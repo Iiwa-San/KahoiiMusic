@@ -1,0 +1,370 @@
+{
+  "files": [
+    {
+      "fileName": "./NAudio.Midi.nuspec",
+      "SPDXID": "SPDXRef-File--NAudio.Midi.nuspec-E94AF911537E5F16B28C168A9340DDFA6A5EBB80",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "b3f44a3d5bb48902bf7b80e8308dd624e42a32a9bcd7f0815959d168d8339e27"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "e94af911537e5f16b28c168a9340ddfa6a5ebb80"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./lib/net9.0/NAudio.Midi.dll",
+      "SPDXID": "SPDXRef-File--lib-net9.0-NAudio.Midi.dll-F2D81581843CE8EA00D1F72D1BE42629B40E1C78",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "b519a99d98370bca7f6b86f1b50d299b36a7ed7f9c3823f50a5fc969693cfe61"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "f2d81581843ce8ea00d1f72d1be42629b40e1c78"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./lib/net9.0/NAudio.Midi.xml",
+      "SPDXID": "SPDXRef-File--lib-net9.0-NAudio.Midi.xml-10F0BCF5C11C8639B517CDEF2BC53F724B82EDAC",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "8aa52f98b3f46a3010be4b52f534b69c2200cbae9e5f49e24cd66a0dee5e3094"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "10f0bcf5c11c8639b517cdef2bc53f724b82edac"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./lib/net9.0-windows10.0.19041/NAudio.Midi.xml",
+      "SPDXID": "SPDXRef-File--lib-net9.0-windows10.0.19041-NAudio.Midi.xml-F40790529A869ED33EE5E245CE0F9B0DB41F0821",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "49f127deb0891b11dd09dea15f2792d8096aeaa2ae43349c61246f0903893558"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "f40790529a869ed33ee5e245ce0f9b0db41f0821"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./lib/net9.0-windows10.0.19041/NAudio.Midi.dll",
+      "SPDXID": "SPDXRef-File--lib-net9.0-windows10.0.19041-NAudio.Midi.dll-2AE59CA625BC606DD3E16EEFFFC307920ACB4DD8",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "a834ac28c9a8bd685384cdeb02e52c44aab6581859595b130f3ba0fb8cff3360"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "2ae59ca625bc606dd3e16eefffc307920acb4dd8"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./[Content_Types].xml",
+      "SPDXID": "SPDXRef-File---Content-Types-.xml-56F3C4FFD2D136B70BC85BCEBEAEAE4CFC8020FA",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "d2063fbe89f8726a57334fdadfd3da559f1e9ece452d80b3855c59e833428d14"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "56f3c4ffd2d136b70bc85bcebeaeae4cfc8020fa"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./naudio-icon.png",
+      "SPDXID": "SPDXRef-File--naudio-icon.png-EC4973594AC75B66660E885F2FCE2750CC8258B2",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "e92081e6bc94991591e6a358bf66742762d54e714f524e5ece3a5a994c47ee67"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "ec4973594ac75b66660e885f2fce2750cc8258b2"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./package/services/metadata/core-properties/nuget.psmdcp",
+      "SPDXID": "SPDXRef-File--package-services-metadata-core-properties-nuget.psmdcp-D365BD55675C4A6FB9C9E239AFEA4F2221803D1A",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "a0df4f2a21fb33f9e126f4fb0e476e72615d6367c8497f9b25060c50ea66e8f0"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "d365bd55675c4a6fb9c9e239afea4f2221803d1a"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./README.md",
+      "SPDXID": "SPDXRef-File--README.md-133812DF309DE8F85F79685F35F933FEF974E802",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "1dbe246aadee3e6253ab5d01335e002a06b71e07d2525ff498a5a2d7878e222d"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "133812df309de8f85f79685f35f933fef974e802"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./_rels/.rels",
+      "SPDXID": "SPDXRef-File---rels-.rels-9D34C66EA97D5B1B76E392D777793FCB413D8F2D",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "ce2bc697b0bbe53d0ecc29ed5a7d4884a9d2c758bb6d8355a47360cfa89ffd74"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "9d34c66ea97d5b1b76e392d777793fcb413d8f2d"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    }
+  ],
+  "packages": [
+    {
+      "name": "Microsoft.Sbom.Targets",
+      "SPDXID": "SPDXRef-Package-187EFE2F1CB79DC28F70C62C1D8E0B6D840AF97A56D8D381EC4C4E7A968129CB",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "4.1.5",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/Microsoft.Sbom.Targets@4.1.5"
+        }
+      ],
+      "supplier": "NOASSERTION"
+    },
+    {
+      "name": "NAudio.Midi",
+      "SPDXID": "SPDXRef-Package-ACDCD12E4FB9BE28A66D00158797821885B591D4678BE2F4A702093ECE64C55D",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "3.3.0",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/NAudio.Midi@3.3.0"
+        }
+      ],
+      "supplier": "Organization: Mark Heath"
+    },
+    {
+      "name": "Microsoft.Windows.SDK.NET.Ref",
+      "SPDXID": "SPDXRef-Package-2A0EECF1D186C5BDEBAEE5ECD28B69D97CB833889172509823E4F85E709D3CB7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "10.0.19041.57",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/Microsoft.Windows.SDK.NET.Ref@10.0.19041.57"
+        }
+      ],
+      "supplier": "NOASSERTION"
+    },
+    {
+      "name": "Microsoft.NET.ILLink.Tasks",
+      "SPDXID": "SPDXRef-Package-093669FC53C96C61BEC028712BCB64756686B13B84ACDEAEF14289E6359EF0A7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "9.0.20",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/Microsoft.NET.ILLink.Tasks@9.0.20"
+        }
+      ],
+      "supplier": "NOASSERTION"
+    },
+    {
+      "name": "NAudio.Midi",
+      "SPDXID": "SPDXRef-Package-2B9307F1F2351CD3B9F9042E1C14FB52161E7F4980E773022500C0D86D69AF57",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "3.2.0",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/NAudio.Midi@3.2.0"
+        }
+      ],
+      "supplier": "NOASSERTION"
+    },
+    {
+      "name": "NAudio.Midi",
+      "SPDXID": "SPDXRef-RootPackage",
+      "downloadLocation": "NOASSERTION",
+      "packageVerificationCode": {
+        "packageVerificationCodeValue": "aa4ddc38f9ae88a184afb628907fb341f29894d7"
+      },
+      "filesAnalyzed": true,
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoFromFiles": [
+        "NOASSERTION"
+      ],
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "3.3.0",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:swid/Mark%20Heath/spdx.org/NAudio.Midi@3.3.0?tag_id=bf3939ce-8914-423b-b761-6637bf6de233"
+        }
+      ],
+      "supplier": "Organization: Mark Heath",
+      "hasFiles": [
+        "SPDXRef-File--lib-net9.0-windows10.0.19041-NAudio.Midi.dll-2AE59CA625BC606DD3E16EEFFFC307920ACB4DD8",
+        "SPDXRef-File--lib-net9.0-NAudio.Midi.xml-10F0BCF5C11C8639B517CDEF2BC53F724B82EDAC",
+        "SPDXRef-File---Content-Types-.xml-56F3C4FFD2D136B70BC85BCEBEAEAE4CFC8020FA",
+        "SPDXRef-File--NAudio.Midi.nuspec-E94AF911537E5F16B28C168A9340DDFA6A5EBB80",
+        "SPDXRef-File---rels-.rels-9D34C66EA97D5B1B76E392D777793FCB413D8F2D",
+        "SPDXRef-File--README.md-133812DF309DE8F85F79685F35F933FEF974E802",
+        "SPDXRef-File--package-services-metadata-core-properties-nuget.psmdcp-D365BD55675C4A6FB9C9E239AFEA4F2221803D1A",
+        "SPDXRef-File--naudio-icon.png-EC4973594AC75B66660E885F2FCE2750CC8258B2",
+        "SPDXRef-File--lib-net9.0-NAudio.Midi.dll-F2D81581843CE8EA00D1F72D1BE42629B40E1C78",
+        "SPDXRef-File--lib-net9.0-windows10.0.19041-NAudio.Midi.xml-F40790529A869ED33EE5E245CE0F9B0DB41F0821"
+      ]
+    }
+  ],
+  "externalDocumentRefs": [],
+  "relationships": [
+    {
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-RootPackage",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-093669FC53C96C61BEC028712BCB64756686B13B84ACDEAEF14289E6359EF0A7",
+      "spdxElementId": "SPDXRef-RootPackage"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-2A0EECF1D186C5BDEBAEE5ECD28B69D97CB833889172509823E4F85E709D3CB7",
+      "spdxElementId": "SPDXRef-RootPackage"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-ACDCD12E4FB9BE28A66D00158797821885B591D4678BE2F4A702093ECE64C55D",
+      "spdxElementId": "SPDXRef-RootPackage"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-2B9307F1F2351CD3B9F9042E1C14FB52161E7F4980E773022500C0D86D69AF57",
+      "spdxElementId": "SPDXRef-RootPackage"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-187EFE2F1CB79DC28F70C62C1D8E0B6D840AF97A56D8D381EC4C4E7A968129CB",
+      "spdxElementId": "SPDXRef-RootPackage"
+    }
+  ],
+  "spdxVersion": "SPDX-2.2",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "NAudio.Midi 3.3.0",
+  "documentNamespace": "http://spdx.org/spdxdocs/NAudio.Midi/NAudio.Midi/3.3.0/8qorrrw8b02IB5vfVLnKUg",
+  "creationInfo": {
+    "created": "2026-10-19T21:24:38Z",
+    "creators": [
+      "Organization: Mark Heath",
+      "Tool: Microsoft.SBOMTool-4.1.5"
+    ]
+  },
+  "documentDescribes": [
+    "SPDXRef-RootPackage"
+  ]
+}

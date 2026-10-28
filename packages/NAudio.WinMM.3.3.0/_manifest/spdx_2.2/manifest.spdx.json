@@ -1,0 +1,307 @@
+{
+  "files": [
+    {
+      "fileName": "./naudio-icon.png",
+      "SPDXID": "SPDXRef-File--naudio-icon.png-EC4973594AC75B66660E885F2FCE2750CC8258B2",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "e92081e6bc94991591e6a358bf66742762d54e714f524e5ece3a5a994c47ee67"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "ec4973594ac75b66660e885f2fce2750cc8258b2"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./_rels/.rels",
+      "SPDXID": "SPDXRef-File---rels-.rels-B3DCD76EDB489FE95B378E534826C40C7C435979",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "4e2f787eb345f7defdb25bcab181b3b0886468244d91678b72389c41de6c50a6"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "b3dcd76edb489fe95b378e534826c40c7c435979"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./NAudio.WinMM.nuspec",
+      "SPDXID": "SPDXRef-File--NAudio.WinMM.nuspec-F7BC3830A71E009FD195DEA59BB496FD38DA5759",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "ab2062432a09b100eeac4e42d1d399aa9b5198bf9b92475b9e9f7f25f7600f1e"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "f7bc3830a71e009fd195dea59bb496fd38da5759"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./[Content_Types].xml",
+      "SPDXID": "SPDXRef-File---Content-Types-.xml-56F3C4FFD2D136B70BC85BCEBEAEAE4CFC8020FA",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "d2063fbe89f8726a57334fdadfd3da559f1e9ece452d80b3855c59e833428d14"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "56f3c4ffd2d136b70bc85bcebeaeae4cfc8020fa"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./package/services/metadata/core-properties/nuget.psmdcp",
+      "SPDXID": "SPDXRef-File--package-services-metadata-core-properties-nuget.psmdcp-BF29465A5A70793D68573981C5C068B5A6B10E77",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "c6da77ea02f48d90f63e96109a197adf1a9760f3536b724067c6874dd9fa6ad1"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "bf29465a5a70793d68573981c5c068b5a6b10e77"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./lib/net9.0/NAudio.WinMM.dll",
+      "SPDXID": "SPDXRef-File--lib-net9.0-NAudio.WinMM.dll-4E380968F796836A431BEE059C3FB46E4F634921",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "7780fb5c3668b6ae99f4461041536a41418c58cd73e9b53bf5a1513bf064284d"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "4e380968f796836a431bee059c3fb46e4f634921"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./README.md",
+      "SPDXID": "SPDXRef-File--README.md-DA5001CA9D33A763E8C6D4D2C8A665C6ADBF915E",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "e23c5dcf9b144b5181e84eae9356932f71d4aa4f68a544a485c75b0cce5846c2"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "da5001ca9d33a763e8c6d4d2c8a665c6adbf915e"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    },
+    {
+      "fileName": "./lib/net9.0/NAudio.WinMM.xml",
+      "SPDXID": "SPDXRef-File--lib-net9.0-NAudio.WinMM.xml-3A49098CE300ECD83C9F683B2FC2E1877EDE5270",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "ebc16009d931bd441ba233a02ae0fefa79db4bd068a216a86423ee945fc27a76"
+        },
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "3a49098ce300ecd83c9f683b2fc2e1877ede5270"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    }
+  ],
+  "packages": [
+    {
+      "name": "NAudio.WinMM",
+      "SPDXID": "SPDXRef-Package-5BA2D41B29F2B5C6A407B49942145259410AEF191E779CDE7D092E2F6D2AE073",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "3.2.0",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/NAudio.WinMM@3.2.0"
+        }
+      ],
+      "supplier": "NOASSERTION"
+    },
+    {
+      "name": "Microsoft.Sbom.Targets",
+      "SPDXID": "SPDXRef-Package-187EFE2F1CB79DC28F70C62C1D8E0B6D840AF97A56D8D381EC4C4E7A968129CB",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "4.1.5",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/Microsoft.Sbom.Targets@4.1.5"
+        }
+      ],
+      "supplier": "NOASSERTION"
+    },
+    {
+      "name": "Microsoft.NET.ILLink.Tasks",
+      "SPDXID": "SPDXRef-Package-093669FC53C96C61BEC028712BCB64756686B13B84ACDEAEF14289E6359EF0A7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "9.0.20",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/Microsoft.NET.ILLink.Tasks@9.0.20"
+        }
+      ],
+      "supplier": "NOASSERTION"
+    },
+    {
+      "name": "NAudio.WinMM",
+      "SPDXID": "SPDXRef-Package-6418F172A3D4B1A3F6A64149B253CB6890EA50776896E9568D4E223C4A121E24",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "3.3.0",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:nuget/NAudio.WinMM@3.3.0"
+        }
+      ],
+      "supplier": "Organization: Mark Heath"
+    },
+    {
+      "name": "NAudio.WinMM",
+      "SPDXID": "SPDXRef-RootPackage",
+      "downloadLocation": "NOASSERTION",
+      "packageVerificationCode": {
+        "packageVerificationCodeValue": "5d0d743f7fc929cefe0a1894f399d2e89304a07d"
+      },
+      "filesAnalyzed": true,
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoFromFiles": [
+        "NOASSERTION"
+      ],
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "versionInfo": "3.3.0",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:swid/Mark%20Heath/spdx.org/NAudio.WinMM@3.3.0?tag_id=539e4f88-6bbb-47f3-bc9f-a698dc825773"
+        }
+      ],
+      "supplier": "Organization: Mark Heath",
+      "hasFiles": [
+        "SPDXRef-File--lib-net9.0-NAudio.WinMM.xml-3A49098CE300ECD83C9F683B2FC2E1877EDE5270",
+        "SPDXRef-File--package-services-metadata-core-properties-nuget.psmdcp-BF29465A5A70793D68573981C5C068B5A6B10E77",
+        "SPDXRef-File--lib-net9.0-NAudio.WinMM.dll-4E380968F796836A431BEE059C3FB46E4F634921",
+        "SPDXRef-File---Content-Types-.xml-56F3C4FFD2D136B70BC85BCEBEAEAE4CFC8020FA",
+        "SPDXRef-File---rels-.rels-B3DCD76EDB489FE95B378E534826C40C7C435979",
+        "SPDXRef-File--naudio-icon.png-EC4973594AC75B66660E885F2FCE2750CC8258B2",
+        "SPDXRef-File--README.md-DA5001CA9D33A763E8C6D4D2C8A665C6ADBF915E",
+        "SPDXRef-File--NAudio.WinMM.nuspec-F7BC3830A71E009FD195DEA59BB496FD38DA5759"
+      ]
+    }
+  ],
+  "externalDocumentRefs": [],
+  "relationships": [
+    {
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-RootPackage",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-6418F172A3D4B1A3F6A64149B253CB6890EA50776896E9568D4E223C4A121E24",
+      "spdxElementId": "SPDXRef-RootPackage"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-187EFE2F1CB79DC28F70C62C1D8E0B6D840AF97A56D8D381EC4C4E7A968129CB",
+      "spdxElementId": "SPDXRef-RootPackage"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-093669FC53C96C61BEC028712BCB64756686B13B84ACDEAEF14289E6359EF0A7",
+      "spdxElementId": "SPDXRef-RootPackage"
+    },
+    {
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-5BA2D41B29F2B5C6A407B49942145259410AEF191E779CDE7D092E2F6D2AE073",
+      "spdxElementId": "SPDXRef-RootPackage"
+    }
+  ],
+  "spdxVersion": "SPDX-2.2",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "NAudio.WinMM 3.3.0",
+  "documentNamespace": "http://spdx.org/spdxdocs/NAudio.WinMM/NAudio.WinMM/3.3.0/2Nr1-KUMqES7wSbrjli8rQ",
+  "creationInfo": {
+    "created": "2026-10-19T21:24:43Z",
+    "creators": [
+      "Organization: Mark Heath",
+      "Tool: Microsoft.SBOMTool-4.1.5"
+    ]
+  },
+  "documentDescribes": [
+    "SPDXRef-RootPackage"
+  ]
+}
