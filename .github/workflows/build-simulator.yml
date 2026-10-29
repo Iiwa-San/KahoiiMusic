@@ -1,0 +1,58 @@
+name: Build for iOS Simulator (Appetize.io)
+
+on:
+  push:
+    branches: [ "IOSApp" ]
+  workflow_dispatch:
+
+jobs:
+  build-simulator:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 15
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild build \
+            -project KahoiiMusic.xcodeproj \
+            -scheme KahoiiMusic \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package Simulator App (.zip for Appetize.io)
+        run: |
+          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -name "KahoiiMusic.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::KahoiiMusic.app not found in build directory!"
+            exit 1
+          fi
+          echo "Found app at: $APP_PATH"
+          cd $(dirname "$APP_PATH")
+          zip -r -y "$GITHUB_WORKSPACE/KahoiiMusic-Simulator.zip" KahoiiMusic.app
+          echo "Packaging completed: $GITHUB_WORKSPACE/KahoiiMusic-Simulator.zip"
+
+      - name: Upload Artifact for Appetize.io
+        uses: actions/upload-artifact@v4
+        with:
+          name: KahoiiMusic-Simulator
+          path: KahoiiMusic-Simulator.zip
+          retention-days: 14
+
+      - name: Output Appetize.io Instructions
+        run: |
+          echo "### 🚀 Bản build iOS Simulator đã sẵn sàng để test trên Appetize.io!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Tải file **KahoiiMusic-Simulator.zip** từ phần **Artifacts** bên dưới." >> $GITHUB_STEP_SUMMARY
+          echo "2. Truy cập [https://appetize.io/upload](https://appetize.io/upload)." >> $GITHUB_STEP_SUMMARY
+          echo "3. Kéo và thả file **KahoiiMusic-Simulator.zip** vào trang web." >> $GITHUB_STEP_SUMMARY
+          echo "4. Trình duyệt sẽ mở ngay một chiếc iPhone ảo để bạn tương tác trực tiếp!" >> $GITHUB_STEP_SUMMARY
