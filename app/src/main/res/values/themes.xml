@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.KahoiiMusic" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#2B107F</item>
+        <item name="android:navigationBarColor">#FF2680</item>
+        <item name="android:windowBackground">#2B107F</item>
+    </style>
+</resources>
+

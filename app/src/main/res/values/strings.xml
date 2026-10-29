@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Kahoii Music</string>
+    <string name="channel_name">Kahoii Music Playback</string>
+    <string name="channel_description">Điều khiển phát nhạc nền Kahoii Music</string>
+    <string name="search_placeholder">link youtube...</string>
+    <string name="tab_playlist">Danh sách phát</string>
+    <string name="tab_history">Lịch sử</string>
+    <string name="clear_history">Xóa lịch sử</string>
+    <string name="status_ready">Sẵn sàng</string>
+    <string name="status_searching">Đang tìm bài hát...</string>
+    <string name="status_loading">Đang nạp âm thanh...</string>
+    <string name="status_playing">Đang phát</string>
+    <string name="status_paused">Tạm dừng</string>
+    <string name="status_error">Lỗi phát nhạc</string>
+</resources>
+
