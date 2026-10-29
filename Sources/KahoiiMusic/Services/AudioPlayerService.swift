@@ -3,6 +3,9 @@ import AVFoundation
 import MediaPlayer
 import Combine
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 public class AudioPlayerService: ObservableObject {

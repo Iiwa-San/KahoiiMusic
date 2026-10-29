@@ -16,13 +16,16 @@ public struct ArtworkView: View {
             // Ambient colored glow
             if let _ = artworkUrl {
                 AsyncImage(url: artworkUrl) { phase in
-                    if case .success(let image) = phase {
+                    switch phase {
+                    case .success(let image):
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .blur(radius: 35)
                             .opacity(isPlaying ? 0.45 : 0.2)
                             .scaleEffect(0.92)
+                    default:
+                        Color.clear
                     }
                 }
             }

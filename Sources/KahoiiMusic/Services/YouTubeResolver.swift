@@ -39,7 +39,7 @@ public actor YouTubeResolver {
 
     // MARK: - ID & URL Extraction
 
-    public func extractVideoId(from input: String) -> String? {
+    public nonisolated func extractVideoId(from input: String) -> String? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return nil }
 
@@ -66,7 +66,7 @@ public actor YouTubeResolver {
         return nil
     }
 
-    public func extractPlaylistId(from input: String) -> String? {
+    public nonisolated func extractPlaylistId(from input: String) -> String? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let patterns = [
             #"[?&]list=([a-zA-Z0-9_-]+)"#
@@ -81,7 +81,7 @@ public actor YouTubeResolver {
         return nil
     }
 
-    public func isUrl(_ input: String) -> Bool {
+    public nonisolated func isUrl(_ input: String) -> Bool {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.contains("youtu.be") || trimmed.contains("youtube.com")
     }

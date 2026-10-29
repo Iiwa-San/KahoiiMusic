@@ -22,6 +22,15 @@ jobs:
           xcodebuild build \
             -project KahoiiMusic.xcodeproj \
             -scheme KahoiiMusic \
+            -destination "platform=iOS Simulator,name=iPhone 15" \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO || \
+          xcodebuild build \
+            -project KahoiiMusic.xcodeproj \
+            -scheme KahoiiMusic \
             -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
             -derivedDataPath build \
@@ -56,3 +65,4 @@ jobs:
           echo "2. Truy cập [https://appetize.io/upload](https://appetize.io/upload)." >> $GITHUB_STEP_SUMMARY
           echo "3. Kéo và thả file **KahoiiMusic-Simulator.zip** vào trang web." >> $GITHUB_STEP_SUMMARY
           echo "4. Trình duyệt sẽ mở ngay một chiếc iPhone ảo để bạn tương tác trực tiếp!" >> $GITHUB_STEP_SUMMARY
+
