@@ -23,7 +23,10 @@ namespace KahoiiMusic
 
         private AudioPlayerService _audioPlayer;
         private Controls.PlaylistPopup playlistPopup;
-        private Timer _ramTimer;
+        private System.Windows.Forms.Timer _ramTimer;
+        private NotifyIcon _trayIcon;
+        private ContextMenuStrip _trayMenu;
+        private ToolStripMenuItem _trayItemLoop;
 
         public Form1() : this(null)
         {
@@ -57,6 +60,7 @@ namespace KahoiiMusic
             _audioPlayer = new AudioPlayerService();
 
             SetupEvents();
+            InitializeTrayIcon();
 
             if (!string.IsNullOrEmpty(initialUrl))
             {
@@ -135,11 +139,7 @@ namespace KahoiiMusic
             btnClose.MouseEnter += (s, e) => btnClose.ForeColor = Color.FromArgb(255, 100, 100);
             btnClose.MouseLeave += (s, e) => btnClose.ForeColor = Color.FromArgb(140, 140, 140);
 
-            btnMinimize.Click += (s, e) =>
-            {
-                WindowState = FormWindowState.Minimized;
-                MemoryOptimizer.TrimMemoryAsync(50, true);
-            };
+            btnMinimize.Click += (s, e) => MinimizeToTray();
             btnMinimize.MouseEnter += (s, e) => btnMinimize.ForeColor = Color.White;
             btnMinimize.MouseLeave += (s, e) => btnMinimize.ForeColor = Color.FromArgb(140, 140, 140);
 
@@ -154,6 +154,7 @@ namespace KahoiiMusic
             _audioPlayer.TitleChanged += (s, title) =>
             {
                 marqueeTitle.Text = title;
+                UpdateTrayTooltip(title);
             };
             _audioPlayer.ThumbnailUrlReady += AudioPlayer_ThumbnailUrlReady;
             _audioPlayer.PlaybackStateChanged += AudioPlayer_PlaybackStateChanged;
@@ -164,6 +165,10 @@ namespace KahoiiMusic
             btnLoop.LoopChanged += (s, e) =>
             {
                 _audioPlayer.IsLooping = btnLoop.IsLooping;
+                if (_trayItemLoop != null)
+                {
+                    _trayItemLoop.Checked = btnLoop.IsLooping;
+                }
             };
 
             // Play / Pause Button Click
@@ -588,6 +593,19 @@ namespace KahoiiMusic
             base.OnFormClosing(e);
             Application.RemoveMessageFilter(this);
 
+            if (_trayIcon != null)
+            {
+                _trayIcon.Visible = false;
+                try { _trayIcon.Dispose(); } catch { }
+                _trayIcon = null;
+            }
+            if (_trayMenu != null)
+            {
+                try { _trayMenu.Dispose(); } catch { }
+                _trayMenu = null;
+            }
+            _trayItemLoop = null;
+
             if (_ramTimer != null)
             {
                 try { _ramTimer.Stop(); _ramTimer.Dispose(); } catch { }
@@ -655,6 +673,285 @@ namespace KahoiiMusic
             panelBottomControls.BackColor = Color.Transparent;
 
             panelPlayerCard.Invalidate();
+        }
+
+        private void InitializeTrayIcon()
+        {
+            try
+            {
+                _trayMenu = new ContextMenuStrip();
+                _trayMenu.ShowImageMargin = false;
+                _trayMenu.ShowCheckMargin = false;
+                _trayMenu.MinimumSize = new Size(165, 0);
+                _trayMenu.BackColor = Color.FromArgb(24, 24, 28);
+                _trayMenu.ForeColor = Color.FromArgb(235, 235, 235);
+                _trayMenu.Renderer = new DarkMenuRenderer();
+                _trayMenu.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+
+                var itemOpen = new ToolStripMenuItem("M\u1edf Kahoii Music");
+                itemOpen.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+                itemOpen.Click += (s, e) => RestoreFromTray();
+
+                var itemPlayPause = new ToolStripMenuItem("Ph\u00e1t / T\u1ea1m d\u1eebng");
+                itemPlayPause.Click += (s, e) =>
+                {
+                    if (_audioPlayer != null && _audioPlayer.HasTrack)
+                    {
+                        _audioPlayer.TogglePlayPause();
+                    }
+                    else
+                    {
+                        RestoreFromTray();
+                    }
+                };
+
+                var itemNext = new ToolStripMenuItem("B\u00e0i ti\u1ebfp theo");
+                itemNext.Click += (s, e) =>
+                {
+                    if (_audioPlayer != null && _audioPlayer.HasPlaylist)
+                    {
+                        _audioPlayer.PlayNext();
+                    }
+                };
+
+                var itemPrevious = new ToolStripMenuItem("B\u00e0i tr\u01b0\u1edbc");
+                itemPrevious.Click += (s, e) =>
+                {
+                    if (_audioPlayer != null && _audioPlayer.HasPlaylist)
+                    {
+                        _audioPlayer.PlayPrevious();
+                    }
+                };
+
+                _trayItemLoop = new ToolStripMenuItem("L\u1eb7p l\u1ea1i");
+                _trayItemLoop.CheckOnClick = true;
+                _trayItemLoop.Checked = (btnLoop != null) ? btnLoop.IsLooping : (_audioPlayer != null && _audioPlayer.IsLooping);
+                _trayItemLoop.Click += (s, e) =>
+                {
+                    bool newLoop = _trayItemLoop.Checked;
+                    if (btnLoop != null) btnLoop.IsLooping = newLoop;
+                    if (_audioPlayer != null) _audioPlayer.IsLooping = newLoop;
+                };
+
+                var itemExit = new ToolStripMenuItem("Tho\u00e1t");
+                itemExit.Click += (s, e) => Close();
+
+                _trayMenu.Items.Add(itemOpen);
+                _trayMenu.Items.Add(new ToolStripSeparator());
+                _trayMenu.Items.Add(itemPlayPause);
+                _trayMenu.Items.Add(itemNext);
+                _trayMenu.Items.Add(itemPrevious);
+                _trayMenu.Items.Add(_trayItemLoop);
+                _trayMenu.Items.Add(new ToolStripSeparator());
+                _trayMenu.Items.Add(itemExit);
+
+                _trayMenu.Opening += (s, e) =>
+                {
+                    if (_audioPlayer != null && _audioPlayer.IsPlaying)
+                    {
+                        itemPlayPause.Text = "T\u1ea1m d\u1eebng";
+                    }
+                    else
+                    {
+                        itemPlayPause.Text = "Ph\u00e1t ti\u1ebfp";
+                    }
+
+                    bool hasPlaylist = (_audioPlayer != null && _audioPlayer.HasPlaylist);
+                    itemNext.Enabled = hasPlaylist;
+                    itemPrevious.Enabled = hasPlaylist;
+
+                    if (_trayItemLoop != null)
+                    {
+                        _trayItemLoop.Checked = (btnLoop != null) ? btnLoop.IsLooping : (_audioPlayer != null && _audioPlayer.IsLooping);
+                    }
+                };
+
+                Icon appIcon = this.Icon;
+                if (appIcon == null)
+                {
+                    try { appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+                }
+                if (appIcon == null && picLogo != null && picLogo.Image is Bitmap bmp)
+                {
+                    try
+                    {
+                        using (Bitmap smallBmp = new Bitmap(bmp, new Size(32, 32)))
+                        {
+                            IntPtr hIcon = smallBmp.GetHicon();
+                            appIcon = Icon.FromHandle(hIcon);
+                        }
+                    }
+                    catch { }
+                }
+
+                _trayIcon = new NotifyIcon
+                {
+                    Text = "Kahoii Music",
+                    Icon = appIcon ?? SystemIcons.Application,
+                    ContextMenuStrip = _trayMenu,
+                    Visible = true
+                };
+
+                _trayIcon.MouseClick += (s, e) =>
+                {
+                    if (e.Button == MouseButtons.Left)
+                    {
+                        RestoreFromTray();
+                    }
+                };
+
+                _trayIcon.DoubleClick += (s, e) =>
+                {
+                    RestoreFromTray();
+                };
+            }
+            catch { }
+        }
+
+        private void UpdateTrayTooltip(string title)
+        {
+            if (_trayIcon == null) return;
+            try
+            {
+                string text = string.IsNullOrWhiteSpace(title) ? "Kahoii Music" : ("Kahoii Music - " + title);
+                if (text.Length > 63)
+                {
+                    text = text.Substring(0, 60) + "...";
+                }
+                _trayIcon.Text = text;
+            }
+            catch { }
+        }
+
+        private void MinimizeToTray()
+        {
+            if (playlistPopup != null && playlistPopup.Visible)
+            {
+                playlistPopup.Hide();
+                btnPlaylist.IsOpen = false;
+            }
+            if (volumePopup != null && volumePopup.Visible)
+            {
+                volumePopup.Visible = false;
+            }
+
+            Hide();
+            if (_trayIcon != null)
+            {
+                _trayIcon.Visible = true;
+            }
+            MemoryOptimizer.TrimMemoryAsync(50, true);
+        }
+
+        private void RestoreFromTray()
+        {
+            Show();
+            if (WindowState == FormWindowState.Minimized)
+            {
+                WindowState = FormWindowState.Normal;
+            }
+            BringToFront();
+            Activate();
+            TopMost = true;
+            TopMost = false;
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (WindowState == FormWindowState.Minimized)
+            {
+                MinimizeToTray();
+            }
+        }
+
+        private class DarkMenuRenderer : ToolStripProfessionalRenderer
+        {
+            public DarkMenuRenderer() : base(new DarkMenuColorTable()) { }
+
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                if (e.Item.Selected && e.Item.Enabled)
+                {
+                    Rectangle rc = new Rectangle(3, 1, e.Item.Width - 6, e.Item.Height - 2);
+                    using (GraphicsPath path = RoundedRect(rc, 4))
+                    using (SolidBrush b = new SolidBrush(Color.FromArgb(60, 40, 90)))
+                    {
+                        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                        e.Graphics.FillPath(b, path);
+                    }
+                }
+            }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            {
+                e.TextColor = e.Item.Enabled ? Color.FromArgb(235, 235, 235) : Color.FromArgb(120, 120, 125);
+                base.OnRenderItemText(e);
+
+                // Right-aligned bare checkmark tick (only when checked)
+                if (e.Item is ToolStripMenuItem mi && mi.Checked)
+                {
+                    Graphics g = e.Graphics;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+
+                    float right = e.Item.Width - 14;
+                    float centerY = e.Item.Height / 2f;
+
+                    using (Pen pen = new Pen(Color.FromArgb(210, 150, 255), 2.2f))
+                    {
+                        pen.StartCap = LineCap.Round;
+                        pen.EndCap = LineCap.Round;
+                        g.DrawLine(pen, right - 10, centerY, right - 6, centerY + 4.5f);
+                        g.DrawLine(pen, right - 6, centerY + 4.5f, right, centerY - 4.5f);
+                    }
+                }
+            }
+
+            protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+            {
+                int y = e.Item.Height / 2;
+                using (Pen pen = new Pen(Color.FromArgb(48, 48, 56)))
+                {
+                    e.Graphics.DrawLine(pen, 10, y, e.Item.Width - 10, y);
+                }
+            }
+
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+            {
+                using (Pen pen = new Pen(Color.FromArgb(52, 52, 60)))
+                {
+                    e.Graphics.DrawRectangle(pen, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1);
+                }
+            }
+
+            protected override void OnRenderImageMargin(ToolStripRenderEventArgs e)
+            {
+                // Blank - no margin drawn
+            }
+
+            private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+            {
+                int diameter = radius * 2;
+                GraphicsPath path = new GraphicsPath();
+                path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+                path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+                path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+                path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+                path.CloseFigure();
+                return path;
+            }
+        }
+
+        private class DarkMenuColorTable : ProfessionalColorTable
+        {
+            public override Color ToolStripDropDownBackground => Color.FromArgb(24, 24, 28);
+            public override Color MenuBorder => Color.FromArgb(52, 52, 60);
+            public override Color MenuItemBorder => Color.Transparent;
+            public override Color MenuItemSelected => Color.FromArgb(60, 40, 90);
+            public override Color MenuStripGradientBegin => Color.FromArgb(24, 24, 28);
+            public override Color MenuStripGradientEnd => Color.FromArgb(24, 24, 28);
+            public override Color SeparatorDark => Color.FromArgb(48, 48, 56);
+            public override Color SeparatorLight => Color.Transparent;
         }
     }
 }
