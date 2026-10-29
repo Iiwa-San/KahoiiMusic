@@ -47,6 +47,8 @@ jobs:
           cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@2x.png"
           cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@3x.png"
           cp Resources/AppIcon.png "$APP_PATH/AppIcon76x76@2x~ipad.png"
+          # Remove any nested Resources directory so Sideloadly never encounters IXPlaceholder Missing bundle ID
+          rm -rf "$APP_PATH/Resources"
           # Convert Info.plist to human-readable XML format (prevents Windows Sideloadly bplist corruption)
           plutil -convert xml1 "$APP_PATH/Info.plist"
           # Pre-sign with ad-hoc signature so _CodeSignature is fully structured
@@ -88,6 +90,7 @@ jobs:
           cp Resources/AppIcon.png "$APP_PATH/AppIcon.png"
           cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@2x.png"
           cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@3x.png"
+          rm -rf "$APP_PATH/Resources"
           # Convert Info.plist to human-readable XML format
           plutil -convert xml1 "$APP_PATH/Info.plist"
           # Remove any leftover _CodeSignature so simulator executes cleanly without signature verification

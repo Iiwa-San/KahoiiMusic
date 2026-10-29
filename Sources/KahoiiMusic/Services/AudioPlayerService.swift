@@ -30,6 +30,7 @@ public class AudioPlayerService: ObservableObject {
 
     private var avPlayer: AVPlayer?
     private var timeObserverToken: Any?
+    private var playerItemCancellable: AnyCancellable?
     private var originalPlaylist: [PlaylistItem] = []
     private var cancellables = Set<AnyCancellable>()
 
@@ -50,7 +51,7 @@ public class AudioPlayerService: ObservableObject {
     private func setupAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetooth, .allowBluetoothA2DP])
+            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetoothA2DP])
             try session.setActive(true)
         } catch {
             print("[AudioPlayerService] AudioSession setup error: \(error)")
@@ -183,7 +184,6 @@ public class AudioPlayerService: ObservableObject {
                   let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
                   let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
 
-            // Headphones unplugged -> pause automatically
             if reason == .oldDeviceUnavailable {
                 self.pause()
             }
@@ -217,7 +217,6 @@ public class AudioPlayerService: ObservableObject {
                 let results = try await YouTubeResolver.shared.search(query: trimmed)
                 if let first = results.first {
                     playTrack(first)
-                    // Populate queue with other results
                     playlist = results
                     currentIndex = 0
                 } else {
@@ -237,7 +236,6 @@ public class AudioPlayerService: ObservableObject {
         statusMessage = "Đang kết nối: \(track.title)"
         errorMessage = nil
 
-        // Add to playlist queue if not already in it
         if let idx = playlist.firstIndex(where: { $0.id == track.id }) {
             currentIndex = idx
         } else {
@@ -245,7 +243,6 @@ public class AudioPlayerService: ObservableObject {
             currentIndex = 0
         }
 
-        // Update theme dynamic gradient
         if let artworkUrl = track.artworkURL {
             Task {
                 let palette = await ColorExtractor.shared.extractColors(from: artworkUrl)
@@ -286,14 +283,27 @@ public class AudioPlayerService: ObservableObject {
             timeObserverToken = nil
         }
 
+        playerItemCancellable?.cancel()
+
+        // Ensure audio session is active
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("[AudioPlayerService] AudioSession setActive error: \(error)")
+        }
+
+        // Set stream headers to prevent 403 on CDN
         let headers: [String: String] = [
-            "User-Agent": "com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
             "Referer": "https://www.youtube.com/"
         ]
         let asset = AVURLAsset(url: streamUrl, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
         let playerItem = AVPlayerItem(asset: asset)
+        playerItem.preferredForwardBufferDuration = 2.0
+
         if avPlayer == nil {
             avPlayer = AVPlayer(playerItem: playerItem)
+            avPlayer?.automaticallyWaitsToMinimizeStalling = true
         } else {
             avPlayer?.replaceCurrentItem(with: playerItem)
         }
@@ -301,6 +311,33 @@ public class AudioPlayerService: ObservableObject {
         avPlayer?.volume = volume
         self.duration = duration
         self.currentTime = 0
+        self.playbackState = .loading("Đang đệm âm thanh...")
+        self.statusMessage = "Đang đệm..."
+
+        // Observe player item status
+        playerItemCancellable = playerItem.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                guard let self = self else { return }
+                switch status {
+                case .readyToPlay:
+                    if self.playbackState != .paused {
+                        self.avPlayer?.play()
+                        self.playbackState = .playing
+                        self.statusMessage = "Đang phát"
+                        self.updateNowPlayingInfo()
+                    }
+                case .failed:
+                    let err = playerItem.error?.localizedDescription ?? "Lỗi phát luồng âm thanh"
+                    self.errorMessage = "Không thể phát: \(err)"
+                    self.playbackState = .failed(err)
+                    self.statusMessage = "Lỗi phát nhạc"
+                case .unknown:
+                    break
+                @unknown default:
+                    break
+                }
+            }
 
         // Observe track finished
         NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
@@ -324,9 +361,6 @@ public class AudioPlayerService: ObservableObject {
         }
 
         avPlayer?.play()
-        playbackState = .playing
-        statusMessage = "Đang phát"
-        updateNowPlayingInfo()
     }
 
     public func play() {
@@ -336,6 +370,9 @@ public class AudioPlayerService: ObservableObject {
             }
             return
         }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
         player.play()
         playbackState = .playing
         statusMessage = "Đang phát"
@@ -383,7 +420,6 @@ public class AudioPlayerService: ObservableObject {
     }
 
     public func previousTrack() {
-        // If current track is past 3 seconds, replay from start (standard music player behavior)
         if currentTime > 3.0 {
             seek(to: 0)
             return
@@ -506,4 +542,3 @@ public class AudioPlayerService: ObservableObject {
         statusMessage = "Danh sách phát đã xóa"
     }
 }
-
