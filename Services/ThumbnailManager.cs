@@ -1,0 +1,230 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Net;
+using System.Threading;
+
+namespace KahoiiMusic.Services
+{
+    public static class ThumbnailManager
+    {
+        private const int ThumbSize = 26;
+        private const int MaxMemoryCache = 35; // Strict LRU limit: 35 * ~2.7KB = ~95KB RAM
+        private static readonly object _lock = new object();
+        private static readonly Dictionary<string, Bitmap> _memCache = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
+        private static readonly LinkedList<string> _lruOrder = new LinkedList<string>();
+        private static readonly HashSet<string> _pendingLoads = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static string _thumbsDir;
+
+        static ThumbnailManager()
+        {
+            try
+            {
+                _thumbsDir = Path.Combine(Path.GetTempPath(), "KahoiiMusic", "thumbs");
+                if (!Directory.Exists(_thumbsDir))
+                {
+                    Directory.CreateDirectory(_thumbsDir);
+                }
+            }
+            catch { }
+        }
+
+        public static Bitmap GetThumbnail(string videoId)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return null;
+
+            lock (_lock)
+            {
+                if (_memCache.TryGetValue(videoId, out Bitmap bmp))
+                {
+                    _lruOrder.Remove(videoId);
+                    _lruOrder.AddFirst(videoId);
+                    return bmp;
+                }
+            }
+            return null;
+        }
+
+        public static void QueueLoad(string videoId, Action onLoaded)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return;
+
+            lock (_lock)
+            {
+                if (_memCache.ContainsKey(videoId) || _pendingLoads.Contains(videoId))
+                {
+                    return;
+                }
+                _pendingLoads.Add(videoId);
+            }
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                Bitmap result = null;
+                try
+                {
+                    string diskFile = (_thumbsDir != null) ? Path.Combine(_thumbsDir, videoId + ".jpg") : null;
+
+                    // 1. Check disk cache first (instant local read, 0ms network)
+                    if (diskFile != null && File.Exists(diskFile))
+                    {
+                        try
+                        {
+                            using (FileStream fs = new FileStream(diskFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+                            using (Image img = Image.FromStream(fs))
+                            {
+                                result = ResizeToMicro(img, ThumbSize, ThumbSize);
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // 2. Download tiny default.jpg (120x90, ~3KB payload) from YouTube
+                    if (result == null)
+                    {
+                        string url = string.Format("https://img.youtube.com/vi/{0}/default.jpg", videoId);
+                        using (WebClient wc = new WebClient())
+                        {
+                            byte[] data = wc.DownloadData(url);
+                            if (data != null && data.Length > 200)
+                            {
+                                using (MemoryStream ms = new MemoryStream(data))
+                                using (Image img = Image.FromStream(ms))
+                                {
+                                    result = ResizeToMicro(img, ThumbSize, ThumbSize);
+
+                                    // Persist tiny micro-thumbnail on disk for future instant loads
+                                    if (diskFile != null && result != null)
+                                    {
+                                        try
+                                        {
+                                            result.Save(diskFile, ImageFormat.Jpeg);
+                                        }
+                                        catch { }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                bool added = false;
+                lock (_lock)
+                {
+                    _pendingLoads.Remove(videoId);
+                    if (result != null)
+                    {
+                        // Enforce strict LRU capacity to keep RAM < 100KB
+                        while (_lruOrder.Count >= MaxMemoryCache)
+                        {
+                            string oldest = _lruOrder.Last.Value;
+                            _lruOrder.RemoveLast();
+                            if (_memCache.TryGetValue(oldest, out Bitmap oldBmp))
+                            {
+                                _memCache.Remove(oldest);
+                                try { oldBmp.Dispose(); } catch { }
+                            }
+                        }
+
+                        _memCache[videoId] = result;
+                        _lruOrder.AddFirst(videoId);
+                        added = true;
+                    }
+                }
+
+                if (added && onLoaded != null)
+                {
+                    try { onLoaded(); } catch { }
+                }
+            });
+        }
+
+        public static void ClearMemory()
+        {
+            lock (_lock)
+            {
+                foreach (var kvp in _memCache)
+                {
+                    try { kvp.Value.Dispose(); } catch { }
+                }
+                _memCache.Clear();
+                _lruOrder.Clear();
+                _pendingLoads.Clear();
+            }
+        }
+
+        public static void DeleteThumb(string videoId)
+        {
+            if (string.IsNullOrWhiteSpace(videoId) || string.IsNullOrEmpty(_thumbsDir)) return;
+            try
+            {
+                lock (_lock)
+                {
+                    if (_memCache.TryGetValue(videoId, out Bitmap bmp))
+                    {
+                        _memCache.Remove(videoId);
+                        _lruOrder.Remove(videoId);
+                        try { bmp.Dispose(); } catch { }
+                    }
+                }
+                string diskFile = Path.Combine(_thumbsDir, videoId + ".jpg");
+                if (File.Exists(diskFile))
+                {
+                    for (int r = 0; r < 3; r++)
+                    {
+                        try { File.Delete(diskFile); break; } catch { Thread.Sleep(20); }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public static void CleanNonHistoryDiskThumbs(HashSet<string> historyIds, bool cleanAll)
+        {
+            try
+            {
+                ClearMemory();
+                if (string.IsNullOrEmpty(_thumbsDir) || !Directory.Exists(_thumbsDir)) return;
+
+                foreach (string file in Directory.GetFiles(_thumbsDir))
+                {
+                    string id = Path.GetFileNameWithoutExtension(file);
+                    if (cleanAll || historyIds == null || !historyIds.Contains(id))
+                    {
+                        for (int r = 0; r < 3; r++)
+                        {
+                            try { File.Delete(file); break; } catch { Thread.Sleep(20); }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static Bitmap ResizeToMicro(Image src, int w, int h)
+        {
+            Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.Clear(Color.Black);
+
+                int sw = src.Width;
+                int sh = src.Height;
+                int cropSize = Math.Min(sw, sh);
+                int sx = (sw - cropSize) / 2;
+                int sy = (sh - cropSize) / 2;
+
+                g.DrawImage(src, new Rectangle(0, 0, w, h), sx, sy, cropSize, cropSize, GraphicsUnit.Pixel);
+            }
+            return bmp;
+        }
+    }
+}
+

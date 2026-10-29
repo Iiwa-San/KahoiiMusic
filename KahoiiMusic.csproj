@@ -130,6 +130,8 @@
     </Compile>
     <Compile Include="Services\AudioPlayerService.cs" />
     <Compile Include="Services\MemoryOptimizer.cs" />
+    <Compile Include="Services\HistoryService.cs" />
+    <Compile Include="Services\ThumbnailManager.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

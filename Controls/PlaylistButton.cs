@@ -114,11 +114,11 @@ namespace KahoiiMusic.Controls
 
             Color drawColor = _isOpen ? _activeColor : (_isHovered ? _hoverIconColor : _iconColor);
 
-            int startX = 6;
-            int barW = 12;
+            int barW = 16;
+            int startX = (Width - barW) / 2;
             int barH = 2;
 
-            // Draw 3 horizontal list bars
+            // Draw 3 clean horizontal menu (hamburger) bars
             using (SolidBrush barBrush = new SolidBrush(drawColor))
             {
                 // Top bar
@@ -126,17 +126,7 @@ namespace KahoiiMusic.Controls
                 // Middle bar
                 FillRoundedBar(g, barBrush, startX, 11, barW, barH);
                 // Bottom bar
-                FillRoundedBar(g, barBrush, startX, 16, barW - 3, barH);
-
-                // Small musical note icon on the right
-                int nx = startX + barW + 2;
-                int ny = 5;
-                // Stem
-                g.FillRectangle(barBrush, nx + 3, ny, 2, 9);
-                // Flag / Hook
-                g.FillRectangle(barBrush, nx + 5, ny, 2, 3);
-                // Note head
-                g.FillEllipse(barBrush, nx + 1, ny + 7, 4, 3);
+                FillRoundedBar(g, barBrush, startX, 16, barW, barH);
             }
 
             // Indicator dot when playlist is loaded

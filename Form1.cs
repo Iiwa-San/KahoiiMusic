@@ -21,12 +21,20 @@ namespace KahoiiMusic
         [DllImport("user32.dll")]
         public static extern bool ReleaseCapture();
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        private const int SW_RESTORE = 9;
+
         private AudioPlayerService _audioPlayer;
         private Controls.PlaylistPopup playlistPopup;
         private System.Windows.Forms.Timer _ramTimer;
         private NotifyIcon _trayIcon;
         private ContextMenuStrip _trayMenu;
         private ToolStripMenuItem _trayItemLoop;
+        private volatile bool _isFormClosed = false;
 
         public Form1() : this(null)
         {
@@ -61,6 +69,7 @@ namespace KahoiiMusic
 
             SetupEvents();
             InitializeTrayIcon();
+            StartSingleInstanceIpcServer();
 
             if (!string.IsNullOrEmpty(initialUrl))
             {
@@ -104,6 +113,10 @@ namespace KahoiiMusic
         {
             playlistPopup = new Controls.PlaylistPopup();
             playlistPopup.Owner = this;
+            playlistPopup.AudioPlayer = _audioPlayer;
+
+            ToolTip menuTip = new ToolTip();
+            menuTip.SetToolTip(btnPlaylist, "Menu (Danh sách phát & Lịch sử)");
 
             // Window Dragging
             MouseDown += Window_MouseDown;
@@ -590,8 +603,11 @@ namespace KahoiiMusic
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            _isFormClosed = true;
             base.OnFormClosing(e);
             Application.RemoveMessageFilter(this);
+
+            try { ThumbnailManager.ClearMemory(); } catch { }
 
             if (_trayIcon != null)
             {
@@ -843,17 +859,75 @@ namespace KahoiiMusic
             MemoryOptimizer.TrimMemoryAsync(50, true);
         }
 
-        private void RestoreFromTray()
+        public void RestoreFromTray()
         {
-            Show();
-            if (WindowState == FormWindowState.Minimized)
+            if (InvokeRequired)
             {
-                WindowState = FormWindowState.Normal;
+                BeginInvoke(new Action(RestoreFromTray));
+                return;
             }
-            BringToFront();
-            Activate();
-            TopMost = true;
-            TopMost = false;
+
+            try
+            {
+                Show();
+                if (WindowState == FormWindowState.Minimized)
+                {
+                    WindowState = FormWindowState.Normal;
+                }
+                ShowWindow(this.Handle, SW_RESTORE);
+                BringToFront();
+                Activate();
+                SetForegroundWindow(this.Handle);
+                TopMost = true;
+                TopMost = false;
+            }
+            catch { }
+        }
+
+        private void StartSingleInstanceIpcServer()
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                string pipeName = "KahoiiMusic_Pipe_" + Environment.UserName;
+                while (!_isFormClosed)
+                {
+                    try
+                    {
+                        using (var server = new System.IO.Pipes.NamedPipeServerStream(pipeName, System.IO.Pipes.PipeDirection.In, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous))
+                        {
+                            server.WaitForConnection();
+                            using (var reader = new System.IO.StreamReader(server, System.Text.Encoding.UTF8))
+                            {
+                                string msg = reader.ReadLine();
+                                if (!string.IsNullOrEmpty(msg))
+                                {
+                                    try
+                                    {
+                                        BeginInvoke(new Action(delegate
+                                        {
+                                            RestoreFromTray();
+                                            if (msg != "__ACTIVATE__" && !string.IsNullOrWhiteSpace(msg))
+                                            {
+                                                searchPillBox.Text = msg;
+                                                if (_audioPlayer != null)
+                                                {
+                                                    _audioPlayer.LoadAndPlay(msg);
+                                                }
+                                            }
+                                        }));
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        if (_isFormClosed) break;
+                        System.Threading.Thread.Sleep(200);
+                    }
+                }
+            });
         }
 
         protected override void OnResize(EventArgs e)
@@ -865,7 +939,7 @@ namespace KahoiiMusic
             }
         }
 
-        private class DarkMenuRenderer : ToolStripProfessionalRenderer
+        internal class DarkMenuRenderer : ToolStripProfessionalRenderer
         {
             public DarkMenuRenderer() : base(new DarkMenuColorTable()) { }
 
@@ -942,7 +1016,7 @@ namespace KahoiiMusic
             }
         }
 
-        private class DarkMenuColorTable : ProfessionalColorTable
+        internal class DarkMenuColorTable : ProfessionalColorTable
         {
             public override Color ToolStripDropDownBackground => Color.FromArgb(24, 24, 28);
             public override Color MenuBorder => Color.FromArgb(52, 52, 60);
