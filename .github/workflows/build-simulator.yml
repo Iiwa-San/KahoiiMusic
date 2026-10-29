@@ -42,6 +42,15 @@ jobs:
             exit 1
           fi
           echo "Found Device app at: $APP_PATH"
+          # Ensure App Icon is copied directly into app bundle root
+          cp Resources/AppIcon.png "$APP_PATH/AppIcon.png"
+          cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@2x.png"
+          cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@3x.png"
+          cp Resources/AppIcon.png "$APP_PATH/AppIcon76x76@2x~ipad.png"
+          # Convert Info.plist to human-readable XML format (prevents Windows Sideloadly bplist corruption)
+          plutil -convert xml1 "$APP_PATH/Info.plist"
+          # Pre-sign with ad-hoc signature so _CodeSignature is fully structured
+          codesign --force --deep --sign - "$APP_PATH"
           mkdir -p Payload
           cp -r "$APP_PATH" Payload/
           zip -r -y "$GITHUB_WORKSPACE/KahoiiMusic.ipa" Payload
@@ -76,6 +85,12 @@ jobs:
             exit 1
           fi
           echo "Found Simulator app at: $APP_PATH"
+          # Ensure App Icon is copied directly into app bundle root
+          cp Resources/AppIcon.png "$APP_PATH/AppIcon.png"
+          cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@2x.png"
+          cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@3x.png"
+          # Convert Info.plist to human-readable XML format
+          plutil -convert xml1 "$APP_PATH/Info.plist"
           codesign --force --deep --sign - "$APP_PATH"
           mkdir -p appetize_bundle
           cp -r "$APP_PATH" appetize_bundle/
