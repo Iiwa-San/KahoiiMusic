@@ -5,6 +5,9 @@ on:
     branches: [ "IOSApp" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-all:
     runs-on: macos-14
@@ -64,16 +67,46 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Upload Simulator Artifact for Appetize.io
+      - name: Prepare Appetize Bundle (Ensure .app folder is preserved at zip root)
+        run: |
+          APP_PATH=$(find build-simulator/Build/Products/Debug-iphonesimulator -name "KahoiiMusic.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::KahoiiMusic.app for Simulator not found!"
+            exit 1
+          fi
+          echo "Found Simulator app at: $APP_PATH"
+          mkdir -p appetize_bundle
+          cp -r "$APP_PATH" appetize_bundle/
+          cd appetize_bundle
+          zip -r -y "$GITHUB_WORKSPACE/KahoiiMusic-Appetize.zip" KahoiiMusic.app
+          echo "Zip contents verification:"
+          unzip -l "$GITHUB_WORKSPACE/KahoiiMusic-Appetize.zip" | head -n 15
+
+      - name: Upload Simulator Artifact (With KahoiiMusic.app folder)
         uses: actions/upload-artifact@v4
         with:
           name: KahoiiMusic-Simulator
-          path: build-simulator/Build/Products/Debug-iphonesimulator/KahoiiMusic.app
+          path: appetize_bundle/
           retention-days: 14
+
+      # --- 3. CREATE DIRECT DOWNLOAD RELEASE ON GITHUB ---
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: "latest-ios"
+          name: "KahoiiMusic iOS Latest Build"
+          body: |
+            ### 🎵 KahoiiMusic iOS App Build
+            - **KahoiiMusic.ipa**: File cài đặt trực tiếp lên iPhone/iPad (qua Sideloadly, AltStore, TrollStore).
+            - **KahoiiMusic-Appetize.zip**: File chuẩn để test trên web [Appetize.io/upload](https://appetize.io/upload) (đã có thư mục `KahoiiMusic.app` chuẩn bên trong).
+          files: |
+            KahoiiMusic.ipa
+            KahoiiMusic-Appetize.zip
 
       - name: Summary
         run: |
           echo "### 🎉 Đã tạo thành công cả file IPA và Simulator!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **KahoiiMusic-IPA** (.ipa): Dùng để cài trực tiếp vào iPhone/iPad qua Sideloadly, AltStore, TrollStore." >> $GITHUB_STEP_SUMMARY
-          echo "- **KahoiiMusic-Simulator** (.zip): Dùng để test trên trình duyệt web qua Appetize.io." >> $GITHUB_STEP_SUMMARY
+          echo "- **KahoiiMusic.ipa**: Cài đặt trực tiếp lên iPhone/iPad." >> $GITHUB_STEP_SUMMARY
+          echo "- **KahoiiMusic-Appetize.zip**: Dùng để test trên trình duyệt web qua Appetize.io." >> $GITHUB_STEP_SUMMARY
