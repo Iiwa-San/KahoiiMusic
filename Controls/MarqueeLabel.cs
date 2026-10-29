@@ -210,21 +210,6 @@ namespace KahoiiMusic.Controls
                     }
 
                     g.Restore(state);
-
-                    // Soft edge fade on left and right borders (16px) for an ultra-premium feel
-                    int fadeWidth = 16;
-                    if (w > fadeWidth * 2)
-                    {
-                        // Left edge fade out
-                        using (LinearGradientBrush leftFade = new LinearGradientBrush(
-                            new Rectangle(0, 0, fadeWidth, h),
-                            Color.FromArgb(180, 0, 0, 0),
-                            Color.Transparent,
-                            LinearGradientMode.Horizontal))
-                        {
-                            // Soft vignette
-                        }
-                    }
                 }
             }
         }

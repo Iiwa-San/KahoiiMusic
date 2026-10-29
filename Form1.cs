@@ -22,6 +22,8 @@ namespace KahoiiMusic
         public static extern bool ReleaseCapture();
 
         private AudioPlayerService _audioPlayer;
+        private Controls.PlaylistPopup playlistPopup;
+        private Timer _ramTimer;
 
         public Form1() : this(null)
         {
@@ -96,6 +98,9 @@ namespace KahoiiMusic
 
         private void SetupEvents()
         {
+            playlistPopup = new Controls.PlaylistPopup();
+            playlistPopup.Owner = this;
+
             // Window Dragging
             MouseDown += Window_MouseDown;
             picLogo.MouseDown += Window_MouseDown;
@@ -116,10 +121,10 @@ namespace KahoiiMusic
             btnMinimize.MouseLeave += (s, e) => btnMinimize.ForeColor = Color.FromArgb(140, 140, 140);
 
             // Periodic memory trimming timer (every 30s) to keep RAM usage minimal
-            Timer ramTimer = new Timer();
-            ramTimer.Interval = 30000;
-            ramTimer.Tick += (s, e) => MemoryOptimizer.TrimMemory();
-            ramTimer.Start();
+            _ramTimer = new Timer();
+            _ramTimer.Interval = 30000;
+            _ramTimer.Tick += (s, e) => MemoryOptimizer.TrimMemory();
+            _ramTimer.Start();
 
             // Audio Player Events
             _audioPlayer.StatusMessageChanged += AudioPlayer_StatusMessageChanged;
@@ -160,7 +165,7 @@ namespace KahoiiMusic
             // Playlist Button and Popup Events
             btnPlaylist.Click += (s, e) =>
             {
-                if (playlistPopup.Visible)
+                if (playlistPopup.Visible || playlistPopup.JustDeactivated)
                 {
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
@@ -512,7 +517,7 @@ namespace KahoiiMusic
             base.OnPaint(e);
 
             // Subtle border around the form for crisp definition on dark desktops
-            using (Pen borderPen = new Pen(Color.FromArgb(45, 45, 45), 1))
+            using (Pen borderPen = new Pen(Color.FromArgb(38, 38, 38), 1))
             {
                 e.Graphics.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
             }
@@ -533,6 +538,16 @@ namespace KahoiiMusic
         {
             base.OnFormClosing(e);
             Application.RemoveMessageFilter(this);
+
+            if (_ramTimer != null)
+            {
+                try { _ramTimer.Stop(); _ramTimer.Dispose(); } catch { }
+                _ramTimer = null;
+            }
+            if (playbackTimer != null)
+            {
+                try { playbackTimer.Stop(); } catch { }
+            }
             if (artworkBox != null)
             {
                 artworkBox.ClearImage();
@@ -591,16 +606,6 @@ namespace KahoiiMusic
             panelBottomControls.BackColor = Color.Transparent;
 
             panelPlayerCard.Invalidate();
-        }
-
-        private void gradientPanel_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
-
-        private void panelBottomControls_Paint(object sender, PaintEventArgs e)
-        {
-
         }
     }
 }

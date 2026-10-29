@@ -197,14 +197,10 @@ namespace KahoiiMusic.Services
                 _volume = Math.Max(0.0f, Math.Min(1.0f, value));
                 lock (_lock)
                 {
-                    try
+                    if (_managedStream != null)
                     {
-                        if (_outputDevice != null)
-                        {
-                            _outputDevice.Volume = _volume;
-                        }
+                        _managedStream.Volume = _volume;
                     }
-                    catch { }
                 }
             }
         }
@@ -767,7 +763,6 @@ namespace KahoiiMusic.Services
                                 _outputDevice.NumberOfBuffers = 3;
                                 _outputDevice.PlaybackStopped += OutputDevice_PlaybackStopped;
                                 _outputDevice.Init(_managedStream);
-                                _outputDevice.Volume = _volume;
                                 _outputDevice.Play();
                             }
 
@@ -1098,7 +1093,7 @@ namespace KahoiiMusic.Services
                 }
             }, null);
         }
-
+       
         public void Dispose()
         {
             lock (_lock)
@@ -1121,6 +1116,7 @@ namespace KahoiiMusic.Services
         private TimeSpan _playbackBaseTime = TimeSpan.Zero;
         private long _bytesReadSinceSeek = 0;
         private readonly byte[] _discardBuffer = new byte[4096];
+        private volatile float _volume = 1.0f;
 
         public ManagedAudioStream(WaveStream source, AudioPlayerService service, List<double> clusters = null)
         {
@@ -1128,6 +1124,13 @@ namespace KahoiiMusic.Services
             _service = service;
             _clusters = clusters;
             _isLooping = service.IsLooping;
+            _volume = service.Volume;
+        }
+
+        public float Volume
+        {
+            get { return _volume; }
+            set { _volume = Math.Max(0.0f, Math.Min(1.0f, value)); }
         }
 
         public bool IsLooping
@@ -1329,7 +1332,65 @@ namespace KahoiiMusic.Services
                     }
                 }
 
+                if (read > 0)
+                {
+                    ApplyVolume(buffer, offset, read);
+                }
+
                 return read;
+            }
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct FloatUnion
+        {
+            [FieldOffset(0)] public float FloatValue;
+            [FieldOffset(0)] public byte B0;
+            [FieldOffset(1)] public byte B1;
+            [FieldOffset(2)] public byte B2;
+            [FieldOffset(3)] public byte B3;
+        }
+
+        private void ApplyVolume(byte[] buffer, int offset, int bytesRead)
+        {
+            float vol = _volume;
+            if (vol >= 0.999f || bytesRead <= 0) return;
+
+            if (vol <= 0.001f)
+            {
+                Array.Clear(buffer, offset, bytesRead);
+                return;
+            }
+
+            if (WaveFormat.BitsPerSample == 16)
+            {
+                int end = offset + bytesRead;
+                for (int i = offset; i < end - 1; i += 2)
+                {
+                    short sample = (short)(buffer[i] | (buffer[i + 1] << 8));
+                    int scaled = (int)(sample * vol);
+                    if (scaled > 32767) scaled = 32767;
+                    else if (scaled < -32768) scaled = -32768;
+                    buffer[i] = (byte)(scaled & 0xFF);
+                    buffer[i + 1] = (byte)((scaled >> 8) & 0xFF);
+                }
+            }
+            else if (WaveFormat.BitsPerSample == 32)
+            {
+                FloatUnion u = default(FloatUnion);
+                int end = offset + bytesRead;
+                for (int i = offset; i < end - 3; i += 4)
+                {
+                    u.B0 = buffer[i];
+                    u.B1 = buffer[i + 1];
+                    u.B2 = buffer[i + 2];
+                    u.B3 = buffer[i + 3];
+                    u.FloatValue *= vol;
+                    buffer[i] = u.B0;
+                    buffer[i + 1] = u.B1;
+                    buffer[i + 2] = u.B2;
+                    buffer[i + 3] = u.B3;
+                }
             }
         }
 
@@ -1355,6 +1416,7 @@ namespace KahoiiMusic.Services
                 if (loopRead > 0)
                 {
                     _bytesReadSinceSeek += loopRead;
+                    ApplyVolume(buffer, offset, loopRead);
                 }
             }
             catch { }

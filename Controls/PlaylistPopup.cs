@@ -29,6 +29,13 @@ namespace KahoiiMusic.Controls
             get { return _isLoading; }
         }
 
+        private DateTime _lastDeactivatedTime = DateTime.MinValue;
+
+        public bool JustDeactivated
+        {
+            get { return (DateTime.UtcNow - _lastDeactivatedTime).TotalMilliseconds < 250; }
+        }
+
         public PlaylistPopup()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint |
@@ -42,12 +49,7 @@ namespace KahoiiMusic.Controls
             BackColor = Color.FromArgb(20, 18, 30);
             Size = new Size(360, 250);
             DoubleBuffered = true;
-            UpdateRegion();
-        }
-
-        protected override bool ShowWithoutActivation
-        {
-            get { return true; }
+            KeyPreview = true;
         }
 
         protected override CreateParams CreateParams
@@ -60,10 +62,44 @@ namespace KahoiiMusic.Controls
             }
         }
 
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            UpdateRegion();
+        }
+
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
-            UpdateRegion();
+            if (IsHandleCreated)
+            {
+                UpdateRegion();
+            }
+        }
+
+        protected override void OnDeactivate(EventArgs e)
+        {
+            base.OnDeactivate(e);
+            _lastDeactivatedTime = DateTime.UtcNow;
+            Hide();
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode == Keys.Escape)
+            {
+                Hide();
+            }
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (!Visible && CloseRequested != null)
+            {
+                CloseRequested(this, EventArgs.Empty);
+            }
         }
 
         private void UpdateRegion()
@@ -83,7 +119,6 @@ namespace KahoiiMusic.Controls
             {
                 e.Cancel = true;
                 Hide();
-                if (CloseRequested != null) CloseRequested(this, EventArgs.Empty);
                 return;
             }
             base.OnFormClosing(e);
@@ -199,17 +234,16 @@ namespace KahoiiMusic.Controls
             Invalidate();
         }
 
-        protected override void OnMouseClick(MouseEventArgs e)
+        protected override void OnMouseDown(MouseEventArgs e)
         {
-            base.OnMouseClick(e);
+            base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left) return;
 
             // Close button clicked
             Rectangle closeRect = new Rectangle(Width - 32, 7, 22, 22);
             if (closeRect.Contains(e.Location))
             {
-                Visible = false;
-                if (CloseRequested != null) CloseRequested(this, EventArgs.Empty);
+                Hide();
                 return;
             }
 
