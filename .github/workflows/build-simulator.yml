@@ -1,4 +1,4 @@
-name: Build for iOS Simulator (Appetize.io)
+name: Build iOS App (IPA & Simulator)
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-simulator:
+  build-all:
     runs-on: macos-14
     steps:
       - name: Checkout Code
@@ -17,52 +17,74 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
           xcodebuild -version
 
+      # --- 1. BUILD IPA CHO IPHONE THẬT (ARM64 RELEASE) ---
+      - name: Build for iOS Device (Release)
+        run: |
+          xcodebuild build \
+            -project KahoiiMusic.xcodeproj \
+            -scheme KahoiiMusic \
+            -destination "generic/platform=iOS" \
+            -configuration Release \
+            -derivedDataPath build-device \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package .ipa File
+        run: |
+          APP_PATH=$(find build-device/Build/Products/Release-iphoneos -name "KahoiiMusic.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::KahoiiMusic.app for iOS Device not found!"
+            exit 1
+          fi
+          echo "Found Device app at: $APP_PATH"
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r -y "$GITHUB_WORKSPACE/KahoiiMusic.ipa" Payload
+          echo "Created IPA: $GITHUB_WORKSPACE/KahoiiMusic.ipa"
+
+      - name: Upload .ipa Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KahoiiMusic-IPA
+          path: KahoiiMusic.ipa
+          retention-days: 14
+
+      # --- 2. BUILD CHO SIMULATOR / APPETIZE.IO ---
       - name: Build for iOS Simulator
         run: |
           xcodebuild build \
             -project KahoiiMusic.xcodeproj \
             -scheme KahoiiMusic \
-            -destination "platform=iOS Simulator,name=iPhone 15" \
-            -configuration Debug \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO || \
-          xcodebuild build \
-            -project KahoiiMusic.xcodeproj \
-            -scheme KahoiiMusic \
             -destination "generic/platform=iOS Simulator" \
             -configuration Debug \
-            -derivedDataPath build \
+            -derivedDataPath build-simulator \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Package Simulator App (.zip for Appetize.io)
         run: |
-          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -name "KahoiiMusic.app" -type d | head -n 1)
+          APP_PATH=$(find build-simulator/Build/Products/Debug-iphonesimulator -name "KahoiiMusic.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            echo "::error::KahoiiMusic.app not found in build directory!"
+            echo "::error::KahoiiMusic.app for Simulator not found!"
             exit 1
           fi
-          echo "Found app at: $APP_PATH"
+          echo "Found Simulator app at: $APP_PATH"
           cd $(dirname "$APP_PATH")
           zip -r -y "$GITHUB_WORKSPACE/KahoiiMusic-Simulator.zip" KahoiiMusic.app
-          echo "Packaging completed: $GITHUB_WORKSPACE/KahoiiMusic-Simulator.zip"
 
-      - name: Upload Artifact for Appetize.io
+      - name: Upload Simulator Artifact
         uses: actions/upload-artifact@v4
         with:
           name: KahoiiMusic-Simulator
           path: KahoiiMusic-Simulator.zip
           retention-days: 14
 
-      - name: Output Appetize.io Instructions
+      - name: Summary
         run: |
-          echo "### 🚀 Bản build iOS Simulator đã sẵn sàng để test trên Appetize.io!" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 Đã tạo thành công cả file IPA và Simulator!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. Tải file **KahoiiMusic-Simulator.zip** từ phần **Artifacts** bên dưới." >> $GITHUB_STEP_SUMMARY
-          echo "2. Truy cập [https://appetize.io/upload](https://appetize.io/upload)." >> $GITHUB_STEP_SUMMARY
-          echo "3. Kéo và thả file **KahoiiMusic-Simulator.zip** vào trang web." >> $GITHUB_STEP_SUMMARY
-          echo "4. Trình duyệt sẽ mở ngay một chiếc iPhone ảo để bạn tương tác trực tiếp!" >> $GITHUB_STEP_SUMMARY
-
+          echo "- **KahoiiMusic-IPA** (.ipa): Dùng để cài trực tiếp vào iPhone/iPad qua Sideloadly, AltStore, TrollStore." >> $GITHUB_STEP_SUMMARY
+          echo "- **KahoiiMusic-Simulator** (.zip): Dùng để test trên trình duyệt web qua Appetize.io." >> $GITHUB_STEP_SUMMARY
