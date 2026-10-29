@@ -1,8 +1,27 @@
+# Xcode & Apple
+.DS_Store
+build/
+DerivedData/
+*.moved-aside
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+
+# Swift Package Manager
+/.build/
+/Packages/
+Package.pins
+Package.resolved
+.swiftpm/configuration/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Windows / Visual Studio temp
 .vs/
 bin/
 obj/
-scratch/
-publish/
-*.user
 *.suo
-
+*.user
+cache/
+*.exe
+*.dll
+*.pdb

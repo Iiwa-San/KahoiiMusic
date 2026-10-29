@@ -1,0 +1,9 @@
+version: 1
+bundleID: com.kahoii.music
+product: KahoiiMusic
+infoPath: Info.plist
+iconPath: Resources/AppIcon.png
+resources:
+  - Resources/app_logo.png
+  - Resources/logo_icon.png
+

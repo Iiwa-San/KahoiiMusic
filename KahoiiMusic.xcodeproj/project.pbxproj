@@ -1,0 +1,333 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA0001012C12340000000001 /* KahoiiMusicApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000001 /* KahoiiMusicApp.swift */; };
+		AA0001012C12340000000002 /* PlaylistItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000002 /* PlaylistItem.swift */; };
+		AA0001012C12340000000003 /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000003 /* AudioPlayerService.swift */; };
+		AA0001012C12340000000004 /* YouTubeResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000004 /* YouTubeResolver.swift */; };
+		AA0001012C12340000000005 /* HistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000005 /* HistoryService.swift */; };
+		AA0001012C12340000000006 /* ColorExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000006 /* ColorExtractor.swift */; };
+		AA0001012C12340000000007 /* MainPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000007 /* MainPlayerView.swift */; };
+		AA0001012C12340000000008 /* DynamicGradientView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000008 /* DynamicGradientView.swift */; };
+		AA0001012C12340000000009 /* ArtworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000009 /* ArtworkView.swift */; };
+		AA0001012C12340000000010 /* MarqueeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000010 /* MarqueeText.swift */; };
+		AA0001012C12340000000011 /* MusicTrackBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000011 /* MusicTrackBarView.swift */; };
+		AA0001012C12340000000012 /* SearchPillBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000012 /* SearchPillBar.swift */; };
+		AA0001012C12340000000013 /* EqualizerAnimationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000013 /* EqualizerAnimationView.swift */; };
+		AA0001012C12340000000014 /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000014 /* MiniPlayerView.swift */; };
+		AA0001012C12340000000015 /* PlaylistQueueSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000015 /* PlaylistQueueSheet.swift */; };
+		AA0001012C12340000000016 /* HistorySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000016 /* HistorySheet.swift */; };
+		AA0001012C12340000000017 /* SearchResultsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000017 /* SearchResultsSheet.swift */; };
+		AA0001012C12340000000018 /* FavoritesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000018 /* FavoritesSheet.swift */; };
+		AA0001012C12340000000019 /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000019 /* Resources */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA0000012C12340000000001 /* KahoiiMusic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KahoiiMusic.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0001002C12340000000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA0001002C12340000000001 /* KahoiiMusicApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KahoiiMusicApp.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000002 /* PlaylistItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistItem.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000003 /* AudioPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerService.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000004 /* YouTubeResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeResolver.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000005 /* HistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryService.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000006 /* ColorExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorExtractor.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000007 /* MainPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPlayerView.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000008 /* DynamicGradientView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicGradientView.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000009 /* ArtworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkView.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000010 /* MarqueeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarqueeText.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000011 /* MusicTrackBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTrackBarView.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000012 /* SearchPillBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPillBar.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000013 /* EqualizerAnimationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqualizerAnimationView.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000014 /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000015 /* PlaylistQueueSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistQueueSheet.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000016 /* HistorySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySheet.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000017 /* SearchResultsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsSheet.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000018 /* FavoritesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesSheet.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000019 /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA0000102C12340000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA0000202C12340000000001 = {
+			isa = PBXGroup;
+			children = (
+				AA0000202C12340000000002 /* Sources */,
+				AA0001002C12340000000019 /* Resources */,
+				AA0001002C12340000000000 /* Info.plist */,
+				AA0000202C12340000000007 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA0000202C12340000000002 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				AA0001002C12340000000001 /* KahoiiMusicApp.swift */,
+				AA0000202C12340000000003 /* Models */,
+				AA0000202C12340000000004 /* Services */,
+				AA0000202C12340000000005 /* Views */,
+			);
+			path = Sources/KahoiiMusic;
+			sourceTree = "<group>";
+		};
+		AA0000202C12340000000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AA0001002C12340000000002 /* PlaylistItem.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		AA0000202C12340000000004 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AA0001002C12340000000003 /* AudioPlayerService.swift */,
+				AA0001002C12340000000004 /* YouTubeResolver.swift */,
+				AA0001002C12340000000005 /* HistoryService.swift */,
+				AA0001002C12340000000006 /* ColorExtractor.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AA0000202C12340000000005 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AA0001002C12340000000007 /* MainPlayerView.swift */,
+				AA0000202C12340000000006 /* Components */,
+				AA0000202C12340000000008 /* Sheets */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		AA0000202C12340000000006 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				AA0001002C12340000000008 /* DynamicGradientView.swift */,
+				AA0001002C12340000000009 /* ArtworkView.swift */,
+				AA0001002C12340000000010 /* MarqueeText.swift */,
+				AA0001002C12340000000011 /* MusicTrackBarView.swift */,
+				AA0001002C12340000000012 /* SearchPillBar.swift */,
+				AA0001002C12340000000013 /* EqualizerAnimationView.swift */,
+				AA0001002C12340000000014 /* MiniPlayerView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		AA0000202C12340000000008 /* Sheets */ = {
+			isa = PBXGroup;
+			children = (
+				AA0001002C12340000000015 /* PlaylistQueueSheet.swift */,
+				AA0001002C12340000000016 /* HistorySheet.swift */,
+				AA0001002C12340000000017 /* SearchResultsSheet.swift */,
+				AA0001002C12340000000018 /* FavoritesSheet.swift */,
+			);
+			path = Sheets;
+			sourceTree = "<group>";
+		};
+		AA0000202C12340000000007 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000012C12340000000001 /* KahoiiMusic.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA0000302C12340000000001 /* KahoiiMusic */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000402C12340000000001 /* Build configuration list for PBXNativeTarget "KahoiiMusic" */;
+			buildPhases = (
+				AA0000502C12340000000001 /* Sources */,
+				AA0000102C12340000000001 /* Frameworks */,
+				AA0000602C12340000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KahoiiMusic;
+			productName = KahoiiMusic;
+			productReference = AA0000012C12340000000001 /* KahoiiMusic.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA0000702C12340000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					AA0000302C12340000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = AA0000402C12340000000002 /* Build configuration list for PBXProject "KahoiiMusic" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA0000202C12340000000001;
+			productRefGroup = AA0000202C12340000000007 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA0000302C12340000000001 /* KahoiiMusic */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA0000602C12340000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0001012C12340000000019 /* Resources in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA0000502C12340000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0001012C12340000000001 /* KahoiiMusicApp.swift in Sources */,
+				AA0001012C12340000000002 /* PlaylistItem.swift in Sources */,
+				AA0001012C12340000000003 /* AudioPlayerService.swift in Sources */,
+				AA0001012C12340000000004 /* YouTubeResolver.swift in Sources */,
+				AA0001012C12340000000005 /* HistoryService.swift in Sources */,
+				AA0001012C12340000000006 /* ColorExtractor.swift in Sources */,
+				AA0001012C12340000000007 /* MainPlayerView.swift in Sources */,
+				AA0001012C12340000000008 /* DynamicGradientView.swift in Sources */,
+				AA0001012C12340000000009 /* ArtworkView.swift in Sources */,
+				AA0001012C12340000000010 /* MarqueeText.swift in Sources */,
+				AA0001012C12340000000011 /* MusicTrackBarView.swift in Sources */,
+				AA0001012C12340000000012 /* SearchPillBar.swift in Sources */,
+				AA0001012C12340000000013 /* EqualizerAnimationView.swift in Sources */,
+				AA0001012C12340000000014 /* MiniPlayerView.swift in Sources */,
+				AA0001012C12340000000015 /* PlaylistQueueSheet.swift in Sources */,
+				AA0001012C12340000000016 /* HistorySheet.swift in Sources */,
+				AA0001012C12340000000017 /* SearchResultsSheet.swift in Sources */,
+				AA0001012C12340000000018 /* FavoritesSheet.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA0000802C12340000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kahoii.music;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA0000802C12340000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kahoii.music;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		AA0000802C12340000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			};
+			name = Debug;
+		};
+		AA0000802C12340000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SDKROOT = iphoneos;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA0000402C12340000000001 /* Build configuration list for PBXNativeTarget "KahoiiMusic" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000802C12340000000001 /* Debug */,
+				AA0000802C12340000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000402C12340000000002 /* Build configuration list for PBXProject "KahoiiMusic" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000802C12340000000003 /* Debug */,
+				AA0000802C12340000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = AA0000702C12340000000001 /* Project object */;
+}
+
