@@ -14,21 +14,25 @@ namespace KahoiiMusic.Services
         private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
 
         /// <summary>
-        /// Trims unreferenced managed objects and flushes unused working set pages to minimize RAM footprint.
+        /// Lightweight background memory trim that does NOT freeze UI threads or cause page faults.
+        /// Runs on ThreadPool to avoid any impact on UI animations.
         /// </summary>
-        public static void TrimMemoryAsync(int delayMs = 500)
+        public static void TrimMemoryLight()
         {
             ThreadPool.QueueUserWorkItem(delegate
             {
-                if (delayMs > 0)
+                try
                 {
-                    Thread.Sleep(delayMs);
+                    GC.Collect(1, GCCollectionMode.Optimized, false);
                 }
-                TrimMemory();
+                catch { }
             });
         }
 
-        public static void TrimMemory()
+        /// <summary>
+        /// Aggressive working set flush - ONLY to be used when the application is minimized!
+        /// </summary>
+        public static void TrimMemoryAggressive()
         {
             try
             {
@@ -44,6 +48,40 @@ namespace KahoiiMusic.Services
                 }
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Trims unreferenced managed objects and flushes unused working set pages to minimize RAM footprint.
+        /// </summary>
+        public static void TrimMemoryAsync(int delayMs = 500, bool aggressive = true)
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                if (delayMs > 0)
+                {
+                    Thread.Sleep(delayMs);
+                }
+                if (aggressive)
+                {
+                    TrimMemoryAggressive();
+                }
+                else
+                {
+                    TrimMemoryLight();
+                }
+            });
+        }
+
+        public static void TrimMemory(bool aggressive = false)
+        {
+            if (aggressive)
+            {
+                TrimMemoryAggressive();
+            }
+            else
+            {
+                TrimMemoryLight();
+            }
         }
     }
 }

@@ -52,14 +52,33 @@ namespace KahoiiMusic.Controls
             KeyPreview = true;
         }
 
+        protected override bool ShowWithoutActivation
+        {
+            get { return true; }
+        }
+
         protected override CreateParams CreateParams
         {
             get
             {
                 CreateParams cp = base.CreateParams;
                 cp.ClassStyle |= 0x20000; // CS_DROPSHADOW (native hardware drop shadow)
+                cp.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE (prevents stealing foreground focus from main window)
                 return cp;
             }
+        }
+
+        private const int WM_MOUSEACTIVATE = 0x0021;
+        private const int MA_NOACTIVATE = 3;
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_MOUSEACTIVATE)
+            {
+                m.Result = (IntPtr)MA_NOACTIVATE;
+                return;
+            }
+            base.WndProc(ref m);
         }
 
         protected override void OnShown(EventArgs e)
@@ -81,6 +100,10 @@ namespace KahoiiMusic.Controls
         {
             base.OnDeactivate(e);
             _lastDeactivatedTime = DateTime.UtcNow;
+            if (Owner != null && !Owner.IsDisposed)
+            {
+                try { Owner.Activate(); } catch { }
+            }
             Hide();
         }
 
@@ -96,9 +119,16 @@ namespace KahoiiMusic.Controls
         protected override void OnVisibleChanged(EventArgs e)
         {
             base.OnVisibleChanged(e);
-            if (!Visible && CloseRequested != null)
+            if (!Visible)
             {
-                CloseRequested(this, EventArgs.Empty);
+                if (Owner != null && !Owner.IsDisposed)
+                {
+                    try { Owner.Activate(); } catch { }
+                }
+                if (CloseRequested != null)
+                {
+                    CloseRequested(this, EventArgs.Empty);
+                }
             }
         }
 

@@ -33,6 +33,17 @@ namespace KahoiiMusic.Services
         private float _volume = 1.0f;
         private bool _isLooping = false;
         private object _lock = new object();
+        private Process _activeDownloadProc;
+        private readonly object _downloadLock = new object();
+        private Process _preloadProc;
+        private string _preloadingVideoId;
+        private readonly object _preloadLock = new object();
+        private CancellationTokenSource _preloadCts;
+        private readonly object _preloadQueueLock = new object();
+        private const int PreloadBatchSize = 20;
+
+        private const long MaxCacheSizeBytes = 3L * 1024 * 1024 * 1024; // 3 GB (supports multiple multi-hour tracks >200MB each)
+        private const int MaxCacheFileCount = 100;
 
         private List<PlaylistItem> _playlist = new List<PlaylistItem>();
         private int _currentPlaylistIndex = -1;
@@ -134,37 +145,285 @@ namespace KahoiiMusic.Services
                 }
             }
 
-            // Immediately wipe any leftover temporary audio files from prior sessions
-            CleanOldCache();
+            // Clean any stale leftover audio cache from previous crashed sessions
+            ClearAudioCache();
         }
 
-        public void CleanOldCache(string keepFile = null)
+        public void MaintainCache(string currentActiveFile = null)
         {
             try
             {
                 if (string.IsNullOrEmpty(_cacheDirectory) || !Directory.Exists(_cacheDirectory)) return;
 
-                string[] files = Directory.GetFiles(_cacheDirectory);
-                foreach (string file in files)
+                DirectoryInfo di = new DirectoryInfo(_cacheDirectory);
+                var audioFiles = new List<FileInfo>();
+                long totalSize = 0;
+
+                foreach (var fi in di.GetFiles())
                 {
-                    string ext = Path.GetExtension(file).ToLower();
-                    // Only remove audio cache files, keep yt-dlp.exe so it never needs re-extracting
-                    if (ext == ".webm" || ext == ".m4a" || ext == ".mp3" || ext == ".opus" ||
-                        ext == ".aac" || ext == ".ogg" || ext == ".part" || ext == ".ytdl" ||
-                        ext == ".tmp" || ext == ".temp")
+                    string ext = fi.Extension.ToLower();
+                    if (ext == ".webm" || ext == ".m4a" || ext == ".mp3" || ext == ".opus" || ext == ".aac")
                     {
-                        if (string.IsNullOrEmpty(keepFile) || !file.Equals(keepFile, StringComparison.OrdinalIgnoreCase))
+                        audioFiles.Add(fi);
+                        totalSize += fi.Length;
+                    }
+                    else if (ext == ".part" || ext == ".ytdl" || ext == ".tmp" || ext == ".temp")
+                    {
+                        // Delete partial files older than 5 minutes
+                        if (DateTime.Now - fi.LastWriteTime > TimeSpan.FromMinutes(5))
                         {
-                            try
-                            {
-                                File.Delete(file);
-                            }
-                            catch { }
+                            try { fi.Delete(); } catch { }
                         }
                     }
                 }
+
+                // If within cache budget, keep everything for instant replay!
+                if (totalSize <= MaxCacheSizeBytes && audioFiles.Count <= MaxCacheFileCount) return;
+
+                // Sort oldest modified/touched first (LRU)
+                audioFiles.Sort((a, b) => a.LastWriteTime.CompareTo(b.LastWriteTime));
+
+                foreach (var fi in audioFiles)
+                {
+                    if (totalSize <= (long)(MaxCacheSizeBytes * 0.75) && audioFiles.Count <= MaxCacheFileCount - 5) break;
+
+                    // Never delete active playing track or upcoming preloaded track
+                    if (!string.IsNullOrEmpty(currentActiveFile) && fi.FullName.Equals(currentActiveFile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    if (!string.IsNullOrEmpty(_preloadingVideoId) && fi.Name.StartsWith(_preloadingVideoId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        totalSize -= fi.Length;
+                        fi.Delete();
+                    }
+                    catch { }
+                }
             }
             catch { }
+        }
+
+        public void CleanOldCache(string keepFile = null)
+        {
+            MaintainCache(keepFile);
+        }
+
+        public void ClearAudioCache()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_cacheDirectory) || !Directory.Exists(_cacheDirectory)) return;
+
+                DirectoryInfo di = new DirectoryInfo(_cacheDirectory);
+                foreach (var fi in di.GetFiles())
+                {
+                    if (fi.Name.Equals("yt-dlp.exe", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    for (int retry = 0; retry < 3; retry++)
+                    {
+                        try
+                        {
+                            fi.Delete();
+                            break;
+                        }
+                        catch
+                        {
+                            Thread.Sleep(30);
+                        }
+                    }
+                }
+
+                foreach (var dir in di.GetDirectories())
+                {
+                    try { dir.Delete(true); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        private void CancelActiveDownload()
+        {
+            lock (_downloadLock)
+            {
+                if (_activeDownloadProc != null)
+                {
+                    try
+                    {
+                        if (!_activeDownloadProc.HasExited)
+                        {
+                            _activeDownloadProc.Kill();
+                        }
+                    }
+                    catch { }
+                    _activeDownloadProc = null;
+                }
+            }
+        }
+
+        private void CancelPreload()
+        {
+            lock (_preloadQueueLock)
+            {
+                if (_preloadCts != null)
+                {
+                    try { _preloadCts.Cancel(); } catch { }
+                    _preloadCts = null;
+                }
+            }
+            CancelPreloadProcess();
+        }
+
+        private void CancelPreloadProcess()
+        {
+            lock (_preloadLock)
+            {
+                if (_preloadProc != null)
+                {
+                    try
+                    {
+                        if (!_preloadProc.HasExited)
+                        {
+                            _preloadProc.Kill();
+                        }
+                    }
+                    catch { }
+                    _preloadProc = null;
+                    _preloadingVideoId = null;
+                }
+            }
+        }
+
+        private void SchedulePreloadPlaylistAhead()
+        {
+            lock (_preloadQueueLock)
+            {
+                if (_preloadCts != null)
+                {
+                    try { _preloadCts.Cancel(); } catch { }
+                    _preloadCts = null;
+                }
+
+                _preloadCts = new CancellationTokenSource();
+                var token = _preloadCts.Token;
+
+                ThreadPool.QueueUserWorkItem(delegate
+                {
+                    try
+                    {
+                        // Wait 3s so current track starts playing smoothly before background downloads begin
+                        Thread.Sleep(3000);
+                        if (token.IsCancellationRequested) return;
+
+                        List<string> targetIds = new List<string>();
+                        lock (_lock)
+                        {
+                            if (_playlist != null && _playlist.Count > 0 && _currentPlaylistIndex >= 0)
+                            {
+                                int totalToQueue = Math.Min(PreloadBatchSize, _playlist.Count - 1);
+                                for (int i = 1; i <= totalToQueue; i++)
+                                {
+                                    int targetIdx = (_currentPlaylistIndex + i);
+                                    if (targetIdx >= _playlist.Count)
+                                    {
+                                        if (_isLooping)
+                                        {
+                                            targetIdx = targetIdx % _playlist.Count;
+                                        }
+                                        else
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    if (targetIdx >= 0 && targetIdx < _playlist.Count)
+                                    {
+                                        string id = _playlist[targetIdx].Id;
+                                        if (!string.IsNullOrEmpty(id) && !targetIds.Contains(id))
+                                        {
+                                            targetIds.Add(id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (targetIds.Count == 0) return;
+
+                        foreach (string vid in targetIds)
+                        {
+                            if (token.IsCancellationRequested) break;
+
+                            // Skip if already in cache
+                            if (!string.IsNullOrEmpty(FindCachedAudioFile(vid))) continue;
+
+                            // Preload track
+                            bool success = PreloadSingleTrackAudio(vid, token);
+                            if (!success || token.IsCancellationRequested) break;
+
+                            // Small delay between downloads so network has breathing room
+                            Thread.Sleep(300);
+                        }
+                    }
+                    catch { }
+                });
+            }
+        }
+
+        private bool PreloadSingleTrackAudio(string videoId, CancellationToken token)
+        {
+            if (string.IsNullOrEmpty(videoId) || token.IsCancellationRequested) return false;
+
+            lock (_preloadLock)
+            {
+                if (token.IsCancellationRequested) return false;
+                CancelPreloadProcess();
+
+                string ytdlpPath = FindYtDlp();
+                if (string.IsNullOrEmpty(ytdlpPath)) return false;
+
+                _preloadingVideoId = videoId;
+
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo();
+                    psi.FileName = ytdlpPath;
+                    psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
+                    psi.CreateNoWindow = true;
+                    psi.UseShellExecute = false;
+                    psi.RedirectStandardOutput = false;
+                    psi.RedirectStandardError = false;
+
+                    _preloadProc = Process.Start(psi);
+                    if (_preloadProc != null)
+                    {
+                        try { _preloadProc.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+                        
+                        while (!_preloadProc.WaitForExit(500))
+                        {
+                            if (token.IsCancellationRequested)
+                            {
+                                try { _preloadProc.Kill(); } catch { }
+                                return false;
+                            }
+                        }
+                    }
+
+                    return !string.IsNullOrEmpty(FindCachedAudioFile(videoId));
+                }
+                catch
+                {
+                    return false;
+                }
+                finally
+                {
+                    _preloadProc = null;
+                    _preloadingVideoId = null;
+                }
+            }
         }
 
         public bool HasTrack
@@ -333,6 +592,8 @@ namespace KahoiiMusic.Services
 
         public void StopAndClear()
         {
+            CancelActiveDownload();
+            CancelPreload();
             lock (_lock)
             {
                 CleanupCurrentTrack();
@@ -340,7 +601,7 @@ namespace KahoiiMusic.Services
                 _currentTitle = string.Empty;
                 _totalDuration = TimeSpan.Zero;
             }
-            CleanOldCache();
+            MaintainCache();
             RaisePlaybackStateChanged();
             RaiseTitleChanged(string.Empty);
             RaiseStatus(null);
@@ -476,6 +737,7 @@ namespace KahoiiMusic.Services
 
                     List<PlaylistItem> list = new List<PlaylistItem>();
                     string errOutput = string.Empty;
+                    bool hasStartedFirst = false;
                     using (Process proc = Process.Start(psi))
                     {
                         var errTask = System.Threading.Tasks.Task.Run(() => proc.StandardError.ReadToEnd());
@@ -496,7 +758,25 @@ namespace KahoiiMusic.Services
                                 }
                                 if (id.Length == 11)
                                 {
-                                    list.Add(new PlaylistItem { Id = id, Title = title, DurationSeconds = dur });
+                                    var item = new PlaylistItem { Id = id, Title = title, DurationSeconds = dur };
+                                    list.Add(item);
+
+                                    // Fast-start: As soon as the first track is found, begin playing it immediately!
+                                    if (playFirstIfNoVideo && string.IsNullOrEmpty(currentVideoId) && !hasStartedFirst && list.Count == 1)
+                                    {
+                                        hasStartedFirst = true;
+                                        _playlist = new List<PlaylistItem>(list);
+                                        _currentPlaylistId = listId;
+                                        _currentPlaylistIndex = 0;
+                                        _currentTitle = title;
+                                        RaiseTitleChanged(_currentTitle);
+                                        _syncContext.Post(delegate
+                                        {
+                                            if (PlaylistLoaded != null) PlaylistLoaded(this, _playlist);
+                                            if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, 0);
+                                        }, null);
+                                        LoadAndPlay(item.Url);
+                                    }
                                 }
                             }
                         }
@@ -585,9 +865,13 @@ namespace KahoiiMusic.Services
                             });
                         }
 
-                        if (playFirstIfNoVideo && string.IsNullOrEmpty(currentVideoId))
+                        if (playFirstIfNoVideo && string.IsNullOrEmpty(currentVideoId) && !hasStartedFirst)
                         {
                             PlayTrackAtIndex(0);
+                        }
+                        else
+                        {
+                            SchedulePreloadPlaylistAhead();
                         }
                     }
                     else
@@ -682,14 +966,54 @@ namespace KahoiiMusic.Services
                                 }, null);
                             }
                         }
-                        FetchVideoTitle(videoId);
-
+                        // Immediate thumbnail display (instant visual feedback)
                         string thumb = string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", videoId);
                         RaiseThumbnail(thumb);
+
+                        // Only fetch title via oEmbed if we don't already have a valid title, AND run it asynchronously!
+                        if (string.IsNullOrWhiteSpace(_currentTitle) || _currentTitle == "None" || _currentTitle == "NA")
+                        {
+                            ThreadPool.QueueUserWorkItem(delegate { FetchVideoTitle(videoId); });
+                        }
                     }
+
+                    // Cancel any previous user-initiated download so 100% bandwidth goes to this song
+                    CancelActiveDownload();
 
                     // Check if already cached
                     string audioPath = FindCachedAudioFile(videoId);
+
+                    // If not in cache, check if currently being preloaded
+                    if (string.IsNullOrEmpty(audioPath))
+                    {
+                        bool preloadingSame = false;
+                        lock (_preloadLock)
+                        {
+                            if (!string.IsNullOrEmpty(videoId) && _preloadingVideoId == videoId && _preloadProc != null)
+                            {
+                                preloadingSame = true;
+                            }
+                        }
+
+                        if (preloadingSame)
+                        {
+                            RaiseStatus("Đang nạp âm thanh...");
+                            try
+                            {
+                                if (_preloadProc != null)
+                                {
+                                    _preloadProc.WaitForExit(120000); // 2 minutes for large tracks
+                                }
+                            }
+                            catch { }
+                            audioPath = FindCachedAudioFile(videoId);
+                        }
+                        else
+                        {
+                            // Cancel preloading of any different track to free up full bandwidth
+                            CancelPreload();
+                        }
+                    }
 
                     if (string.IsNullOrEmpty(audioPath))
                     {
@@ -699,20 +1023,28 @@ namespace KahoiiMusic.Services
                             ? string.Format("https://www.youtube.com/watch?v={0}", videoId)
                             : string.Format("ytsearch1:\"{0}\"", input);
 
-                        // Use -f "ba/b" to download reliable WebM/Opus audio that decodes seamlessly without external codecs
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = ytdlpPath;
-                        psi.Arguments = string.Format("-f \"ba/b\" --no-playlist --no-progress -o \"{0}\\%(id)s.%(ext)s\" \"{1}\"", _cacheDirectory, targetArg);
+                        psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"{1}\"", _cacheDirectory, targetArg);
                         psi.CreateNoWindow = true;
                         psi.UseShellExecute = false;
                         psi.RedirectStandardOutput = false;
                         psi.RedirectStandardError = false;
 
-                        using (Process proc = Process.Start(psi))
+                        lock (_downloadLock)
                         {
-                            if (!proc.WaitForExit(45000))
+                            _activeDownloadProc = Process.Start(psi);
+                        }
+
+                        if (_activeDownloadProc != null)
+                        {
+                            if (!_activeDownloadProc.WaitForExit(180000)) // 3 minutes for large tracks >200MB
                             {
-                                try { proc.Kill(); } catch { }
+                                try { _activeDownloadProc.Kill(); } catch { }
+                            }
+                            lock (_downloadLock)
+                            {
+                                _activeDownloadProc = null;
                             }
                         }
 
@@ -729,7 +1061,7 @@ namespace KahoiiMusic.Services
                                 if (fname.Length == 11)
                                 {
                                     _currentVideoId = fname;
-                                    FetchVideoTitle(fname);
+                                    ThreadPool.QueueUserWorkItem(delegate { FetchVideoTitle(fname); });
                                     string thumb = string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", fname);
                                     RaiseThumbnail(thumb);
                                 }
@@ -766,11 +1098,14 @@ namespace KahoiiMusic.Services
                                 _outputDevice.Play();
                             }
 
-                            // Clean old cached audio files now that previous track was disposed and unlocked
+                            // Maintain cache limits (LRU up to 300MB) keeping recently used tracks
                             ThreadPool.QueueUserWorkItem(delegate
                             {
-                                CleanOldCache(audioPath);
+                                MaintainCache(audioPath);
                             });
+
+                            // Schedule preloading up to 20 tracks ahead in the background for zero-latency switching
+                            SchedulePreloadPlaylistAhead();
 
                             _isLoading = false;
                             string display = !string.IsNullOrEmpty(_currentTitle) ? _currentTitle : "Đang phát nhạc";
@@ -815,9 +1150,14 @@ namespace KahoiiMusic.Services
                 foreach (string ext in prioritizedExts)
                 {
                     string candidate = Path.Combine(_cacheDirectory, videoId + ext);
-                    if (File.Exists(candidate) && new FileInfo(candidate).Length > 1000)
+                    if (File.Exists(candidate))
                     {
-                        return candidate;
+                        FileInfo fi = new FileInfo(candidate);
+                        if (fi.Length > 50000)
+                        {
+                            try { File.SetLastWriteTime(candidate, DateTime.Now); } catch { }
+                            return candidate;
+                        }
                     }
                 }
             }
@@ -1096,11 +1436,22 @@ namespace KahoiiMusic.Services
        
         public void Dispose()
         {
+            CancelActiveDownload();
+            CancelPreload();
             lock (_lock)
             {
                 CleanupCurrentTrack();
             }
-            CleanOldCache();
+
+            try
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+            catch { }
+
+            // Clear all cached audio files when exiting the app as requested
+            ClearAudioCache();
         }
     }
 

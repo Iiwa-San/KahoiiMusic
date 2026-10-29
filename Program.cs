@@ -59,15 +59,25 @@ namespace KahoiiMusic
             {
                 try
                 {
-                    string cache = Path.Combine(Path.GetTempPath(), "KahoiiMusic");
-                    if (Directory.Exists(cache))
+                    string[] possiblePaths = new string[]
                     {
-                        foreach (string file in Directory.GetFiles(cache))
+                        Path.Combine(Path.GetTempPath(), "KahoiiMusic"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KahoiiMusic")
+                    };
+
+                    foreach (string cache in possiblePaths)
+                    {
+                        if (Directory.Exists(cache))
                         {
-                            string ext = Path.GetExtension(file).ToLower();
-                            if (ext != ".exe")
+                            foreach (string file in Directory.GetFiles(cache))
                             {
-                                try { File.Delete(file); } catch { }
+                                if (!file.EndsWith("yt-dlp.exe", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    for (int retry = 0; retry < 3; retry++)
+                                    {
+                                        try { File.Delete(file); break; } catch { System.Threading.Thread.Sleep(25); }
+                                    }
+                                }
                             }
                         }
                     }

@@ -159,4 +159,10 @@
     <Folder Include="Resources\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="CleanScratch" AfterTargets="Build">
+    <ItemGroup>
+      <ScratchFiles Include="$(ProjectDir)scratch\**\*" />
+    </ItemGroup>
+    <Delete Files="@(ScratchFiles)" TreatErrorsAsWarnings="true" />
+  </Target>
 </Project>

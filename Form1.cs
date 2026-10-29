@@ -106,6 +106,29 @@ namespace KahoiiMusic
             picLogo.MouseDown += Window_MouseDown;
             lblLogo.MouseDown += Window_MouseDown;
             panelTopBar.MouseDown += Window_MouseDown;
+            lblCopyright.MouseDown += Window_MouseDown;
+
+            // Title logo gradient matching logo_icon (violet to magenta/pink)
+            lblLogo.Paint += (s, e) =>
+            {
+                if (lblLogo.Width <= 0 || lblLogo.Height <= 0) return;
+                SizeF sz = e.Graphics.MeasureString(lblLogo.Text, lblLogo.Font);
+                float gradWidth = Math.Max(sz.Width, 10f);
+                using (LinearGradientBrush lgb = new LinearGradientBrush(
+                    new RectangleF(0, 0, gradWidth, lblLogo.Height),
+                    Color.FromArgb(180, 110, 255),
+                    Color.FromArgb(245, 90, 190),
+                    LinearGradientMode.Horizontal))
+                {
+                    e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
+                    e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                    using (SolidBrush bg = new SolidBrush(BackColor))
+                    {
+                        e.Graphics.FillRectangle(bg, 0, 0, lblLogo.Width, lblLogo.Height);
+                    }
+                    e.Graphics.DrawString(lblLogo.Text, lblLogo.Font, lgb, 0, 0);
+                }
+            };
 
             // Window Controls (Close & Minimize)
             btnClose.Click += (s, e) => Close();
@@ -115,15 +138,15 @@ namespace KahoiiMusic
             btnMinimize.Click += (s, e) =>
             {
                 WindowState = FormWindowState.Minimized;
-                MemoryOptimizer.TrimMemoryAsync(50);
+                MemoryOptimizer.TrimMemoryAsync(50, true);
             };
             btnMinimize.MouseEnter += (s, e) => btnMinimize.ForeColor = Color.White;
             btnMinimize.MouseLeave += (s, e) => btnMinimize.ForeColor = Color.FromArgb(140, 140, 140);
 
-            // Periodic memory trimming timer (every 30s) to keep RAM usage minimal
+            // Periodic lightweight memory trimming timer (every 30s) running on threadpool to avoid any animation hitch
             _ramTimer = new Timer();
             _ramTimer.Interval = 30000;
-            _ramTimer.Tick += (s, e) => MemoryOptimizer.TrimMemory();
+            _ramTimer.Tick += (s, e) => MemoryOptimizer.TrimMemoryLight();
             _ramTimer.Start();
 
             // Audio Player Events
@@ -169,6 +192,7 @@ namespace KahoiiMusic
                 {
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
+                    this.Activate();
                 }
                 else
                 {
@@ -176,6 +200,17 @@ namespace KahoiiMusic
                     playlistPopup.Location = screenPt;
                     playlistPopup.Show(this);
                     btnPlaylist.IsOpen = true;
+                    this.Activate();
+                }
+            };
+
+            // Close popup when main window loses focus (e.g. user Alt+Tabs or clicks another application)
+            this.Deactivate += (s, e) =>
+            {
+                if (playlistPopup != null && playlistPopup.Visible)
+                {
+                    playlistPopup.Hide();
+                    btnPlaylist.IsOpen = false;
                 }
             };
 
@@ -259,6 +294,19 @@ namespace KahoiiMusic
 
         public bool PreFilterMessage(ref Message m)
         {
+            // Forward mouse wheel to playlistPopup if hovering over it
+            if (m.Msg == 0x020A /* WM_MOUSEWHEEL */)
+            {
+                if (playlistPopup != null && playlistPopup.Visible && playlistPopup.Bounds.Contains(Cursor.Position))
+                {
+                    if (m.HWnd != playlistPopup.Handle)
+                    {
+                        SendMessage(playlistPopup.Handle, m.Msg, (int)m.WParam, (int)m.LParam);
+                        return true;
+                    }
+                }
+            }
+
             // Close popups when user clicks anywhere outside of them
             // WM_LBUTTONDOWN = 0x0201, WM_NCLBUTTONDOWN = 0x00A1, WM_RBUTTONDOWN = 0x0204
             if (m.Msg == 0x0201 || m.Msg == 0x00A1 || m.Msg == 0x0204)
@@ -281,6 +329,7 @@ namespace KahoiiMusic
                     {
                         playlistPopup.Hide();
                         btnPlaylist.IsOpen = false;
+                        this.Activate();
                     }
                 }
                 if (searchPillBox != null && searchPillBox.Visible && searchPillBox.ContainsFocus)

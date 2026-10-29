@@ -15,7 +15,8 @@ namespace KahoiiMusic.Controls
         private Image _image;
         private bool _isSpinning = false;
         private float _rotationAngle = 0f;
-        private float _rotationSpeed = 1.2f;
+        private readonly System.Diagnostics.Stopwatch _stopwatch = new System.Diagnostics.Stopwatch();
+        private const float DegreesPerSecond = 36f; // Exactly 10 seconds per revolution (smooth, natural, relaxing)
         private System.Windows.Forms.Timer _spinTimer;
 
         public ArtworkBox()
@@ -31,7 +32,7 @@ namespace KahoiiMusic.Controls
             DoubleBuffered = true;
 
             _spinTimer = new System.Windows.Forms.Timer();
-            _spinTimer.Interval = 30; // ~33 FPS for silky smooth rotation
+            _spinTimer.Interval = 16; // ~60 FPS buttery smooth rotation
             _spinTimer.Tick += SpinTimer_Tick;
         }
 
@@ -46,10 +47,12 @@ namespace KahoiiMusic.Controls
                     _isSpinning = value;
                     if (_isSpinning)
                     {
+                        if (!_stopwatch.IsRunning) _stopwatch.Start();
                         _spinTimer.Start();
                     }
                     else
                     {
+                        if (_stopwatch.IsRunning) _stopwatch.Stop();
                         _spinTimer.Stop();
                     }
                     Invalidate();
@@ -65,10 +68,15 @@ namespace KahoiiMusic.Controls
             get { return _timeText; }
             set
             {
-                if (_timeText != value)
+                string val = value ?? string.Empty;
+                if (_timeText != val)
                 {
-                    _timeText = value ?? string.Empty;
-                    Invalidate();
+                    _timeText = val;
+                    // Only explicitly invalidate when not spinning (when spinning, the 60fps timer already renders it)
+                    if (!_isSpinning)
+                    {
+                        Invalidate();
+                    }
                 }
             }
         }
@@ -95,7 +103,8 @@ namespace KahoiiMusic.Controls
         {
             if (_isSpinning)
             {
-                _rotationAngle = (_rotationAngle + _rotationSpeed) % 360f;
+                // Wall-clock continuous rotation: completely immune to timer jitter, drift or delays
+                _rotationAngle = (float)((_stopwatch.Elapsed.TotalSeconds * DegreesPerSecond) % 360.0);
                 Invalidate();
             }
         }
@@ -113,7 +122,7 @@ namespace KahoiiMusic.Controls
                         using (Image loaded = Image.FromStream(ms))
                         {
                             // Pre-scale and circular-clip center 1:1 square thumbnail (removes YouTube pillarbox/letterbox bars)
-                            int thumbDim = 100;
+                            int thumbDim = 116;
                             Bitmap thumb = new Bitmap(thumbDim, thumbDim, PixelFormat.Format32bppPArgb);
                             using (Graphics g = Graphics.FromImage(thumb))
                             {
@@ -161,6 +170,7 @@ namespace KahoiiMusic.Controls
         public void ClearImage()
         {
             IsSpinning = false;
+            _stopwatch.Reset();
             _rotationAngle = 0f;
             _timeText = string.Empty;
             if (_image != null)
@@ -175,6 +185,10 @@ namespace KahoiiMusic.Controls
         {
             if (disposing)
             {
+                if (_stopwatch.IsRunning)
+                {
+                    _stopwatch.Stop();
+                }
                 if (_spinTimer != null)
                 {
                     _spinTimer.Stop();
@@ -244,16 +258,9 @@ namespace KahoiiMusic.Controls
             // Center Label / Album Artwork
             if (_image != null)
             {
-                GraphicsState preImageState = g.Save();
-                using (GraphicsPath labelClip = new GraphicsPath())
-                {
-                    labelClip.AddEllipse(cx - rLabel, cy - rLabel, 2 * rLabel, 2 * rLabel);
-                    g.SetClip(labelClip, CombineMode.Intersect);
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                    g.DrawImage(_image, cx - rLabel, cy - rLabel, 2 * rLabel, 2 * rLabel);
-                }
-                g.Restore(preImageState);
+                g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.DrawImage(_image, cx - rLabel, cy - rLabel, 2 * rLabel, 2 * rLabel);
 
                 // Fine gold/silver border around center artwork
                 using (Pen labelBorder = new Pen(Color.FromArgb(100, 255, 255, 255), 1.5f))
