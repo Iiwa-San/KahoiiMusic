@@ -73,9 +73,8 @@ jobs:
             -configuration Debug \
             -derivedDataPath build-simulator \
             ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Prepare Appetize Bundle (Ensure .app folder is preserved at zip root)
         run: |
@@ -91,7 +90,8 @@ jobs:
           cp Resources/AppIcon.png "$APP_PATH/AppIcon60x60@3x.png"
           # Convert Info.plist to human-readable XML format
           plutil -convert xml1 "$APP_PATH/Info.plist"
-          codesign --force --deep --sign - "$APP_PATH"
+          # Remove any leftover _CodeSignature so simulator executes cleanly without signature verification
+          rm -rf "$APP_PATH/_CodeSignature"
           mkdir -p appetize_bundle
           cp -r "$APP_PATH" appetize_bundle/
           cd appetize_bundle
