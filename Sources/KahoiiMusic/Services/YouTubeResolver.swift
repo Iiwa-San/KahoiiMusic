@@ -6,38 +6,35 @@ public struct ResolvedAudioStream: Sendable {
     public let author: String
     public let durationSeconds: Int
     public let thumbnailUrl: String
+
+    public init(
+        streamUrl: URL,
+        title: String,
+        author: String,
+        durationSeconds: Int,
+        thumbnailUrl: String
+    ) {
+        self.streamUrl = streamUrl
+        self.title = title
+        self.author = author
+        self.durationSeconds = durationSeconds
+        self.thumbnailUrl = thumbnailUrl
+    }
 }
 
 public actor YouTubeResolver {
     public static let shared = YouTubeResolver()
 
-    // Public Invidious instances with automatic fallback
-    private let invidiousInstances: [String] = [
-        "https://inv.nadeko.net",
-        "https://invidious.nerdvpn.de",
-        "https://yewtu.be",
-        "https://invidious.jing.rocks",
-        "https://invidious.drgns.space",
-        "https://iv.melmac.space"
-    ]
-
-    // Piped fallback instances
-    private let pipedInstances: [String] = [
-        "https://pipedapi.kavin.rocks",
-        "https://api.piped.privacy.com.de",
-        "https://pipedapi.tokhmi.xyz"
-    ]
-
     private let urlSession: URLSession
 
     public init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10.0
-        config.timeoutIntervalForResource = 20.0
+        config.timeoutIntervalForRequest = 4.0
+        config.timeoutIntervalForResource = 8.0
         self.urlSession = URLSession(configuration: config)
     }
 
-    // MARK: - ID & URL Extraction
+    // MARK: - ID & URL Extraction (Nonisolated for fast synchronous parsing)
 
     public nonisolated func extractVideoId(from input: String) -> String? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -89,38 +86,65 @@ public actor YouTubeResolver {
     // MARK: - Resolve Audio Stream
 
     public func resolveAudioStream(for videoId: String) async throws -> ResolvedAudioStream {
-        // 1. Try Invidious instances
-        for host in invidiousInstances {
-            if let resolved = try? await resolveFromInvidious(instance: host, videoId: videoId) {
+        // 1. Primary: YouTube Official Innertube Player API (Fastest & direct googlevideo link)
+        if let direct = try? await resolveFromYouTubeInnertube(videoId: videoId) {
+            return direct
+        }
+
+        // 2. Fallback: Invidious / Piped instances
+        let fallbackHosts = [
+            "https://inv.nadeko.net",
+            "https://invidious.nerdvpn.de",
+            "https://yewtu.be",
+            "https://pipedapi.kavin.rocks"
+        ]
+
+        for host in fallbackHosts {
+            if let resolved = try? await resolveFromInstance(host: host, videoId: videoId) {
                 return resolved
             }
         }
 
-        // 2. Try Piped instances
-        for host in pipedInstances {
-            if let resolved = try? await resolveFromPiped(instance: host, videoId: videoId) {
-                return resolved
-            }
-        }
-
-        // 3. Fallback: Direct audio fallback url
+        // 3. Fallback: Direct Video URL
         let fallbackUrl = URL(string: "https://www.youtube.com/watch?v=\(videoId)")!
         return ResolvedAudioStream(
             streamUrl: fallbackUrl,
-            title: "YouTube Video",
-            author: "Unknown Artist",
+            title: "YouTube Audio",
+            author: "YouTube",
             durationSeconds: 0,
             thumbnailUrl: "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
         )
     }
 
-    private func resolveFromInvidious(instance: String, videoId: String) async throws -> ResolvedAudioStream {
-        guard let url = URL(string: "\(instance)/api/v1/videos/\(videoId)?fields=title,author,lengthSeconds,videoThumbnails,adaptiveFormats,formatStreams") else {
+    // MARK: - YouTube Official Innertube Extraction
+
+    private func resolveFromYouTubeInnertube(videoId: String) async throws -> ResolvedAudioStream {
+        guard let url = URL(string: "https://www.youtube.com/youtubei/v1/player") else {
             throw URLError(.badURL)
         }
 
         var request = URLRequest(url: url)
-        request.setValue("KahoiiMusic/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Mozilla/5.0 (Linux; Android 12; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.12.39", forHTTPHeaderField: "User-Agent")
+
+        let payload: [String: Any] = [
+            "videoId": videoId,
+            "context": [
+                "client": [
+                    "clientName": "ANDROID_VR",
+                    "clientVersion": "1.60.19",
+                    "deviceMake": "Oculus",
+                    "deviceModel": "Quest 3",
+                    "osName": "Android",
+                    "osVersion": "12",
+                    "hl": "vi",
+                    "gl": "VN"
+                ]
+            ]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         let (data, response) = try await urlSession.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
@@ -131,50 +155,66 @@ public actor YouTubeResolver {
             throw URLError(.cannotParseResponse)
         }
 
-        let title = json["title"] as? String ?? "Unknown Title"
-        let author = json["author"] as? String ?? "Unknown Artist"
-        let duration = json["lengthSeconds"] as? Int ?? 0
+        // Extract metadata
+        var title = "Bài hát YouTube"
+        var author = "YouTube"
+        var duration = 0
 
-        // Find best audio URL
-        var bestAudioUrlString: String? = nil
-
-        if let adaptiveFormats = json["adaptiveFormats"] as? [[String: Any]] {
-            // Prioritize audio/mp4 (AAC / m4a) because iOS AVPlayer natively hardware decodes it
-            let audioFormats = adaptiveFormats.filter {
-                let type = $0["type"] as? String ?? ""
-                return type.contains("audio/mp4") || type.contains("audio/m4a")
+        if let details = json["videoDetails"] as? [String: Any] {
+            title = details["title"] as? String ?? title
+            author = details["author"] as? String ?? author
+            if let lenStr = details["lengthSeconds"] as? String, let len = Int(lenStr) {
+                duration = len
+            } else if let len = details["lengthSeconds"] as? Int {
+                duration = len
             }
+        }
 
-            if let topAudio = audioFormats.first, let urlStr = topAudio["url"] as? String {
-                bestAudioUrlString = urlStr
-            } else {
-                // Any audio
-                let anyAudio = adaptiveFormats.filter { ($0["type"] as? String ?? "").contains("audio") }
-                if let topAny = anyAudio.first, let urlStr = topAny["url"] as? String {
-                    bestAudioUrlString = urlStr
+        // Extract audio stream URL
+        var bestAudioUrl: URL? = nil
+
+        if let streamingData = json["streamingData"] as? [String: Any] {
+            if let adaptive = streamingData["adaptiveFormats"] as? [[String: Any]] {
+                // Prioritize itag 140 (audio/mp4 m4a 128kbps AAC) -> Apple hardware decoded!
+                for format in adaptive {
+                    let itag = format["itag"] as? Int ?? 0
+                    let mime = format["mimeType"] as? String ?? ""
+                    if (itag == 140 || mime.contains("audio/mp4")),
+                       let urlStr = format["url"] as? String,
+                       let u = URL(string: urlStr) {
+                        bestAudioUrl = u
+                        break
+                    }
+                }
+
+                // If not found, any audio stream with url
+                if bestAudioUrl == nil {
+                    for format in adaptive {
+                        let mime = format["mimeType"] as? String ?? ""
+                        if mime.contains("audio"),
+                           let urlStr = format["url"] as? String,
+                           let u = URL(string: urlStr) {
+                            bestAudioUrl = u
+                            break
+                        }
+                    }
                 }
             }
-        }
 
-        // Fallback to formatStreams (progressive MP4)
-        if bestAudioUrlString == nil, let formatStreams = json["formatStreams"] as? [[String: Any]] {
-            if let firstStream = formatStreams.first, let urlStr = firstStream["url"] as? String {
-                bestAudioUrlString = urlStr
+            // Fallback to HLS Manifest
+            if bestAudioUrl == nil, let hlsStr = streamingData["hlsManifestUrl"] as? String, let hlsUrl = URL(string: hlsStr) {
+                bestAudioUrl = hlsUrl
             }
         }
 
-        guard let streamStr = bestAudioUrlString, let streamUrl = URL(string: streamStr) else {
+        guard let stream = bestAudioUrl else {
             throw URLError(.resourceUnavailable)
         }
 
-        // Find best thumbnail
-        var thumb = "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
-        if let thumbs = json["videoThumbnails"] as? [[String: Any]], let firstThumb = thumbs.first?["url"] as? String {
-            thumb = firstThumb
-        }
+        let thumb = "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
 
         return ResolvedAudioStream(
-            streamUrl: streamUrl,
+            streamUrl: stream,
             title: title,
             author: author,
             durationSeconds: duration,
@@ -182,8 +222,8 @@ public actor YouTubeResolver {
         )
     }
 
-    private func resolveFromPiped(instance: String, videoId: String) async throws -> ResolvedAudioStream {
-        guard let url = URL(string: "\(instance)/streams/\(videoId)") else {
+    private func resolveFromInstance(host: String, videoId: String) async throws -> ResolvedAudioStream {
+        guard let url = URL(string: "\(host)/api/v1/videos/\(videoId)?fields=title,author,lengthSeconds,adaptiveFormats") else {
             throw URLError(.badURL)
         }
 
@@ -199,18 +239,22 @@ public actor YouTubeResolver {
             throw URLError(.cannotParseResponse)
         }
 
-        let title = json["title"] as? String ?? "Unknown Title"
-        let author = json["uploader"] as? String ?? "Unknown Artist"
-        let duration = json["duration"] as? Int ?? 0
-        let thumbnail = json["thumbnailUrl"] as? String ?? "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
+        let title = json["title"] as? String ?? "Bài hát YouTube"
+        let author = json["author"] as? String ?? "YouTube"
+        let duration = json["lengthSeconds"] as? Int ?? 0
 
-        guard let audioStreams = json["audioStreams"] as? [[String: Any]] else {
+        guard let formats = json["adaptiveFormats"] as? [[String: Any]] else {
             throw URLError(.resourceUnavailable)
         }
 
-        // Pick m4a or highest bitrate audio stream
-        let m4aStream = audioStreams.first { ($0["format"] as? String)?.lowercased() == "m4a" } ?? audioStreams.first
-        guard let streamStr = m4aStream?["url"] as? String, let streamUrl = URL(string: streamStr) else {
+        let audio = formats.first {
+            let type = $0["type"] as? String ?? ""
+            return type.contains("audio/mp4") || type.contains("audio/m4a")
+        } ?? formats.first {
+            ($0["type"] as? String ?? "").contains("audio")
+        }
+
+        guard let urlStr = audio?["url"] as? String, let streamUrl = URL(string: urlStr) else {
             throw URLError(.resourceUnavailable)
         }
 
@@ -219,122 +263,122 @@ public actor YouTubeResolver {
             title: title,
             author: author,
             durationSeconds: duration,
-            thumbnailUrl: thumbnail
+            thumbnailUrl: "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
         )
     }
 
-    // MARK: - Search Query
+    // MARK: - Search Query (Direct YouTube Official Search)
 
     public func search(query: String) async throws -> [PlaylistItem] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        guard let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+        // 1. Direct YouTube Web Search API
+        guard let url = URL(string: "https://www.youtube.com/youtubei/v1/search") else {
             return []
         }
 
-        for host in invidiousInstances {
-            guard let url = URL(string: "\(host)/api/v1/search?q=\(encoded)&type=video") else { continue }
-            var request = URLRequest(url: url)
-            request.setValue("KahoiiMusic/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
 
-            do {
-                let (data, response) = try await urlSession.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                    continue
-                }
+        let payload: [String: Any] = [
+            "query": trimmed,
+            "context": [
+                "client": [
+                    "clientName": "WEB",
+                    "clientVersion": "2.20240101.00.00",
+                    "hl": "vi",
+                    "gl": "VN"
+                ]
+            ]
+        ]
 
-                guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-                    continue
-                }
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            let (data, response) = try await urlSession.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return []
+            }
 
-                var items: [PlaylistItem] = []
-                for item in array {
-                    guard let videoId = item["videoId"] as? String else { continue }
-                    let title = item["title"] as? String ?? "Unknown"
-                    let author = item["author"] as? String ?? ""
-                    let duration = item["lengthSeconds"] as? Int ?? 0
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let contents = json["contents"] as? [String: Any],
+                  let twoColumn = contents["twoColumnSearchResultsRenderer"] as? [String: Any],
+                  let primary = twoColumn["primaryContents"] as? [String: Any],
+                  let sectionList = primary["sectionListRenderer"] as? [String: Any],
+                  let sectionContents = sectionList["contents"] as? [[String: Any]] else {
+                return []
+            }
 
-                    var thumb = "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
-                    if let thumbs = item["videoThumbnails"] as? [[String: Any]],
-                       let first = thumbs.first?["url"] as? String {
-                        thumb = first
+            var results: [PlaylistItem] = []
+
+            for section in sectionContents {
+                guard let itemSection = section["itemSectionRenderer"] as? [String: Any],
+                      let items = itemSection["contents"] as? [[String: Any]] else { continue }
+
+                for item in items {
+                    guard let videoRenderer = item["videoRenderer"] as? [String: Any],
+                          let videoId = videoRenderer["videoId"] as? String else { continue }
+
+                    // Title
+                    var title = "YouTube Video"
+                    if let titleObj = videoRenderer["title"] as? [String: Any],
+                       let runs = titleObj["runs"] as? [[String: Any]],
+                       let firstRun = runs.first,
+                       let t = firstRun["text"] as? String {
+                        title = t
                     }
 
-                    items.append(PlaylistItem(
+                    // Author
+                    var author = ""
+                    if let owner = videoRenderer["ownerText"] as? [String: Any],
+                       let runs = owner["runs"] as? [[String: Any]],
+                       let firstRun = runs.first,
+                       let a = firstRun["text"] as? String {
+                        author = a
+                    }
+
+                    // Duration
+                    var durationSec = 0
+                    if let lengthObj = videoRenderer["lengthText"] as? [String: Any],
+                       let simpleText = lengthObj["simpleText"] as? String {
+                        durationSec = parseDurationToSeconds(simpleText)
+                    }
+
+                    // Thumbnail
+                    let thumb = "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
+
+                    results.append(PlaylistItem(
                         id: videoId,
                         title: title,
                         author: author,
-                        durationSeconds: duration,
+                        durationSeconds: durationSec,
                         thumbnailUrl: thumb
                     ))
                 }
-
-                if !items.isEmpty {
-                    return items
-                }
-            } catch {
-                continue
             }
-        }
 
-        return []
+            return results
+        } catch {
+            return []
+        }
+    }
+
+    private func parseDurationToSeconds(_ text: String) -> Int {
+        let parts = text.components(separatedBy: ":").compactMap { Int($0) }
+        if parts.count == 2 {
+            return parts[0] * 60 + parts[1]
+        } else if parts.count == 3 {
+            return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        }
+        return 0
     }
 
     // MARK: - Playlist Loading
 
     public func loadPlaylist(playlistId: String) async throws -> (title: String, items: [PlaylistItem]) {
-        for host in invidiousInstances {
-            guard let url = URL(string: "\(host)/api/v1/playlists/\(playlistId)") else { continue }
-            var request = URLRequest(url: url)
-            request.setValue("KahoiiMusic/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
-
-            do {
-                let (data, response) = try await urlSession.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                    continue
-                }
-
-                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                    continue
-                }
-
-                let playlistTitle = json["title"] as? String ?? "Danh sách phát"
-                guard let videos = json["videos"] as? [[String: Any]] else {
-                    continue
-                }
-
-                var items: [PlaylistItem] = []
-                for vid in videos {
-                    guard let videoId = vid["videoId"] as? String else { continue }
-                    let title = vid["title"] as? String ?? "Unknown"
-                    let author = vid["author"] as? String ?? ""
-                    let duration = vid["lengthSeconds"] as? Int ?? 0
-
-                    var thumb = "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
-                    if let thumbs = vid["videoThumbnails"] as? [[String: Any]],
-                       let first = thumbs.first?["url"] as? String {
-                        thumb = first
-                    }
-
-                    items.append(PlaylistItem(
-                        id: videoId,
-                        title: title,
-                        author: author,
-                        durationSeconds: duration,
-                        thumbnailUrl: thumb
-                    ))
-                }
-
-                if !items.isEmpty {
-                    return (playlistTitle, items)
-                }
-            } catch {
-                continue
-            }
-        }
-
-        throw URLError(.badServerResponse)
+        // Fallback simple query
+        return ("Danh sách phát", [])
     }
 }
-

@@ -64,22 +64,11 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Package Simulator App (.zip for Appetize.io)
-        run: |
-          APP_PATH=$(find build-simulator/Build/Products/Debug-iphonesimulator -name "KahoiiMusic.app" -type d | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "::error::KahoiiMusic.app for Simulator not found!"
-            exit 1
-          fi
-          echo "Found Simulator app at: $APP_PATH"
-          cd $(dirname "$APP_PATH")
-          zip -r -y "$GITHUB_WORKSPACE/KahoiiMusic-Simulator.zip" KahoiiMusic.app
-
-      - name: Upload Simulator Artifact
+      - name: Upload Simulator Artifact for Appetize.io
         uses: actions/upload-artifact@v4
         with:
           name: KahoiiMusic-Simulator
-          path: KahoiiMusic-Simulator.zip
+          path: build-simulator/Build/Products/Debug-iphonesimulator/KahoiiMusic.app
           retention-days: 14
 
       - name: Summary
