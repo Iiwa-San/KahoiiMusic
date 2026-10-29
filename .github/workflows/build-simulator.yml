@@ -60,12 +60,13 @@ jobs:
           xcodebuild build \
             -project KahoiiMusic.xcodeproj \
             -scheme KahoiiMusic \
-            -destination "generic/platform=iOS Simulator" \
+            -sdk iphonesimulator \
             -configuration Debug \
             -derivedDataPath build-simulator \
-            CODE_SIGN_IDENTITY="" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
       - name: Prepare Appetize Bundle (Ensure .app folder is preserved at zip root)
         run: |
@@ -75,6 +76,7 @@ jobs:
             exit 1
           fi
           echo "Found Simulator app at: $APP_PATH"
+          codesign --force --deep --sign - "$APP_PATH"
           mkdir -p appetize_bundle
           cp -r "$APP_PATH" appetize_bundle/
           cd appetize_bundle
