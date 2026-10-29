@@ -286,7 +286,12 @@ public class AudioPlayerService: ObservableObject {
             timeObserverToken = nil
         }
 
-        let playerItem = AVPlayerItem(url: streamUrl)
+        let headers: [String: String] = [
+            "User-Agent": "com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip",
+            "Referer": "https://www.youtube.com/"
+        ]
+        let asset = AVURLAsset(url: streamUrl, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+        let playerItem = AVPlayerItem(asset: asset)
         if avPlayer == nil {
             avPlayer = AVPlayer(playerItem: playerItem)
         } else {

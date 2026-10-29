@@ -123,12 +123,34 @@ public actor YouTubeResolver {
             throw URLError(.badURL)
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Mozilla/5.0 (Linux; Android 12; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/32.0.0.12.39", forHTTPHeaderField: "User-Agent")
+        // 1. Primary: ANDROID client (itag 18 returns direct unthrottled non-ciphered stream)
+        let androidPayload: [String: Any] = [
+            "videoId": videoId,
+            "context": [
+                "client": [
+                    "clientName": "ANDROID",
+                    "clientVersion": "21.26.364",
+                    "androidSdkVersion": 30,
+                    "userAgent": "com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip",
+                    "osName": "Android",
+                    "osVersion": "11",
+                    "hl": "vi",
+                    "gl": "VN"
+                ]
+            ]
+        ]
 
-        let payload: [String: Any] = [
+        if let stream = try? await queryInnertube(
+            url: url,
+            payload: androidPayload,
+            userAgent: "com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip",
+            videoId: videoId
+        ) {
+            return stream
+        }
+
+        // 2. Secondary: ANDROID_VR client fallback
+        let vrPayload: [String: Any] = [
             "videoId": videoId,
             "context": [
                 "client": [
@@ -144,6 +166,24 @@ public actor YouTubeResolver {
             ]
         ]
 
+        return try await queryInnertube(
+            url: url,
+            payload: vrPayload,
+            userAgent: "Mozilla/5.0 (Linux; Android 12; Quest 3) AppleWebKit/537.36",
+            videoId: videoId
+        )
+    }
+
+    private func queryInnertube(
+        url: URL,
+        payload: [String: Any],
+        userAgent: String,
+        videoId: String
+    ) async throws -> ResolvedAudioStream {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         let (data, response) = try await urlSession.data(for: request)
@@ -174,8 +214,21 @@ public actor YouTubeResolver {
         var bestAudioUrl: URL? = nil
 
         if let streamingData = json["streamingData"] as? [String: Any] {
-            if let adaptive = streamingData["adaptiveFormats"] as? [[String: Any]] {
-                // Prioritize itag 140 (audio/mp4 m4a 128kbps AAC) -> Apple hardware decoded!
+            // Priority 1: Check standard multiplexed formats (itag 18 has direct un-ciphered progressive MP4 audio!)
+            if let formats = streamingData["formats"] as? [[String: Any]] {
+                for format in formats {
+                    let itag = format["itag"] as? Int ?? 0
+                    if (itag == 18 || itag == 22),
+                       let urlStr = format["url"] as? String,
+                       let u = URL(string: urlStr) {
+                        bestAudioUrl = u
+                        break
+                    }
+                }
+            }
+
+            // Priority 2: Check adaptive formats (itag 140 m4a / AAC)
+            if bestAudioUrl == nil, let adaptive = streamingData["adaptiveFormats"] as? [[String: Any]] {
                 for format in adaptive {
                     let itag = format["itag"] as? Int ?? 0
                     let mime = format["mimeType"] as? String ?? ""
@@ -187,7 +240,6 @@ public actor YouTubeResolver {
                     }
                 }
 
-                // If not found, any audio stream with url
                 if bestAudioUrl == nil {
                     for format in adaptive {
                         let mime = format["mimeType"] as? String ?? ""
@@ -201,7 +253,7 @@ public actor YouTubeResolver {
                 }
             }
 
-            // Fallback to HLS Manifest
+            // Priority 3: Fallback to HLS Manifest
             if bestAudioUrl == nil, let hlsStr = streamingData["hlsManifestUrl"] as? String, let hlsUrl = URL(string: hlsStr) {
                 bestAudioUrl = hlsUrl
             }
