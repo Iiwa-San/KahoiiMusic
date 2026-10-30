@@ -111,6 +111,26 @@ namespace KahoiiMusic
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                Application.ThreadException += (s, exArgs) =>
+                {
+                    try
+                    {
+                        MessageBox.Show("Đã xảy ra sự cố: " + (exArgs.Exception != null ? exArgs.Exception.Message : "Lỗi không xác định"),
+                            "Kahoii Music", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    catch { }
+                };
+                AppDomain.CurrentDomain.UnhandledException += (s, unhandledArgs) =>
+                {
+                    try
+                    {
+                        var ex = unhandledArgs.ExceptionObject as Exception;
+                        MessageBox.Show("Đã xảy ra sự cố nghiêm trọng: " + (ex != null ? ex.Message : "Lỗi không xác định"),
+                            "Kahoii Music", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    catch { }
+                };
                 KahoiiMusic.Services.AppPaths.EnsureDirectoriesExist();
                 Application.Run(new Form1(startUrl));
             }

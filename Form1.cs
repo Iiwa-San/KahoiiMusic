@@ -262,15 +262,17 @@ namespace KahoiiMusic
             {
                 if (item != null)
                 {
-                    int idx = _audioPlayer.Playlist.FindIndex(x => x.Id == item.Id);
-                    if (idx >= 0)
+                    var pl = _audioPlayer.Playlist;
+                    if (pl != null)
                     {
-                        _audioPlayer.PlayTrackAtIndex(idx);
+                        int idx = pl.FindIndex(x => x.Id == item.Id);
+                        if (idx >= 0 && idx < pl.Count)
+                        {
+                            _audioPlayer.PlayTrackAtIndex(idx);
+                            return;
+                        }
                     }
-                    else
-                    {
-                        _audioPlayer.LoadAndPlay(item.Url);
-                    }
+                    _audioPlayer.LoadAndPlay(item.Url);
                 }
             };
 
@@ -541,10 +543,11 @@ namespace KahoiiMusic
             string listId = AudioPlayerService.ExtractListId(url);
 
             // 1. If the video exists in the currently loaded playlist:
-            if (!string.IsNullOrEmpty(videoId) && _audioPlayer.Playlist != null && _audioPlayer.Playlist.Count > 0)
+            var currentPl = _audioPlayer.Playlist;
+            if (!string.IsNullOrEmpty(videoId) && currentPl != null && currentPl.Count > 0)
             {
-                int existingIdx = _audioPlayer.Playlist.FindIndex(x => x.Id == videoId);
-                if (existingIdx >= 0)
+                int existingIdx = currentPl.FindIndex(x => x.Id == videoId);
+                if (existingIdx >= 0 && existingIdx < currentPl.Count)
                 {
                     // If no playlist ID in URL or same playlist ID as current:
                     if (string.IsNullOrEmpty(listId) || string.Equals(listId, _audioPlayer.CurrentPlaylistId, StringComparison.OrdinalIgnoreCase))

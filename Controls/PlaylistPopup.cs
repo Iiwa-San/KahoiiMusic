@@ -95,6 +95,8 @@ namespace KahoiiMusic.Controls
             KeyPreview = true;
 
             _historyItems = HistoryService.GetHistory();
+            _savedItems = SavedTracksService.Instance.GetSavedTracks();
+
             HistoryService.HistoryChanged += (s, e) =>
             {
                 if (IsHandleCreated)
@@ -113,6 +115,27 @@ namespace KahoiiMusic.Controls
                 else
                 {
                     _historyItems = HistoryService.GetHistory();
+                }
+            };
+
+            SavedTracksService.Instance.SavedTracksChanged += (s, e) =>
+            {
+                if (IsHandleCreated)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            _savedItems = SavedTracksService.Instance.GetSavedTracks();
+                            if (_activeTab == MenuTab.Saved) ClampScroll();
+                            Invalidate();
+                        }));
+                    }
+                    catch { }
+                }
+                else
+                {
+                    _savedItems = SavedTracksService.Instance.GetSavedTracks();
                 }
             };
         }
@@ -150,7 +173,15 @@ namespace KahoiiMusic.Controls
         {
             base.OnShown(e);
             RefreshHistory();
+            RefreshSaved();
             UpdateRegion();
+        }
+
+        public void RefreshSaved()
+        {
+            _savedItems = SavedTracksService.Instance.GetSavedTracks();
+            if (_activeTab == MenuTab.Saved) ClampScroll();
+            Invalidate();
         }
 
         protected override void OnResize(EventArgs e)
@@ -216,6 +247,7 @@ namespace KahoiiMusic.Controls
             if (Visible)
             {
                 RefreshHistory();
+                RefreshSaved();
                 ClampScroll();
                 Invalidate();
             }
@@ -552,7 +584,7 @@ namespace KahoiiMusic.Controls
                 {
                     _activeTab = MenuTab.Saved;
                     _scrollOffset = 0;
-                    _savedItems = SavedTracksService.Instance.GetSavedTracks();
+                    RefreshSaved();
                     ClampScroll();
                     Invalidate();
                 }
@@ -605,20 +637,23 @@ namespace KahoiiMusic.Controls
             // 5. Song row clicked
             if (_hoveredRowIndex >= 0 && _hoveredRowIndex < ActiveItems.Count)
             {
-                if (_activeTab == MenuTab.Playlist)
+                PlaylistItem clickedItem = ActiveItems[_hoveredRowIndex];
+                if (clickedItem != null)
                 {
-                    _currentPlaylistIndex = _hoveredRowIndex;
-                    Invalidate();
-                    TrackSelected?.Invoke(this, _playlistItems[_currentPlaylistIndex]);
-                }
-                else
-                {
-                    PlaylistItem historyItem = _historyItems[_hoveredRowIndex];
-                    if (AudioPlayer != null)
+                    if (_activeTab == MenuTab.Playlist)
                     {
-                        AudioPlayer.LoadAndPlay(historyItem.Url);
+                        _currentPlaylistIndex = _hoveredRowIndex;
+                        Invalidate();
+                        TrackSelected?.Invoke(this, clickedItem);
                     }
-                    Invalidate();
+                    else
+                    {
+                        if (AudioPlayer != null)
+                        {
+                            AudioPlayer.LoadAndPlay(clickedItem.Url);
+                        }
+                        Invalidate();
+                    }
                 }
             }
         }
@@ -881,10 +916,15 @@ namespace KahoiiMusic.Controls
                         g.DrawString("Chưa có danh sách phát", emptyFont, b1, new RectangleF(0, HeaderHeight + 40, w, 24), sf);
                         g.DrawString("Dán link YouTube playlist hoặc chuột phải vào Lịch sử để thêm", hintFont, b2, new RectangleF(0, HeaderHeight + 66, w, 20), sf);
                     }
-                    else
+                    else if (_activeTab == MenuTab.History)
                     {
                         g.DrawString("Chưa có lịch sử phát nhạc", emptyFont, b1, new RectangleF(0, HeaderHeight + 40, w, 24), sf);
                         g.DrawString("Các bài hát đã nghe sẽ được lưu tự động tại đây", hintFont, b2, new RectangleF(0, HeaderHeight + 66, w, 20), sf);
+                    }
+                    else
+                    {
+                        g.DrawString("Chưa có bài hát đã tải", emptyFont, b1, new RectangleF(0, HeaderHeight + 40, w, 24), sf);
+                        g.DrawString("Chuột phải vào bài hát trong Danh sách hoặc Lịch sử để tải về", hintFont, b2, new RectangleF(0, HeaderHeight + 66, w, 20), sf);
                     }
                 }
                 return;

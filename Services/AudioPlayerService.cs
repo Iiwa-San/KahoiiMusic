@@ -659,6 +659,8 @@ namespace KahoiiMusic.Services
 
                     psi.FileName = ytdlpPath;
 
+                    psi.WorkingDirectory = _cacheDirectory;
+
                     psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
 
                     psi.CreateNoWindow = true;
@@ -1305,7 +1307,9 @@ namespace KahoiiMusic.Services
 
         {
 
-            if (_playlist == null || index < 0 || index >= _playlist.Count) return;
+            var pl = _playlist;
+
+            if (pl == null || index < 0 || index >= pl.Count) return;
 
             _currentPlaylistIndex = index;
 
@@ -1323,7 +1327,7 @@ namespace KahoiiMusic.Services
 
             }, null);
 
-            PlaylistItem item = _playlist[index];
+            PlaylistItem item = pl[index];
 
             if (!string.IsNullOrEmpty(item.Title))
 
@@ -1827,19 +1831,21 @@ namespace KahoiiMusic.Services
 
                         {
 
-                            int matchIdx = _playlist.FindIndex(x => x.Id == videoId);
+                            var pl = _playlist;
 
-                            if (matchIdx >= 0)
+                            int matchIdx = pl.FindIndex(x => x.Id == videoId);
+
+                            if (matchIdx >= 0 && matchIdx < pl.Count)
 
                             {
 
                                 _currentPlaylistIndex = matchIdx;
 
-                                if (!string.IsNullOrWhiteSpace(_playlist[matchIdx].Title) && _playlist[matchIdx].Title != "None" && _playlist[matchIdx].Title != "NA")
+                                if (!string.IsNullOrWhiteSpace(pl[matchIdx].Title) && pl[matchIdx].Title != "None" && pl[matchIdx].Title != "NA")
 
                                 {
 
-                                    resolvedTitle = _playlist[matchIdx].Title;
+                                    resolvedTitle = pl[matchIdx].Title;
 
                                 }
 
@@ -1883,13 +1889,21 @@ namespace KahoiiMusic.Services
 
                         }
 
-                        // If not found in playlist, check HistoryService
+                        // If not found in playlist, check HistoryService and SavedTracksService
 
                         if (string.IsNullOrWhiteSpace(resolvedTitle))
 
                         {
 
                             resolvedTitle = HistoryService.GetTrackTitle(videoId);
+
+                        }
+
+                        if (string.IsNullOrWhiteSpace(resolvedTitle))
+
+                        {
+
+                            resolvedTitle = SavedTracksService.Instance.GetTrackTitle(videoId);
 
                         }
 
@@ -2022,6 +2036,8 @@ namespace KahoiiMusic.Services
                         ProcessStartInfo psi = new ProcessStartInfo();
 
                         psi.FileName = ytdlpPath;
+
+                        psi.WorkingDirectory = _cacheDirectory;
 
                         psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"{1}\"", _cacheDirectory, targetArg);
 

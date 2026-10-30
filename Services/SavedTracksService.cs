@@ -36,6 +36,21 @@ namespace KahoiiMusic.Services
             }
         }
 
+        public string GetTrackTitle(string videoId)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return null;
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                var match = _savedTracks.Find(x => string.Equals(x.Id, videoId, StringComparison.OrdinalIgnoreCase));
+                if (match != null && !string.IsNullOrWhiteSpace(match.Title) && match.Title != "None" && match.Title != "NA")
+                {
+                    return match.Title;
+                }
+            }
+            return null;
+        }
+
         public bool IsTrackSaved(string videoId)
         {
             if (string.IsNullOrWhiteSpace(videoId)) return false;
@@ -132,6 +147,7 @@ namespace KahoiiMusic.Services
 
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = ytdlpPath;
+                        psi.WorkingDirectory = AppPaths.SavedAudioDir;
                         psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
                         psi.CreateNoWindow = true;
                         psi.UseShellExecute = false;
