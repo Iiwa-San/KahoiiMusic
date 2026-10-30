@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeMute
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -70,7 +70,7 @@ fun VolumeDialog(
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.VolumeMute,
+                        imageVector = Icons.AutoMirrored.Filled.VolumeMute,
                         contentDescription = "Mute",
                         tint = NeonPink,
                         modifier = Modifier.size(20.dp)
@@ -93,7 +93,7 @@ fun VolumeDialog(
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.VolumeUp,
+                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                         contentDescription = "Max",
                         tint = NeonPink,
                         modifier = Modifier.size(20.dp)
@@ -103,4 +103,3 @@ fun VolumeDialog(
         }
     }
 }
-

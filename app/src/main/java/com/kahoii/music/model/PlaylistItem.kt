@@ -1,6 +1,7 @@
 package com.kahoii.music.model
 
 import com.google.gson.annotations.SerializedName
+import java.io.File
 import java.io.Serializable
 import java.util.Locale
 
@@ -18,11 +19,17 @@ data class PlaylistItem(
     val durationSeconds: Int = 0,
 
     @SerializedName("thumbnailUrl")
-    val customThumbnailUrl: String? = null
+    val customThumbnailUrl: String? = null,
+
+    @SerializedName("localAudioPath")
+    val localAudioPath: String? = null
 ) : Serializable {
 
+    val isOffline: Boolean
+        get() = !localAudioPath.isNullOrBlank() && File(localAudioPath).exists()
+
     val url: String
-        get() = "https://www.youtube.com/watch?v=$id"
+        get() = if (isOffline) localAudioPath!! else "https://www.youtube.com/watch?v=$id"
 
     val thumbnailUrl: String
         get() = customThumbnailUrl ?: "https://img.youtube.com/vi/$id/hqdefault.jpg"
@@ -40,4 +47,3 @@ data class PlaylistItem(
             }
         }
 }
-

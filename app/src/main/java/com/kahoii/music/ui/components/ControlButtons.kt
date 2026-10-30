@@ -6,20 +6,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeMute
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +33,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kahoii.music.model.LoopMode
 import com.kahoii.music.ui.theme.GradientBottom
 import com.kahoii.music.ui.theme.NeonPink
@@ -40,10 +46,13 @@ fun ControlButtons(
     isPlaying: Boolean,
     loopMode: LoopMode,
     volume: Float,
+    isSleepTimerActive: Boolean,
+    sleepTimerText: String,
     onTogglePlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onToggleLoop: () -> Unit,
+    onTimerClick: () -> Unit,
     onVolumeClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -53,25 +62,28 @@ fun ControlButtons(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. Loop Button
-        IconButton(onClick = onToggleLoop) {
+        IconButton(
+            onClick = onToggleLoop,
+            modifier = Modifier.size(40.dp)
+        ) {
             when (loopMode) {
                 LoopMode.OFF -> Icon(
                     imageVector = Icons.Default.Repeat,
                     contentDescription = "Loop Off",
-                    tint = TextMuted.copy(alpha = 0.6f),
-                    modifier = Modifier.size(26.dp)
+                    tint = TextMuted.copy(alpha = 0.55f),
+                    modifier = Modifier.size(24.dp)
                 )
                 LoopMode.ONE -> Icon(
                     imageVector = Icons.Default.RepeatOne,
                     contentDescription = "Repeat One",
                     tint = NeonPink,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
                 LoopMode.ALL -> Icon(
                     imageVector = Icons.Default.Repeat,
                     contentDescription = "Repeat All",
                     tint = GradientBottom,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
@@ -79,21 +91,21 @@ fun ControlButtons(
         // 2. Previous Button
         IconButton(
             onClick = onPrevious,
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.SkipPrevious,
                 contentDescription = "Previous Track",
                 tint = TextWhite,
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
 
-        // 3. Center Play/Pause Button
+        // 3. Center Play/Pause Button (Signature Kahoii Music luminous radial orb)
         Box(
             modifier = Modifier
-                .size(68.dp)
-                .shadow(elevation = 12.dp, shape = CircleShape, spotColor = NeonPink)
+                .size(64.dp)
+                .shadow(elevation = 14.dp, shape = CircleShape, spotColor = NeonPink)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
@@ -107,37 +119,76 @@ fun ControlButtons(
                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = if (isPlaying) "Pause" else "Play",
                 tint = TextWhite,
-                modifier = Modifier.size(38.dp)
+                modifier = Modifier.size(36.dp)
             )
         }
 
         // 4. Next Button
         IconButton(
             onClick = onNext,
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.SkipNext,
                 contentDescription = "Next Track",
                 tint = TextWhite,
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
 
-        // 5. Volume Button
-        IconButton(onClick = onVolumeClick) {
+        // 5. Sleep Timer Button (Hẹn giờ tắt nhạc)
+        IconButton(
+            onClick = onTimerClick,
+            modifier = Modifier.size(40.dp)
+        ) {
+            if (isSleepTimerActive) {
+                BadgedBox(
+                    badge = {
+                        Badge(
+                            containerColor = NeonPink,
+                            contentColor = Color.White,
+                            modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
+                        ) {
+                            Text(
+                                text = if (sleepTimerText.isNotBlank()) sleepTimerText else "•",
+                                fontSize = 9.sp
+                            )
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = "Hẹn giờ tắt nhạc",
+                        tint = NeonPink,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Timer,
+                    contentDescription = "Hẹn giờ tắt nhạc",
+                    tint = TextMuted.copy(alpha = 0.7f),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        // 6. Volume Button
+        IconButton(
+            onClick = onVolumeClick,
+            modifier = Modifier.size(40.dp)
+        ) {
             val volumeIcon = when {
-                volume <= 0.01f -> Icons.Default.VolumeMute
-                volume < 0.5f -> Icons.Default.VolumeDown
-                else -> Icons.Default.VolumeUp
+                volume <= 0.01f -> Icons.AutoMirrored.Filled.VolumeMute
+                volume < 0.5f -> Icons.AutoMirrored.Filled.VolumeDown
+                else -> Icons.AutoMirrored.Filled.VolumeUp
             }
             Icon(
                 imageVector = volumeIcon,
-                contentDescription = "Volume",
-                tint = TextWhite,
-                modifier = Modifier.size(26.dp)
+                contentDescription = "Âm lượng",
+                tint = if (volume <= 0.01f) TextMuted.copy(alpha = 0.5f) else TextWhite,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
 }
-
