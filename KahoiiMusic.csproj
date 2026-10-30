@@ -95,9 +95,6 @@
     <Compile Include="Controls\PlaylistButton.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="Controls\DownloadButton.cs">
-      <SubType>Component</SubType>
-    </Compile>
     <Compile Include="Controls\PlaylistPopup.cs">
       <SubType>Form</SubType>
     </Compile>

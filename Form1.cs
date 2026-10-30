@@ -116,8 +116,7 @@ namespace KahoiiMusic
             playlistPopup.AudioPlayer = _audioPlayer;
 
             ToolTip menuTip = new ToolTip();
-            menuTip.SetToolTip(btnPlaylist, "Menu (Danh sách phát & Lịch sử)");
-            menuTip.SetToolTip(btnDownloads, "Nhạc đã tải về máy (Offline Saved)");
+            menuTip.SetToolTip(btnPlaylist, "Menu (Danh sách phát, Lịch sử, Đã tải)");
 
             // Window Dragging
             MouseDown += Window_MouseDown;
@@ -224,38 +223,14 @@ namespace KahoiiMusic
                 {
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
-                    btnDownloads.IsOpen = false;
                     this.Activate();
                 }
                 else
                 {
-                    playlistPopup.ActiveTab = KahoiiMusic.Controls.MenuTab.Playlist;
                     Point screenPt = panelTopBar.PointToScreen(new Point(btnPlaylist.Left, btnPlaylist.Bottom + 4));
                     playlistPopup.Location = screenPt;
                     playlistPopup.Show(this);
                     btnPlaylist.IsOpen = true;
-                    btnDownloads.IsOpen = false;
-                    this.Activate();
-                }
-            };
-
-            btnDownloads.Click += (s, e) =>
-            {
-                if (playlistPopup.Visible && playlistPopup.ActiveTab == KahoiiMusic.Controls.MenuTab.Saved)
-                {
-                    playlistPopup.Hide();
-                    btnDownloads.IsOpen = false;
-                    btnPlaylist.IsOpen = false;
-                    this.Activate();
-                }
-                else
-                {
-                    playlistPopup.ActiveTab = KahoiiMusic.Controls.MenuTab.Saved;
-                    Point screenPt = panelTopBar.PointToScreen(new Point(btnPlaylist.Left, btnPlaylist.Bottom + 4));
-                    playlistPopup.Location = screenPt;
-                    playlistPopup.Show(this);
-                    btnDownloads.IsOpen = true;
-                    btnPlaylist.IsOpen = false;
                     this.Activate();
                 }
             };
@@ -273,7 +248,6 @@ namespace KahoiiMusic
             playlistPopup.CloseRequested += (s, e) =>
             {
                 btnPlaylist.IsOpen = false;
-                btnDownloads.IsOpen = false;
             };
 
             this.LocationChanged += (s, e) =>
@@ -382,12 +356,10 @@ namespace KahoiiMusic
                 {
                     Rectangle popupScreenRect = playlistPopup.Bounds;
                     Rectangle btnScreenRect = panelTopBar.RectangleToScreen(btnPlaylist.Bounds);
-                    Rectangle btnDownRect = panelTopBar.RectangleToScreen(btnDownloads.Bounds);
-                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur) && !btnDownRect.Contains(cur))
+                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur))
                     {
                         playlistPopup.Hide();
                         btnPlaylist.IsOpen = false;
-                        btnDownloads.IsOpen = false;
                         this.Activate();
                     }
                 }
