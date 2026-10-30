@@ -40,7 +40,7 @@ public class AudioPlayerService: ObservableObject {
 
     private var avPlayer: AVPlayer?
     private var timeObserverToken: Any?
-    private var playerItemCancellable: AnyCancellable?
+    private var playerItemCancellables = Set<AnyCancellable>()
     private var originalPlaylist: [PlaylistItem] = []
     private var cancellables = Set<AnyCancellable>()
 
@@ -279,6 +279,8 @@ public class AudioPlayerService: ObservableObject {
                 self.playbackState = .failed("Hết thời gian tải")
                 self.statusMessage = "Hết thời gian chờ"
                 self.avPlayer?.pause()
+                self.avPlayer?.replaceCurrentItem(with: nil)
+                self.playerItemCancellables.removeAll()
                 ErrorLogService.shared.log("Timeout tải nhạc", msg, category: "Phát nhạc")
             }
         }
@@ -333,6 +335,16 @@ public class AudioPlayerService: ObservableObject {
             return
         }
 
+        // If the exact same track is already loaded in player, simply resume instead of reloading from byte 0
+        if let current = currentTrack, current.id == track.id, let player = avPlayer, player.currentItem != nil {
+            if playbackState.isPaused {
+                play()
+                return
+            } else if playbackState.isPlaying {
+                return
+            }
+        }
+
         // 2. Play Online stream
         playbackState = .loading("Đang kết nối luồng phát...")
         statusMessage = "Đang kết nối: \(track.title)"
@@ -382,7 +394,7 @@ public class AudioPlayerService: ObservableObject {
             timeObserverToken = nil
         }
 
-        playerItemCancellable?.cancel()
+        playerItemCancellables.removeAll()
 
         // Ensure audio session is active
         do {
@@ -402,10 +414,12 @@ public class AudioPlayerService: ObservableObject {
 
         if avPlayer == nil {
             avPlayer = AVPlayer(playerItem: playerItem)
-            avPlayer?.automaticallyWaitsToMinimizeStalling = true
         } else {
             avPlayer?.replaceCurrentItem(with: playerItem)
         }
+
+        // Critical: Start playing immediately without waiting for a massive buffer on long tracks!
+        avPlayer?.automaticallyWaitsToMinimizeStalling = false
 
         avPlayer?.volume = volume
         self.duration = duration
@@ -414,7 +428,7 @@ public class AudioPlayerService: ObservableObject {
         self.statusMessage = "Đang đệm..."
 
         // Observe player item status
-        playerItemCancellable = playerItem.publisher(for: \.status)
+        playerItem.publisher(for: \.status)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
                 guard let self = self else { return }
@@ -440,6 +454,22 @@ public class AudioPlayerService: ObservableObject {
                     break
                 }
             }
+            .store(in: &playerItemCancellables)
+
+        // Observe isPlaybackLikelyToKeepUp (instant play as soon as initial packets arrive)
+        playerItem.publisher(for: \.isPlaybackLikelyToKeepUp)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] likely in
+                guard let self = self else { return }
+                if likely && self.playbackState.isLoading && self.playbackState != .paused {
+                    self.cancelLoadingTimeout()
+                    self.avPlayer?.play()
+                    self.playbackState = .playing
+                    self.statusMessage = "Đang phát"
+                    self.updateNowPlayingInfo()
+                }
+            }
+            .store(in: &playerItemCancellables)
 
         // Observe track finished
         NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)

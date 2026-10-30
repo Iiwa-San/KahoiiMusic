@@ -28,12 +28,18 @@ public actor YouTubeResolver {
     private let urlSession: URLSession
     private var cachedVisitorData: String?
     private var visitorDataFetchTime: Date?
+    private var resolvedStreamCache: [String: (stream: ResolvedAudioStream, cachedAt: Date)] = [:]
 
     public init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 25.0
         config.timeoutIntervalForResource = 60.0 // 1 phút timeout
         self.urlSession = URLSession(configuration: config)
+
+        // Pre-warm visitor data in background on init so the first user tap is instant
+        Task { [weak self] in
+            _ = await self?.fetchVisitorData(for: "dQw4w9WgXcQ")
+        }
     }
 
     // MARK: - ID & URL Extraction (Nonisolated for fast synchronous parsing)
@@ -90,7 +96,7 @@ public actor YouTubeResolver {
     private func fetchVisitorData(for videoId: String) async -> String? {
         if let cached = cachedVisitorData,
            let fetchTime = visitorDataFetchTime,
-           Date().timeIntervalSince(fetchTime) < 3600 {
+           Date().timeIntervalSince(fetchTime) < 86400 { // Cache 24 hours
             return cached
         }
 
@@ -99,6 +105,7 @@ public actor YouTubeResolver {
         }
 
         var request = URLRequest(url: url)
+        request.timeoutInterval = 8.0 // Quick 8s timeout to avoid stalling playback
         request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
 
@@ -136,19 +143,29 @@ public actor YouTubeResolver {
     // MARK: - Resolve Audio Stream
 
     public func resolveAudioStream(for videoId: String) async throws -> ResolvedAudioStream {
+        // 0. Check in-memory cache first (valid for ~6 hours; cached for 2 hours)
+        if let cached = resolvedStreamCache[videoId],
+           Date().timeIntervalSince(cached.cachedAt) < 7200 {
+            return cached.stream
+        }
+
         // Fetch or get cached visitor token
         let visitorData = await fetchVisitorData(for: videoId)
 
         // 1. Primary: YouTube InnerTube API with VISIONOS client
         do {
-            return try await resolveFromYouTubeVisionOS(videoId: videoId, visitorData: visitorData)
+            let res = try await resolveFromYouTubeVisionOS(videoId: videoId, visitorData: visitorData)
+            resolvedStreamCache[videoId] = (stream: res, cachedAt: Date())
+            return res
         } catch {
             print("[YouTubeResolver] VisionOS resolution failed: \(error)")
         }
 
         // 2. Secondary: YouTube InnerTube API with ANDROID_VR client
         do {
-            return try await resolveFromYouTubeAndroidVR(videoId: videoId, visitorData: visitorData)
+            let res = try await resolveFromYouTubeAndroidVR(videoId: videoId, visitorData: visitorData)
+            resolvedStreamCache[videoId] = (stream: res, cachedAt: Date())
+            return res
         } catch {
             print("[YouTubeResolver] AndroidVR resolution failed: \(error)")
         }
@@ -158,7 +175,9 @@ public actor YouTubeResolver {
         let freshVisitorData = await fetchVisitorData(for: videoId)
         if freshVisitorData != visitorData {
             do {
-                return try await resolveFromYouTubeVisionOS(videoId: videoId, visitorData: freshVisitorData)
+                let res = try await resolveFromYouTubeVisionOS(videoId: videoId, visitorData: freshVisitorData)
+                resolvedStreamCache[videoId] = (stream: res, cachedAt: Date())
+                return res
             } catch {
                 print("[YouTubeResolver] Retry with fresh visitorData failed: \(error)")
             }
@@ -169,6 +188,10 @@ public actor YouTubeResolver {
             code: 404,
             userInfo: [NSLocalizedDescriptionKey: "Không thể trích xuất luồng âm thanh từ video này."]
         )
+    }
+
+    public func invalidateCache(for videoId: String) {
+        resolvedStreamCache.removeValue(forKey: videoId)
     }
 
     // MARK: - YouTube Official Innertube (VisionOS)
