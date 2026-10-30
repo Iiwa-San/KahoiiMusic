@@ -111,6 +111,7 @@ namespace KahoiiMusic
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+                KahoiiMusic.Services.AppPaths.EnsureDirectoriesExist();
                 Application.Run(new Form1(startUrl));
             }
         }

@@ -17,19 +17,10 @@ namespace KahoiiMusic.Services
         private static readonly Dictionary<string, Bitmap> _memCache = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
         private static readonly LinkedList<string> _lruOrder = new LinkedList<string>();
         private static readonly HashSet<string> _pendingLoads = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private static string _thumbsDir;
 
         static ThumbnailManager()
         {
-            try
-            {
-                _thumbsDir = Path.Combine(Path.GetTempPath(), "KahoiiMusic", "thumbs");
-                if (!Directory.Exists(_thumbsDir))
-                {
-                    Directory.CreateDirectory(_thumbsDir);
-                }
-            }
-            catch { }
+            AppPaths.EnsureDirectoriesExist();
         }
 
         public static Bitmap GetThumbnail(string videoId)
@@ -40,11 +31,13 @@ namespace KahoiiMusic.Services
             {
                 if (_memCache.TryGetValue(videoId, out Bitmap bmp))
                 {
+                    // Move to end of LRU list
                     _lruOrder.Remove(videoId);
-                    _lruOrder.AddFirst(videoId);
+                    _lruOrder.AddLast(videoId);
                     return bmp;
                 }
             }
+
             return null;
         }
 
@@ -66,14 +59,15 @@ namespace KahoiiMusic.Services
                 Bitmap result = null;
                 try
                 {
-                    string diskFile = (_thumbsDir != null) ? Path.Combine(_thumbsDir, videoId + ".jpg") : null;
+                    string savedThumbFile = Path.Combine(AppPaths.SavedThumbDir, videoId + ".jpg");
+                    string tempThumbFile = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
 
-                    // 1. Check disk cache first (instant local read, 0ms network)
-                    if (diskFile != null && File.Exists(diskFile))
+                    // 1. Check Saved/thumb/ first (Instant local read, 0ms network)
+                    if (File.Exists(savedThumbFile))
                     {
                         try
                         {
-                            using (FileStream fs = new FileStream(diskFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+                            using (FileStream fs = new FileStream(savedThumbFile, FileMode.Open, FileAccess.Read, FileShare.Read))
                             using (Image img = Image.FromStream(fs))
                             {
                                 result = ResizeToMicro(img, ThumbSize, ThumbSize);
@@ -82,7 +76,21 @@ namespace KahoiiMusic.Services
                         catch { }
                     }
 
-                    // 2. Download tiny default.jpg (120x90, ~3KB payload) from YouTube
+                    // 2. Check KahoiiTemp/thumb/ next
+                    if (result == null && File.Exists(tempThumbFile))
+                    {
+                        try
+                        {
+                            using (FileStream fs = new FileStream(tempThumbFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+                            using (Image img = Image.FromStream(fs))
+                            {
+                                result = ResizeToMicro(img, ThumbSize, ThumbSize);
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // 3. Download tiny default.jpg (120x90, ~3KB payload) from YouTube
                     if (result == null)
                     {
                         string url = string.Format("https://img.youtube.com/vi/{0}/default.jpg", videoId);
@@ -97,11 +105,11 @@ namespace KahoiiMusic.Services
                                     result = ResizeToMicro(img, ThumbSize, ThumbSize);
 
                                     // Persist tiny micro-thumbnail on disk for future instant loads
-                                    if (diskFile != null && result != null)
+                                    if (result != null)
                                     {
                                         try
                                         {
-                                            result.Save(diskFile, ImageFormat.Jpeg);
+                                            result.Save(tempThumbFile, ImageFormat.Jpeg);
                                         }
                                         catch { }
                                     }
@@ -118,21 +126,29 @@ namespace KahoiiMusic.Services
                     _pendingLoads.Remove(videoId);
                     if (result != null)
                     {
-                        // Enforce strict LRU capacity to keep RAM < 100KB
-                        while (_lruOrder.Count >= MaxMemoryCache)
+                        if (_memCache.ContainsKey(videoId))
                         {
-                            string oldest = _lruOrder.Last.Value;
-                            _lruOrder.RemoveLast();
-                            if (_memCache.TryGetValue(oldest, out Bitmap oldBmp))
-                            {
-                                _memCache.Remove(oldest);
-                                try { oldBmp.Dispose(); } catch { }
-                            }
+                            try { result.Dispose(); } catch { }
+                            result = null;
                         }
+                        else
+                        {
+                            // Enforce strict LRU cache size
+                            while (_memCache.Count >= MaxMemoryCache && _lruOrder.Count > 0)
+                            {
+                                string oldestKey = _lruOrder.First.Value;
+                                _lruOrder.RemoveFirst();
+                                if (_memCache.TryGetValue(oldestKey, out Bitmap evictBmp))
+                                {
+                                    _memCache.Remove(oldestKey);
+                                    try { evictBmp.Dispose(); } catch { }
+                                }
+                            }
 
-                        _memCache[videoId] = result;
-                        _lruOrder.AddFirst(videoId);
-                        added = true;
+                            _memCache[videoId] = result;
+                            _lruOrder.AddLast(videoId);
+                            added = true;
+                        }
                     }
                 }
 
@@ -159,7 +175,7 @@ namespace KahoiiMusic.Services
 
         public static void DeleteThumb(string videoId)
         {
-            if (string.IsNullOrWhiteSpace(videoId) || string.IsNullOrEmpty(_thumbsDir)) return;
+            if (string.IsNullOrWhiteSpace(videoId)) return;
             try
             {
                 lock (_lock)
@@ -171,13 +187,12 @@ namespace KahoiiMusic.Services
                         try { bmp.Dispose(); } catch { }
                     }
                 }
-                string diskFile = Path.Combine(_thumbsDir, videoId + ".jpg");
-                if (File.Exists(diskFile))
+
+                // Delete from KahoiiTemp/thumb
+                string tempThumb = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
+                if (File.Exists(tempThumb))
                 {
-                    for (int r = 0; r < 3; r++)
-                    {
-                        try { File.Delete(diskFile); break; } catch { Thread.Sleep(20); }
-                    }
+                    try { File.Delete(tempThumb); } catch { }
                 }
             }
             catch { }
@@ -188,9 +203,9 @@ namespace KahoiiMusic.Services
             try
             {
                 ClearMemory();
-                if (string.IsNullOrEmpty(_thumbsDir) || !Directory.Exists(_thumbsDir)) return;
+                if (!Directory.Exists(AppPaths.TempThumbDir)) return;
 
-                foreach (string file in Directory.GetFiles(_thumbsDir))
+                foreach (string file in Directory.GetFiles(AppPaths.TempThumbDir))
                 {
                     string id = Path.GetFileNameWithoutExtension(file);
                     if (cleanAll || historyIds == null || !historyIds.Contains(id))
@@ -227,4 +242,3 @@ namespace KahoiiMusic.Services
         }
     }
 }
-

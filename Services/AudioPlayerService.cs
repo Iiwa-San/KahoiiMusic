@@ -228,25 +228,12 @@ namespace KahoiiMusic.Services
 
             {
 
-                // Store temporary audio files in Windows Temp path so it NEVER creates any folder on Desktop or next to exe
-
-                _cacheDirectory = Path.Combine(Path.GetTempPath(), "KahoiiMusic");
-
-                if (!Directory.Exists(_cacheDirectory))
-
-                {
-
-                    Directory.CreateDirectory(_cacheDirectory);
-
-                }
-
+                AppPaths.EnsureDirectoriesExist();
+                _cacheDirectory = AppPaths.TempAudioDir;
             }
-
             catch
-
             {
-
-                _cacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KahoiiMusic");
+                _cacheDirectory = AppPaths.TempAudioDir;
 
                 if (!Directory.Exists(_cacheDirectory))
 
@@ -2303,45 +2290,41 @@ namespace KahoiiMusic.Services
         }
 
         private string FindCachedAudioFile(string videoId)
-
         {
-
-            if (string.IsNullOrEmpty(videoId) || string.IsNullOrEmpty(_cacheDirectory) || !Directory.Exists(_cacheDirectory)) return null;
+            if (string.IsNullOrEmpty(videoId)) return null;
 
             try
-
             {
-
                 string[] prioritizedExts = new string[] { ".webm", ".opus", ".mp3", ".m4a", ".aac" };
 
+                // 1. Check Saved/audio first (Highest priority: Offline music)
                 foreach (string ext in prioritizedExts)
-
                 {
-
-                    string candidate = Path.Combine(_cacheDirectory, videoId + ext);
-
-                    if (File.Exists(candidate))
-
+                    string savedPath = Path.Combine(AppPaths.SavedAudioDir, videoId + ext);
+                    if (File.Exists(savedPath) && new FileInfo(savedPath).Length > 50000)
                     {
-
-                        FileInfo fi = new FileInfo(candidate);
-
-                        if (fi.Length > 50000)
-
-                        {
-
-                            try { File.SetLastWriteTime(candidate, DateTime.Now); } catch { }
-
-                            return candidate;
-
-                        }
-
+                        return savedPath;
                     }
-
                 }
 
+                // 2. Check KahoiiTemp/audio
+                if (!string.IsNullOrEmpty(_cacheDirectory) && Directory.Exists(_cacheDirectory))
+                {
+                    foreach (string ext in prioritizedExts)
+                    {
+                        string candidate = Path.Combine(_cacheDirectory, videoId + ext);
+                        if (File.Exists(candidate))
+                        {
+                            FileInfo fi = new FileInfo(candidate);
+                            if (fi.Length > 50000)
+                            {
+                                try { File.SetLastWriteTime(candidate, DateTime.Now); } catch { }
+                                return candidate;
+                            }
+                        }
+                    }
+                }
             }
-
             catch { }
 
             return null;
@@ -2651,7 +2634,7 @@ namespace KahoiiMusic.Services
 
         }
 
-        private string FindYtDlp()
+        public static string FindYtDlp()
 
         {
 
@@ -2663,7 +2646,7 @@ namespace KahoiiMusic.Services
 
             // 2. Cached in AppData directory
 
-            string cachedYtDlp = Path.Combine(_cacheDirectory, "yt-dlp.exe");
+            string cachedYtDlp = Path.Combine(AppPaths.TempDir, "yt-dlp.exe");
 
             if (File.Exists(cachedYtDlp) && new FileInfo(cachedYtDlp).Length > 1000000)
 
@@ -2701,11 +2684,11 @@ namespace KahoiiMusic.Services
 
                     {
 
-                        if (!Directory.Exists(_cacheDirectory))
+                        if (!Directory.Exists(AppPaths.TempDir))
 
                         {
 
-                            Directory.CreateDirectory(_cacheDirectory);
+                            Directory.CreateDirectory(AppPaths.TempDir);
 
                         }
 

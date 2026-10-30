@@ -238,10 +238,8 @@ namespace KahoiiMusic.Services
 
                 string[] possiblePaths = new string[]
                 {
-                    Path.Combine(Path.GetTempPath(), "KahoiiMusic"),
-                    Path.Combine(Path.GetTempPath(), "KahoiiMusic", "thumbs"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KahoiiMusic"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KahoiiMusic", "thumbs")
+                    AppPaths.TempAudioDir,
+                    AppPaths.TempThumbDir
                 };
                 foreach (string dir in possiblePaths)
                 {
@@ -275,10 +273,8 @@ namespace KahoiiMusic.Services
 
                 string[] possiblePaths = new string[]
                 {
-                    Path.Combine(Path.GetTempPath(), "KahoiiMusic"),
-                    Path.Combine(Path.GetTempPath(), "KahoiiMusic", "thumbs"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KahoiiMusic"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KahoiiMusic", "thumbs")
+                    AppPaths.TempAudioDir,
+                    AppPaths.TempThumbDir
                 };
 
                 foreach (string dir in possiblePaths)

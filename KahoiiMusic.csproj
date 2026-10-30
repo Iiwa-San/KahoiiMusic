@@ -95,6 +95,9 @@
     <Compile Include="Controls\PlaylistButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\DownloadButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\PlaylistPopup.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -136,6 +139,10 @@
     <Compile Include="Services\HistoryService.cs" />
     <Compile Include="Services\ThumbnailManager.cs" />
     <Compile Include="Services\SleepTimerService.cs" />
+
+    <Compile Include="Services\AppPaths.cs" />
+
+    <Compile Include="Services\SavedTracksService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -173,6 +180,10 @@
   </Target>
   <Target Name="CopyToPublish" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <MakeDir Directories="$(ProjectDir)publish" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" ContinueOnError="true" />
+    <MakeDir Directories="$(ProjectDir)publish\Saved\audio" />
+    <MakeDir Directories="$(ProjectDir)publish\Saved\thumb" />
+    <MakeDir Directories="$(ProjectDir)publish\KahoiiTemp\audio" />
+    <MakeDir Directories="$(ProjectDir)publish\KahoiiTemp\thumb" />
   </Target>
 </Project>

@@ -11,7 +11,8 @@ namespace KahoiiMusic.Controls
     public enum MenuTab
     {
         Playlist,
-        History
+        History,
+        Saved
     }
 
     public class PlaylistPopup : Form
@@ -19,6 +20,7 @@ namespace KahoiiMusic.Controls
         private MenuTab _activeTab = MenuTab.Playlist;
         private List<PlaylistItem> _playlistItems = new List<PlaylistItem>();
         private List<PlaylistItem> _historyItems = new List<PlaylistItem>();
+        private List<PlaylistItem> _savedItems = new List<PlaylistItem>();
 
         private int _currentPlaylistIndex = -1;
         private int _hoveredRowIndex = -1;
@@ -60,7 +62,15 @@ namespace KahoiiMusic.Controls
             }
         }
 
-        private List<PlaylistItem> ActiveItems => (_activeTab == MenuTab.Playlist) ? _playlistItems : _historyItems;
+        private List<PlaylistItem> ActiveItems
+        {
+            get
+            {
+                if (_activeTab == MenuTab.Playlist) return _playlistItems;
+                if (_activeTab == MenuTab.History) return _historyItems;
+                return _savedItems;
+            }
+        }
 
         private DateTime _lastDeactivatedTime = DateTime.MinValue;
 
@@ -80,7 +90,7 @@ namespace KahoiiMusic.Controls
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.FromArgb(20, 18, 30);
-            Size = new Size(380, 270);
+            Size = new Size(392, 270);
             DoubleBuffered = true;
             KeyPreview = true;
 
@@ -423,11 +433,13 @@ namespace KahoiiMusic.Controls
             _isHoveringClose = closeRect.Contains(pt);
 
             // Tab headers hover
-            Rectangle tab1Rect = new Rectangle(10, 7, 136, 28);
-            Rectangle tab2Rect = new Rectangle(152, 7, 106, 28);
+            Rectangle tab1Rect = new Rectangle(10, 7, 126, 28);
+            Rectangle tab2Rect = new Rectangle(142, 7, 98, 28);
+            Rectangle tab3Rect = new Rectangle(246, 7, 98, 28);
             int oldHoverTab = _hoveredTabIndex;
             if (tab1Rect.Contains(pt)) _hoveredTabIndex = 0;
             else if (tab2Rect.Contains(pt)) _hoveredTabIndex = 1;
+            else if (tab3Rect.Contains(pt)) _hoveredTabIndex = 2;
             else _hoveredTabIndex = -1;
 
             // Scrollbar hover
@@ -472,8 +484,9 @@ namespace KahoiiMusic.Controls
         {
             base.OnMouseDown(e);
 
-            Rectangle tab1Rect = new Rectangle(10, 7, 136, 28);
-            Rectangle tab2Rect = new Rectangle(152, 7, 106, 28);
+            Rectangle tab1Rect = new Rectangle(10, 7, 126, 28);
+            Rectangle tab2Rect = new Rectangle(142, 7, 98, 28);
+            Rectangle tab3Rect = new Rectangle(246, 7, 98, 28);
             Rectangle closeRect = new Rectangle(Width - 32, 10, 22, 22);
 
             if (e.Button == MouseButtons.Right)
@@ -526,6 +539,20 @@ namespace KahoiiMusic.Controls
                     _activeTab = MenuTab.History;
                     _scrollOffset = 0;
                     RefreshHistory();
+                    ClampScroll();
+                    Invalidate();
+                }
+                return;
+            }
+
+            // 4. Tab 3 clicked (Đã tải - Saved)
+            if (tab3Rect.Contains(e.Location))
+            {
+                if (_activeTab != MenuTab.Saved)
+                {
+                    _activeTab = MenuTab.Saved;
+                    _scrollOffset = 0;
+                    _savedItems = SavedTracksService.Instance.GetSavedTracks();
                     ClampScroll();
                     Invalidate();
                 }
@@ -620,7 +647,48 @@ namespace KahoiiMusic.Controls
             menu.Renderer = new Form1.DarkMenuRenderer();
             menu.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
 
-            if (_activeTab == MenuTab.History)
+            if (_activeTab == MenuTab.Saved)
+            {
+                var itemPlay = new ToolStripMenuItem("Phát ngay");
+                itemPlay.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+                itemPlay.Click += (s, e) =>
+                {
+                    if (AudioPlayer != null)
+                    {
+                        AudioPlayer.LoadAndPlay(item.Url);
+                    }
+                };
+
+                var itemAdd = new ToolStripMenuItem("Thêm vào danh sách phát");
+                itemAdd.Click += (s, e) =>
+                {
+                    if (AudioPlayer != null)
+                    {
+                        AudioPlayer.AddToPlaylist(item);
+                        Invalidate();
+                    }
+                };
+
+                var itemOpenFolder = new ToolStripMenuItem("Mở thư mục Saved");
+                itemOpenFolder.Click += (s, e) =>
+                {
+                    try { System.Diagnostics.Process.Start("explorer.exe", AppPaths.SavedAudioDir); } catch { }
+                };
+
+                var itemDelete = new ToolStripMenuItem("Xóa khỏi mục Đã tải");
+                itemDelete.Click += (s, e) =>
+                {
+                    SavedTracksService.Instance.DeleteSavedTrack(item.Id);
+                };
+
+                menu.Items.Add(itemPlay);
+                menu.Items.Add(itemAdd);
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemOpenFolder);
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemDelete);
+            }
+            else if (_activeTab == MenuTab.History)
             {
                 var itemAdd = new ToolStripMenuItem("Thêm vào danh sách phát");
                 itemAdd.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
@@ -642,6 +710,14 @@ namespace KahoiiMusic.Controls
                     }
                 };
 
+                bool isSaved = SavedTracksService.Instance.IsTrackSaved(item.Id);
+                var itemDownload = new ToolStripMenuItem(isSaved ? "✓ Đã lưu Offline (Saved)" : "📥 Tải về nghe Offline");
+                itemDownload.Enabled = !isSaved;
+                itemDownload.Click += (s, e) =>
+                {
+                    SavedTracksService.Instance.SaveTrackAsync(item);
+                };
+
                 var itemDelete = new ToolStripMenuItem("Xóa khỏi lịch sử");
                 itemDelete.Click += (s, e) =>
                 {
@@ -651,6 +727,8 @@ namespace KahoiiMusic.Controls
 
                 menu.Items.Add(itemAdd);
                 menu.Items.Add(itemPlay);
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemDownload);
                 menu.Items.Add(new ToolStripSeparator());
                 menu.Items.Add(itemDelete);
             }
@@ -666,6 +744,14 @@ namespace KahoiiMusic.Controls
                     }
                 };
 
+                bool isSaved = SavedTracksService.Instance.IsTrackSaved(item.Id);
+                var itemDownload = new ToolStripMenuItem(isSaved ? "✓ Đã lưu Offline (Saved)" : "📥 Tải về nghe Offline");
+                itemDownload.Enabled = !isSaved;
+                itemDownload.Click += (s, e) =>
+                {
+                    SavedTracksService.Instance.SaveTrackAsync(item);
+                };
+
                 var itemRemove = new ToolStripMenuItem("Xóa khỏi danh sách phát");
                 itemRemove.Click += (s, e) =>
                 {
@@ -677,6 +763,8 @@ namespace KahoiiMusic.Controls
                 };
 
                 menu.Items.Add(itemPlay);
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemDownload);
                 menu.Items.Add(new ToolStripSeparator());
                 menu.Items.Add(itemRemove);
             }
@@ -740,11 +828,13 @@ namespace KahoiiMusic.Controls
             }
 
             // 2. Tab Navigation Header
-            Rectangle tab1Rect = new Rectangle(10, 7, 136, 28);
-            Rectangle tab2Rect = new Rectangle(152, 7, 106, 28);
+            Rectangle tab1Rect = new Rectangle(10, 7, 126, 28);
+            Rectangle tab2Rect = new Rectangle(142, 7, 98, 28);
+            Rectangle tab3Rect = new Rectangle(246, 7, 98, 28);
 
             DrawTab(g, tab1Rect, "Danh sách phát", _playlistItems.Count, _activeTab == MenuTab.Playlist, _hoveredTabIndex == 0);
             DrawTab(g, tab2Rect, "Lịch sử", _historyItems.Count, _activeTab == MenuTab.History, _hoveredTabIndex == 1);
+            DrawTab(g, tab3Rect, "Đã tải", _savedItems.Count, _activeTab == MenuTab.Saved, _hoveredTabIndex == 2);
 
             // Close button "✕"
             Color closeColor = _isHoveringClose ? Color.FromArgb(255, 120, 120) : Color.FromArgb(150, 150, 160);

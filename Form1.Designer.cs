@@ -34,6 +34,7 @@ namespace KahoiiMusic
             this.panelPlayerCard = new System.Windows.Forms.Panel();
             this.panelTopBar = new System.Windows.Forms.Panel();
             this.btnPlaylist = new KahoiiMusic.Controls.PlaylistButton();
+            this.btnDownloads = new KahoiiMusic.Controls.DownloadButton();
             this.searchPillBox = new KahoiiMusic.Controls.SearchPillBox();
             this.gradientPanel = new KahoiiMusic.Controls.GradientPanel();
             this.volumePopup = new KahoiiMusic.Controls.VolumePopup();
@@ -94,6 +95,7 @@ namespace KahoiiMusic
             // 
             this.panelTopBar.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(47)))), ((int)(((byte)(20)))));
             this.panelTopBar.Controls.Add(this.btnPlaylist);
+            this.panelTopBar.Controls.Add(this.btnDownloads);
             this.panelTopBar.Controls.Add(this.searchPillBox);
             this.panelTopBar.Location = new System.Drawing.Point(0, 0);
             this.panelTopBar.Name = "panelTopBar";
@@ -104,18 +106,27 @@ namespace KahoiiMusic
             // 
             this.btnPlaylist.BackColor = System.Drawing.Color.Transparent;
             this.btnPlaylist.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnPlaylist.Location = new System.Drawing.Point(14, 3);
+            this.btnPlaylist.Location = new System.Drawing.Point(12, 3);
             this.btnPlaylist.Name = "btnPlaylist";
-            this.btnPlaylist.Size = new System.Drawing.Size(28, 24);
+            this.btnPlaylist.Size = new System.Drawing.Size(26, 24);
             this.btnPlaylist.TabIndex = 1;
+            // 
+            // btnDownloads
+            // 
+            this.btnDownloads.BackColor = System.Drawing.Color.Transparent;
+            this.btnDownloads.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnDownloads.Location = new System.Drawing.Point(40, 3);
+            this.btnDownloads.Name = "btnDownloads";
+            this.btnDownloads.Size = new System.Drawing.Size(26, 24);
+            this.btnDownloads.TabIndex = 2;
             // 
             // searchPillBox
             // 
             this.searchPillBox.BackColor = System.Drawing.Color.Transparent;
-            this.searchPillBox.Location = new System.Drawing.Point(58, 5);
+            this.searchPillBox.Location = new System.Drawing.Point(72, 5);
             this.searchPillBox.Name = "searchPillBox";
             this.searchPillBox.PlaceholderText = "link youtube...";
-            this.searchPillBox.Size = new System.Drawing.Size(360, 20);
+            this.searchPillBox.Size = new System.Drawing.Size(346, 20);
             this.searchPillBox.TabIndex = 0;
             // 
             // gradientPanel
@@ -343,6 +354,7 @@ namespace KahoiiMusic
         private KahoiiMusic.Controls.TimerButton btnTimer;
         private KahoiiMusic.Controls.VolumePopup volumePopup;
         private KahoiiMusic.Controls.PlaylistButton btnPlaylist;
+        private KahoiiMusic.Controls.DownloadButton btnDownloads;
         private System.Windows.Forms.Label lblCopyright;
         private System.Windows.Forms.Timer playbackTimer;
     }
