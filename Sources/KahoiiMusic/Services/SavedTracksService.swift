@@ -119,16 +119,18 @@ public class SavedTracksService: ObservableObject {
 
             // 2. Prepare optimized requests with matching headers to bypass CDN speed throttling
             let targetAudioFile = audioDir.appendingPathComponent("\(item.id).m4a")
-            var audioRequest = URLRequest(url: resolvedStreamUrl)
-            audioRequest.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
-            audioRequest.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
+            var req = URLRequest(url: resolvedStreamUrl)
+            req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+            req.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
+            let finalAudioRequest = req
+            let finalThumbUrl = resolvedThumb
 
             let targetThumbFile = thumbDir.appendingPathComponent("\(item.id).jpg")
 
             // 3. Parallel download: Download Audio and Thumbnail at the same time for max speed
-            async let audioTask: (URL, URLResponse) = downloadSession.download(for: audioRequest)
+            async let audioTask: (URL, URLResponse) = downloadSession.download(for: finalAudioRequest)
             async let thumbTask: (URL, URLResponse)? = {
-                if let thumbUrl = URL(string: resolvedThumb) {
+                if let thumbUrl = URL(string: finalThumbUrl) {
                     return try? await downloadSession.download(from: thumbUrl)
                 }
                 return nil
