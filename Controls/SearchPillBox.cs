@@ -196,6 +196,11 @@ namespace KahoiiMusic.Controls
                     UrlSubmitted(this, url);
                 }
             }
+            else if (e.KeyCode == Keys.Escape)
+            {
+                e.SuppressKeyPress = true;
+                RemoveFocus();
+            }
         }
 
         protected override void OnResize(EventArgs e)

@@ -25,10 +25,28 @@ namespace KahoiiMusic.Services
         {
             try
             {
-                DataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KahoiiMusic");
+                // Self-contained in Saved/ folder next to executable (portable, zero C-drive pollution)
+                DataFolder = AppPaths.SavedDir;
                 if (!Directory.Exists(DataFolder))
                 {
                     Directory.CreateDirectory(DataFolder);
+                }
+
+                // Check for migration from legacy %AppData%
+                string legacyDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KahoiiMusic");
+                string legacyHistory = Path.Combine(legacyDir, "history.json");
+                string legacySettings = Path.Combine(legacyDir, "settings.json");
+
+                string targetHistory = Path.Combine(DataFolder, "history.json");
+                string targetSettings = Path.Combine(DataFolder, "settings.json");
+
+                if (!File.Exists(targetHistory) && File.Exists(legacyHistory))
+                {
+                    try { File.Copy(legacyHistory, targetHistory, true); } catch { }
+                }
+                if (!File.Exists(targetSettings) && File.Exists(legacySettings))
+                {
+                    try { File.Copy(legacySettings, targetSettings, true); } catch { }
                 }
             }
             catch

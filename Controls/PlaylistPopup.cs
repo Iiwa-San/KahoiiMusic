@@ -750,7 +750,17 @@ namespace KahoiiMusic.Controls
                 itemDownload.Enabled = !isSaved;
                 itemDownload.Click += (s, e) =>
                 {
-                    SavedTracksService.Instance.SaveTrackAsync(item);
+                    if (AudioPlayer != null)
+                    {
+                        AudioPlayer.RaiseStatus("Đang lưu bài hát về máy: " + item.Title + "...");
+                    }
+                    SavedTracksService.Instance.SaveTrackAsync(item, (success, msg) =>
+                    {
+                        if (AudioPlayer != null)
+                        {
+                            AudioPlayer.RaiseStatus(success ? ("✓ Đã lưu bài hát: " + item.Title) : ("Lỗi lưu bài: " + msg));
+                        }
+                    });
                 };
 
                 var itemDelete = new ToolStripMenuItem("Xóa khỏi lịch sử");
@@ -784,7 +794,17 @@ namespace KahoiiMusic.Controls
                 itemDownload.Enabled = !isSaved;
                 itemDownload.Click += (s, e) =>
                 {
-                    SavedTracksService.Instance.SaveTrackAsync(item);
+                    if (AudioPlayer != null)
+                    {
+                        AudioPlayer.RaiseStatus("Đang lưu bài hát về máy: " + item.Title + "...");
+                    }
+                    SavedTracksService.Instance.SaveTrackAsync(item, (success, msg) =>
+                    {
+                        if (AudioPlayer != null)
+                        {
+                            AudioPlayer.RaiseStatus(success ? ("✓ Đã lưu bài hát: " + item.Title) : ("Lỗi lưu bài: " + msg));
+                        }
+                    });
                 };
 
                 var itemRemove = new ToolStripMenuItem("Xóa khỏi danh sách phát");

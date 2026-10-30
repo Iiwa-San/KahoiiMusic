@@ -104,12 +104,12 @@ namespace KahoiiMusic.Services
                                 {
                                     result = ResizeToMicro(img, ThumbSize, ThumbSize);
 
-                                    // Persist tiny micro-thumbnail on disk for future instant loads
-                                    if (result != null)
+                                    // Persist full-quality thumbnail on disk for future instant offline loads
+                                    if (data != null)
                                     {
                                         try
                                         {
-                                            result.Save(tempThumbFile, ImageFormat.Jpeg);
+                                            File.WriteAllBytes(tempThumbFile, data);
                                         }
                                         catch { }
                                     }

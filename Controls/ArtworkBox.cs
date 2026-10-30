@@ -1,3 +1,4 @@
+using KahoiiMusic.Services;
 using System;
 using System.ComponentModel;
 using System.Drawing;
@@ -109,62 +110,198 @@ namespace KahoiiMusic.Controls
             }
         }
 
-        public void LoadFromUrlAsync(string url)
+        public void LoadFromUrlAsync(string urlOrVideoId)
         {
+            if (string.IsNullOrWhiteSpace(urlOrVideoId))
+            {
+                ClearImage();
+                return;
+            }
+
             ThreadPool.QueueUserWorkItem(delegate
             {
                 try
                 {
-                    using (WebClient wc = new WebClient())
+                    // 1. Extract videoId
+                    string videoId = null;
+                    if (urlOrVideoId.Length == 11 && System.Text.RegularExpressions.Regex.IsMatch(urlOrVideoId, @"^[a-zA-Z0-9_-]{11}$"))
                     {
-                        byte[] data = wc.DownloadData(url);
-                        using (MemoryStream ms = new MemoryStream(data))
-                        using (Image loaded = Image.FromStream(ms))
+                        videoId = urlOrVideoId;
+                    }
+                    else
+                    {
+                        var m = System.Text.RegularExpressions.Regex.Match(urlOrVideoId, @"(?:vi\/|v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})");
+                        if (m.Success)
                         {
-                            // Pre-scale and circular-clip center 1:1 square thumbnail (removes YouTube pillarbox/letterbox bars)
-                            int thumbDim = 116;
-                            Bitmap thumb = new Bitmap(thumbDim, thumbDim, PixelFormat.Format32bppPArgb);
-                            using (Graphics g = Graphics.FromImage(thumb))
+                            videoId = m.Groups[1].Value;
+                        }
+                    }
+
+                    Bitmap resultThumb = null;
+
+                    // 2. Check Saved/thumb/ (Highest priority: Instant offline playback)
+                    if (!string.IsNullOrEmpty(videoId))
+                    {
+                        string savedThumb = Path.Combine(AppPaths.SavedThumbDir, videoId + ".jpg");
+                        resultThumb = TryLoadCircularThumbFromFile(savedThumb);
+                    }
+
+                    // 3. Check KahoiiTemp/thumb/ (Cached thumbnails)
+                    if (resultThumb == null && !string.IsNullOrEmpty(videoId))
+                    {
+                        string tempThumb = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
+                        resultThumb = TryLoadCircularThumbFromFile(tempThumb);
+                    }
+
+                    // 4. Check if urlOrVideoId is an existing direct file path
+                    if (resultThumb == null && File.Exists(urlOrVideoId))
+                    {
+                        resultThumb = TryLoadCircularThumbFromFile(urlOrVideoId);
+                    }
+
+                    // If successfully loaded from local disk, apply immediately! (0ms offline visual feedback)
+                    if (resultThumb != null)
+                    {
+                        if (IsHandleCreated)
+                        {
+                            BeginInvoke(new Action(delegate { Image = resultThumb; }));
+                        }
+                        else
+                        {
+                            resultThumb.Dispose();
+                        }
+                        return;
+                    }
+
+                    // 5. If not found on disk, attempt online download from YouTube
+                    string downloadUrl = urlOrVideoId;
+                    if (!downloadUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                        !downloadUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrEmpty(videoId))
+                    {
+                        downloadUrl = string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", videoId);
+                    }
+
+                    try
+                    {
+                        using (WebClient wc = new WebClient())
+                        {
+                            byte[] data = wc.DownloadData(downloadUrl);
+                            if (data != null && data.Length > 200)
                             {
-                                g.SmoothingMode = SmoothingMode.AntiAlias;
-                                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-                                using (GraphicsPath circlePath = new GraphicsPath())
+                                // Cache thumbnail in TempThumbDir for future offline plays
+                                if (!string.IsNullOrEmpty(videoId))
                                 {
-                                    circlePath.AddEllipse(0, 0, thumbDim, thumbDim);
-                                    g.SetClip(circlePath);
+                                    try
+                                    {
+                                        string cacheFile = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
+                                        File.WriteAllBytes(cacheFile, data);
+                                    }
+                                    catch { }
+                                }
 
-                                    // Extract the focused 1:1 center square (removes YouTube letterbox & pillarbox bars)
-                                    int cropSize = (int)(Math.Min(loaded.Width, loaded.Height) * 0.72f);
-                                    int srcX = (loaded.Width - cropSize) / 2;
-                                    int srcY = (loaded.Height - cropSize) / 2;
-                                    Rectangle srcRect = new Rectangle(srcX, srcY, cropSize, cropSize);
-                                    Rectangle destRect = new Rectangle(0, 0, thumbDim, thumbDim);
+                                using (MemoryStream ms = new MemoryStream(data))
+                                using (Image loaded = Image.FromStream(ms))
+                                {
+                                    resultThumb = CreateCircularVinylArtwork(loaded);
+                                }
 
-                                    g.DrawImage(loaded, destRect, srcRect, GraphicsUnit.Pixel);
+                                if (resultThumb != null)
+                                {
+                                    if (IsHandleCreated)
+                                    {
+                                        BeginInvoke(new Action(delegate { Image = resultThumb; }));
+                                    }
+                                    else
+                                    {
+                                        resultThumb.Dispose();
+                                    }
+                                    return;
                                 }
                             }
-
-                            if (IsHandleCreated)
-                            {
-                                BeginInvoke(new Action(delegate
-                                {
-                                    Image = thumb;
-                                }));
-                            }
-                            else
-                            {
-                                thumb.Dispose();
-                            }
                         }
+                    }
+                    catch { }
+
+                    // If all failed (e.g. offline with no cached image), reset image so old track thumbnail does not linger
+                    if (IsHandleCreated)
+                    {
+                        BeginInvoke(new Action(delegate { Image = null; }));
                     }
                 }
                 catch
                 {
-                    // Ignore on load failure
+                    if (IsHandleCreated)
+                    {
+                        BeginInvoke(new Action(delegate { Image = null; }));
+                    }
                 }
             });
+        }
+
+        private Bitmap TryLoadCircularThumbFromFile(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return null;
+            try
+            {
+                FileInfo fi = new FileInfo(filePath);
+                if (fi.Length > 100)
+                {
+                    byte[] data = File.ReadAllBytes(filePath);
+                    using (MemoryStream ms = new MemoryStream(data))
+                    using (Image loaded = Image.FromStream(ms))
+                    {
+                        return CreateCircularVinylArtwork(loaded);
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private Bitmap CreateCircularVinylArtwork(Image loaded)
+        {
+            if (loaded == null) return null;
+            try
+            {
+                int thumbDim = 116;
+                Bitmap thumb = new Bitmap(thumbDim, thumbDim, PixelFormat.Format32bppPArgb);
+                using (Graphics g = Graphics.FromImage(thumb))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                    using (GraphicsPath circlePath = new GraphicsPath())
+                    {
+                        circlePath.AddEllipse(0, 0, thumbDim, thumbDim);
+                        g.SetClip(circlePath);
+
+                        int cropSize;
+                        if (Math.Abs(loaded.Width - loaded.Height) <= 2 || loaded.Width <= 64)
+                        {
+                            // Already square or micro-thumbnail: preserve entire image
+                            cropSize = Math.Min(loaded.Width, loaded.Height);
+                        }
+                        else
+                        {
+                            // Standard 16:9 YouTube thumbnail: crop center 75% focused area
+                            cropSize = (int)(Math.Min(loaded.Width, loaded.Height) * 0.75f);
+                        }
+                        int srcX = (loaded.Width - cropSize) / 2;
+                        int srcY = (loaded.Height - cropSize) / 2;
+                        Rectangle srcRect = new Rectangle(srcX, srcY, cropSize, cropSize);
+                        Rectangle destRect = new Rectangle(0, 0, thumbDim, thumbDim);
+
+                        g.DrawImage(loaded, destRect, srcRect, GraphicsUnit.Pixel);
+                    }
+                }
+                return thumb;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public void ClearImage()

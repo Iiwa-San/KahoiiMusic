@@ -144,7 +144,7 @@ namespace KahoiiMusic.Services
 
         {
 
-            get { return HasPlaylist && (_currentPlaylistIndex + 1 < _playlist.Count || _isLooping); }
+            get { return HasPlaylist && _currentPlaylistIndex >= 0 && (_currentPlaylistIndex + 1 < _playlist.Count || _isLooping); }
 
         }
 
@@ -1201,6 +1201,50 @@ namespace KahoiiMusic.Services
 
         }
 
+        public void SetPlaylist(List<PlaylistItem> items, int initialIndex = 0)
+
+        {
+
+            if (items == null || items.Count == 0)
+
+            {
+
+                ClearPlaylist();
+
+                return;
+
+            }
+
+            _playlist = new List<PlaylistItem>(items);
+
+            _currentPlaylistId = null;
+
+            _currentPlaylistIndex = Math.Max(0, Math.Min(initialIndex, _playlist.Count - 1));
+
+            _syncContext.Post(delegate
+
+            {
+
+                if (PlaylistLoaded != null)
+
+                {
+
+                    PlaylistLoaded(this, _playlist);
+
+                }
+
+                if (PlaylistIndexChanged != null)
+
+                {
+
+                    PlaylistIndexChanged(this, _currentPlaylistIndex);
+
+                }
+
+            }, null);
+
+        }
+
         public void AddToPlaylist(PlaylistItem item)
 
         {
@@ -1336,6 +1380,22 @@ namespace KahoiiMusic.Services
                 _currentTitle = item.Title;
 
                 RaiseTitleChanged(_currentTitle);
+
+            }
+
+            if (!string.IsNullOrEmpty(item.Id))
+
+            {
+
+                string localThumb = SavedTracksService.Instance.FindSavedThumbFile(item.Id);
+
+                string thumb = !string.IsNullOrEmpty(localThumb)
+
+                    ? localThumb
+
+                    : string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", item.Id);
+
+                RaiseThumbnail(thumb);
 
             }
 
@@ -1937,7 +1997,13 @@ namespace KahoiiMusic.Services
 
                         // Immediate thumbnail display (instant visual feedback)
 
-                        string thumb = string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", videoId);
+                        string localThumb = SavedTracksService.Instance.FindSavedThumbFile(videoId);
+
+                        string thumb = !string.IsNullOrEmpty(localThumb)
+
+                            ? localThumb
+
+                            : string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", videoId);
 
                         RaiseThumbnail(thumb);
 
@@ -2834,7 +2900,7 @@ namespace KahoiiMusic.Services
 
         }
 
-        private void RaiseStatus(string message)
+        public void RaiseStatus(string message)
 
         {
 

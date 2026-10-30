@@ -226,7 +226,7 @@ namespace KahoiiMusic
             this.btnLoop.ActiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(168)))), ((int)(((byte)(85)))), ((int)(((byte)(247)))));
             this.btnLoop.BackColor = System.Drawing.Color.Transparent;
             this.btnLoop.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnLoop.InactiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
+            this.btnLoop.InactiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(220)))), ((int)(((byte)(220)))), ((int)(((byte)(220)))));
             this.btnLoop.Location = new System.Drawing.Point(324, 47);
             this.btnLoop.Name = "btnLoop";
             this.btnLoop.Size = new System.Drawing.Size(28, 24);
@@ -237,7 +237,7 @@ namespace KahoiiMusic
             this.btnTimer.ActiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(168)))), ((int)(((byte)(85)))), ((int)(((byte)(247)))));
             this.btnTimer.BackColor = System.Drawing.Color.Transparent;
             this.btnTimer.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnTimer.InactiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
+            this.btnTimer.InactiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(220)))), ((int)(((byte)(220)))), ((int)(((byte)(220)))));
             this.btnTimer.Location = new System.Drawing.Point(368, 47);
             this.btnTimer.Name = "btnTimer";
             this.btnTimer.Size = new System.Drawing.Size(28, 24);

@@ -13,7 +13,7 @@ namespace KahoiiMusic.Controls
         private bool _isPressed = false;
         private readonly ToolTip _toolTip;
 
-        private Color _inactiveColor = Color.FromArgb(140, 140, 140);
+        private Color _inactiveColor = Color.FromArgb(220, 220, 220);
         private Color _inactiveHoverColor = Color.FromArgb(220, 220, 220);
         private Color _activeColor = Color.FromArgb(168, 85, 247);
         private Color _activeHoverColor = Color.FromArgb(192, 132, 252);

@@ -327,7 +327,7 @@ namespace KahoiiMusic
 
         public bool PreFilterMessage(ref Message m)
         {
-            // Forward mouse wheel to playlistPopup if hovering over it
+            // Forward mouse wheel to playlistPopup if hovering over it, or adjust volume
             if (m.Msg == 0x020A /* WM_MOUSEWHEEL */)
             {
                 if (playlistPopup != null && playlistPopup.Visible && playlistPopup.Bounds.Contains(Cursor.Position))
@@ -335,6 +335,20 @@ namespace KahoiiMusic
                     if (m.HWnd != playlistPopup.Handle)
                     {
                         SendMessage(playlistPopup.Handle, m.Msg, (int)m.WParam, (int)m.LParam);
+                        return true;
+                    }
+                }
+                else
+                {
+                    Point cur = Cursor.Position;
+                    bool isOverVolume = (volumePopup != null && volumePopup.Visible && volumePopup.Bounds.Contains(cur)) ||
+                                        (panelBottomControls != null && panelBottomControls.RectangleToScreen(btnVolume.Bounds).Contains(cur)) ||
+                                        (panelBottomControls != null && panelBottomControls.RectangleToScreen(panelBottomControls.ClientRectangle).Contains(cur));
+                    if (isOverVolume)
+                    {
+                        short delta = (short)((m.WParam.ToInt64() >> 16) & 0xFFFF);
+                        float volChange = (delta > 0) ? 0.04f : -0.04f;
+                        AdjustVolume(volChange);
                         return true;
                     }
                 }
@@ -375,6 +389,100 @@ namespace KahoiiMusic
                 }
             }
             return false;
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (searchPillBox != null && searchPillBox.ContainsFocus)
+            {
+                if (keyData == Keys.Escape)
+                {
+                    searchPillBox.RemoveFocus();
+                    return true;
+                }
+                return base.ProcessCmdKey(ref msg, keyData);
+            }
+
+            switch (keyData)
+            {
+                case Keys.Space:
+                case Keys.MediaPlayPause:
+                    BtnPlayPause_Click(this, EventArgs.Empty);
+                    return true;
+
+                case Keys.MediaNextTrack:
+                case (Keys.Control | Keys.Right):
+                    BtnNext_Click(this, EventArgs.Empty);
+                    return true;
+
+                case Keys.MediaPreviousTrack:
+                case (Keys.Control | Keys.Left):
+                    BtnPrevious_Click(this, EventArgs.Empty);
+                    return true;
+
+                case Keys.Up:
+                    AdjustVolume(0.05f);
+                    return true;
+
+                case Keys.Down:
+                    AdjustVolume(-0.05f);
+                    return true;
+
+                case Keys.M:
+                    ToggleMute();
+                    return true;
+
+                case Keys.L:
+                    btnLoop.IsLooping = !btnLoop.IsLooping;
+                    _audioPlayer.IsLooping = btnLoop.IsLooping;
+                    if (_trayItemLoop != null) _trayItemLoop.Checked = btnLoop.IsLooping;
+                    return true;
+
+                case Keys.Escape:
+                    if (playlistPopup != null && playlistPopup.Visible)
+                    {
+                        playlistPopup.Hide();
+                        btnPlaylist.IsOpen = false;
+                        return true;
+                    }
+                    if (volumePopup != null && volumePopup.Visible)
+                    {
+                        volumePopup.Visible = false;
+                        return true;
+                    }
+                    break;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private float _previousNonZeroVolume = 1.0f;
+        private void ToggleMute()
+        {
+            if (_audioPlayer == null) return;
+            if (_audioPlayer.Volume > 0.001f)
+            {
+                _previousNonZeroVolume = _audioPlayer.Volume;
+                _audioPlayer.Volume = 0f;
+                btnVolume.Volume = 0f;
+                volumePopup.Volume = 0f;
+            }
+            else
+            {
+                float target = _previousNonZeroVolume > 0.05f ? _previousNonZeroVolume : 0.5f;
+                _audioPlayer.Volume = target;
+                btnVolume.Volume = target;
+                volumePopup.Volume = target;
+            }
+        }
+
+        private void AdjustVolume(float delta)
+        {
+            if (_audioPlayer == null) return;
+            float newVol = Math.Max(0.0f, Math.Min(1.0f, _audioPlayer.Volume + delta));
+            _audioPlayer.Volume = newVol;
+            btnVolume.Volume = newVol;
+            volumePopup.Volume = newVol;
         }
 
         private void Window_MouseDown(object sender, MouseEventArgs e)
@@ -494,7 +602,7 @@ namespace KahoiiMusic
 
         private void BtnPrevious_Click(object sender, EventArgs e)
         {
-            if (_audioPlayer.HasPlaylist)
+            if (_audioPlayer.HasPlaylist && _audioPlayer.CurrentPlaylistIndex >= 0)
             {
                 _audioPlayer.PlayPrevious();
             }
@@ -508,7 +616,7 @@ namespace KahoiiMusic
 
         private void BtnNext_Click(object sender, EventArgs e)
         {
-            if (_audioPlayer.HasPlaylist)
+            if (_audioPlayer.HasPlaylist && _audioPlayer.CurrentPlaylistIndex >= 0)
             {
                 _audioPlayer.PlayNext();
             }

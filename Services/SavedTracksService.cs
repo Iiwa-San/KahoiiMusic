@@ -132,8 +132,29 @@ namespace KahoiiMusic.Services
 
                     if (existingTempAudio != null && File.Exists(existingTempAudio))
                     {
-                        // Copy from KahoiiTemp directly (instant 0ms)
-                        File.Copy(existingTempAudio, destinationAudio, true);
+                        // Copy from KahoiiTemp directly with sharing to avoid file locks (instant 0ms)
+                        bool copied = false;
+                        for (int attempt = 0; attempt < 3; attempt++)
+                        {
+                            try
+                            {
+                                using (var src = new FileStream(existingTempAudio, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                                using (var dst = new FileStream(destinationAudio, FileMode.Create, FileAccess.Write, FileShare.None))
+                                {
+                                    src.CopyTo(dst);
+                                }
+                                copied = true;
+                                break;
+                            }
+                            catch
+                            {
+                                Thread.Sleep(50);
+                            }
+                        }
+                        if (!copied)
+                        {
+                            try { File.Copy(existingTempAudio, destinationAudio, true); } catch { }
+                        }
                     }
                     else
                     {
@@ -161,11 +182,33 @@ namespace KahoiiMusic.Services
                     // 2. Ensure thumbnail is in Saved/thumb/
                     string destThumb = Path.Combine(AppPaths.SavedThumbDir, videoId + ".jpg");
                     string srcTempThumb = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
-                    if (File.Exists(srcTempThumb))
+                    bool thumbSaved = false;
+
+                    try
                     {
-                        try { File.Copy(srcTempThumb, destThumb, true); } catch { }
+                        using (WebClient wc = new WebClient())
+                        {
+                            byte[] bytes = wc.DownloadData("https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg");
+                            if (bytes != null && bytes.Length > 1000)
+                            {
+                                File.WriteAllBytes(destThumb, bytes);
+                                thumbSaved = true;
+                            }
+                        }
                     }
-                    else
+                    catch { }
+
+                    if (!thumbSaved && File.Exists(srcTempThumb))
+                    {
+                        try
+                        {
+                            File.Copy(srcTempThumb, destThumb, true);
+                            thumbSaved = true;
+                        }
+                        catch { }
+                    }
+
+                    if (!thumbSaved)
                     {
                         try
                         {
