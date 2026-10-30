@@ -82,6 +82,11 @@ public enum PlaybackState: Equatable, Sendable {
         if case .loading = self { return true }
         return false
     }
+
+    public var isPaused: Bool {
+        if case .paused = self { return true }
+        return false
+    }
 }
 
 public enum LoopMode: Int, Codable, CaseIterable, Sendable {
