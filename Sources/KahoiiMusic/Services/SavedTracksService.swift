@@ -12,8 +12,8 @@ public class SavedTracksService: ObservableObject {
 
     private lazy var downloadSession: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 25.0
-        config.timeoutIntervalForResource = 90.0
+        config.timeoutIntervalForRequest = 60.0 // 1 phút timeout cho mỗi gói dữ liệu
+        config.timeoutIntervalForResource = 360.0 // 6 phút tổng cộng (hỗ trợ nhạc dài 1-2 tiếng >100MB)
         return URLSession(configuration: config)
     }()
 

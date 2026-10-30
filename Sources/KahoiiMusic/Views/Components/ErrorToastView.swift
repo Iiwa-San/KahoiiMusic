@@ -80,3 +80,4 @@ public struct ErrorToastView: View {
         }
     }
 }
+

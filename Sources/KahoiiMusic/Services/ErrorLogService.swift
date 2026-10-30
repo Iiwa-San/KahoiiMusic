@@ -77,3 +77,4 @@ public class ErrorLogService: ObservableObject {
         dismissToast()
     }
 }
+

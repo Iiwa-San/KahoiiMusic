@@ -271,10 +271,10 @@ public class AudioPlayerService: ObservableObject {
     private func startLoadingTimeout(for track: PlaylistItem) {
         loadingTimeoutTask?.cancel()
         loadingTimeoutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 15_000_000_000) // 15s timeout
+            try? await Task.sleep(nanoseconds: 60_000_000_000) // 60s (1 phút) timeout cho audio dài
             guard let self = self, !Task.isCancelled else { return }
             if self.playbackState.isLoading {
-                let msg = "Quá thời gian kết nối luồng phát (Timeout 15s). Vui lòng kiểm tra mạng hoặc chọn bài khác."
+                let msg = "Quá thời gian kết nối luồng phát (Timeout 1 phút). Vui lòng kiểm tra mạng hoặc chọn bài khác."
                 self.errorMessage = msg
                 self.playbackState = .failed("Hết thời gian tải")
                 self.statusMessage = "Hết thời gian chờ"
