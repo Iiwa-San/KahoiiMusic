@@ -29,6 +29,9 @@
 		AA0001012C12340000000020 /* SavedTracksService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000020 /* SavedTracksService.swift */; };
 		AA0001012C12340000000021 /* SleepTimerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000021 /* SleepTimerService.swift */; };
 		AA0001012C12340000000022 /* SavedTracksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000022 /* SavedTracksSheet.swift */; };
+		AA0001012C12340000000023 /* ErrorLogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000023 /* ErrorLogService.swift */; };
+		AA0001012C12340000000024 /* ErrorToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000024 /* ErrorToastView.swift */; };
+		AA0001012C12340000000025 /* ErrorLogsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000025 /* ErrorLogsSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +59,9 @@
 		AA0001002C12340000000020 /* SavedTracksService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTracksService.swift; sourceTree = "<group>"; };
 		AA0001002C12340000000021 /* SleepTimerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTimerService.swift; sourceTree = "<group>"; };
 		AA0001002C12340000000022 /* SavedTracksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTracksSheet.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000023 /* ErrorLogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorLogService.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000024 /* ErrorToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorToastView.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000025 /* ErrorLogsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorLogsSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,6 +113,7 @@
 				AA0001002C12340000000006 /* ColorExtractor.swift */,
 				AA0001002C12340000000020 /* SavedTracksService.swift */,
 				AA0001002C12340000000021 /* SleepTimerService.swift */,
+				AA0001002C12340000000023 /* ErrorLogService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -131,6 +138,7 @@
 				AA0001002C12340000000012 /* SearchPillBar.swift */,
 				AA0001002C12340000000013 /* EqualizerAnimationView.swift */,
 				AA0001002C12340000000014 /* MiniPlayerView.swift */,
+				AA0001002C12340000000024 /* ErrorToastView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -143,6 +151,7 @@
 				AA0001002C12340000000017 /* SearchResultsSheet.swift */,
 				AA0001002C12340000000018 /* FavoritesSheet.swift */,
 				AA0001002C12340000000022 /* SavedTracksSheet.swift */,
+				AA0001002C12340000000025 /* ErrorLogsSheet.swift */,
 			);
 			path = Sheets;
 			sourceTree = "<group>";
@@ -244,6 +253,9 @@
 				AA0001012C12340000000020 /* SavedTracksService.swift in Sources */,
 				AA0001012C12340000000021 /* SleepTimerService.swift in Sources */,
 				AA0001012C12340000000022 /* SavedTracksSheet.swift in Sources */,
+				AA0001012C12340000000023 /* ErrorLogService.swift in Sources */,
+				AA0001012C12340000000024 /* ErrorToastView.swift in Sources */,
+				AA0001012C12340000000025 /* ErrorLogsSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

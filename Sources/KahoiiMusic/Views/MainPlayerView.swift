@@ -17,6 +17,7 @@ public struct MainPlayerView: View {
     @State private var showingHistorySheet: Bool = false
     @State private var showingFavoritesSheet: Bool = false
     @State private var showingSavedTracksSheet: Bool = false
+    @State private var showingErrorLogsSheet: Bool = false
     @State private var showingSearchResultsSheet: Bool = false
 
     public init() {}
@@ -77,35 +78,10 @@ public struct MainPlayerView: View {
                     .padding(.bottom, 12)
             }
 
-            // Error Overlay Banner
-            if let error = player.errorMessage {
-                VStack {
-                    Spacer()
-                    HStack(spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.yellow)
-                        Text(error)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
-                        Spacer()
-                        Button("Đóng") {
-                            player.errorMessage = nil
-                        }
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white.opacity(0.8))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(Color.black.opacity(0.85))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .shadow(radius: 10)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 80)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.easeInOut, value: player.errorMessage)
-            }
+            // Floating Error Toast Overlay
+            ErrorToastView(onShowDetails: {
+                showingErrorLogsSheet = true
+            })
         }
         // Sheets
         .sheet(isPresented: $showingPlaylistSheet) {
@@ -127,6 +103,9 @@ public struct MainPlayerView: View {
                 isLoading: isSearching,
                 player: player
             )
+        }
+        .sheet(isPresented: $showingErrorLogsSheet) {
+            ErrorLogsSheet()
         }
     }
 
@@ -156,6 +135,28 @@ public struct MainPlayerView: View {
                     .padding(.vertical, 4)
                     .background(Color.white.opacity(0.08))
                     .clipShape(Capsule())
+
+                // Quick Settings & Error Log Menu
+                Menu {
+                    Button(action: {
+                        player.showArtworkInBackground.toggle()
+                    }) {
+                        Label(player.showArtworkInBackground ? "✓ Ảnh bìa khi phát nền: Bật" : "Ảnh bìa khi phát nền: Tắt", systemImage: player.showArtworkInBackground ? "photo.fill" : "photo")
+                    }
+
+                    Button(action: {
+                        showingErrorLogsSheet = true
+                    }) {
+                        Label("Nhật ký lỗi (\(ErrorLogService.shared.logs.count))", systemImage: "exclamationmark.triangle")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(6)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(Circle())
+                }
             }
 
             // Search Bar

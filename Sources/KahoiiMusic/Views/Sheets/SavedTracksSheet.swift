@@ -28,6 +28,15 @@ public struct SavedTracksSheet: View {
                             Text("\(savedService.savedTracks.count) bài hát • \(formattedTotalDuration())")
                                 .font(.system(size: 13))
                                 .foregroundColor(.white.opacity(0.6))
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "folder.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.purple)
+                                Text("Lưu tại: \(savedService.storagePathDescription)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.45))
+                            }
                         }
 
                         Spacer()

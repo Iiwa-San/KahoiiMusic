@@ -19,6 +19,16 @@ public class AudioPlayerService: ObservableObject {
     @Published public var duration: Double = 0
     @Published public var volume: Float = 1.0
     @Published public var loopMode: LoopMode = .off
+    @Published public var showArtworkInBackground: Bool = true {
+        didSet {
+            UserDefaults.standard.set(showArtworkInBackground, forKey: "showArtworkInBackground")
+            updateNowPlayingInfo()
+        }
+    }
+
+    private var cachedArtwork: MPMediaItemArtwork? = nil
+    private var cachedArtworkTrackId: String? = nil
+    private var loadingTimeoutTask: Task<Void, Never>? = nil
     @Published public var isShuffled: Bool = false
     @Published public var playlist: [PlaylistItem] = []
     @Published public var currentIndex: Int = -1
@@ -129,6 +139,8 @@ public class AudioPlayerService: ObservableObject {
     private func updateNowPlayingInfo() {
         guard let track = currentTrack else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            cachedArtwork = nil
+            cachedArtworkTrackId = nil
             return
         }
 
@@ -140,13 +152,34 @@ public class AudioPlayerService: ObservableObject {
             MPNowPlayingInfoPropertyPlaybackRate: playbackState.isPlaying ? 1.0 : 0.0
         ]
 
-        if let artworkUrl = track.artworkURL {
-            Task {
-                if let (data, _) = try? await URLSession.shared.data(from: artworkUrl),
-                   let uiImage = UIImage(data: data) {
-                    let artwork = MPMediaItemArtwork(boundsSize: uiImage.size) { _ in uiImage }
-                    info[MPMediaItemPropertyArtwork] = artwork
-                    MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        // Fix background thumbnail flickering: Only load/set artwork ONCE per track, never repeatedly
+        if showArtworkInBackground {
+            if let cached = cachedArtwork, cachedArtworkTrackId == track.id {
+                info[MPMediaItemPropertyArtwork] = cached
+            } else if let artworkUrl = track.artworkURL {
+                if cachedArtworkTrackId != track.id {
+                    cachedArtworkTrackId = track.id
+                    Task { [weak self] in
+                        guard let self = self else { return }
+                        var loadedImg: UIImage? = nil
+                        // 1. Check local saved thumbnail first (0ms latency)
+                        if let localThumb = SavedTracksService.shared.savedThumbURL(for: track.id),
+                           let data = try? Data(contentsOf: localThumb),
+                           let img = UIImage(data: data) {
+                            loadedImg = img
+                        } else if let (data, _) = try? await URLSession.shared.data(from: artworkUrl),
+                                  let img = UIImage(data: data) {
+                            loadedImg = img
+                        }
+
+                        if let uiImage = loadedImg {
+                            let artwork = MPMediaItemArtwork(boundsSize: uiImage.size) { _ in uiImage }
+                            self.cachedArtwork = artwork
+                            var currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+                            currentInfo[MPMediaItemPropertyArtwork] = artwork
+                            MPNowPlayingInfoCenter.default().nowPlayingInfo = currentInfo
+                        }
+                    }
                 }
             }
         }
@@ -235,6 +268,27 @@ public class AudioPlayerService: ObservableObject {
         }
     }
 
+    private func startLoadingTimeout(for track: PlaylistItem) {
+        loadingTimeoutTask?.cancel()
+        loadingTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 15_000_000_000) // 15s timeout
+            guard let self = self, !Task.isCancelled else { return }
+            if self.playbackState.isLoading {
+                let msg = "Quá thời gian kết nối luồng phát (Timeout 15s). Vui lòng kiểm tra mạng hoặc chọn bài khác."
+                self.errorMessage = msg
+                self.playbackState = .failed("Hết thời gian tải")
+                self.statusMessage = "Hết thời gian chờ"
+                self.avPlayer?.pause()
+                ErrorLogService.shared.log("Timeout tải nhạc", msg, category: "Phát nhạc")
+            }
+        }
+    }
+
+    private func cancelLoadingTimeout() {
+        loadingTimeoutTask?.cancel()
+        loadingTimeoutTask = nil
+    }
+
     public func playTrack(_ track: PlaylistItem, keepQueue: Bool = false) {
         currentTrack = track
         errorMessage = nil
@@ -282,6 +336,7 @@ public class AudioPlayerService: ObservableObject {
         // 2. Play Online stream
         playbackState = .loading("Đang kết nối luồng phát...")
         statusMessage = "Đang kết nối: \(track.title)"
+        startLoadingTimeout(for: track)
 
         // Update theme dynamic gradient
         if let artworkUrl = track.artworkURL {
@@ -311,9 +366,12 @@ public class AudioPlayerService: ObservableObject {
 
                 self.startPlayer(with: resolved.streamUrl, duration: Double(resolved.durationSeconds))
             } catch {
-                self.errorMessage = "Không thể phát nhạc: \(error.localizedDescription)"
-                self.playbackState = .failed(error.localizedDescription)
+                self.cancelLoadingTimeout()
+                let errorDesc = error.localizedDescription
+                self.errorMessage = "Không thể phát nhạc: \(errorDesc)"
+                self.playbackState = .failed(errorDesc)
                 self.statusMessage = "Lỗi kết nối"
+                ErrorLogService.shared.log("Lỗi kết nối nhạc", "\(track.title): \(errorDesc)", category: "YouTube")
             }
         }
     }
@@ -362,6 +420,7 @@ public class AudioPlayerService: ObservableObject {
                 guard let self = self else { return }
                 switch status {
                 case .readyToPlay:
+                    self.cancelLoadingTimeout()
                     if self.playbackState != .paused {
                         self.avPlayer?.play()
                         self.playbackState = .playing
@@ -369,10 +428,12 @@ public class AudioPlayerService: ObservableObject {
                         self.updateNowPlayingInfo()
                     }
                 case .failed:
+                    self.cancelLoadingTimeout()
                     let err = playerItem.error?.localizedDescription ?? "Lỗi phát luồng âm thanh"
                     self.errorMessage = "Không thể phát: \(err)"
                     self.playbackState = .failed(err)
                     self.statusMessage = "Lỗi phát nhạc"
+                    ErrorLogService.shared.log("Lỗi giải mã âm thanh", err, category: "AVPlayer")
                 case .unknown:
                     break
                 @unknown default:
@@ -398,7 +459,8 @@ public class AudioPlayerService: ObservableObject {
             if self.duration <= 0, let itemDuration = self.avPlayer?.currentItem?.duration.seconds, !itemDuration.isNaN {
                 self.duration = itemDuration
             }
-            self.updateNowPlayingInfo()
+            // Note: iOS lock screen animates elapsed time automatically via MPNowPlayingInfoCenter.
+            // Do NOT call updateNowPlayingInfo() here 4x/sec as that triggers thumbnail flashing!
         }
 
         avPlayer?.play()

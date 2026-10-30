@@ -10,21 +10,32 @@ public class SavedTracksService: ObservableObject {
     @Published public private(set) var downloadingTrackIds: Set<String> = []
     @Published public var downloadErrorMessage: String?
 
-    private var baseDir: URL {
+    private lazy var downloadSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 25.0
+        config.timeoutIntervalForResource = 90.0
+        return URLSession(configuration: config)
+    }()
+
+    public var baseDir: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return docs.appendingPathComponent("Saved", isDirectory: true)
     }
 
-    private var audioDir: URL {
+    public var audioDir: URL {
         baseDir.appendingPathComponent("audio", isDirectory: true)
     }
 
-    private var thumbDir: URL {
+    public var thumbDir: URL {
         baseDir.appendingPathComponent("thumb", isDirectory: true)
     }
 
     private var jsonFile: URL {
         baseDir.appendingPathComponent("saved_tracks.json")
+    }
+
+    public var storagePathDescription: String {
+        "Tệp > Trên iPhone > Kahoii Music > Saved"
     }
 
     private init() {
@@ -39,6 +50,7 @@ public class SavedTracksService: ObservableObject {
             try fm.createDirectory(at: thumbDir, withIntermediateDirectories: true, attributes: nil)
         } catch {
             print("[SavedTracksService] Error creating directories: \(error)")
+            ErrorLogService.shared.log("Lỗi tạo thư mục", error.localizedDescription, category: "Hệ thống")
         }
     }
 
@@ -87,7 +99,7 @@ public class SavedTracksService: ObservableObject {
         ensureDirectoriesExist()
 
         do {
-            // 1. Resolve audio stream if streamUrl is nil or expired
+            // 1. Resolve audio stream with fast fallback
             let resolvedStreamUrl: URL
             var resolvedTitle = item.title
             var resolvedAuthor = item.author
@@ -105,27 +117,37 @@ public class SavedTracksService: ObservableObject {
                 resolvedThumb = resolved.thumbnailUrl
             }
 
-            // 2. Download Audio Stream
+            // 2. Prepare optimized requests with matching headers to bypass CDN speed throttling
             let targetAudioFile = audioDir.appendingPathComponent("\(item.id).m4a")
-            var request = URLRequest(url: resolvedStreamUrl)
-            request.setValue("com.google.android.youtube/21.26.364 (Linux; U; Android 11) gzip", forHTTPHeaderField: "User-Agent")
-            request.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
+            var audioRequest = URLRequest(url: resolvedStreamUrl)
+            audioRequest.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+            audioRequest.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
 
-            let (tempAudioUrl, _) = try await URLSession.shared.download(for: request)
+            let targetThumbFile = thumbDir.appendingPathComponent("\(item.id).jpg")
+
+            // 3. Parallel download: Download Audio and Thumbnail at the same time for max speed
+            async let audioTask: (URL, URLResponse) = downloadSession.download(for: audioRequest)
+            async let thumbTask: (URL, URLResponse)? = {
+                if let thumbUrl = URL(string: resolvedThumb) {
+                    return try? await downloadSession.download(from: thumbUrl)
+                }
+                return nil
+            }()
+
+            let ((tempAudioUrl, _), thumbResult) = try await (audioTask, thumbTask)
+
+            // Save audio file
             if FileManager.default.fileExists(atPath: targetAudioFile.path) {
                 try? FileManager.default.removeItem(at: targetAudioFile)
             }
             try FileManager.default.moveItem(at: tempAudioUrl, to: targetAudioFile)
 
-            // 3. Download Thumbnail Image
-            let targetThumbFile = thumbDir.appendingPathComponent("\(item.id).jpg")
-            if let thumbUrl = URL(string: resolvedThumb) {
-                if let (tempThumbUrl, _) = try? await URLSession.shared.download(from: thumbUrl) {
-                    if FileManager.default.fileExists(atPath: targetThumbFile.path) {
-                        try? FileManager.default.removeItem(at: targetThumbFile)
-                    }
-                    try? FileManager.default.moveItem(at: tempThumbUrl, to: targetThumbFile)
+            // Save thumbnail file
+            if let (tempThumbUrl, _) = thumbResult {
+                if FileManager.default.fileExists(atPath: targetThumbFile.path) {
+                    try? FileManager.default.removeItem(at: targetThumbFile)
                 }
+                try? FileManager.default.moveItem(at: tempThumbUrl, to: targetThumbFile)
             }
 
             // 4. Update savedTracks list
@@ -140,9 +162,12 @@ public class SavedTracksService: ObservableObject {
             savedTracks.insert(savedItem, at: 0)
             saveToFile()
 
+            ErrorLogService.shared.log("Tải thành công", "Đã lưu \"\(savedItem.title)\" vào mục Đã tải (Offline).", category: "Tải nhạc", isError: false)
+
         } catch {
             print("[SavedTracksService] Error saving track \(item.id): \(error)")
             downloadErrorMessage = "Lỗi khi lưu bài: \(error.localizedDescription)"
+            ErrorLogService.shared.log("Lỗi tải bài", "\(item.title): \(error.localizedDescription)", category: "Tải nhạc")
         }
     }
 
@@ -170,6 +195,7 @@ public class SavedTracksService: ObservableObject {
             self.savedTracks = decoded.filter { isSaved(id: $0.id) }
         } catch {
             print("[SavedTracksService] Load error: \(error)")
+            ErrorLogService.shared.log("Lỗi đọc danh sách tải", error.localizedDescription, category: "Hệ thống")
         }
     }
 
@@ -179,7 +205,7 @@ public class SavedTracksService: ObservableObject {
             try data.write(to: jsonFile, options: .atomic)
         } catch {
             print("[SavedTracksService] Save error: \(error)")
+            ErrorLogService.shared.log("Lỗi ghi danh sách tải", error.localizedDescription, category: "Hệ thống")
         }
     }
 }
-

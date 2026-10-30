@@ -31,8 +31,8 @@ public actor YouTubeResolver {
 
     public init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 15.0
-        config.timeoutIntervalForResource = 30.0
+        config.timeoutIntervalForRequest = 10.0
+        config.timeoutIntervalForResource = 15.0
         self.urlSession = URLSession(configuration: config)
     }
 
