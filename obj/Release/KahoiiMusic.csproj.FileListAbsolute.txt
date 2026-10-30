@@ -1,40 +1,20 @@
-D:\KahoiiProjects\KahoiiMusic\bin\Release\yt-dlp.exe
-D:\KahoiiProjects\KahoiiMusic\bin\Release\KahoiiMusic.exe.config
-D:\KahoiiProjects\KahoiiMusic\bin\Release\KahoiiMusic.exe
-D:\KahoiiProjects\KahoiiMusic\bin\Release\KahoiiMusic.pdb
-D:\KahoiiProjects\KahoiiMusic\bin\Release\NAudio.Core.dll
-D:\KahoiiProjects\KahoiiMusic\bin\Release\NAudio.dll
-D:\KahoiiProjects\KahoiiMusic\bin\Release\NAudio.Wasapi.dll
-D:\KahoiiProjects\KahoiiMusic\bin\Release\NAudio.WinMM.dll
-D:\KahoiiProjects\KahoiiMusic\bin\Release\NAudio.Core.xml
-D:\KahoiiProjects\KahoiiMusic\bin\Release\NAudio.WinMM.xml
-D:\KahoiiProjects\KahoiiMusic\bin\Release\NAudio.Wasapi.xml
-D:\KahoiiProjects\KahoiiMusic\bin\Release\NAudio.xml
-D:\KahoiiProjects\KahoiiMusic\obj\Release\KahoiiMusic.Properties.Resources.resources
-D:\KahoiiProjects\KahoiiMusic\obj\Release\KahoiiMusic.csproj.GenerateResource.Cache
-D:\KahoiiProjects\KahoiiMusic\obj\Release\KahoiiMusic.exe
-D:\KahoiiProjects\KahoiiMusic\obj\Release\KahoiiMusic.pdb
-D:\KahoiiProjects\KahoiiMusic\obj\Release\KahoiiMusic.Form1.resources
-d:\KahoiiProjects\KahoiiMusic\obj\Release\KahoiiMusic.csproj.AssemblyReference.cache
-d:\KahoiiProjects\KahoiiMusic\obj\Release\KahoiiMusic.csproj.CoreCompileInputs.cache
-d:\KahoiiProjects\KahoiiMusic\obj\Release\KahoiiMusic.csproj.CopyComplete
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\yt-dlp.exe
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\KahoiiMusic.exe.config
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\KahoiiMusic.exe
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\KahoiiMusic.pdb
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\NAudio.Core.dll
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\NAudio.dll
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\NAudio.Wasapi.dll
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\NAudio.WinMM.dll
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\NAudio.Core.xml
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\NAudio.WinMM.xml
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\NAudio.Wasapi.xml
-D:\KahoiiProjects\MusicApp\KahoiiMusic\bin\Release\NAudio.xml
-D:\KahoiiProjects\MusicApp\KahoiiMusic\obj\Release\KahoiiMusic.csproj.AssemblyReference.cache
-D:\KahoiiProjects\MusicApp\KahoiiMusic\obj\Release\KahoiiMusic.Form1.resources
-D:\KahoiiProjects\MusicApp\KahoiiMusic\obj\Release\KahoiiMusic.Properties.Resources.resources
-D:\KahoiiProjects\MusicApp\KahoiiMusic\obj\Release\KahoiiMusic.csproj.GenerateResource.cache
-D:\KahoiiProjects\MusicApp\KahoiiMusic\obj\Release\KahoiiMusic.csproj.CoreCompileInputs.cache
-D:\KahoiiProjects\MusicApp\KahoiiMusic\obj\Release\KahoiiMusic.csproj.CopyComplete
-D:\KahoiiProjects\MusicApp\KahoiiMusic\obj\Release\KahoiiMusic.exe
-D:\KahoiiProjects\MusicApp\KahoiiMusic\obj\Release\KahoiiMusic.pdb
+F:\Kahoii APP\KahoiiMusic\bin\Release\yt-dlp.exe
+F:\Kahoii APP\KahoiiMusic\bin\Release\KahoiiMusic.exe.config
+F:\Kahoii APP\KahoiiMusic\bin\Release\KahoiiMusic.exe
+F:\Kahoii APP\KahoiiMusic\bin\Release\KahoiiMusic.pdb
+F:\Kahoii APP\KahoiiMusic\bin\Release\NAudio.Core.dll
+F:\Kahoii APP\KahoiiMusic\bin\Release\NAudio.dll
+F:\Kahoii APP\KahoiiMusic\bin\Release\NAudio.Wasapi.dll
+F:\Kahoii APP\KahoiiMusic\bin\Release\NAudio.WinMM.dll
+F:\Kahoii APP\KahoiiMusic\bin\Release\NAudio.Core.xml
+F:\Kahoii APP\KahoiiMusic\bin\Release\NAudio.WinMM.xml
+F:\Kahoii APP\KahoiiMusic\bin\Release\NAudio.Wasapi.xml
+F:\Kahoii APP\KahoiiMusic\bin\Release\NAudio.xml
+F:\Kahoii APP\KahoiiMusic\obj\Release\KahoiiMusic.csproj.AssemblyReference.cache
+F:\Kahoii APP\KahoiiMusic\obj\Release\KahoiiMusic.Form1.resources
+F:\Kahoii APP\KahoiiMusic\obj\Release\KahoiiMusic.Properties.Resources.resources
+F:\Kahoii APP\KahoiiMusic\obj\Release\KahoiiMusic.csproj.GenerateResource.cache
+F:\Kahoii APP\KahoiiMusic\obj\Release\KahoiiMusic.csproj.CoreCompileInputs.cache
+F:\Kahoii APP\KahoiiMusic\obj\Release\KahoiiMu.2A0D9EBD.Up2Date
+F:\Kahoii APP\KahoiiMusic\obj\Release\KahoiiMusic.exe
+F:\Kahoii APP\KahoiiMusic\obj\Release\KahoiiMusic.pdb

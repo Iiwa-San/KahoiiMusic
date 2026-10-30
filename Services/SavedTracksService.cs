@@ -18,6 +18,8 @@ namespace KahoiiMusic.Services
         private readonly object _lock = new object();
         private List<PlaylistItem> _savedTracks = new List<PlaylistItem>();
         private bool _isLoaded = false;
+        private int _activeSavingCount = 0;
+        public bool IsSavingTrack => _activeSavingCount > 0;
 
         public event EventHandler SavedTracksChanged;
 
@@ -107,6 +109,7 @@ namespace KahoiiMusic.Services
                 return;
             }
 
+            Interlocked.Increment(ref _activeSavingCount);
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
@@ -169,12 +172,13 @@ namespace KahoiiMusic.Services
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = ytdlpPath;
                         psi.WorkingDirectory = AppPaths.SavedAudioDir;
-                        psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
+                        psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
                         psi.CreateNoWindow = true;
                         psi.UseShellExecute = false;
 
                         using (Process proc = Process.Start(psi))
                         {
+                            try { if (proc != null) proc.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
                             proc?.WaitForExit(60000);
                         }
                     }
@@ -242,6 +246,11 @@ namespace KahoiiMusic.Services
                 catch (Exception ex)
                 {
                     callback?.Invoke(false, "Lỗi khi lưu bài: " + ex.Message);
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref _activeSavingCount);
+                    MemoryOptimizer.TrimMemoryAsync(2000, aggressive: true);
                 }
             });
         }

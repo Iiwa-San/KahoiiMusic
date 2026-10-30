@@ -14,6 +14,12 @@ namespace KahoiiMusic.Services
         private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
 
         /// <summary>
+        /// Delegate to check whether background downloading or preloading is actively in progress.
+        /// Protects physical RAM pages from being purged during active disk-heavy downloads.
+        /// </summary>
+        public static Func<bool> IsDownloadActive { get; set; }
+
+        /// <summary>
         /// Lightweight background memory trim that does NOT freeze UI threads or cause page faults.
         /// Runs on ThreadPool to avoid any impact on UI animations.
         /// </summary>
@@ -30,12 +36,22 @@ namespace KahoiiMusic.Services
         }
 
         /// <summary>
-        /// Aggressive working set flush - ONLY to be used when the application is minimized!
+        /// Aggressive working set flush - trims unreferenced managed objects and flushes unused working set pages.
+        /// If downloads are actively running, defers to lightweight trim to prevent disk contention and audio stuttering.
+        /// Once downloads finish, this is executed to achieve minimal RAM footprint.
         /// </summary>
         public static void TrimMemoryAggressive()
         {
             try
             {
+                // CRITICAL PROTECTION: While background downloads are writing to disk,
+                // do NOT purge working set to prevent hard page faults on audio stream.
+                if (IsDownloadActive != null && IsDownloadActive())
+                {
+                    TrimMemoryLight();
+                    return;
+                }
+
                 GC.Collect(2, GCCollectionMode.Forced, false);
                 GC.WaitForPendingFinalizers();
                 GC.Collect(2, GCCollectionMode.Forced, false);
@@ -51,9 +67,9 @@ namespace KahoiiMusic.Services
         }
 
         /// <summary>
-        /// Trims unreferenced managed objects and flushes unused working set pages to minimize RAM footprint.
+        /// Trims memory asynchronously after a specified delay.
         /// </summary>
-        public static void TrimMemoryAsync(int delayMs = 500, bool aggressive = true)
+        public static void TrimMemoryAsync(int delayMs = 500, bool aggressive = false)
         {
             ThreadPool.QueueUserWorkItem(delegate
             {

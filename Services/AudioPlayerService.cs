@@ -78,6 +78,16 @@ namespace KahoiiMusic.Services
 
         private readonly object _preloadQueueLock = new object();
 
+        private volatile bool _isPreloadingQueueRunning = false;
+
+        public bool IsDownloadingOrPreloading
+        {
+            get
+            {
+                return _activeDownloadProc != null || _preloadProc != null || _isPreloadingQueueRunning;
+            }
+        }
+
         private const int PreloadBatchSize = 20;
 
         private const long MaxCacheSizeBytes = 3L * 1024 * 1024 * 1024; // 3 GB (supports multiple multi-hour tracks >200MB each)
@@ -529,6 +539,8 @@ namespace KahoiiMusic.Services
 
                     {
 
+                        _isPreloadingQueueRunning = true;
+
                         // Wait 3s so current track starts playing smoothly before background downloads begin
 
                         Thread.Sleep(3000);
@@ -617,13 +629,20 @@ namespace KahoiiMusic.Services
 
                             // Small delay between downloads so network has breathing room
 
-                            Thread.Sleep(300);
+                            // Generous 1.5s delay between downloads so disk flush, OS cache, and network settle smoothly
+                            Thread.Sleep(1500);
 
                         }
 
                     }
 
                     catch { }
+
+                    finally
+                    {
+                        _isPreloadingQueueRunning = false;
+                        MemoryOptimizer.TrimMemoryAsync(2000, aggressive: true);
+                    }
 
                 });
 
@@ -661,7 +680,7 @@ namespace KahoiiMusic.Services
 
                     psi.WorkingDirectory = _cacheDirectory;
 
-                    psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
+                    psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
 
                     psi.CreateNoWindow = true;
 
@@ -677,7 +696,7 @@ namespace KahoiiMusic.Services
 
                     {
 
-                        try { _preloadProc.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+                        try { _preloadProc.PriorityClass = ProcessPriorityClass.Idle; } catch { }
 
                         
 
@@ -2221,7 +2240,7 @@ namespace KahoiiMusic.Services
 
                                 _outputDevice.DeviceNumber = -1; // Default Windows playback device (Bluetooth / Headphones)
 
-                                _outputDevice.DesiredLatency = 100; // Low latency for tight UI sync
+                                _outputDevice.DesiredLatency = 300; // 300ms buffer provides generous headroom against background disk I/O & process spikes
 
                                 _outputDevice.NumberOfBuffers = 3;
 
@@ -2339,7 +2358,7 @@ namespace KahoiiMusic.Services
 
                             // Trim unreferenced memory & working set after track initialization
 
-                            MemoryOptimizer.TrimMemoryAsync(800);
+                            MemoryOptimizer.TrimMemoryAsync(3000, aggressive: true);
 
                         }
 
@@ -2932,6 +2951,12 @@ namespace KahoiiMusic.Services
 
                 {
 
+                    try
+                    {
+                        Process.GetCurrentProcess().PriorityClass = IsPlaying ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.Normal;
+                    }
+                    catch { }
+
                     PlaybackStateChanged(this, EventArgs.Empty);
 
                 }
@@ -3003,6 +3028,11 @@ namespace KahoiiMusic.Services
         private readonly byte[] _discardBuffer = new byte[4096];
 
         private volatile float _volume = 1.0f;
+
+        [DllImport("avrt.dll", SetLastError = true)]
+        private static extern IntPtr AvSetMmThreadCharacteristics(string taskName, ref int taskIndex);
+
+        private bool _audioPriorityConfigured = false;
 
         public ManagedAudioStream(WaveStream source, AudioPlayerService service, List<double> clusters = null)
 
@@ -3215,6 +3245,18 @@ namespace KahoiiMusic.Services
             {
 
                 TimeSpan total = _service.TotalDuration;
+
+                if (!_audioPriorityConfigured)
+                {
+                    _audioPriorityConfigured = true;
+                    try
+                    {
+                        Thread.CurrentThread.Priority = ThreadPriority.Highest;
+                        int taskIndex = 0;
+                        AvSetMmThreadCharacteristics("Playback", ref taskIndex);
+                    }
+                    catch { }
+                }
 
                 // 1. Discard preroll bytes so physical sound begins precisely at the seek target
 

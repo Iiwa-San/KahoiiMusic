@@ -66,6 +66,12 @@ namespace KahoiiMusic
             LoadAppLogo();
 
             _audioPlayer = new AudioPlayerService();
+            MemoryOptimizer.IsDownloadActive = () =>
+            {
+                bool playerDownloading = _audioPlayer != null && _audioPlayer.IsDownloadingOrPreloading;
+                bool savingOffline = SavedTracksService.Instance.IsSavingTrack;
+                return playerDownloading || savingOffline;
+            };
 
             SetupEvents();
             InitializeTrayIcon();
@@ -159,7 +165,19 @@ namespace KahoiiMusic
             // Periodic lightweight memory trimming timer (every 30s) running on threadpool to avoid any animation hitch
             _ramTimer = new Timer();
             _ramTimer.Interval = 30000;
-            _ramTimer.Tick += (s, e) => MemoryOptimizer.TrimMemoryLight();
+            _ramTimer.Tick += (s, e) =>
+            {
+                bool isBackground = WindowState == FormWindowState.Minimized || !Visible;
+                bool isDownloading = MemoryOptimizer.IsDownloadActive != null && MemoryOptimizer.IsDownloadActive();
+                if (isBackground && !isDownloading)
+                {
+                    MemoryOptimizer.TrimMemory(true);
+                }
+                else
+                {
+                    MemoryOptimizer.TrimMemory(false);
+                }
+            };
             _ramTimer.Start();
 
             // Audio Player Events
