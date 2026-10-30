@@ -6,6 +6,8 @@ import UIKit
 public struct MainPlayerView: View {
     @StateObject private var player = AudioPlayerService.shared
     @StateObject private var historyService = HistoryService.shared
+    @StateObject private var savedService = SavedTracksService.shared
+    @StateObject private var sleepTimer = SleepTimerService.shared
 
     @State private var searchInput: String = ""
     @State private var isSearching: Bool = false
@@ -14,6 +16,7 @@ public struct MainPlayerView: View {
     @State private var showingPlaylistSheet: Bool = false
     @State private var showingHistorySheet: Bool = false
     @State private var showingFavoritesSheet: Bool = false
+    @State private var showingSavedTracksSheet: Bool = false
     @State private var showingSearchResultsSheet: Bool = false
 
     public init() {}
@@ -114,6 +117,9 @@ public struct MainPlayerView: View {
         .sheet(isPresented: $showingFavoritesSheet) {
             FavoritesSheet(player: player)
         }
+        .sheet(isPresented: $showingSavedTracksSheet) {
+            SavedTracksSheet(player: player)
+        }
         .sheet(isPresented: $showingSearchResultsSheet) {
             SearchResultsSheet(
                 results: searchResults,
@@ -207,16 +213,45 @@ public struct MainPlayerView: View {
             Spacer()
 
             if let track = player.currentTrack {
-                Button(action: {
-                    #if canImport(UIKit)
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    #endif
-                    historyService.toggleFavorite(track)
-                }) {
-                    Image(systemName: historyService.isFavorite(id: track.id) ? "heart.fill" : "heart")
-                        .font(.system(size: 22))
-                        .foregroundColor(historyService.isFavorite(id: track.id) ? .pink : .white.opacity(0.5))
-                        .frame(width: 44, height: 44)
+                HStack(spacing: 2) {
+                    // Download Button (Offline)
+                    Button(action: {
+                        #if canImport(UIKit)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        #endif
+                        Task {
+                            if savedService.isSaved(id: track.id) {
+                                savedService.deleteSavedTrack(id: track.id)
+                            } else {
+                                await savedService.saveTrackAsync(track)
+                            }
+                        }
+                    }) {
+                        if savedService.isDownloading(id: track.id) {
+                            ProgressView()
+                                .tint(.green)
+                                .scaleEffect(0.8)
+                                .frame(width: 40, height: 40)
+                        } else {
+                            Image(systemName: savedService.isSaved(id: track.id) ? "arrow.down.circle.fill" : "arrow.down.circle")
+                                .font(.system(size: 21))
+                                .foregroundColor(savedService.isSaved(id: track.id) ? .green : .white.opacity(0.5))
+                                .frame(width: 40, height: 40)
+                        }
+                    }
+
+                    // Favorite Button
+                    Button(action: {
+                        #if canImport(UIKit)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        #endif
+                        historyService.toggleFavorite(track)
+                    }) {
+                        Image(systemName: historyService.isFavorite(id: track.id) ? "heart.fill" : "heart")
+                            .font(.system(size: 22))
+                            .foregroundColor(historyService.isFavorite(id: track.id) ? .pink : .white.opacity(0.5))
+                            .frame(width: 40, height: 40)
+                    }
                 }
             }
         }
@@ -307,8 +342,35 @@ public struct MainPlayerView: View {
             }) {
                 Image(systemName: player.loopMode.iconName)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(player.loopMode != .off ? player.currentPalette.accentColor : .white.opacity(0.5))
+                    .foregroundColor(player.loopMode != .off ? player.currentPalette.accentColor : Color(red: 220/255, green: 220/255, blue: 220/255))
                     .frame(maxWidth: .infinity)
+            }
+
+            // Sleep Timer Button
+            Menu {
+                Button("15 phút") { sleepTimer.startTimer(minutes: 15) }
+                Button("30 phút") { sleepTimer.startTimer(minutes: 30) }
+                Button("45 phút") { sleepTimer.startTimer(minutes: 45) }
+                Button("60 phút") { sleepTimer.startTimer(minutes: 60) }
+                Button("Hết bài hát hiện tại") { sleepTimer.startEndOfTrack() }
+                if sleepTimer.isActive {
+                    Button(role: .destructive, action: { sleepTimer.cancelTimer() }) {
+                        Label("Tắt hẹn giờ", systemImage: "xmark.circle")
+                    }
+                }
+            } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: sleepTimer.isActive ? "timer.circle.fill" : "timer")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(sleepTimer.isActive ? player.currentPalette.accentColor : Color(red: 220/255, green: 220/255, blue: 220/255))
+
+                    if sleepTimer.isActive {
+                        Text(sleepTimer.formattedRemainingTime)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(player.currentPalette.accentColor)
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
         }
     }
@@ -363,6 +425,35 @@ public struct MainPlayerView: View {
                         }
                     }
                     Text("Danh sách")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundColor(.white.opacity(0.75))
+                .frame(maxWidth: .infinity)
+            }
+
+            // Saved / Downloads Button (Đã tải)
+            Button(action: {
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                showingSavedTracksSheet = true
+            }) {
+                VStack(spacing: 4) {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 20))
+
+                        if !savedService.savedTracks.isEmpty {
+                            Text("\(savedService.savedTracks.count)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(3)
+                                .background(Color.green)
+                                .clipShape(Circle())
+                                .offset(x: 10, y: -6)
+                        }
+                    }
+                    Text("Đã tải")
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(.white.opacity(0.75))

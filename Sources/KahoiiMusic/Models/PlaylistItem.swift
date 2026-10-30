@@ -35,6 +35,11 @@ public struct PlaylistItem: Identifiable, Codable, Hashable, Equatable, Sendable
     }
 
     public var artworkURL: URL? {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        if let localThumb = docs?.appendingPathComponent("Saved/thumb/\(id).jpg"),
+           FileManager.default.fileExists(atPath: localThumb.path) {
+            return localThumb
+        }
         if !thumbnailUrl.isEmpty, let url = URL(string: thumbnailUrl) {
             return url
         }

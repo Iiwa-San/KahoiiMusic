@@ -182,6 +182,32 @@ public struct PlaylistQueueSheet: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(PlainButtonStyle())
+        .contextMenu {
+            Button(action: {
+                player.currentIndex = index
+                player.playTrack(item)
+            }) {
+                Label("Phát ngay", systemImage: "play.fill")
+            }
+
+            if SavedTracksService.shared.isSaved(id: item.id) {
+                Label("✓ Đã lưu Offline", systemImage: "checkmark.circle.fill")
+            } else {
+                Button(action: {
+                    Task { await SavedTracksService.shared.saveTrackAsync(item) }
+                }) {
+                    Label("Tải về nghe Offline", systemImage: "arrow.down.circle")
+                }
+            }
+
+            Button(role: .destructive, action: {
+                if index < player.playlist.count {
+                    player.playlist.remove(at: index)
+                }
+            }) {
+                Label("Xóa khỏi danh sách", systemImage: "trash")
+            }
+        }
     }
 
     private func deleteItems(at offsets: IndexSet) {

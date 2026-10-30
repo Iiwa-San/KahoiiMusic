@@ -38,6 +38,11 @@ public class AudioPlayerService: ObservableObject {
         setupAudioSession()
         setupRemoteCommands()
         setupInterruptionNotifications()
+        SleepTimerService.shared.onTimerExpired = { [weak self] in
+            Task { @MainActor in
+                self?.pause()
+            }
+        }
     }
 
     deinit {
@@ -230,19 +235,55 @@ public class AudioPlayerService: ObservableObject {
         }
     }
 
-    public func playTrack(_ track: PlaylistItem) {
+    public func playTrack(_ track: PlaylistItem, keepQueue: Bool = false) {
         currentTrack = track
-        playbackState = .loading("Đang kết nối luồng phát...")
-        statusMessage = "Đang kết nối: \(track.title)"
         errorMessage = nil
 
-        if let idx = playlist.firstIndex(where: { $0.id == track.id }) {
-            currentIndex = idx
+        // Manage playlist queue
+        if keepQueue {
+            if let idx = playlist.firstIndex(where: { $0.id == track.id }) {
+                currentIndex = idx
+            } else {
+                currentIndex = -1
+            }
         } else {
-            playlist.insert(track, at: 0)
-            currentIndex = 0
+            if let idx = playlist.firstIndex(where: { $0.id == track.id }) {
+                currentIndex = idx
+            } else {
+                playlist.insert(track, at: 0)
+                currentIndex = 0
+            }
         }
 
+        // 1. Check Offline file first (Highest priority: Instant offline playback)
+        if let localAudio = SavedTracksService.shared.savedAudioURL(for: track.id) {
+            playbackState = .playing
+            statusMessage = "Đang phát Offline"
+            var updatedTrack = track
+            updatedTrack.streamUrl = localAudio.absoluteString
+            self.currentTrack = updatedTrack
+
+            if self.currentIndex >= 0 && self.currentIndex < self.playlist.count {
+                self.playlist[self.currentIndex] = updatedTrack
+            }
+
+            HistoryService.shared.recordPlay(updatedTrack)
+            self.startPlayer(with: localAudio, duration: Double(track.durationSeconds))
+
+            if let artworkUrl = track.artworkURL {
+                Task {
+                    let palette = await ColorExtractor.shared.extractColors(from: artworkUrl)
+                    self.currentPalette = palette
+                }
+            }
+            return
+        }
+
+        // 2. Play Online stream
+        playbackState = .loading("Đang kết nối luồng phát...")
+        statusMessage = "Đang kết nối: \(track.title)"
+
+        // Update theme dynamic gradient
         if let artworkUrl = track.artworkURL {
             Task {
                 let palette = await ColorExtractor.shared.extractColors(from: artworkUrl)
@@ -403,7 +444,10 @@ public class AudioPlayerService: ObservableObject {
     }
 
     public func nextTrack() {
-        guard !playlist.isEmpty else { return }
+        guard !playlist.isEmpty, currentIndex >= 0 else {
+            seek(to: 0)
+            return
+        }
 
         var nextIndex = currentIndex + 1
         if nextIndex >= playlist.count {
@@ -425,7 +469,10 @@ public class AudioPlayerService: ObservableObject {
             return
         }
 
-        guard !playlist.isEmpty else { return }
+        guard !playlist.isEmpty, currentIndex >= 0 else {
+            seek(to: 0)
+            return
+        }
 
         var prevIndex = currentIndex - 1
         if prevIndex < 0 {
@@ -437,6 +484,21 @@ public class AudioPlayerService: ObservableObject {
     }
 
     private func handleTrackEnded() {
+        SleepTimerService.shared.handleTrackFinished()
+
+        if currentIndex < 0 {
+            switch loopMode {
+            case .one:
+                seek(to: 0)
+                play()
+            default:
+                playbackState = .paused
+                seek(to: 0)
+                statusMessage = "Đã phát xong"
+            }
+            return
+        }
+
         switch loopMode {
         case .one:
             seek(to: 0)

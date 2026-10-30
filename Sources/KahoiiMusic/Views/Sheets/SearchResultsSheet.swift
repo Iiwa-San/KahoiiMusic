@@ -92,18 +92,8 @@ public struct SearchResultsSheet: View {
 
     @ViewBuilder
     private func resultRow(item: PlaylistItem) -> some View {
-        Button(action: {
-            #if canImport(UIKit)
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            #endif
-            player.playTrack(item)
-            // Populate playlist with results
-            player.playlist = results
-            if let idx = results.firstIndex(where: { $0.id == item.id }) {
-                player.currentIndex = idx
-            }
-            dismiss()
-        }) {
+        HStack(spacing: 12) {
+            // Track Info tap target
             HStack(spacing: 12) {
                 // Thumbnail
                 if let url = item.artworkURL {
@@ -140,26 +130,61 @@ public struct SearchResultsSheet: View {
                 }
 
                 Spacer()
-
-                // Add to Queue button
-                Button(action: {
-                    #if canImport(UIKit)
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    #endif
-                    player.addToQueue(item)
-                }) {
-                    Image(systemName: "text.badge.plus")
-                        .font(.system(size: 18))
-                        .foregroundColor(.purple)
-                        .frame(width: 36, height: 36)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(PlainButtonStyle())
             }
-            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                #endif
+                player.playTrack(item)
+                player.playlist = results
+                if let idx = results.firstIndex(where: { $0.id == item.id }) {
+                    player.currentIndex = idx
+                }
+                dismiss()
+            }
+
+            // Add to Queue button
+            Button(action: {
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                player.addToQueue(item)
+            }) {
+                Image(systemName: "text.badge.plus")
+                    .font(.system(size: 18))
+                    .foregroundColor(.purple)
+                    .frame(width: 36, height: 36)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding(.vertical, 4)
+        .contextMenu {
+            Button(action: {
+                player.playTrack(item)
+                dismiss()
+            }) {
+                Label("Phát ngay", systemImage: "play.fill")
+            }
+
+            Button(action: {
+                player.addToQueue(item)
+            }) {
+                Label("Thêm vào danh sách chờ", systemImage: "text.badge.plus")
+            }
+
+            if SavedTracksService.shared.isSaved(id: item.id) {
+                Label("✓ Đã lưu Offline", systemImage: "checkmark.circle.fill")
+            } else {
+                Button(action: {
+                    Task { await SavedTracksService.shared.saveTrackAsync(item) }
+                }) {
+                    Label("Tải về nghe Offline", systemImage: "arrow.down.circle")
+                }
+            }
+        }
     }
 }
 

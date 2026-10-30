@@ -26,6 +26,9 @@
 		AA0001012C12340000000017 /* SearchResultsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000017 /* SearchResultsSheet.swift */; };
 		AA0001012C12340000000018 /* FavoritesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000018 /* FavoritesSheet.swift */; };
 		AA0001012C12340000000019 /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000019 /* Resources */; };
+		AA0001012C12340000000020 /* SavedTracksService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000020 /* SavedTracksService.swift */; };
+		AA0001012C12340000000021 /* SleepTimerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000021 /* SleepTimerService.swift */; };
+		AA0001012C12340000000022 /* SavedTracksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000022 /* SavedTracksSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +53,9 @@
 		AA0001002C12340000000017 /* SearchResultsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsSheet.swift; sourceTree = "<group>"; };
 		AA0001002C12340000000018 /* FavoritesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesSheet.swift; sourceTree = "<group>"; };
 		AA0001002C12340000000019 /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources; sourceTree = "<group>"; };
+		AA0001002C12340000000020 /* SavedTracksService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTracksService.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000021 /* SleepTimerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTimerService.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000022 /* SavedTracksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedTracksSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +105,8 @@
 				AA0001002C12340000000004 /* YouTubeResolver.swift */,
 				AA0001002C12340000000005 /* HistoryService.swift */,
 				AA0001002C12340000000006 /* ColorExtractor.swift */,
+				AA0001002C12340000000020 /* SavedTracksService.swift */,
+				AA0001002C12340000000021 /* SleepTimerService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -134,6 +142,7 @@
 				AA0001002C12340000000016 /* HistorySheet.swift */,
 				AA0001002C12340000000017 /* SearchResultsSheet.swift */,
 				AA0001002C12340000000018 /* FavoritesSheet.swift */,
+				AA0001002C12340000000022 /* SavedTracksSheet.swift */,
 			);
 			path = Sheets;
 			sourceTree = "<group>";
@@ -232,6 +241,9 @@
 				AA0001012C12340000000016 /* HistorySheet.swift in Sources */,
 				AA0001012C12340000000017 /* SearchResultsSheet.swift in Sources */,
 				AA0001012C12340000000018 /* FavoritesSheet.swift in Sources */,
+				AA0001012C12340000000020 /* SavedTracksService.swift in Sources */,
+				AA0001012C12340000000021 /* SleepTimerService.swift in Sources */,
+				AA0001012C12340000000022 /* SavedTracksSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

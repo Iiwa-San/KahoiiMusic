@@ -6,6 +6,7 @@ import UIKit
 public struct HistorySheet: View {
     @ObservedObject var player: AudioPlayerService
     @ObservedObject var historyService = HistoryService.shared
+    @ObservedObject var savedService = SavedTracksService.shared
     @Environment(\.dismiss) private var dismiss
 
     public init(player: AudioPlayerService) {
@@ -123,12 +124,8 @@ public struct HistorySheet: View {
 
     @ViewBuilder
     private func historyRow(item: PlaylistItem) -> some View {
-        Button(action: {
-            #if canImport(UIKit)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
-            player.playTrack(item)
-        }) {
+        HStack(spacing: 12) {
+            // Track Info tap target
             HStack(spacing: 12) {
                 // Thumbnail
                 if let url = item.artworkURL {
@@ -145,10 +142,19 @@ public struct HistorySheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(player.currentTrack?.id == item.id ? player.currentPalette.accentColor : .white)
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
+                        if savedService.isSaved(id: item.id) {
+                            Text("Offline")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.green)
+                            Text("•")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.3))
+                        }
+
                         Text(item.author.isEmpty ? "YouTube" : item.author)
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.55))
@@ -165,24 +171,90 @@ public struct HistorySheet: View {
                 }
 
                 Spacer()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                player.playTrack(item, keepQueue: true)
+            }
 
-                // Favorite Toggle
-                Button(action: {
-                    #if canImport(UIKit)
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    #endif
-                    historyService.toggleFavorite(item)
-                }) {
-                    Image(systemName: historyService.isFavorite(id: item.id) ? "heart.fill" : "heart")
-                        .font(.system(size: 16))
-                        .foregroundColor(historyService.isFavorite(id: item.id) ? .pink : .white.opacity(0.3))
+            // Download Button
+            Button(action: {
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                Task {
+                    if savedService.isSaved(id: item.id) {
+                        savedService.deleteSavedTrack(id: item.id)
+                    } else {
+                        await savedService.saveTrackAsync(item)
+                    }
+                }
+            }) {
+                if savedService.isDownloading(id: item.id) {
+                    ProgressView()
+                        .tint(.green)
+                        .scaleEffect(0.7)
+                        .frame(width: 32, height: 32)
+                } else {
+                    Image(systemName: savedService.isSaved(id: item.id) ? "arrow.down.circle.fill" : "arrow.down.circle")
+                        .font(.system(size: 17))
+                        .foregroundColor(savedService.isSaved(id: item.id) ? .green : .white.opacity(0.35))
                         .frame(width: 32, height: 32)
                 }
-                .buttonStyle(PlainButtonStyle())
             }
-            .padding(.vertical, 4)
+            .buttonStyle(.plain)
+
+            // Favorite Toggle
+            Button(action: {
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                historyService.toggleFavorite(item)
+            }) {
+                Image(systemName: historyService.isFavorite(id: item.id) ? "heart.fill" : "heart")
+                    .font(.system(size: 16))
+                    .foregroundColor(historyService.isFavorite(id: item.id) ? .pink : .white.opacity(0.3))
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding(.vertical, 4)
+        .contextMenu {
+            Button(action: {
+                player.playTrack(item, keepQueue: true)
+            }) {
+                Label("Phát ngay", systemImage: "play.fill")
+            }
+
+            Button(action: {
+                player.addToQueue(item)
+            }) {
+                Label("Thêm vào danh sách chờ", systemImage: "text.badge.plus")
+            }
+
+            if savedService.isSaved(id: item.id) {
+                Button(role: .destructive, action: {
+                    savedService.deleteSavedTrack(id: item.id)
+                }) {
+                    Label("Xóa khỏi mục Đã tải", systemImage: "trash")
+                }
+            } else {
+                Button(action: {
+                    Task { await savedService.saveTrackAsync(item) }
+                }) {
+                    Label("Tải về nghe Offline", systemImage: "arrow.down.circle")
+                }
+            }
+
+            Button(role: .destructive, action: {
+                historyService.removeHistoryItem(id: item.id)
+            }) {
+                Label("Xóa khỏi lịch sử", systemImage: "xmark")
+            }
+        }
     }
 }
 
