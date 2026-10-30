@@ -2445,8 +2445,13 @@ namespace KahoiiMusic.Services
                 RaisePlaybackStateChanged();
 
                 if (naturallyEnded)
-
                 {
+                    if (SleepTimerService.Instance.IsEndOfTrack)
+                    {
+                        SleepTimerService.Instance.Stop();
+                        Pause();
+                        return;
+                    }
 
                     if (!_isLooping && HasPlaylist && CanPlayNext)
 

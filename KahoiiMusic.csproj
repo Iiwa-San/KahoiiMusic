@@ -86,6 +86,9 @@
     <Compile Include="Controls\LoopButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\TimerButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\VolumePopup.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -132,6 +135,7 @@
     <Compile Include="Services\MemoryOptimizer.cs" />
     <Compile Include="Services\HistoryService.cs" />
     <Compile Include="Services\ThumbnailManager.cs" />
+    <Compile Include="Services\SleepTimerService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

@@ -184,6 +184,19 @@ namespace KahoiiMusic
                 }
             };
 
+            // Sleep Timer
+            KahoiiMusic.Services.SleepTimerService.Instance.TimerExpired += (s, e) =>
+            {
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(() => StopAudioForTimer()));
+                }
+                else
+                {
+                    StopAudioForTimer();
+                }
+            };
+
             // Play / Pause Button Click
             btnPlayPause.Click += BtnPlayPause_Click;
 
@@ -757,7 +770,27 @@ namespace KahoiiMusic
                 _trayMenu.Items.Add(itemPlayPause);
                 _trayMenu.Items.Add(itemNext);
                 _trayMenu.Items.Add(itemPrevious);
+                var trayItemTimer = new ToolStripMenuItem("H\u1eb9n gi\u1edd t\u1eaft");
+                Action<string, KahoiiMusic.Services.SleepTimerOption> addTrayTimer = (lbl, opt) =>
+                {
+                    var optItem = new ToolStripMenuItem(lbl);
+                    optItem.Click += (s, e) => KahoiiMusic.Services.SleepTimerService.Instance.SetTimer(opt);
+                    trayItemTimer.DropDownItems.Add(optItem);
+                };
+                addTrayTimer("5 ph\u00fat", KahoiiMusic.Services.SleepTimerOption.Minutes5);
+                addTrayTimer("10 ph\u00fat", KahoiiMusic.Services.SleepTimerOption.Minutes10);
+                addTrayTimer("15 ph\u00fat", KahoiiMusic.Services.SleepTimerOption.Minutes15);
+                addTrayTimer("20 ph\u00fat", KahoiiMusic.Services.SleepTimerOption.Minutes20);
+                addTrayTimer("30 ph\u00fat", KahoiiMusic.Services.SleepTimerOption.Minutes30);
+                addTrayTimer("45 ph\u00fat", KahoiiMusic.Services.SleepTimerOption.Minutes45);
+                addTrayTimer("60 ph\u00fat", KahoiiMusic.Services.SleepTimerOption.Minutes60);
+                trayItemTimer.DropDownItems.Add(new ToolStripSeparator());
+                addTrayTimer("H\u1ebft b\u00e0i h\u00e1t", KahoiiMusic.Services.SleepTimerOption.EndOfTrack);
+                trayItemTimer.DropDownItems.Add(new ToolStripSeparator());
+                addTrayTimer("T\u1eaft h\u1eb9n gi\u1edd", KahoiiMusic.Services.SleepTimerOption.Off);
+
                 _trayMenu.Items.Add(_trayItemLoop);
+                _trayMenu.Items.Add(trayItemTimer);
                 _trayMenu.Items.Add(new ToolStripSeparator());
                 _trayMenu.Items.Add(itemExit);
 
@@ -779,6 +812,25 @@ namespace KahoiiMusic
                     if (_trayItemLoop != null)
                     {
                         _trayItemLoop.Checked = (btnLoop != null) ? btnLoop.IsLooping : (_audioPlayer != null && _audioPlayer.IsLooping);
+                    }
+                    if (trayItemTimer != null)
+                    {
+                        trayItemTimer.Text = KahoiiMusic.Services.SleepTimerService.Instance.IsActive ? KahoiiMusic.Services.SleepTimerService.Instance.GetStatusString() : "H\u1eb9n gi\u1edd t\u1eaft";
+                        foreach (ToolStripItem it in trayItemTimer.DropDownItems)
+                        {
+                            if (it is ToolStripMenuItem mi)
+                            {
+                                if (mi.Text.StartsWith("5")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.Minutes5;
+                                else if (mi.Text.StartsWith("10")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.Minutes10;
+                                else if (mi.Text.StartsWith("15")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.Minutes15;
+                                else if (mi.Text.StartsWith("20")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.Minutes20;
+                                else if (mi.Text.StartsWith("30")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.Minutes30;
+                                else if (mi.Text.StartsWith("45")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.Minutes45;
+                                else if (mi.Text.StartsWith("60")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.Minutes60;
+                                else if (mi.Text.Contains("b\u00e0i")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.EndOfTrack;
+                                else if (mi.Text.Contains("T\u1eaft")) mi.Checked = KahoiiMusic.Services.SleepTimerService.Instance.CurrentOption == KahoiiMusic.Services.SleepTimerOption.Off;
+                            }
+                        }
                     }
                 };
 
@@ -1027,5 +1079,14 @@ namespace KahoiiMusic
             public override Color SeparatorDark => Color.FromArgb(48, 48, 56);
             public override Color SeparatorLight => Color.Transparent;
         }
-    }
+    
+        private void StopAudioForTimer()
+        {
+            if (_audioPlayer != null && _audioPlayer.IsPlaying)
+            {
+                _audioPlayer.Pause();
+            }
+        }
+
+}
 }

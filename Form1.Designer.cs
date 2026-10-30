@@ -45,6 +45,7 @@ namespace KahoiiMusic
             this.btnPlayPause = new KahoiiMusic.Controls.PlayPauseButton();
             this.btnNext = new KahoiiMusic.Controls.DirectionalButton();
             this.btnLoop = new KahoiiMusic.Controls.LoopButton();
+            this.btnTimer = new KahoiiMusic.Controls.TimerButton();
             this.musicTrackBar = new KahoiiMusic.Controls.MusicTrackBar();
             this.lblCopyright = new System.Windows.Forms.Label();
             this.btnClose = new System.Windows.Forms.Label();
@@ -169,6 +170,7 @@ namespace KahoiiMusic
             this.panelBottomControls.Controls.Add(this.btnPlayPause);
             this.panelBottomControls.Controls.Add(this.btnNext);
             this.panelBottomControls.Controls.Add(this.btnLoop);
+            this.panelBottomControls.Controls.Add(this.btnTimer);
             this.panelBottomControls.Controls.Add(this.musicTrackBar);
             this.panelBottomControls.Controls.Add(this.lblCopyright);
             this.panelBottomControls.Location = new System.Drawing.Point(0, 222);
@@ -229,6 +231,17 @@ namespace KahoiiMusic
             this.btnLoop.Name = "btnLoop";
             this.btnLoop.Size = new System.Drawing.Size(28, 24);
             this.btnLoop.TabIndex = 5;
+            // 
+            // btnTimer
+            // 
+            this.btnTimer.ActiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(168)))), ((int)(((byte)(85)))), ((int)(((byte)(247)))));
+            this.btnTimer.BackColor = System.Drawing.Color.Transparent;
+            this.btnTimer.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnTimer.InactiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
+            this.btnTimer.Location = new System.Drawing.Point(368, 47);
+            this.btnTimer.Name = "btnTimer";
+            this.btnTimer.Size = new System.Drawing.Size(28, 24);
+            this.btnTimer.TabIndex = 6;
             // 
             // lblCopyright
             // 
@@ -327,6 +340,7 @@ namespace KahoiiMusic
         private KahoiiMusic.Controls.DirectionalButton btnNext;
         private KahoiiMusic.Controls.VolumeButton btnVolume;
         private KahoiiMusic.Controls.LoopButton btnLoop;
+        private KahoiiMusic.Controls.TimerButton btnTimer;
         private KahoiiMusic.Controls.VolumePopup volumePopup;
         private KahoiiMusic.Controls.PlaylistButton btnPlaylist;
         private System.Windows.Forms.Label lblCopyright;
