@@ -171,4 +171,8 @@
     </ItemGroup>
     <Delete Files="@(ScratchFiles)" TreatErrorsAsWarnings="true" />
   </Target>
+  <Target Name="CopyToPublish" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <MakeDir Directories="$(ProjectDir)publish" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" />
+  </Target>
 </Project>
