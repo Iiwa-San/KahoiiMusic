@@ -61,10 +61,25 @@ class MusicPlaybackService : MediaSessionService() {
             .build()
 
         exoPlayer.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_ENDED -> {
+                        MusicQueueManager.handleTrackEnded()
+                    }
+                    Player.STATE_READY -> {
+                        MusicQueueManager.releaseWakeLock()
+                    }
+                    else -> {}
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 error.printStackTrace()
+                MusicQueueManager.handlePlaybackError(error)
             }
         })
+
+        MusicQueueManager.init(applicationContext, exoPlayer)
 
         // Wrap ExoPlayer with ForwardingPlayer so that system notification & lock screen
         // always show and enable the Next (⏭️) and Previous (⏮️) buttons!
@@ -130,34 +145,33 @@ class MusicPlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // When user swipes away / clears the app from Recents (xóa đa nhiệm),
-        // stop audio playback, remove the foreground notification, and terminate the service completely.
-        player?.run {
-            playWhenReady = false
-            stop()
-            clearMediaItems()
-        }
+        // If music is actively playing, DO NOT terminate playback when swiped from Recents!
+        // The user expects background music to continue playing via the Foreground Service notification.
+        val p = player
+        if (p == null || !p.playWhenReady || p.playbackState == Player.STATE_ENDED || p.playbackState == Player.STATE_IDLE) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
+            mediaSession?.run {
+                player.release()
+                release()
+                mediaSession = null
+            }
+            player?.let { MusicQueueManager.releaseService(it) }
+            player = null
+            forwardingPlayer = null
 
-        mediaSession?.run {
-            player.release()
-            release()
-            mediaSession = null
+            stopSelf()
         }
-        player = null
-        forwardingPlayer = null
-
-        stopSelf()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        player?.let { MusicQueueManager.releaseService(it) }
         mediaSession?.run {
             player.release()
             release()

@@ -83,15 +83,43 @@ class YouTubeRepository {
         }
     }
 
+    companion object {
+        private val resolvedStreamCache = java.util.concurrent.ConcurrentHashMap<String, Pair<AudioStreamResult, Long>>()
+        private const val CACHE_EXPIRY_MS = 2 * 3600 * 1000L // 2 hours
+
+        fun getCachedStream(videoId: String): AudioStreamResult? {
+            val cached = resolvedStreamCache[videoId] ?: return null
+            if (System.currentTimeMillis() - cached.second < CACHE_EXPIRY_MS) {
+                return cached.first
+            }
+            resolvedStreamCache.remove(videoId)
+            return null
+        }
+
+        fun cacheStream(videoId: String, stream: AudioStreamResult) {
+            resolvedStreamCache[videoId] = Pair(stream, System.currentTimeMillis())
+        }
+
+        fun invalidateCache(videoId: String) {
+            resolvedStreamCache.remove(videoId)
+        }
+    }
+
     suspend fun resolveAudio(input: String): Result<AudioStreamResult> = withContext(Dispatchers.IO) {
         val videoId = extractVideoId(input) ?: return@withContext Result.failure(
             IllegalArgumentException("Không tìm thấy Video ID hợp lệ")
         )
 
+        val cached = getCachedStream(videoId)
+        if (cached != null) return@withContext Result.success(cached)
+
         // Try Method 1: YouTube VisionOS client with session visitor token (highest success rate, bypasses bot checks)
         try {
             val visionResult = fetchFromVisionOS(videoId)
-            if (visionResult != null) return@withContext Result.success(visionResult)
+            if (visionResult != null) {
+                cacheStream(videoId, visionResult)
+                return@withContext Result.success(visionResult)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -99,7 +127,10 @@ class YouTubeRepository {
         // Try Method 2: YouTube InnerTube ANDROID_VR client
         try {
             val vrResult = fetchFromInnerTubeVR(videoId)
-            if (vrResult != null) return@withContext Result.success(vrResult)
+            if (vrResult != null) {
+                cacheStream(videoId, vrResult)
+                return@withContext Result.success(vrResult)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -107,7 +138,10 @@ class YouTubeRepository {
         // Try Method 3: Piped API as fallback
         try {
             val pipedResult = fetchFromPiped(videoId)
-            if (pipedResult != null) return@withContext Result.success(pipedResult)
+            if (pipedResult != null) {
+                cacheStream(videoId, pipedResult)
+                return@withContext Result.success(pipedResult)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -115,7 +149,10 @@ class YouTubeRepository {
         // Try Method 4: Invidious API as secondary fallback
         try {
             val invidiousResult = fetchFromInvidious(videoId)
-            if (invidiousResult != null) return@withContext Result.success(invidiousResult)
+            if (invidiousResult != null) {
+                cacheStream(videoId, invidiousResult)
+                return@withContext Result.success(invidiousResult)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }

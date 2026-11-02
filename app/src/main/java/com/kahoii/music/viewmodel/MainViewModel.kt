@@ -54,8 +54,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         observeHistory()
         observeSavedTracks()
         observeFavorites()
-        com.kahoii.music.service.MusicQueueManager.onNextAction = { playNext() }
-        com.kahoii.music.service.MusicQueueManager.onPreviousAction = { playPrevious() }
+        com.kahoii.music.service.MusicQueueManager.onTrackChanged = { track ->
+            _uiState.update { it.copy(currentTrack = track) }
+        }
+        com.kahoii.music.service.MusicQueueManager.onPlaylistIndexChanged = { idx ->
+            _uiState.update { it.copy(currentPlaylistIndex = idx) }
+        }
+        com.kahoii.music.service.MusicQueueManager.onStatusMessage = { msg ->
+            _uiState.update { it.copy(statusMessage = msg) }
+        }
     }
 
     private fun initMediaController() {
@@ -68,6 +75,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             controller = controllerFuture?.get()
             setupPlayerListener()
             startProgressUpdates()
+            com.kahoii.music.service.MusicQueueManager.currentTrack?.let { cur ->
+                _uiState.update { it.copy(currentTrack = cur, currentPlaylistIndex = com.kahoii.music.service.MusicQueueManager.currentIndex) }
+            }
             pendingMediaItem?.let { (url, track) ->
                 playStreamUrl(url, track)
                 pendingMediaItem = null
@@ -343,6 +353,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var playTrackJob: Job? = null
 
     fun playTrack(item: PlaylistItem) {
+        com.kahoii.music.service.MusicQueueManager.activeQueue = _uiState.value.activeQueue
+        com.kahoii.music.service.MusicQueueManager.currentIndex = _uiState.value.currentPlaylistIndex
+        com.kahoii.music.service.MusicQueueManager.loopMode = _uiState.value.loopMode
+        com.kahoii.music.service.MusicQueueManager.isShuffled = _uiState.value.isShuffled
+        com.kahoii.music.service.MusicQueueManager.activeQueueSource = _uiState.value.activeQueueSource
+        com.kahoii.music.service.MusicQueueManager.currentTrack = item
+
         playTrackJob?.cancel()
         playTrackJob = viewModelScope.launch {
             // 1. Check if track is saved offline first -> Instant playback with 0 delay!
@@ -552,6 +569,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleShuffle() {
         val newShuffle = !_uiState.value.isShuffled
         _uiState.update { it.copy(isShuffled = newShuffle) }
+        com.kahoii.music.service.MusicQueueManager.isShuffled = newShuffle
         val msg = if (newShuffle) "Đã bật trộn bài (Shuffle On)" else "Đã tắt trộn bài (Shuffle Off)"
         Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
     }
@@ -578,71 +596,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playNext() {
-        val state = _uiState.value
-        val queue = state.activeQueue
-        val queueName = state.activeQueueSource.label
-        if (queue.isEmpty()) {
-            controller?.seekTo(0L)
-            Toast.makeText(getApplication(), "Mục $queueName chưa có bài hát", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (queue.size == 1) {
-            controller?.seekTo(0L)
-            controller?.play()
-            Toast.makeText(getApplication(), "Mục $queueName chỉ có 1 bài hát", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val currentId = state.currentTrack?.id
-        val currentIndex = if (!currentId.isNullOrBlank()) {
-            queue.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
-        } else -1
-
-        val nextIndex = if (state.isShuffled && queue.size > 1) {
-            val otherIndices = queue.indices.filter { it != currentIndex }
-            if (otherIndices.isNotEmpty()) otherIndices.random() else 0
-        } else {
-            if (currentIndex >= 0) {
-                (currentIndex + 1) % queue.size
-            } else {
-                0
-            }
-        }
-
-        val nextTrack = queue[nextIndex]
-        _uiState.update { it.copy(currentPlaylistIndex = nextIndex) }
-        playTrack(nextTrack)
+        com.kahoii.music.service.MusicQueueManager.activeQueue = _uiState.value.activeQueue
+        com.kahoii.music.service.MusicQueueManager.loopMode = _uiState.value.loopMode
+        com.kahoii.music.service.MusicQueueManager.isShuffled = _uiState.value.isShuffled
+        com.kahoii.music.service.MusicQueueManager.playNext()
     }
 
     fun playPrevious() {
-        val p = controller
-        val state = _uiState.value
-        val queue = state.activeQueue
-        val queueName = state.activeQueueSource.label
-        if (queue.isEmpty()) {
-            p?.seekTo(0L)
-            Toast.makeText(getApplication(), "Mục $queueName chưa có bài hát", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val currentId = state.currentTrack?.id
-        val currentIndex = if (!currentId.isNullOrBlank()) {
-            queue.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
-        } else 0
-
-        // Nếu bài đang phát là bài đầu tiên trong danh sách (hoặc chỉ có 1 bài) mới tua về từ đầu
-        if (currentIndex <= 0 || queue.size == 1) {
-            p?.seekTo(0L)
-            if (p?.isPlaying == false) p?.play()
-            return
-        }
-
-        // Lùi hẳn về bài trước
-        val prevIndex = currentIndex - 1
-        val prevTrack = queue[prevIndex]
-        _uiState.update { it.copy(currentPlaylistIndex = prevIndex) }
-        playTrack(prevTrack)
+        com.kahoii.music.service.MusicQueueManager.activeQueue = _uiState.value.activeQueue
+        com.kahoii.music.service.MusicQueueManager.loopMode = _uiState.value.loopMode
+        com.kahoii.music.service.MusicQueueManager.isShuffled = _uiState.value.isShuffled
+        com.kahoii.music.service.MusicQueueManager.playPrevious()
     }
 
     fun seekTo(progress: Float) {
@@ -662,6 +626,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             LoopMode.ALL -> LoopMode.OFF
         }
         _uiState.update { it.copy(loopMode = nextMode) }
+        com.kahoii.music.service.MusicQueueManager.loopMode = nextMode
 
         val p = controller ?: return
         when (nextMode) {
@@ -942,57 +907,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun handleTrackEnded() {
-        val state = _uiState.value
-
-        // Check Sleep Timer End of Track
-        if (state.sleepTimerOption == SleepTimerOption.END_OF_TRACK) {
-            controller?.pause()
-            _uiState.update {
-                it.copy(
-                    sleepTimerOption = SleepTimerOption.OFF,
-                    statusMessage = "Hết bài hát - Đã dừng hẹn giờ"
-                )
-            }
-            return
-        }
-
-        when (state.loopMode) {
-            LoopMode.ONE -> {
-                controller?.seekTo(0L)
-                controller?.play()
-            }
-            LoopMode.ALL -> {
-                playNext()
-            }
-            LoopMode.OFF -> {
-                val queue = state.activeQueue
-                val currentId = state.currentTrack?.id
-                val currentIndex = if (!currentId.isNullOrBlank()) {
-                    queue.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
-                } else -1
-
-                if (currentIndex >= 0 && currentIndex + 1 < queue.size) {
-                    playNext()
-                } else {
-                    controller?.pause()
-                    _uiState.update {
-                        it.copy(status = PlaybackStatus.PAUSED, statusMessage = "Đã phát hết danh sách")
-                    }
-                }
-            }
-        }
+        com.kahoii.music.service.MusicQueueManager.activeQueue = _uiState.value.activeQueue
+        com.kahoii.music.service.MusicQueueManager.loopMode = _uiState.value.loopMode
+        com.kahoii.music.service.MusicQueueManager.isShuffled = _uiState.value.isShuffled
+        com.kahoii.music.service.MusicQueueManager.handleTrackEnded()
     }
 
     override fun onCleared() {
-        com.kahoii.music.service.MusicQueueManager.onNextAction = null
-        com.kahoii.music.service.MusicQueueManager.onPreviousAction = null
+        com.kahoii.music.service.MusicQueueManager.onTrackChanged = null
+        com.kahoii.music.service.MusicQueueManager.onPlaylistIndexChanged = null
+        com.kahoii.music.service.MusicQueueManager.onStatusMessage = null
         progressJob?.cancel()
         sleepTimerJob?.cancel()
         preloadingJob?.cancel()
         playTrackJob?.cancel()
-        controller?.release()
-        controllerFuture?.let { MediaController.releaseFuture(it) }
-        controller = null
+        if (controller?.isPlaying != true) {
+            controller?.release()
+            controllerFuture?.let { MediaController.releaseFuture(it) }
+            controller = null
+        }
         super.onCleared()
     }
 }
