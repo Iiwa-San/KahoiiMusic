@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -52,17 +54,48 @@ fun PlaybackControlsView(
     onToggleLoop: () -> Unit,
     onTimerClick: () -> Unit,
     modifier: Modifier = Modifier,
-    accentColor: Color = NeonPink
+    accentColor: Color = NeonPink,
+    isCurrentTrackSaved: Boolean = false,
+    isCurrentTrackDownloading: Boolean = false,
+    onQuickDownload: () -> Unit = {}
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Shuffle Button (Matching iOS shuffle button)
+        // 1. Quick Download Button (Nút tải nhanh - cân xứng 2 bên)
+        IconButton(
+            onClick = onQuickDownload,
+            modifier = Modifier.size(40.dp)
+        ) {
+            if (isCurrentTrackDownloading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = Color(0xFF22C55E),
+                    strokeWidth = 2.dp
+                )
+            } else if (isCurrentTrackSaved) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Đã tải về máy",
+                    tint = Color(0xFF22C55E),
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Tải về nhanh",
+                    tint = Color.White.copy(alpha = 0.45f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        // 2. Shuffle Button (Matching iOS shuffle button)
         IconButton(
             onClick = onToggleShuffle,
-            modifier = Modifier.size(42.dp)
+            modifier = Modifier.size(40.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Shuffle,
@@ -72,10 +105,10 @@ fun PlaybackControlsView(
             )
         }
 
-        // 2. Previous Button
+        // 3. Previous Button
         IconButton(
             onClick = onPrevious,
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(46.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.SkipPrevious,
@@ -122,10 +155,10 @@ fun PlaybackControlsView(
             }
         }
 
-        // 4. Next Button
+        // 5. Next Button
         IconButton(
             onClick = onNext,
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(46.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.SkipNext,
@@ -135,10 +168,10 @@ fun PlaybackControlsView(
             )
         }
 
-        // 5. Loop / Repeat Button
+        // 6. Loop / Repeat Button
         IconButton(
             onClick = onToggleLoop,
-            modifier = Modifier.size(42.dp)
+            modifier = Modifier.size(40.dp)
         ) {
             when (loopMode) {
                 LoopMode.OFF -> Icon(
@@ -162,10 +195,10 @@ fun PlaybackControlsView(
             }
         }
 
-        // 6. Sleep Timer Button with Countdown label
+        // 7. Sleep Timer Button with Countdown label
         IconButton(
             onClick = onTimerClick,
-            modifier = Modifier.size(42.dp)
+            modifier = Modifier.size(40.dp)
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,

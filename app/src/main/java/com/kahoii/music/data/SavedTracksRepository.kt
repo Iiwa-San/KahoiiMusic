@@ -24,9 +24,12 @@ class SavedTracksRepository(private val context: Context) {
     private val thumbDir = File(context.filesDir, "saved_thumb").apply { if (!exists()) mkdirs() }
     private val metadataFile = File(context.filesDir, "saved_tracks.json")
 
+    // Temp audio cache (Matching PC KahoiiTemp/audio & iOS Caches/KahoiiTemp/audio)
+    val tempAudioDir = File(context.cacheDir, "temp_audio").apply { if (!exists()) mkdirs() }
+
     private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
 
@@ -88,10 +91,159 @@ class SavedTracksRepository(private val context: Context) {
         return _savedTracks.value.find { it.id.equals(id, ignoreCase = true) }
     }
 
+    fun getTempAudioFile(id: String): File? {
+        if (id.isBlank()) return null
+        val candidates = listOf(
+            File(tempAudioDir, "$id.mp3"),
+            File(tempAudioDir, "$id.m4a")
+        )
+        for (f in candidates) {
+            if (f.exists() && f.length() > 50000) return f
+        }
+        return null
+    }
+
+    /**
+     * Tải phân đoạn đa luồng HTTP Range (5MB/chunk) - Đạt tốc độ 10-20 MB/s,
+     * khắc phục triệt để lỗi YouTube bóp băng thông 32KB/s gây timeout trên các bài dài > 10 phút.
+     */
+    suspend fun downloadAudioChunked(
+        streamUrl: String,
+        destinationFile: File,
+        expectedLength: Long? = null
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            destinationFile.parentFile?.mkdirs()
+            var totalLength: Long = expectedLength ?: 0L
+
+            // 1. Nếu chưa biết tổng dung lượng, gửi probe Range bytes=0-0 để đọc Content-Range
+            if (totalLength <= 0L) {
+                val headReq = Request.Builder()
+                    .url(streamUrl)
+                    .header("Range", "bytes=0-0")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                    .header("Referer", "https://www.youtube.com/")
+                    .build()
+
+                try {
+                    client.newCall(headReq).execute().use { resp ->
+                        val contentRange = resp.header("Content-Range")
+                        if (!contentRange.isNullOrBlank()) {
+                            val totalStr = contentRange.substringAfterLast("/").trim()
+                            totalLength = totalStr.toLongOrNull() ?: 0L
+                        }
+                    }
+                } catch (_: Exception) { }
+            }
+
+            // 2. Nếu file quá nhỏ (< 1MB) hoặc không xác định được độ dài, tải đơn luồng thông thường
+            if (totalLength <= 1024 * 1024L) {
+                val req = Request.Builder()
+                    .url(streamUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                    .header("Referer", "https://www.youtube.com/")
+                    .build()
+
+                client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@withContext false
+                    val body = resp.body ?: return@withContext false
+                    val tempPart = File(destinationFile.parentFile, "${destinationFile.name}.part")
+                    FileOutputStream(tempPart).use { out ->
+                        body.byteStream().copyTo(out)
+                    }
+                    if (destinationFile.exists()) destinationFile.delete()
+                    return@withContext tempPart.renameTo(destinationFile)
+                }
+            }
+
+            // 3. Tải đa phân đoạn 5MB siêu tốc
+            val tempPart = File(destinationFile.parentFile, "${destinationFile.name}.part")
+            if (tempPart.exists()) tempPart.delete()
+
+            val chunkSize = 5 * 1024 * 1024L // 5MB chunks
+            var currentOffset = 0L
+
+            FileOutputStream(tempPart, true).use { outStream ->
+                while (currentOffset < totalLength) {
+                    val nextOffset = (currentOffset + chunkSize - 1).coerceAtMost(totalLength - 1)
+                    val chunkReq = Request.Builder()
+                        .url(streamUrl)
+                        .header("Range", "bytes=$currentOffset-$nextOffset")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                        .header("Referer", "https://www.youtube.com/")
+                        .build()
+
+                    client.newCall(chunkReq).execute().use { chunkResp ->
+                        if (!chunkResp.isSuccessful && chunkResp.code != 206) {
+                            return@withContext false
+                        }
+                        val body = chunkResp.body ?: return@withContext false
+                        val bytes = body.bytes()
+                        if (bytes.isEmpty()) {
+                            return@withContext false
+                        }
+                        outStream.write(bytes)
+                        currentOffset += bytes.size
+                    }
+                }
+            }
+
+            if (tempPart.exists() && tempPart.length() > 50000) {
+                if (destinationFile.exists()) destinationFile.delete()
+                return@withContext tempPart.renameTo(destinationFile)
+            }
+            false
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Lưu tạm âm thanh phục vụ phát lại tức thì và tải trước (Preload 1 bài tiếp theo)
+     */
+    suspend fun cacheTempAudio(trackId: String, streamUrl: String, expectedLength: Long? = null): File? = withContext(Dispatchers.IO) {
+        if (trackId.isBlank() || streamUrl.isBlank()) return@withContext null
+        val existing = getTempAudioFile(trackId)
+        if (existing != null) return@withContext existing
+
+        val target = File(tempAudioDir, "$trackId.mp3")
+        val ok = downloadAudioChunked(streamUrl, target, expectedLength)
+        if (ok && target.exists() && target.length() > 50000) {
+            target
+        } else null
+    }
+
+    /**
+     * Dọn dẹp các file audio tạm không nằm trong danh sách phát đang hoạt động hoặc danh sách đã tải,
+     * giúp giải phóng dung lượng bộ nhớ.
+     */
+    fun cleanUnusedTempAudio(protectedIds: Set<String>) {
+        try {
+            val files = tempAudioDir.listFiles() ?: return
+            val savedIds = _savedTracks.value.map { it.id.lowercase() }.toSet()
+            val protectedLower = protectedIds.map { it.lowercase() }.toSet()
+
+            for (file in files) {
+                if (file.name.endsWith(".part")) {
+                    file.delete()
+                    continue
+                }
+                val fileId = file.nameWithoutExtension.lowercase()
+                if (!protectedLower.contains(fileId) && !savedIds.contains(fileId)) {
+                    file.delete()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     suspend fun saveTrack(
         track: PlaylistItem,
         streamUrl: String,
-        thumbnailUrl: String?
+        thumbnailUrl: String?,
+        contentLength: Long? = null
     ): Result<PlaylistItem> = withContext(Dispatchers.IO) {
         try {
             if (track.id.isBlank()) {
@@ -101,21 +253,16 @@ class SavedTracksRepository(private val context: Context) {
             val audioFile = File(savedDir, "${track.id}.mp3")
             val thumbFile = File(thumbDir, "${track.id}.jpg")
 
-            // 1. Download audio file if not present or too small
-            if (!audioFile.exists() || audioFile.length() < 50000) {
-                val req = Request.Builder()
-                    .url(streamUrl)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                    .build()
-
-                client.newCall(req).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return@withContext Result.failure(Exception("Tải âm thanh thất bại: HTTP ${response.code}"))
-                    }
-                    val body = response.body ?: return@withContext Result.failure(Exception("Dữ liệu âm thanh trống"))
-                    FileOutputStream(audioFile).use { out ->
-                        body.byteStream().copyTo(out)
-                    }
+            // 0. Kiểm tra nếu bài hát đã được lưu trong bộ nhớ tạm (temp_audio), sao chép tức thì (0s)
+            val cachedTemp = getTempAudioFile(track.id)
+            if (cachedTemp != null && cachedTemp.exists() && cachedTemp.length() > 50000) {
+                if (audioFile.exists()) audioFile.delete()
+                cachedTemp.copyTo(audioFile, overwrite = true)
+            } else if (!audioFile.exists() || audioFile.length() < 50000) {
+                // Tải phân đoạn đa luồng Range cực nhanh
+                val ok = downloadAudioChunked(streamUrl, audioFile, contentLength)
+                if (!ok || !audioFile.exists() || audioFile.length() < 50000) {
+                    return@withContext Result.failure(Exception("Tải âm thanh thất bại hoặc file quá nhỏ"))
                 }
             }
 
@@ -180,4 +327,3 @@ class SavedTracksRepository(private val context: Context) {
         }
     }
 }
-

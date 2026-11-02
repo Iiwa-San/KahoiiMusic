@@ -1,0 +1,65 @@
+name: Build Android App (APK)
+
+on:
+  push:
+    branches: [ "AndroidApp" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Android Release APK
+        run: ./gradlew assembleRelease --stacktrace --no-daemon
+
+      - name: Prepare APK Asset
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::Release APK not found!"
+            exit 1
+          fi
+          echo "Found APK at: $APK_PATH"
+          cp "$APK_PATH" KahoiiMusic.apk
+          ls -lh KahoiiMusic.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KahoiiMusic-Android-APK
+          path: KahoiiMusic.apk
+          retention-days: 14
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: "latest-android"
+          name: "KahoiiMusic Android Latest Build"
+          body: |
+            ### 🤖 KahoiiMusic Android App Build
+            - **KahoiiMusic.apk**: File cài đặt trực tiếp lên điện thoại / máy tính bảng Android (hỗ trợ Android 7.0 trở lên).
+          files: |
+            KahoiiMusic.apk
+
+      - name: Summary
+        run: |
+          echo "### 🎉 Đã tạo thành công file KahoiiMusic.apk!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **KahoiiMusic.apk**: Cài đặt trực tiếp lên điện thoại / máy tính bảng Android." >> $GITHUB_STEP_SUMMARY

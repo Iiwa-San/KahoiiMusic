@@ -274,7 +274,7 @@ fun MusicPlayerScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // ================= 5. PLAYBACK CONTROLS (SHUFFLE, PREV, PLAY, NEXT, LOOP, TIMER) =================
+            // ================= 5. PLAYBACK CONTROLS (QUICK DOWNLOAD, SHUFFLE, PREV, PLAY, NEXT, LOOP, TIMER) =================
             PlaybackControlsView(
                 isPlaying = uiState.isPlaying,
                 isLoading = uiState.status == PlaybackStatus.BUFFERING,
@@ -283,6 +283,11 @@ fun MusicPlayerScreen(
                 isSleepTimerActive = uiState.isSleepTimerActive,
                 sleepTimerText = uiState.sleepTimerFormatted,
                 accentColor = NeonPink,
+                isCurrentTrackSaved = uiState.isCurrentTrackSaved,
+                isCurrentTrackDownloading = uiState.isCurrentTrackDownloading,
+                onQuickDownload = {
+                    viewModel.quickDownloadCurrentTrack()
+                },
                 onTogglePlayPause = { viewModel.togglePlayPause() },
                 onPrevious = { viewModel.playPrevious() },
                 onNext = { viewModel.playNext() },

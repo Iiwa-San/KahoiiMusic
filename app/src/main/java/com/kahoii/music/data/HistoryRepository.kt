@@ -100,6 +100,24 @@ class HistoryRepository(private val context: Context) {
         saveHistory()
     }
 
+    suspend fun updateTrackInfoOnly(track: PlaylistItem) = withContext(Dispatchers.IO) {
+        if (track.id.isBlank()) return@withContext
+        val current = _history.value.toMutableList()
+        val index = current.indexOfFirst { it.id.equals(track.id, ignoreCase = true) }
+        if (index >= 0) {
+            val existing = current[index]
+            val updated = existing.copy(
+                title = if (track.title.isNotBlank() && track.title != "None" && !track.title.startsWith("Bài ")) track.title else existing.title,
+                artist = if (track.artist.isNotBlank()) track.artist else existing.artist,
+                durationSeconds = if (track.durationSeconds > 0) track.durationSeconds else existing.durationSeconds,
+                thumbnailUrl = if (track.thumbnailUrl.isNotBlank()) track.thumbnailUrl else existing.thumbnailUrl
+            )
+            current[index] = updated
+            _history.value = current
+            saveHistory()
+        }
+    }
+
     suspend fun removeTrack(id: String) = withContext(Dispatchers.IO) {
         val current = _history.value.toMutableList()
         current.removeAll { it.id.equals(id, ignoreCase = true) }

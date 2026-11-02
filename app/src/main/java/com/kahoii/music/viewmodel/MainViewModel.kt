@@ -23,6 +23,7 @@ import com.kahoii.music.model.PlayerUiState
 import com.kahoii.music.model.PlaylistItem
 import com.kahoii.music.model.SleepTimerOption
 import com.kahoii.music.service.MusicPlaybackService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -321,7 +322,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playTrack(item: PlaylistItem) {
         viewModelScope.launch {
-            // Check if track is saved offline first -> Instant playback with 0 delay!
+            // 1. Check if track is saved offline first -> Instant playback with 0 delay!
             val savedTrack = savedTracksRepository.getSavedTrack(item.id)
             if (savedTrack != null && savedTrack.isOffline) {
                 _uiState.update {
@@ -332,9 +333,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         status = PlaybackStatus.BUFFERING
                     )
                 }
-                historyRepository.addTrack(savedTrack)
+                if (_uiState.value.activeQueueSource == ActiveQueueSource.HISTORY) {
+                    historyRepository.updateTrackInfoOnly(savedTrack)
+                } else {
+                    historyRepository.addTrack(savedTrack)
+                }
                 val fileUri = Uri.fromFile(File(savedTrack.localAudioPath!!)).toString()
                 playStreamUrl(fileUri, savedTrack)
+                preloadNextTrack(savedTrack.id)
+                cleanUnusedTempAudio()
+                return@launch
+            }
+
+            // 1b. Check if track is cached in temp audio -> Instant playback!
+            val cachedTemp = savedTracksRepository.getTempAudioFile(item.id)
+            if (cachedTemp != null && cachedTemp.exists()) {
+                val cachedTrack = item.copy(
+                    durationSeconds = if (item.durationSeconds > 0) item.durationSeconds else 180
+                )
+                _uiState.update {
+                    it.copy(
+                        currentTrack = cachedTrack,
+                        durationMs = cachedTrack.durationSeconds * 1000L,
+                        statusMessage = "Đang phát (Đã lưu tạm)",
+                        status = PlaybackStatus.BUFFERING
+                    )
+                }
+                if (_uiState.value.activeQueueSource == ActiveQueueSource.HISTORY) {
+                    historyRepository.updateTrackInfoOnly(cachedTrack)
+                } else {
+                    historyRepository.addTrack(cachedTrack)
+                }
+                val fileUri = Uri.fromFile(cachedTemp).toString()
+                playStreamUrl(fileUri, cachedTrack)
+                preloadNextTrack(cachedTrack.id)
+                cleanUnusedTempAudio()
                 return@launch
             }
 
@@ -365,11 +398,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
 
-                // Add to persistent history
-                historyRepository.addTrack(resolvedTrack)
+                // If listening from History, keep order fixed!
+                if (_uiState.value.activeQueueSource == ActiveQueueSource.HISTORY) {
+                    historyRepository.updateTrackInfoOnly(resolvedTrack)
+                } else {
+                    historyRepository.addTrack(resolvedTrack)
+                }
 
                 // Play in ExoPlayer
                 playStreamUrl(stream.audioUrl, resolvedTrack, stream.artworkBytes)
+
+                // Background auto-cache current track & preload next 1 track
+                viewModelScope.launch(Dispatchers.IO) {
+                    savedTracksRepository.cacheTempAudio(resolvedTrack.id, stream.audioUrl, stream.contentLength)
+                }
+                preloadNextTrack(resolvedTrack.id)
+                cleanUnusedTempAudio()
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(
@@ -541,11 +585,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playPrevious() {
         val p = controller
-        if (p != null && p.currentPosition > 3000L) {
-            p.seekTo(0L)
-            return
-        }
-
         val state = _uiState.value
         val queue = state.activeQueue
         val queueName = state.activeQueueSource.label
@@ -555,24 +594,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        if (queue.size == 1) {
-            p?.seekTo(0L)
-            p?.play()
-            Toast.makeText(getApplication(), "Mục $queueName chỉ có 1 bài hát", Toast.LENGTH_SHORT).show()
-            return
-        }
-
         val currentId = state.currentTrack?.id
         val currentIndex = if (!currentId.isNullOrBlank()) {
             queue.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
         } else 0
 
-        val prevIndex = if (currentIndex > 0) {
-            currentIndex - 1
-        } else {
-            queue.size - 1
+        // Nếu bài đang phát là bài đầu tiên trong danh sách (hoặc chỉ có 1 bài) mới tua về từ đầu
+        if (currentIndex <= 0 || queue.size == 1) {
+            p?.seekTo(0L)
+            if (p?.isPlaying == false) p?.play()
+            return
         }
 
+        // Lùi hẳn về bài trước
+        val prevIndex = currentIndex - 1
         val prevTrack = queue[prevIndex]
         _uiState.update { it.copy(currentPlaylistIndex = prevIndex) }
         playTrack(prevTrack)
@@ -658,7 +693,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ================= OFFLINE SAVED TRACKS =================
+    // ================= OFFLINE SAVED TRACKS & PRELOAD =================
+    fun quickDownloadCurrentTrack() {
+        val track = _uiState.value.currentTrack ?: return
+        if (savedTracksRepository.isTrackSaved(track.id)) {
+            Toast.makeText(getApplication(), "Bài hát đã có trong mục Đã tải", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (isTrackDownloading(track.id)) {
+            Toast.makeText(getApplication(), "Bài hát đang được tải...", Toast.LENGTH_SHORT).show()
+            return
+        }
+        saveTrackOffline(track)
+    }
+
+    private var preloadingJob: Job? = null
+
+    private fun preloadNextTrack(currentTrackId: String) {
+        preloadingJob?.cancel()
+        preloadingJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val state = _uiState.value
+                val queue = state.activeQueue
+                if (queue.size <= 1) return@launch
+
+                val currentIndex = queue.indexOfFirst { it.id.equals(currentTrackId, ignoreCase = true) }
+                if (currentIndex < 0) return@launch
+
+                val nextIndex = (currentIndex + 1) % queue.size
+                if (nextIndex == currentIndex) return@launch
+
+                val nextTrack = queue[nextIndex]
+                if (savedTracksRepository.isTrackSaved(nextTrack.id) || savedTracksRepository.getTempAudioFile(nextTrack.id) != null) {
+                    return@launch
+                }
+
+                // Preload exactly 1 track ahead to optimize storage
+                val result = youTubeRepository.resolveAudio(nextTrack.id)
+                result.onSuccess { stream ->
+                    savedTracksRepository.cacheTempAudio(nextTrack.id, stream.audioUrl, stream.contentLength)
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun cleanUnusedTempAudio() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val protectedSet = mutableSetOf<String>()
+            _uiState.value.currentTrack?.let { protectedSet.add(it.id) }
+            _uiState.value.playlist.forEach { protectedSet.add(it.id) }
+            savedTracksRepository.cleanUnusedTempAudio(protectedSet)
+        }
+    }
+
     fun saveTrackOffline(item: PlaylistItem) {
         if (item.id.isBlank()) return
         if (savedTracksRepository.isTrackSaved(item.id)) {
@@ -679,10 +766,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     durationSeconds = if (item.durationSeconds <= 0) stream.durationSeconds else item.durationSeconds
                 )
 
-                val saveResult = savedTracksRepository.saveTrack(fullItem, stream.audioUrl, stream.thumbnailUrl)
+                val saveResult = savedTracksRepository.saveTrack(fullItem, stream.audioUrl, stream.thumbnailUrl, stream.contentLength)
                 saveResult.onSuccess {
                     _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
                     Toast.makeText(getApplication(), "✓ Đã lưu bài hát vào mục Đã tải!", Toast.LENGTH_SHORT).show()
+                    cleanUnusedTempAudio()
                 }.onFailure { err ->
                     _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
                     Toast.makeText(getApplication(), "Lỗi tải tệp: ${err.message}", Toast.LENGTH_LONG).show()
@@ -830,6 +918,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.kahoii.music.service.MusicQueueManager.onPreviousAction = null
         progressJob?.cancel()
         sleepTimerJob?.cancel()
+        preloadingJob?.cancel()
         controller?.release()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null

@@ -18,7 +18,8 @@ data class AudioStreamResult(
     val durationSeconds: Int,
     val audioUrl: String,
     val thumbnailUrl: String,
-    val artworkBytes: ByteArray? = null
+    val artworkBytes: ByteArray? = null,
+    val contentLength: Long? = null
 )
 
 class YouTubeRepository {
@@ -208,6 +209,7 @@ class YouTubeRepository {
 
             var bestAudioUrl: String? = null
             var highestBitrate = 0
+            var bestContentLength: Long? = null
 
             if (adaptiveFormats != null) {
                 for (i in 0 until adaptiveFormats.length()) {
@@ -219,6 +221,8 @@ class YouTubeRepository {
                         if (url.isNotBlank() && bitrate > highestBitrate) {
                             highestBitrate = bitrate
                             bestAudioUrl = url
+                            val clenStr = format.optString("contentLength")
+                            bestContentLength = clenStr.toLongOrNull() ?: if (format.has("contentLength")) format.optLong("contentLength") else null
                         }
                     }
                 }
@@ -242,7 +246,8 @@ class YouTubeRepository {
                     durationSeconds = durationSeconds,
                     audioUrl = bestAudioUrl,
                     thumbnailUrl = thumbUrl,
-                    artworkBytes = artBytes
+                    artworkBytes = artBytes,
+                    contentLength = bestContentLength
                 )
             }
         }
@@ -285,6 +290,7 @@ class YouTubeRepository {
 
             var bestAudioUrl: String? = null
             var highestBitrate = 0
+            var bestContentLength: Long? = null
 
             for (i in 0 until adaptiveFormats.length()) {
                 val format = adaptiveFormats.getJSONObject(i)
@@ -295,6 +301,8 @@ class YouTubeRepository {
                     if (url.isNotBlank() && bitrate > highestBitrate) {
                         highestBitrate = bitrate
                         bestAudioUrl = url
+                        val clenStr = format.optString("contentLength")
+                        bestContentLength = clenStr.toLongOrNull() ?: if (format.has("contentLength")) format.optLong("contentLength") else null
                     }
                 }
             }
@@ -309,7 +317,8 @@ class YouTubeRepository {
                     durationSeconds = durationSeconds,
                     audioUrl = bestAudioUrl,
                     thumbnailUrl = thumbUrl,
-                    artworkBytes = artBytes
+                    artworkBytes = artBytes,
+                    contentLength = bestContentLength
                 )
             }
         }
