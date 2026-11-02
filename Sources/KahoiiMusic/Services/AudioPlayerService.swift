@@ -46,6 +46,27 @@ public class AudioPlayerService: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var sleepFadeTask: Task<Void, Never>? = nil
 
+    #if canImport(UIKit)
+    private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+
+    private func beginBackgroundTask() {
+        endBackgroundTask()
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "KahoiiBackgroundAudioTransition") { [weak self] in
+            self?.endBackgroundTask()
+        }
+    }
+
+    private func endBackgroundTask() {
+        if backgroundTaskID != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+    }
+    #else
+    private func beginBackgroundTask() {}
+    private func endBackgroundTask() {}
+    #endif
+
     private init() {
         setupAudioSession()
         setupRemoteCommands()
@@ -337,6 +358,7 @@ public class AudioPlayerService: ObservableObject {
 
             HistoryService.shared.recordPlay(updatedTrack)
             self.startPlayer(with: localAudio, duration: Double(track.durationSeconds))
+            self.preloadNextTrack()
 
             if let artworkUrl = track.artworkURL {
                 Task {
@@ -361,6 +383,7 @@ public class AudioPlayerService: ObservableObject {
 
             HistoryService.shared.recordPlay(updatedTrack)
             self.startPlayer(with: cachedAudio, duration: Double(track.durationSeconds))
+            self.preloadNextTrack()
 
             if let artworkUrl = track.artworkURL {
                 Task {
@@ -413,6 +436,7 @@ public class AudioPlayerService: ObservableObject {
                 HistoryService.shared.recordPlay(updatedTrack)
 
                 self.startPlayer(with: resolved.streamUrl, duration: Double(resolved.durationSeconds))
+                self.preloadNextTrack()
 
                 // Auto-cache audio stream in background using chunked Range downloader (10-20 MB/s)
                 let vid = track.id
@@ -444,6 +468,15 @@ public class AudioPlayerService: ObservableObject {
     }
 
     private func startPlayer(with streamUrl: URL, duration: Double) {
+        endBackgroundTask()
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetoothA2DP])
+            try session.setActive(true)
+        } catch {
+            print("[AudioPlayerService] Audio session error: \(error)")
+        }
+
         if let token = timeObserverToken {
             avPlayer?.removeTimeObserver(token)
             timeObserverToken = nil
@@ -638,6 +671,7 @@ public class AudioPlayerService: ObservableObject {
     }
 
     private func handleTrackEnded() {
+        beginBackgroundTask()
         SleepTimerService.shared.handleTrackFinished()
 
         if currentIndex < 0 {
@@ -667,6 +701,16 @@ public class AudioPlayerService: ObservableObject {
                 seek(to: 0)
                 statusMessage = "Đã phát xong"
             }
+        }
+    }
+
+    private func preloadNextTrack() {
+        guard !playlist.isEmpty, currentIndex >= 0 else { return }
+        let nextIndex = (currentIndex + 1) % playlist.count
+        if nextIndex == currentIndex { return }
+        let nextTrack = playlist[nextIndex]
+        Task(priority: .utility) {
+            _ = try? await YouTubeResolver.shared.resolveAudioStream(for: nextTrack.id)
         }
     }
 
