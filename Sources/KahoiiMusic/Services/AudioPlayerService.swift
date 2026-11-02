@@ -829,4 +829,15 @@ public class AudioPlayerService: ObservableObject {
         playbackState = .idle
         statusMessage = "Danh sách phát đã xóa"
     }
+
+    public func setPlaylist(_ items: [PlaylistItem], startIndex: Int = 0) {
+        guard !items.isEmpty else {
+            clearQueue()
+            return
+        }
+        self.playlist = items
+        let safeIndex = max(0, min(startIndex, items.count - 1))
+        self.currentIndex = safeIndex
+        self.playTrack(items[safeIndex], keepQueue: true)
+    }
 }

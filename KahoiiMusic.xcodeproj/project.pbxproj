@@ -32,6 +32,8 @@
 		AA0001012C12340000000023 /* ErrorLogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000023 /* ErrorLogService.swift */; };
 		AA0001012C12340000000024 /* ErrorToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000024 /* ErrorToastView.swift */; };
 		AA0001012C12340000000025 /* ErrorLogsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000025 /* ErrorLogsSheet.swift */; };
+		AA0001012C12340000000026 /* UserPlaylist.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000026 /* UserPlaylist.swift */; };
+		AA0001012C12340000000027 /* PlaylistCollectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000027 /* PlaylistCollectionService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +64,8 @@
 		AA0001002C12340000000023 /* ErrorLogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorLogService.swift; sourceTree = "<group>"; };
 		AA0001002C12340000000024 /* ErrorToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorToastView.swift; sourceTree = "<group>"; };
 		AA0001002C12340000000025 /* ErrorLogsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorLogsSheet.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000026 /* UserPlaylist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPlaylist.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000027 /* PlaylistCollectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistCollectionService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -100,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0001002C12340000000002 /* PlaylistItem.swift */,
+				AA0001002C12340000000026 /* UserPlaylist.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -114,6 +119,7 @@
 				AA0001002C12340000000020 /* SavedTracksService.swift */,
 				AA0001002C12340000000021 /* SleepTimerService.swift */,
 				AA0001002C12340000000023 /* ErrorLogService.swift */,
+				AA0001002C12340000000027 /* PlaylistCollectionService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -256,6 +262,8 @@
 				AA0001012C12340000000023 /* ErrorLogService.swift in Sources */,
 				AA0001012C12340000000024 /* ErrorToastView.swift in Sources */,
 				AA0001012C12340000000025 /* ErrorLogsSheet.swift in Sources */,
+				AA0001012C12340000000026 /* UserPlaylist.swift in Sources */,
+				AA0001012C12340000000027 /* PlaylistCollectionService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,13 +279,13 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_BITCODE = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kahoii.music;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -296,13 +304,13 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_BITCODE = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kahoii.music;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
