@@ -19,6 +19,7 @@ public struct MainPlayerView: View {
     @State private var showingSavedTracksSheet: Bool = false
     @State private var showingErrorLogsSheet: Bool = false
     @State private var showingSearchResultsSheet: Bool = false
+    @State private var artworkDragOffset: CGFloat = 0
 
     public init() {}
 
@@ -182,6 +183,25 @@ public struct MainPlayerView: View {
             accentColor: player.currentPalette.accentColor
         )
         .frame(maxWidth: 340, maxHeight: 340)
+        .offset(x: artworkDragOffset)
+        .rotationEffect(.degrees(Double(min(max(artworkDragOffset / 30.0, -10.0), 10.0))))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 15)
+                .onChanged { gesture in
+                    artworkDragOffset = gesture.translation.width
+                }
+                .onEnded { gesture in
+                    let threshold: CGFloat = 60
+                    if gesture.translation.width < -threshold {
+                        player.nextTrack()
+                    } else if gesture.translation.width > threshold {
+                        player.previousTrack()
+                    }
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        artworkDragOffset = 0
+                    }
+                }
+        )
     }
 
     // MARK: - Track Info & Favorite
