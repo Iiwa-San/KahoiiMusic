@@ -11,6 +11,7 @@ enum class PlaybackStatus {
 
 enum class ActiveQueueSource(val label: String) {
     PLAYLIST("Danh sách"),
+    COLLECTION("Bộ sưu tập"),
     SAVED("Đã tải"),
     FAVORITES("Yêu thích"),
     HISTORY("Lịch sử")
@@ -31,6 +32,8 @@ data class PlayerUiState(
     val playlist: List<PlaylistItem> = emptyList(),
     val currentPlaylistIndex: Int = -1,
     val currentPlaylistId: String? = null,
+    val currentPlaylistTitle: String? = null,
+    val playlists: List<UserPlaylist> = emptyList(),
     val history: List<PlaylistItem> = emptyList(),
     val savedTracks: List<PlaylistItem> = emptyList(),
     val favorites: List<PlaylistItem> = emptyList(),

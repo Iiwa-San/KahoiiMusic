@@ -293,15 +293,15 @@ fun MusicPlayerScreen(
                     showPlaylistSheet = true
                 },
                 onSavedClick = {
-                    selectedSheetTab = 1
-                    showPlaylistSheet = true
-                },
-                onHistoryClick = {
                     selectedSheetTab = 2
                     showPlaylistSheet = true
                 },
-                onFavoritesClick = {
+                onHistoryClick = {
                     selectedSheetTab = 3
+                    showPlaylistSheet = true
+                },
+                onFavoritesClick = {
+                    selectedSheetTab = 4
                     showPlaylistSheet = true
                 },
                 onShareClick = {
@@ -326,6 +326,7 @@ fun MusicPlayerScreen(
         if (showPlaylistSheet) {
             PlaylistBottomSheet(
                 playlist = uiState.playlist,
+                playlists = uiState.playlists,
                 history = uiState.history,
                 savedTracks = uiState.savedTracks,
                 favorites = uiState.favorites,
@@ -333,9 +334,37 @@ fun MusicPlayerScreen(
                 currentTrackId = uiState.currentTrack?.id,
                 currentDurationMs = uiState.durationMs,
                 isPlaylistLoading = uiState.isPlaylistLoading,
+                currentPlaylistTitle = uiState.currentPlaylistTitle,
                 initialTab = selectedSheetTab,
                 onPlaylistTrackSelected = { track, index ->
                     viewModel.playFromQueueIndex(index, ActiveQueueSource.PLAYLIST)
+                },
+                onCollectionTrackSelected = { collection, index ->
+                    viewModel.playCollection(collection, index)
+                },
+                onSaveCurrentPlaylist = { name ->
+                    viewModel.saveCurrentPlaylistToCollection(name)
+                },
+                onCreateCollection = { name ->
+                    viewModel.createCollection(name)
+                },
+                onDeleteCollection = { id ->
+                    viewModel.deleteCollection(id)
+                },
+                onRenameCollection = { id, newName ->
+                    viewModel.renameCollection(id, newName)
+                },
+                onPlayCollection = { collection ->
+                    viewModel.playCollection(collection, 0)
+                },
+                onDownloadCollection = { collection ->
+                    viewModel.downloadCollection(collection)
+                },
+                onAddTrackToCollection = { playlistId, track ->
+                    viewModel.addTrackToCollection(playlistId, track)
+                },
+                onRemoveTrackFromCollection = { playlistId, trackId ->
+                    viewModel.removeTrackFromCollection(playlistId, trackId)
                 },
                 onHistoryTrackSelected = { track, index ->
                     viewModel.playFromQueueIndex(index, ActiveQueueSource.HISTORY)

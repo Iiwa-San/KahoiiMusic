@@ -39,6 +39,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val youTubeRepository = YouTubeRepository()
     private val historyRepository = HistoryRepository(application)
     private val savedTracksRepository = SavedTracksRepository(application)
+    private val playlistCollectionRepository = com.kahoii.music.data.PlaylistCollectionRepository(application)
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -54,6 +55,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         observeHistory()
         observeSavedTracks()
         observeFavorites()
+        observePlaylists()
         com.kahoii.music.service.MusicQueueManager.onTrackChanged = { track ->
             _uiState.update { it.copy(currentTrack = track) }
         }
@@ -911,6 +913,97 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.kahoii.music.service.MusicQueueManager.loopMode = _uiState.value.loopMode
         com.kahoii.music.service.MusicQueueManager.isShuffled = _uiState.value.isShuffled
         com.kahoii.music.service.MusicQueueManager.handleTrackEnded()
+    }
+
+    private fun observePlaylists() {
+        viewModelScope.launch {
+            playlistCollectionRepository.playlists.collect { list ->
+                _uiState.update { it.copy(playlists = list) }
+            }
+        }
+    }
+
+    fun playCollection(collection: com.kahoii.music.model.UserPlaylist, startIndex: Int = 0) {
+        if (collection.items.isNotEmpty()) {
+            val safeIndex = startIndex.coerceIn(0, collection.items.size - 1)
+            _uiState.update {
+                it.copy(
+                    playlist = collection.items,
+                    currentPlaylistIndex = safeIndex,
+                    currentPlaylistTitle = collection.name,
+                    activeQueueSource = ActiveQueueSource.PLAYLIST
+                )
+            }
+            com.kahoii.music.service.MusicQueueManager.setQueue(collection.items, safeIndex)
+            playFromQueueIndex(safeIndex, ActiveQueueSource.PLAYLIST)
+            Toast.makeText(getApplication(), "Đang phát bộ sưu tập: ${collection.name}", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(getApplication(), "Bộ sưu tập này chưa có bài hát nào", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun saveCurrentPlaylistToCollection(name: String) {
+        viewModelScope.launch {
+            val currentList = _uiState.value.playlist
+            if (currentList.isNotEmpty()) {
+                val saved = playlistCollectionRepository.savePlaylist(name, currentList)
+                Toast.makeText(getApplication(), "Đã lưu '${saved.name}' (${saved.items.size} bài) vào Bộ sưu tập!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(getApplication(), "Danh sách phát hiện tại đang trống", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun createCollection(name: String) {
+        viewModelScope.launch {
+            val created = playlistCollectionRepository.createPlaylist(name)
+            Toast.makeText(getApplication(), "Đã tạo bộ sưu tập: ${created.name}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun deleteCollection(id: String) {
+        viewModelScope.launch {
+            playlistCollectionRepository.deletePlaylist(id)
+            Toast.makeText(getApplication(), "Đã xóa bộ sưu tập", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun renameCollection(id: String, newName: String) {
+        viewModelScope.launch {
+            playlistCollectionRepository.renamePlaylist(id, newName)
+            Toast.makeText(getApplication(), "Đã đổi tên bộ sưu tập", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun addTrackToCollection(playlistId: String, track: PlaylistItem) {
+        viewModelScope.launch {
+            playlistCollectionRepository.addTrackToPlaylist(playlistId, track)
+            Toast.makeText(getApplication(), "Đã thêm vào bộ sưu tập", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun removeTrackFromCollection(playlistId: String, trackId: String) {
+        viewModelScope.launch {
+            playlistCollectionRepository.removeTrackFromPlaylist(playlistId, trackId)
+            Toast.makeText(getApplication(), "Đã xóa khỏi bộ sưu tập", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun downloadCollection(collection: com.kahoii.music.model.UserPlaylist) {
+        viewModelScope.launch {
+            var count = 0
+            collection.items.forEach { track ->
+                if (!savedTracksRepository.isTrackSaved(track.id)) {
+                    downloadTrack(track)
+                    count++
+                }
+            }
+            if (count > 0) {
+                Toast.makeText(getApplication(), "Đang tải $count bài hát từ '${collection.name}'...", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(getApplication(), "Tất cả bài hát đã được lưu trong máy", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     override fun onCleared() {

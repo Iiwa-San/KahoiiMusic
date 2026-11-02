@@ -32,20 +32,25 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,16 +70,21 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.kahoii.music.R
 import com.kahoii.music.model.PlaylistItem
+import com.kahoii.music.model.UserPlaylist
 import com.kahoii.music.ui.theme.NeonPink
 import com.kahoii.music.ui.theme.SurfaceDark
 import com.kahoii.music.ui.theme.SurfaceElevated
 import com.kahoii.music.ui.theme.TextMuted
 import com.kahoii.music.ui.theme.TextWhite
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PlaylistBottomSheet(
     playlist: List<PlaylistItem>,
+    playlists: List<UserPlaylist> = emptyList(),
     history: List<PlaylistItem>,
     savedTracks: List<PlaylistItem>,
     favorites: List<PlaylistItem>,
@@ -82,8 +92,18 @@ fun PlaylistBottomSheet(
     currentTrackId: String?,
     currentDurationMs: Long = 0L,
     isPlaylistLoading: Boolean,
+    currentPlaylistTitle: String? = null,
     initialTab: Int = 0,
     onPlaylistTrackSelected: (PlaylistItem, Int) -> Unit,
+    onCollectionTrackSelected: (UserPlaylist, Int) -> Unit = { _, _ -> },
+    onSaveCurrentPlaylist: (String) -> Unit = {},
+    onCreateCollection: (String) -> Unit = {},
+    onDeleteCollection: (String) -> Unit = {},
+    onRenameCollection: (String, String) -> Unit = { _, _ -> },
+    onPlayCollection: (UserPlaylist) -> Unit = {},
+    onDownloadCollection: (UserPlaylist) -> Unit = {},
+    onAddTrackToCollection: (String, PlaylistItem) -> Unit = { _, _ -> },
+    onRemoveTrackFromCollection: (String, String) -> Unit = { _, _ -> },
     onHistoryTrackSelected: (PlaylistItem, Int) -> Unit,
     onSavedTrackSelected: (PlaylistItem, Int) -> Unit,
     onFavoriteTrackSelected: (PlaylistItem, Int) -> Unit,
@@ -100,9 +120,21 @@ fun PlaylistBottomSheet(
     onDismissRequest: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    var selectedTab by remember { mutableIntStateOf(initialTab.coerceIn(0, 3)) }
+    var selectedTab by remember { mutableIntStateOf(initialTab.coerceIn(0, 4)) }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+
+    var showSavePlaylistDialog by remember { mutableStateOf(false) }
+    var savePlaylistName by remember { mutableStateOf("") }
+
+    var showCreateCollectionDialog by remember { mutableStateOf(false) }
+    var newCollectionName by remember { mutableStateOf("") }
+
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameCollectionId by remember { mutableStateOf("") }
+    var renameCollectionName by remember { mutableStateOf("") }
+
+    var inspectingCollectionId by remember { mutableStateOf<String?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -113,7 +145,7 @@ fun PlaylistBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.82f)
+                .fillMaxHeight(0.85f)
                 .padding(top = 12.dp)
         ) {
             // Drag handle pill
@@ -128,7 +160,7 @@ fun PlaylistBottomSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 4 Tabs matching iOS navigation: Danh sách | Đã tải | Lịch sử | Yêu thích
+            // 5 Tabs: Danh sách | Bộ sưu tập | Đã tải | Lịch sử | Yêu thích
             ScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = Color(0xFF140F24),
@@ -158,9 +190,9 @@ fun PlaylistBottomSheet(
                     onClick = { selectedTab = 1 },
                     text = {
                         Text(
-                            text = "Đã tải (${savedTracks.size})",
+                            text = "Bộ sưu tập (${playlists.size})",
                             fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == 1) Color(0xFF22C55E) else Color.White.copy(alpha = 0.6f),
+                            color = if (selectedTab == 1) Color(0xFFC084FC) else Color.White.copy(alpha = 0.6f),
                             fontSize = 13.5.sp
                         )
                     }
@@ -170,9 +202,9 @@ fun PlaylistBottomSheet(
                     onClick = { selectedTab = 2 },
                     text = {
                         Text(
-                            text = "Lịch sử (${history.size})",
+                            text = "Đã tải (${savedTracks.size})",
                             fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == 2) NeonPink else Color.White.copy(alpha = 0.6f),
+                            color = if (selectedTab == 2) Color(0xFF22C55E) else Color.White.copy(alpha = 0.6f),
                             fontSize = 13.5.sp
                         )
                     }
@@ -182,9 +214,21 @@ fun PlaylistBottomSheet(
                     onClick = { selectedTab = 3 },
                     text = {
                         Text(
-                            text = "Yêu thích (${favorites.size})",
+                            text = "Lịch sử (${history.size})",
                             fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == 3) Color(0xFFFF2D55) else Color.White.copy(alpha = 0.6f),
+                            color = if (selectedTab == 3) NeonPink else Color.White.copy(alpha = 0.6f),
+                            fontSize = 13.5.sp
+                        )
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
+                    text = {
+                        Text(
+                            text = "Yêu thích (${favorites.size})",
+                            fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedTab == 4) Color(0xFFFF2D55) else Color.White.copy(alpha = 0.6f),
                             fontSize = 13.5.sp
                         )
                     }
@@ -206,26 +250,58 @@ fun PlaylistBottomSheet(
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = 12.sp
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { onClearPlaylist() }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ClearAll,
-                                contentDescription = "Clear Playlist",
-                                tint = NeonPink,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Làm rỗng",
-                                color = NeonPink,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Lưu vào bộ sưu tập button
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF9333EA).copy(alpha = 0.35f))
+                                    .clickable {
+                                        savePlaylistName = currentPlaylistTitle ?: "Danh sách phát ${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())}"
+                                        showSavePlaylistDialog = true
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Save Playlist",
+                                    tint = Color(0xFFC084FC),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Lưu BST",
+                                    color = Color(0xFFE9D5FF),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onClearPlaylist() }
+                                    .padding(horizontal = 8.dp, vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ClearAll,
+                                    contentDescription = "Clear Playlist",
+                                    tint = NeonPink,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Làm rỗng",
+                                    color = NeonPink,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
@@ -288,8 +364,285 @@ fun PlaylistBottomSheet(
                     }
                 }
             }
-            // ================= TAB 1: SAVED (ĐÃ TẢI OFFLINE) =================
+            // ================= TAB 1: BỘ SƯU TẬP (COLLECTIONS) =================
             else if (selectedTab == 1) {
+                val currentInspecting = playlists.find { it.id == inspectingCollectionId }
+                if (currentInspecting != null) {
+                    // Chi tiết 1 bộ sưu tập
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { inspectingCollectionId = null }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Quay lại",
+                                tint = NeonPink,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = currentInspecting.name,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (currentInspecting.items.isNotEmpty()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF9333EA).copy(alpha = 0.85f))
+                                        .clickable { onPlayCollection(currentInspecting) }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Phát tất cả",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Phát",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.15f))
+                                        .clickable { onDownloadCollection(currentInspecting) }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "Tải",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Tải",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (currentInspecting.items.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Bộ sưu tập này chưa có bài hát nào\nLưu playlist hoặc thêm bài hát để nghe tại đây",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            itemsIndexed(currentInspecting.items, key = { index, item -> "coll_${item.id}_$index" }) { index, item ->
+                                val isPlayingThis = item.id.equals(currentTrackId, ignoreCase = true)
+                                val isSaved = savedTracks.any { it.id.equals(item.id, ignoreCase = true) }
+                                val isFav = favorites.any { it.id.equals(item.id, ignoreCase = true) }
+                                val isDownloading = downloadingTrackIds.contains(item.id)
+
+                                TrackRow(
+                                    item = item,
+                                    index = index + 1,
+                                    isPlaying = isPlayingThis,
+                                    isSaved = isSaved,
+                                    isFavorite = isFav,
+                                    isDownloading = isDownloading,
+                                    currentDurationMs = currentDurationMs,
+                                    onClick = { onCollectionTrackSelected(currentInspecting, index) },
+                                    onDownload = { onDownloadTrack(item) },
+                                    onToggleFavorite = { onToggleFavorite(item) },
+                                    onDelete = { onRemoveTrackFromCollection(currentInspecting.id, item.id) },
+                                    deleteIcon = Icons.Default.Close,
+                                    deleteContentDescription = "Xóa khỏi bộ sưu tập"
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // Danh sách tất cả các bộ sưu tập đã lưu
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${playlists.size} bộ sưu tập đã lưu",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp
+                        )
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF9333EA).copy(alpha = 0.35f))
+                                .clickable {
+                                    newCollectionName = ""
+                                    showCreateCollectionDialog = true
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Tạo mới",
+                                tint = Color(0xFFC084FC),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "+ Tạo mới",
+                                color = Color(0xFFE9D5FF),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    if (playlists.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Chưa có bộ sưu tập nào\nBấm nút 'Lưu BST' ở tab Danh sách để lưu",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            itemsIndexed(playlists, key = { index, item -> "user_pl_${item.id}_$index" }) { index, p ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.White.copy(alpha = 0.05f))
+                                        .clickable { inspectingCollectionId = p.id }
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF9333EA).copy(alpha = 0.25f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = Color(0xFFC084FC),
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = p.name,
+                                            color = Color.White,
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "♫ ${p.items.size} bài hát",
+                                            color = Color(0xFFC084FC),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+
+                                    if (p.items.isNotEmpty()) {
+                                        IconButton(onClick = { onPlayCollection(p) }) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Phát tất cả",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+
+                                    IconButton(onClick = {
+                                        renameCollectionId = p.id
+                                        renameCollectionName = p.name
+                                        showRenameDialog = true
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = "Đổi tên",
+                                            tint = Color.White.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    IconButton(onClick = { onDeleteCollection(p.id) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Xóa",
+                                            tint = Color(0xFFFF5252),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // ================= TAB 2: SAVED (ĐÃ TẢI OFFLINE) =================
+            else if (selectedTab == 2) {
                 if (savedTracks.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -338,25 +691,25 @@ fun PlaylistBottomSheet(
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(28.dp)
+                            modifier = Modifier.padding(24.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Download,
-                                contentDescription = "Chưa có bài tải về",
-                                tint = Color.White.copy(alpha = 0.35f),
-                                modifier = Modifier.size(52.dp)
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.25f),
+                                modifier = Modifier.size(48.dp)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Chưa có bài hát nào được tải về",
+                                text = "Chưa có bài hát đã tải",
                                 color = Color.White,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Bấm biểu tượng 📥 tải về ở cạnh bài hát để nghe offline không cần Internet.",
-                                color = Color.White.copy(alpha = 0.5f),
+                                text = "Bấm biểu tượng tải xuống ở bất kỳ bài hát nào để nghe ngoại tuyến không cần mạng.",
+                                color = TextMuted,
                                 fontSize = 12.5.sp,
                                 textAlign = TextAlign.Center
                             )
@@ -389,14 +742,14 @@ fun PlaylistBottomSheet(
                                 onToggleFavorite = { onToggleFavorite(item) },
                                 onDelete = { onDeleteSavedTrack(item.id) },
                                 deleteIcon = Icons.Default.Delete,
-                                deleteContentDescription = "Xóa bài tải về"
+                                deleteContentDescription = "Xóa khỏi bộ nhớ"
                             )
                         }
                     }
                 }
             }
-            // ================= TAB 2: HISTORY =================
-            else if (selectedTab == 2) {
+            // ================= TAB 3: HISTORY =================
+            else if (selectedTab == 3) {
                 if (history.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -484,7 +837,7 @@ fun PlaylistBottomSheet(
                     }
                 }
             }
-            // ================= TAB 3: FAVORITES (YÊU THÍCH) =================
+            // ================= TAB 4: FAVORITES (YÊU THÍCH) =================
             else {
                 if (favorites.isNotEmpty()) {
                     Row(
@@ -534,13 +887,13 @@ fun PlaylistBottomSheet(
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(28.dp)
+                            modifier = Modifier.padding(24.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.FavoriteBorder,
-                                contentDescription = "Chưa có bài thích",
-                                tint = Color.White.copy(alpha = 0.35f),
-                                modifier = Modifier.size(52.dp)
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.25f),
+                                modifier = Modifier.size(48.dp)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
@@ -549,10 +902,10 @@ fun PlaylistBottomSheet(
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Nhấn biểu tượng trái tim ❤️ khi nghe nhạc để lưu bài hát vào đây.",
-                                color = Color.White.copy(alpha = 0.5f),
+                                text = "Bấm biểu tượng trái tim ở góc màn hình nghe nhạc để thêm bài hát vào đây.",
+                                color = TextMuted,
                                 fontSize = 12.5.sp,
                                 textAlign = TextAlign.Center
                             )
@@ -592,6 +945,130 @@ fun PlaylistBottomSheet(
                         }
                     }
                 }
+            }
+
+            // Dialog Lưu vào bộ sưu tập
+            if (showSavePlaylistDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSavePlaylistDialog = false },
+                    title = { Text("Lưu vào bộ sưu tập", color = Color.White, fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column {
+                            Text("Nhập tên cho danh sách phát này:", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = savePlaylistName,
+                                onValueChange = { savePlaylistName = it },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = NeonPink,
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.3f)
+                                )
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (savePlaylistName.isNotBlank()) {
+                                onSaveCurrentPlaylist(savePlaylistName.trim())
+                                showSavePlaylistDialog = false
+                                selectedTab = 1
+                            }
+                        }) {
+                            Text("Lưu", color = NeonPink, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSavePlaylistDialog = false }) {
+                            Text("Hủy", color = Color.White.copy(alpha = 0.6f))
+                        }
+                    },
+                    containerColor = Color(0xFF1E1635)
+                )
+            }
+
+            // Dialog Tạo bộ sưu tập mới
+            if (showCreateCollectionDialog) {
+                AlertDialog(
+                    onDismissRequest = { showCreateCollectionDialog = false },
+                    title = { Text("Tạo bộ sưu tập mới", color = Color.White, fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column {
+                            Text("Nhập tên bộ sưu tập:", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = newCollectionName,
+                                onValueChange = { newCollectionName = it },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = NeonPink,
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.3f)
+                                )
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (newCollectionName.isNotBlank()) {
+                                onCreateCollection(newCollectionName.trim())
+                                showCreateCollectionDialog = false
+                            }
+                        }) {
+                            Text("Tạo", color = NeonPink, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCreateCollectionDialog = false }) {
+                            Text("Hủy", color = Color.White.copy(alpha = 0.6f))
+                        }
+                    },
+                    containerColor = Color(0xFF1E1635)
+                )
+            }
+
+            // Dialog Đổi tên bộ sưu tập
+            if (showRenameDialog) {
+                AlertDialog(
+                    onDismissRequest = { showRenameDialog = false },
+                    title = { Text("Đổi tên bộ sưu tập", color = Color.White, fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column {
+                            Text("Nhập tên mới:", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = renameCollectionName,
+                                onValueChange = { renameCollectionName = it },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = NeonPink,
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.3f)
+                                )
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (renameCollectionName.isNotBlank()) {
+                                onRenameCollection(renameCollectionId, renameCollectionName.trim())
+                                showRenameDialog = false
+                            }
+                        }) {
+                            Text("Lưu", color = NeonPink, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showRenameDialog = false }) {
+                            Text("Hủy", color = Color.White.copy(alpha = 0.6f))
+                        }
+                    },
+                    containerColor = Color(0xFF1E1635)
+                )
             }
         }
     }
@@ -650,8 +1127,8 @@ private fun TrackRow(
             if (isPlaying) {
                 Box(
                     modifier = Modifier
-                        .matchParentSize()
-                        .background(Color.Black.copy(alpha = 0.55f)),
+                        .size(46.dp)
+                        .background(Color.Black.copy(alpha = 0.5f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -666,13 +1143,13 @@ private fun TrackRow(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Title and Subtitle
+        // Title and duration
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = item.title.ifBlank { "Bài hát" },
+                text = item.title.ifBlank { "Bài $index" },
                 color = if (isPlaying) NeonPink else Color.White,
-                fontSize = 14.sp,
-                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 14.5.sp,
+                fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -680,137 +1157,108 @@ private fun TrackRow(
             Spacer(modifier = Modifier.height(2.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isSaved) {
-                    Text(
-                        text = "Offline",
-                        color = Color(0xFF22C55E),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFF22C55E).copy(alpha = 0.18f))
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                }
-
-                if (item.artist.isNotBlank()) {
-                    Text(
-                        text = item.artist,
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 11.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    Text(text = " • ", color = Color.White.copy(alpha = 0.55f), fontSize = 11.5.sp)
-                }
-                val displayDuration = if (item.durationSeconds > 0) {
-                    item.formattedDuration
-                } else if (isPlaying && currentDurationMs > 0L) {
-                    val totalSec = (currentDurationMs / 1000L).toInt()
-                    val hours = totalSec / 3600
-                    val minutes = (totalSec % 3600) / 60
-                    val seconds = totalSec % 60
-                    if (hours > 0) {
-                        String.format(java.util.Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
-                    } else {
-                        String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds)
-                    }
+                val durText = if (isPlaying && currentDurationMs > 0) {
+                    val sec = (currentDurationMs / 1000).toInt()
+                    val m = sec / 60
+                    val s = sec % 60
+                    String.format(Locale.getDefault(), "%02d:%02d", m, s)
                 } else {
                     item.formattedDuration
                 }
+
                 Text(
-                    text = displayDuration,
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 11.5.sp
+                    text = durText,
+                    color = TextMuted,
+                    fontSize = 12.sp
                 )
+
+                if (isSaved) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "• Đã tải",
+                        color = Color(0xFF22C55E),
+                        fontSize = 11.5.sp
+                    )
+                }
             }
         }
 
-        // Action Buttons Row: Favorite, Download, Add, Delete
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Action Buttons: Favorite, Download, Add, Delete
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Favorite Button
             if (onToggleFavorite != null) {
                 IconButton(
                     onClick = onToggleFavorite,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Yêu thích",
-                        tint = if (isFavorite) Color(0xFFFF2D55) else Color.White.copy(alpha = 0.45f),
+                        contentDescription = if (isFavorite) "Bỏ thích" else "Yêu thích",
+                        tint = if (isFavorite) Color(0xFFFF2D55) else Color.White.copy(alpha = 0.6f),
                         modifier = Modifier.size(19.dp)
                     )
                 }
             }
 
-            // Download Offline Button
             if (onDownload != null) {
-                if (isDownloading) {
-                    Box(
-                        modifier = Modifier.size(34.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = Color(0xFF22C55E),
-                            strokeWidth = 2.dp
-                        )
-                    }
-                } else if (isSaved) {
-                    Box(
-                        modifier = Modifier.size(34.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Đã tải",
-                            tint = Color(0xFF22C55E),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = onDownload,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Tải về nghe offline",
-                            tint = Color.White.copy(alpha = 0.5f),
-                            modifier = Modifier.size(19.dp)
-                        )
+                IconButton(
+                    onClick = onDownload,
+                    enabled = !isSaved && !isDownloading,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    when {
+                        isDownloading -> {
+                            CircularProgressIndicator(
+                                color = NeonPink,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        isSaved -> {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Đã lưu",
+                                tint = Color(0xFF22C55E),
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        else -> {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Tải về máy",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // Add to Playlist Button
             if (onAddToPlaylist != null) {
                 IconButton(
                     onClick = onAddToPlaylist,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Thêm vào danh sách",
-                        tint = NeonPink,
-                        modifier = Modifier.size(19.dp)
+                        contentDescription = "Thêm vào danh sách phát",
+                        tint = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
-            // Delete Button
             if (onDelete != null) {
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = deleteIcon,
                         contentDescription = deleteContentDescription,
-                        tint = Color.White.copy(alpha = 0.45f),
-                        modifier = Modifier.size(17.dp)
+                        tint = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }
