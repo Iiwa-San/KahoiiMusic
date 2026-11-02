@@ -105,6 +105,10 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Models\PlaylistItem.cs" />
+    <Compile Include="Models\UserPlaylist.cs" />
+    <Compile Include="Controls\InputDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -143,6 +147,7 @@
     <Compile Include="Services\AppPaths.cs" />
 
     <Compile Include="Services\SavedTracksService.cs" />
+    <Compile Include="Services\PlaylistCollectionService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

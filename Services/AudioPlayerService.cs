@@ -101,6 +101,8 @@ namespace KahoiiMusic.Services
 
         private string _currentPlaylistId = null;
 
+        public string CurrentPlaylistTitle { get; set; }
+
         public event EventHandler<string> StatusMessageChanged;
 
         public event EventHandler<string> TitleChanged;
@@ -1224,6 +1226,8 @@ namespace KahoiiMusic.Services
 
             _currentPlaylistId = null;
 
+            CurrentPlaylistTitle = null;
+
             _currentPlaylistIndex = -1;
 
             _syncContext.Post(delegate
@@ -1264,6 +1268,8 @@ namespace KahoiiMusic.Services
             _isPlayingFromHistory = true;
             _playlist = new List<PlaylistItem>(historyItems);
             _currentPlaylistId = null;
+
+            CurrentPlaylistTitle = null;
             _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
 
             PlayTrackAtIndex(_currentPlaylistIndex);
@@ -1287,6 +1293,8 @@ namespace KahoiiMusic.Services
             _playlist = new List<PlaylistItem>(items);
 
             _currentPlaylistId = null;
+
+            CurrentPlaylistTitle = null;
 
             _currentPlaylistIndex = Math.Max(0, Math.Min(initialIndex, _playlist.Count - 1));
 
@@ -1516,7 +1524,7 @@ namespace KahoiiMusic.Services
 
                     psi.FileName = ytdlpPath;
 
-                    psi.Arguments = string.Format("--encoding utf-8 --flat-playlist --print \"%(id)s\t%(title)s\t%(duration)s\" \"{0}\"", targetUrl);
+                    psi.Arguments = string.Format("--encoding utf-8 --flat-playlist --print \"%(playlist_title)s\t%(id)s\t%(title)s\t%(duration)s\" \"{0}\"", targetUrl);
 
                     psi.CreateNoWindow = true;
 
@@ -1552,27 +1560,33 @@ namespace KahoiiMusic.Services
 
                             if (string.IsNullOrEmpty(line)) continue;
 
-                            string[] parts = line.Split('\t');
+                                                        string[] parts = line.Split('\t');
 
-                            if (parts.Length >= 2)
+                            string plTitle = null;
+                            string id = null;
+                            string title = null;
+                            int dur = 0;
 
+                            if (parts.Length >= 4)
                             {
+                                plTitle = parts[0].Trim();
+                                id = parts[1].Trim();
+                                title = parts[2].Trim();
+                                int.TryParse(parts[3].Trim(), out dur);
+                            }
+                            else if (parts.Length >= 2)
+                            {
+                                id = parts[0].Trim();
+                                title = parts[1].Trim();
+                                if (parts.Length >= 3) int.TryParse(parts[2].Trim(), out dur);
+                            }
 
-                                string id = parts[0].Trim();
+                            if (!string.IsNullOrEmpty(plTitle) && plTitle != "NA" && plTitle != "None")
+                            {
+                                CurrentPlaylistTitle = plTitle;
+                            }
 
-                                string title = parts[1].Trim();
-
-                                int dur = 0;
-
-                                if (parts.Length >= 3)
-
-                                {
-
-                                    int.TryParse(parts[2].Trim(), out dur);
-
-                                }
-
-                                if (id.Length == 11)
+                            if (id.Length == 11)
 
                                 {
 
@@ -1615,8 +1629,6 @@ namespace KahoiiMusic.Services
                                 }
 
                             }
-
-                        }
 
                         if (!proc.WaitForExit(90000))
 
@@ -1851,6 +1863,8 @@ namespace KahoiiMusic.Services
                         _playlist = new List<PlaylistItem>();
 
                         _currentPlaylistId = null;
+
+            CurrentPlaylistTitle = null;
 
                         _currentPlaylistIndex = -1;
 

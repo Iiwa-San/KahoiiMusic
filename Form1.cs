@@ -267,7 +267,7 @@ namespace KahoiiMusic
                 }
                 else
                 {
-                    Point screenPt = panelTopBar.PointToScreen(new Point(btnPlaylist.Left, btnPlaylist.Bottom + 4));
+                    Point screenPt = panelTopBar.PointToScreen(new Point(12, btnPlaylist.Bottom + 4));
                     playlistPopup.Location = screenPt;
                     playlistPopup.Show(this);
                     btnPlaylist.IsOpen = true;
@@ -294,7 +294,7 @@ namespace KahoiiMusic
             {
                 if (playlistPopup != null && playlistPopup.Visible)
                 {
-                    playlistPopup.Location = panelTopBar.PointToScreen(new Point(btnPlaylist.Left, btnPlaylist.Bottom + 4));
+                    playlistPopup.Location = panelTopBar.PointToScreen(new Point(12, btnPlaylist.Bottom + 4));
                 }
             };
 
