@@ -302,6 +302,16 @@ namespace KahoiiMusic
             {
                 if (item != null)
                 {
+                    if (_audioPlayer.IsPlayingFromHistory)
+                    {
+                        _audioPlayer.IsPlayingFromHistory = false;
+                        if (playlistPopup.PlaylistItems != null && playlistPopup.PlaylistItems.Count > 0)
+                        {
+                            _audioPlayer.SetPlaylist(playlistPopup.PlaylistItems, playlistPopup.CurrentPlaylistIndex);
+                            return;
+                        }
+                    }
+
                     var pl = _audioPlayer.Playlist;
                     if (pl != null)
                     {
@@ -670,6 +680,7 @@ namespace KahoiiMusic
 
         private void SearchPillBox_UrlSubmitted(object sender, string url)
         {
+            _audioPlayer.IsPlayingFromHistory = false;
             if (string.IsNullOrWhiteSpace(url) || url == "link youtube..." || url == "linkYT")
             {
                 _audioPlayer.StopAndClear();

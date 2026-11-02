@@ -165,6 +165,37 @@ namespace KahoiiMusic.Services
             }
         }
 
+        public static void UpdateTrackInfoOnly(PlaylistItem item)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(item.Id)) return;
+            bool changed = false;
+            lock (_lock)
+            {
+                var match = _history.Find(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(item.Title) && item.Title != "None" && item.Title != "NA" && !item.Title.StartsWith("Bài ") && match.Title != item.Title)
+                    {
+                        match.Title = item.Title;
+                        changed = true;
+                    }
+                    if (item.DurationSeconds > 0 && match.DurationSeconds != item.DurationSeconds)
+                    {
+                        match.DurationSeconds = item.DurationSeconds;
+                        changed = true;
+                    }
+                    if (changed)
+                    {
+                        SaveHistory();
+                    }
+                }
+            }
+            if (changed)
+            {
+                HistoryChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
+
         public static void UpdateTitle(string id, string newTitle)
         {
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(newTitle)) return;

@@ -23,6 +23,9 @@ namespace KahoiiMusic.Controls
         private List<PlaylistItem> _savedItems = new List<PlaylistItem>();
 
         private int _currentPlaylistIndex = -1;
+
+        public List<PlaylistItem> PlaylistItems => _playlistItems;
+        public int CurrentPlaylistIndex => _currentPlaylistIndex;
         private int _hoveredRowIndex = -1;
         private int _hoveredTabIndex = -1; // 0: Playlist, 1: History
         private bool _isHoveringClose = false;
@@ -646,10 +649,19 @@ namespace KahoiiMusic.Controls
                         Invalidate();
                         TrackSelected?.Invoke(this, clickedItem);
                     }
+                    else if (_activeTab == MenuTab.History)
+                    {
+                        if (AudioPlayer != null)
+                        {
+                            AudioPlayer.PlayHistory(_historyItems, _hoveredRowIndex);
+                        }
+                        Invalidate();
+                    }
                     else
                     {
                         if (AudioPlayer != null)
                         {
+                            AudioPlayer.IsPlayingFromHistory = false;
                             AudioPlayer.LoadAndPlay(clickedItem.Url);
                         }
                         Invalidate();
@@ -741,7 +753,7 @@ namespace KahoiiMusic.Controls
                 {
                     if (AudioPlayer != null)
                     {
-                        AudioPlayer.LoadAndPlay(item.Url);
+                        AudioPlayer.PlayHistory(_historyItems, index);
                     }
                 };
 
@@ -837,15 +849,6 @@ namespace KahoiiMusic.Controls
             menu.Renderer = new Form1.DarkMenuRenderer();
             menu.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
 
-            var itemClean = new ToolStripMenuItem("Xóa file tạm (Temp) khi thoát");
-            itemClean.CheckOnClick = true;
-            itemClean.Checked = HistoryService.AutoCleanTempOnExit;
-            itemClean.Click += (s, e) =>
-            {
-                HistoryService.AutoCleanTempOnExit = !HistoryService.AutoCleanTempOnExit;
-                itemClean.Checked = HistoryService.AutoCleanTempOnExit;
-            };
-
             var itemClearAll = new ToolStripMenuItem("Xóa toàn bộ lịch sử");
             itemClearAll.Click += (s, e) =>
             {
@@ -853,8 +856,6 @@ namespace KahoiiMusic.Controls
                 RefreshHistory();
             };
 
-            menu.Items.Add(itemClean);
-            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(itemClearAll);
 
             menu.Show(screenLocation);

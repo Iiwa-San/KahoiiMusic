@@ -89,7 +89,7 @@ namespace KahoiiMusic.Services
             }
         }
 
-        private const int PreloadBatchSize = 20;
+        private const int PreloadBatchSize = 1; // Only preload 1 track ahead to optimize disk space
 
         private const long MaxCacheSizeBytes = 3L * 1024 * 1024 * 1024; // 3 GB (supports multiple multi-hour tracks >200MB each)
 
@@ -1258,9 +1258,29 @@ namespace KahoiiMusic.Services
 
         }
 
+        private bool _isPlayingFromHistory = false;
+        public bool IsPlayingFromHistory
+        {
+            get => _isPlayingFromHistory;
+            set => _isPlayingFromHistory = value;
+        }
+
+        public void PlayHistory(List<PlaylistItem> historyItems, int startIndex = 0)
+        {
+            if (historyItems == null || historyItems.Count == 0) return;
+
+            _isPlayingFromHistory = true;
+            _playlist = new List<PlaylistItem>(historyItems);
+            _currentPlaylistId = null;
+            _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
+
+            PlayTrackAtIndex(_currentPlaylistIndex);
+        }
+
         public void SetPlaylist(List<PlaylistItem> items, int initialIndex = 0)
 
         {
+            _isPlayingFromHistory = false;
 
             if (items == null || items.Count == 0)
 
@@ -1884,6 +1904,8 @@ namespace KahoiiMusic.Services
 
             input = input.Trim();
 
+            _isPlayingFromHistory = false;
+
             _isLoading = true;
 
             RaiseStatus("Đang tìm bài hát...");
@@ -2380,17 +2402,43 @@ namespace KahoiiMusic.Services
 
                             {
 
-                                HistoryService.AddTrack(new PlaylistItem
+                                if (!_isPlayingFromHistory)
 
                                 {
 
-                                    Id = _currentVideoId,
+                                    HistoryService.AddTrack(new PlaylistItem
 
-                                    Title = titleForHistory,
+                                    {
 
-                                    DurationSeconds = (int)_totalDuration.TotalSeconds
+                                        Id = _currentVideoId,
 
-                                });
+                                        Title = titleForHistory,
+
+                                        DurationSeconds = (int)_totalDuration.TotalSeconds
+
+                                    });
+
+                                }
+
+                                else
+
+                                {
+
+                                    // Keep list fixed when playing through History!
+
+                                    HistoryService.UpdateTrackInfoOnly(new PlaylistItem
+
+                                    {
+
+                                        Id = _currentVideoId,
+
+                                        Title = titleForHistory,
+
+                                        DurationSeconds = (int)_totalDuration.TotalSeconds
+
+                                    });
+
+                                }
 
                             }
 
