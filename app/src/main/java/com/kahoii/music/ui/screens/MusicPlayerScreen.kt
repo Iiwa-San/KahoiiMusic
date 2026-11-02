@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,7 +77,9 @@ fun MusicPlayerScreen(
 
     // Dynamic animated backdrop matching iOS DynamicGradientView
     DynamicGradientView(
-        modifier = modifier.statusBarsPadding(),
+        modifier = modifier
+            .statusBarsPadding()
+            .navigationBarsPadding(),
         accentColor = NeonPink
     ) {
         Column(
@@ -89,7 +92,7 @@ fun MusicPlayerScreen(
                     focusManager.clearFocus()
                     keyboardController?.hide()
                 }
-                .padding(horizontal = 22.dp, vertical = 6.dp),
+                .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -214,18 +217,21 @@ fun MusicPlayerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 // Favorite Heart Button
-                if (uiState.currentTrack != null) {
-                    IconButton(
-                        onClick = { viewModel.toggleFavorite() },
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (uiState.isCurrentTrackFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Yêu thích",
-                            tint = if (uiState.isCurrentTrackFavorite) Color(0xFFFF2D55) else Color.White.copy(alpha = 0.5f),
-                            modifier = Modifier.size(23.dp)
-                        )
-                    }
+                IconButton(
+                    onClick = { viewModel.toggleFavorite() },
+                    enabled = uiState.currentTrack != null,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = if (uiState.isCurrentTrackFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Yêu thích",
+                        tint = when {
+                            uiState.currentTrack == null -> Color.White.copy(alpha = 0.2f)
+                            uiState.isCurrentTrackFavorite -> Color(0xFFFF2D55)
+                            else -> Color.White.copy(alpha = 0.5f)
+                        },
+                        modifier = Modifier.size(23.dp)
+                    )
                 }
             }
 

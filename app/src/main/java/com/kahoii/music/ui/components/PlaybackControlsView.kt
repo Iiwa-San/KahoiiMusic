@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -23,7 +24,6 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -64,10 +64,14 @@ fun PlaybackControlsView(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Quick Download Button (Nút tải nhanh - cân xứng 2 bên)
-        IconButton(
-            onClick = onQuickDownload,
-            modifier = Modifier.size(40.dp)
+        // 1. Quick Download Button
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onQuickDownload),
+            contentAlignment = Alignment.Center
         ) {
             if (isCurrentTrackDownloading) {
                 CircularProgressIndicator(
@@ -92,10 +96,14 @@ fun PlaybackControlsView(
             }
         }
 
-        // 2. Shuffle Button (Matching iOS shuffle button)
-        IconButton(
-            onClick = onToggleShuffle,
-            modifier = Modifier.size(40.dp)
+        // 2. Shuffle Button
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onToggleShuffle),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Shuffle,
@@ -106,72 +114,91 @@ fun PlaybackControlsView(
         }
 
         // 3. Previous Button
-        IconButton(
-            onClick = onPrevious,
-            modifier = Modifier.size(46.dp)
+        Box(
+            modifier = Modifier
+                .weight(1.05f)
+                .height(48.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onPrevious),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.SkipPrevious,
                 contentDescription = "Bài trước",
                 tint = Color.White,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(30.dp)
             )
         }
 
-        // 3. Hero Play / Pause Button (Large luminous 68dp orb matching iOS)
+        // 4. Hero Play / Pause Button (Luminous orb matching iOS)
         Box(
             modifier = Modifier
-                .size(68.dp)
-                .shadow(
-                    elevation = 16.dp,
-                    shape = CircleShape,
-                    spotColor = accentColor,
-                    ambientColor = accentColor
-                )
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(accentColor, GradientBottom)
-                    )
-                )
-                .clickable(onClick = onTogglePlayPause),
+                .weight(1.35f)
+                .height(64.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    color = Color.White,
-                    strokeWidth = 2.5.dp
-                )
-            } else {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Tạm dừng" else "Phát",
-                    tint = Color.White,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .offset(x = if (isPlaying) 0.dp else 2.dp)
-                )
+            Box(
+                modifier = Modifier
+                    .size(62.dp)
+                    .shadow(
+                        elevation = 14.dp,
+                        shape = CircleShape,
+                        spotColor = accentColor,
+                        ambientColor = accentColor
+                    )
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(accentColor, GradientBottom)
+                        )
+                    )
+                    .clickable(onClick = onTogglePlayPause),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(26.dp),
+                        color = Color.White,
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Tạm dừng" else "Phát",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .offset(x = if (isPlaying) 0.dp else 2.dp)
+                    )
+                }
             }
         }
 
         // 5. Next Button
-        IconButton(
-            onClick = onNext,
-            modifier = Modifier.size(46.dp)
+        Box(
+            modifier = Modifier
+                .weight(1.05f)
+                .height(48.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onNext),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.SkipNext,
                 contentDescription = "Bài tiếp theo",
                 tint = Color.White,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(30.dp)
             )
         }
 
         // 6. Loop / Repeat Button
-        IconButton(
-            onClick = onToggleLoop,
-            modifier = Modifier.size(40.dp)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onToggleLoop),
+            contentAlignment = Alignment.Center
         ) {
             when (loopMode) {
                 LoopMode.OFF -> Icon(
@@ -196,9 +223,13 @@ fun PlaybackControlsView(
         }
 
         // 7. Sleep Timer Button with Countdown label
-        IconButton(
-            onClick = onTimerClick,
-            modifier = Modifier.size(40.dp)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onTimerClick),
+            contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -223,4 +254,3 @@ fun PlaybackControlsView(
         }
     }
 }
-
