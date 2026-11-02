@@ -532,6 +532,17 @@ public class AudioPlayerService: ObservableObject {
             self.currentTime = time.seconds
             if self.duration <= 0, let itemDuration = self.avPlayer?.currentItem?.duration.seconds, !itemDuration.isNaN {
                 self.duration = itemDuration
+                let durSec = Int(itemDuration)
+                if durSec > 0 {
+                    if var track = self.currentTrack, track.durationSeconds <= 0 {
+                        track.durationSeconds = durSec
+                        self.currentTrack = track
+                        HistoryService.shared.recordPlay(track)
+                    }
+                    if self.currentIndex >= 0 && self.currentIndex < self.playlist.count, self.playlist[self.currentIndex].durationSeconds <= 0 {
+                        self.playlist[self.currentIndex].durationSeconds = durSec
+                    }
+                }
             }
             // Note: iOS lock screen animates elapsed time automatically via MPNowPlayingInfoCenter.
             // Do NOT call updateNowPlayingInfo() here 4x/sec as that triggers thumbnail flashing!

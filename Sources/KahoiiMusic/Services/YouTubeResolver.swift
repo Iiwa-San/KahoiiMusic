@@ -582,6 +582,172 @@ public actor YouTubeResolver {
     // MARK: - Playlist Loading
 
     public func loadPlaylist(playlistId: String) async throws -> (title: String, items: [PlaylistItem]) {
+        let cleanId = playlistId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanId.isEmpty else { return ("Danh sách phát", []) }
+
+        if cleanId.uppercased().hasPrefix("RD") {
+            let mixItems = await fetchMixFromInnerTube(playlistId: cleanId)
+            if !mixItems.isEmpty {
+                return ("YouTube Mix", mixItems)
+            }
+        }
+
+        let browseId = cleanId.uppercased().hasPrefix("VL") ? cleanId : "VL\(cleanId)"
+        let browseItems = await fetchPlaylistFromBrowse(browseId: browseId)
+        if !browseItems.isEmpty {
+            return ("Danh sách phát", browseItems)
+        }
+
         return ("Danh sách phát", [])
+    }
+
+    private func fetchMixFromInnerTube(playlistId: String) async -> [PlaylistItem] {
+        guard let url = URL(string: "https://www.youtube.com/youtubei/v1/next") else { return [] }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+
+        let payload: [String: Any] = [
+            "playlistId": playlistId,
+            "context": [
+                "client": [
+                    "clientName": "WEB",
+                    "clientVersion": "2.20240101.00.00",
+                    "hl": "vi",
+                    "gl": "VN"
+                ]
+            ]
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            let (data, response) = try await urlSession.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else { return [] }
+            guard let rawStr = String(data: data, encoding: .utf8) else { return [] }
+            return parsePlaylistFromRawJson(rawStr)
+        } catch {
+            return []
+        }
+    }
+
+    private func fetchPlaylistFromBrowse(browseId: String) async -> [PlaylistItem] {
+        guard let url = URL(string: "https://www.youtube.com/youtubei/v1/browse") else { return [] }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+
+        let payload: [String: Any] = [
+            "browseId": browseId,
+            "context": [
+                "client": [
+                    "clientName": "WEB",
+                    "clientVersion": "2.20240101.00.00",
+                    "hl": "vi",
+                    "gl": "VN"
+                ]
+            ]
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            let (data, response) = try await urlSession.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else { return [] }
+            guard let rawStr = String(data: data, encoding: .utf8) else { return [] }
+            return parsePlaylistFromRawJson(rawStr)
+        } catch {
+            return []
+        }
+    }
+
+    private func parsePlaylistFromRawJson(_ rawJson: String) -> [PlaylistItem] {
+        var items: [PlaylistItem] = []
+        var seenIds = Set<String>()
+
+        // 1. Try modern lockupViewModel
+        let lockupBlocks = rawJson.components(separatedBy: "\"lockupViewModel\":").dropFirst()
+        for block in lockupBlocks {
+            guard let id = extractFirstMatch(pattern: #""(?:contentId|url)"\s*:\s*"(?:https:\/\/i\.ytimg\.com\/vi\/)?([a-zA-Z0-9_-]{11})"#, in: block),
+                  seenIds.insert(id).inserted else { continue }
+
+            let title = extractFirstMatch(pattern: #""lockupMetadataViewModel"\s*:\s*\{.*?"title"\s*:\s*\{\s*"content"\s*:\s*"([^"]+)""#, in: block) ?? "Bài hát"
+            let author = extractFirstMatch(pattern: #""metadataParts"\s*:\s*\[\{\s*"text"\s*:\s*\{\s*"content"\s*:\s*"([^"]+)""#, in: block) ?? ""
+            let durText = extractFirstMatch(pattern: #""thumbnailBadgeViewModel"\s*:\s*\{.*?"text"\s*:\s*"([0-9:]+)""#, in: block) ??
+                          extractFirstMatch(pattern: #""simpleText"\s*:\s*"([0-9:]+)""#, in: block) ?? ""
+            let durationSeconds = parseDurationToSeconds(durText)
+
+            items.append(PlaylistItem(
+                id: id,
+                title: title,
+                author: author,
+                durationSeconds: durationSeconds,
+                thumbnailUrl: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg"
+            ))
+        }
+
+        // 2. Try playlistPanelVideoRenderer (Mix / Radio)
+        if items.isEmpty {
+            let mixBlocks = rawJson.components(separatedBy: "\"playlistPanelVideoRenderer\":").dropFirst()
+            for block in mixBlocks {
+                guard let id = extractFirstMatch(pattern: #""videoId"\s*:\s*"([a-zA-Z0-9_-]{11})""#, in: block),
+                      seenIds.insert(id).inserted else { continue }
+
+                let title = extractFirstMatch(pattern: #""title"\s*:\s*\{.*?"simpleText"\s*:\s*"([^"]+)""#, in: block) ?? "Bài hát"
+                let author = extractFirstMatch(pattern: #""(?:shortBylineText|longBylineText)"\s*:\s*\{.*?"runs"\s*:\s*\[\{\s*"text"\s*:\s*"([^"]+)""#, in: block) ?? ""
+                let durText = extractFirstMatch(pattern: #""lengthText"\s*:\s*\{.*?"simpleText"\s*:\s*"([0-9:]+)""#, in: block) ??
+                              extractFirstMatch(pattern: #""thumbnailOverlayTimeStatusRenderer"\s*:\s*\{.*?"simpleText"\s*:\s*"([0-9:]+)""#, in: block) ?? ""
+                let durationSeconds = parseDurationToSeconds(durText)
+
+                items.append(PlaylistItem(
+                    id: id,
+                    title: title,
+                    author: author,
+                    durationSeconds: durationSeconds,
+                    thumbnailUrl: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg"
+                ))
+            }
+        }
+
+        // 3. Try standard playlistVideoRenderer
+        if items.isEmpty {
+            let pvrBlocks = rawJson.components(separatedBy: "\"playlistVideoRenderer\":").dropFirst()
+            for block in pvrBlocks {
+                guard let id = extractFirstMatch(pattern: #""videoId"\s*:\s*"([a-zA-Z0-9_-]{11})""#, in: block),
+                      seenIds.insert(id).inserted else { continue }
+
+                let title = extractFirstMatch(pattern: #""title"\s*:\s*\{(?:\"runs\"\s*:\s*\[\{\s*\"text\"\s*:\s*\"([^"]+)\"\}|\"simpleText\"\s*:\s*\"([^"]+)\"\)"#, in: block) ?? "Bài hát"
+                let author = extractFirstMatch(pattern: #""shortBylineText"\s*:\s*\{.*?"runs"\s*:\s*\[\{\s*"text"\s*:\s*"([^"]+)""#, in: block) ?? ""
+                var durSec = 0
+                if let secStr = extractFirstMatch(pattern: #""lengthSeconds"\s*:\s*"(\\d+)""#, in: block), let s = Int(secStr) {
+                    durSec = s
+                } else if let durText = extractFirstMatch(pattern: #""lengthText"\s*:\s*\{.*?"simpleText"\s*:\s*"([0-9:]+)""#, in: block) {
+                    durSec = parseDurationToSeconds(durText)
+                }
+
+                items.append(PlaylistItem(
+                    id: id,
+                    title: title,
+                    author: author,
+                    durationSeconds: durSec,
+                    thumbnailUrl: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg"
+                ))
+            }
+        }
+
+        return items
+    }
+
+    private func extractFirstMatch(pattern: String, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, options: [], range: range) else { return nil }
+        for i in 1..<match.numberOfRanges {
+            let r = match.range(at: i)
+            if r.location != NSNotFound, let stringRange = Range(r, in: text) {
+                return String(text[stringRange])
+            }
+        }
+        return nil
     }
 }
