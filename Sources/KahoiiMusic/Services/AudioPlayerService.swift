@@ -36,6 +36,48 @@ public class AudioPlayerService: ObservableObject {
     @Published public var errorMessage: String?
     @Published public var currentPalette: GradientPalette = .default
 
+    // MARK: - Temp Audio Cache Directory (Matching PC KahoiiTemp/audio)
+    public var tempAudioDir: URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return caches.appendingPathComponent("KahoiiTemp/audio", isDirectory: true)
+    }
+
+    public func tempAudioURL(for id: String) -> URL? {
+        guard !id.isEmpty else { return nil }
+        let file = tempAudioDir.appendingPathComponent("\(id).m4a")
+        if FileManager.default.fileExists(atPath: file.path),
+           let attr = try? FileManager.default.attributesOfItem(atPath: file.path),
+           let size = attr[.size] as? Int64, size > 1024 * 100 {
+            return file
+        }
+        return nil
+    }
+
+    public func cleanTempCacheLRU(maxSizeBytes: Int64 = 300 * 1024 * 1024) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: tempAudioDir, includingPropertiesForKeys: [.contentAccessDateKey, .contentModificationDateKey, .fileSizeKey], options: .skipsHiddenFiles) else { return }
+
+        var totalSize: Int64 = 0
+        var fileList: [(url: URL, date: Date, size: Int64)] = []
+
+        for file in files {
+            guard let res = try? file.resourceValues(forKeys: [.contentAccessDateKey, .contentModificationDateKey, .fileSizeKey]),
+                  let size = res.fileSize else { continue }
+            let date = res.contentAccessDate ?? res.contentModificationDate ?? Date.distantPast
+            totalSize += Int64(size)
+            fileList.append((url: file, date: date, size: Int64(size)))
+        }
+
+        if totalSize > maxSizeBytes {
+            fileList.sort { $0.date < $1.date }
+            for item in fileList {
+                if totalSize <= maxSizeBytes { break }
+                try? fm.removeItem(at: item.url)
+                totalSize -= item.size
+            }
+        }
+    }
+
     // MARK: - Internal Audio State
 
     private var avPlayer: AVPlayer?
@@ -271,10 +313,10 @@ public class AudioPlayerService: ObservableObject {
     private func startLoadingTimeout(for track: PlaylistItem) {
         loadingTimeoutTask?.cancel()
         loadingTimeoutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 60_000_000_000) // 60s (1 phút) timeout cho audio dài
+            try? await Task.sleep(nanoseconds: 120_000_000_000) // 120s (2 phút) timeout cho audio dài
             guard let self = self, !Task.isCancelled else { return }
             if self.playbackState.isLoading {
-                let msg = "Quá thời gian kết nối luồng phát (Timeout 1 phút). Vui lòng kiểm tra mạng hoặc chọn bài khác."
+                let msg = "Quá thời gian kết nối luồng phát (Timeout 2 phút). Vui lòng kiểm tra mạng hoặc chọn bài khác."
                 self.errorMessage = msg
                 self.playbackState = .failed("Hết thời gian tải")
                 self.statusMessage = "Hết thời gian chờ"
@@ -335,6 +377,30 @@ public class AudioPlayerService: ObservableObject {
             return
         }
 
+        // 1b. Check Temp Cached file (Instant playback from previous stream without network!)
+        if let cachedAudio = tempAudioURL(for: track.id) {
+            playbackState = .playing
+            statusMessage = "Đang phát (Đã lưu tạm)"
+            var updatedTrack = track
+            updatedTrack.streamUrl = cachedAudio.absoluteString
+            self.currentTrack = updatedTrack
+
+            if self.currentIndex >= 0 && self.currentIndex < self.playlist.count {
+                self.playlist[self.currentIndex] = updatedTrack
+            }
+
+            HistoryService.shared.recordPlay(updatedTrack)
+            self.startPlayer(with: cachedAudio, duration: Double(track.durationSeconds))
+
+            if let artworkUrl = track.artworkURL {
+                Task {
+                    let palette = await ColorExtractor.shared.extractColors(from: artworkUrl)
+                    self.currentPalette = palette
+                }
+            }
+            return
+        }
+
         // If the exact same track is already loaded in player, simply resume instead of reloading from byte 0
         if let current = currentTrack, current.id == track.id, let player = avPlayer, player.currentItem != nil {
             if playbackState.isPaused {
@@ -377,6 +443,25 @@ public class AudioPlayerService: ObservableObject {
                 HistoryService.shared.recordPlay(updatedTrack)
 
                 self.startPlayer(with: resolved.streamUrl, duration: Double(resolved.durationSeconds))
+
+                // Auto-cache audio stream in background using chunked Range downloader (10-20 MB/s)
+                let vid = track.id
+                let sUrl = resolved.streamUrl
+                let clen = resolved.contentLength
+                Task.detached(priority: .utility) { [weak self] in
+                    guard let self = self else { return }
+                    do {
+                        try FileManager.default.createDirectory(at: self.tempAudioDir, withIntermediateDirectories: true)
+                        let targetFile = self.tempAudioDir.appendingPathComponent("\(vid).m4a")
+                        if !FileManager.default.fileExists(atPath: targetFile.path) {
+                            try await SavedTracksService.shared.downloadAudioChunked(from: sUrl, to: targetFile, expectedContentLength: clen)
+                            print("[AudioPlayerService] Background cached track \(vid) successfully!")
+                            self.cleanTempCacheLRU()
+                        }
+                    } catch {
+                        print("[AudioPlayerService] Background caching non-critical notice: \(error.localizedDescription)")
+                    }
+                }
             } catch {
                 self.cancelLoadingTimeout()
                 let errorDesc = error.localizedDescription

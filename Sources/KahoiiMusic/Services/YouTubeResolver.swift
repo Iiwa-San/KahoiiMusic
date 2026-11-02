@@ -6,19 +6,22 @@ public struct ResolvedAudioStream: Sendable {
     public let author: String
     public let durationSeconds: Int
     public let thumbnailUrl: String
+    public let contentLength: Int64?
 
     public init(
         streamUrl: URL,
         title: String,
         author: String,
         durationSeconds: Int,
-        thumbnailUrl: String
+        thumbnailUrl: String,
+        contentLength: Int64? = nil
     ) {
         self.streamUrl = streamUrl
         self.title = title
         self.author = author
         self.durationSeconds = durationSeconds
         self.thumbnailUrl = thumbnailUrl
+        self.contentLength = contentLength
     }
 }
 
@@ -286,6 +289,7 @@ public actor YouTubeResolver {
 
         var bestAudioUrl: URL? = nil
         var highestBitrate: Int = 0
+        var bestFormat: [String: Any]? = nil
 
         if let adaptive = streamingData["adaptiveFormats"] as? [[String: Any]] {
             // First pass: Prioritize hardware-friendly audio/mp4 (AAC m4a / itag 140) with highest bitrate
@@ -298,6 +302,7 @@ public actor YouTubeResolver {
                    bitrate > highestBitrate {
                     highestBitrate = bitrate
                     bestAudioUrl = u
+                    bestFormat = format
                 }
             }
 
@@ -312,6 +317,7 @@ public actor YouTubeResolver {
                        bitrate > highestBitrate {
                         highestBitrate = bitrate
                         bestAudioUrl = u
+                        bestFormat = format
                     }
                 }
             }
@@ -329,13 +335,20 @@ public actor YouTubeResolver {
         }
 
         let thumb = "https://i.ytimg.com/vi/\(videoId)/hqdefault.jpg"
+        var clen: Int64? = nil
+        if let clenStr = bestFormat?["contentLength"] as? String, let num = Int64(clenStr) {
+            clen = num
+        } else if let clenNum = bestFormat?["contentLength"] as? Int64 {
+            clen = clenNum
+        }
 
         return ResolvedAudioStream(
             streamUrl: stream,
             title: title,
             author: author,
             durationSeconds: duration,
-            thumbnailUrl: thumb
+            thumbnailUrl: thumb,
+            contentLength: clen
         )
     }
 

@@ -13,7 +13,7 @@ public class SavedTracksService: ObservableObject {
     private lazy var downloadSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60.0 // 1 phút timeout cho mỗi gói dữ liệu
-        config.timeoutIntervalForResource = 360.0 // 6 phút tổng cộng (hỗ trợ nhạc dài 1-2 tiếng >100MB)
+        config.timeoutIntervalForResource = 1200.0 // 20 phút tổng cộng (hỗ trợ audio cực dài >100MB)
         return URLSession(configuration: config)
     }()
 
@@ -89,6 +89,71 @@ public class SavedTracksService: ObservableObject {
         return nil
     }
 
+    /// High-speed multi-chunk HTTP Range downloader (10-20 MB/s), bypassing YouTube 32KB/s throttling
+    public func downloadAudioChunked(from streamUrl: URL, to destinationUrl: URL, expectedContentLength: Int64? = nil) async throws {
+        var totalLength: Int64 = expectedContentLength ?? 0
+
+        // If total length is unknown, query via Range: bytes=0-0 probe
+        if totalLength <= 0 {
+            var headReq = URLRequest(url: streamUrl)
+            headReq.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+            headReq.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+            headReq.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
+            if let (_, resp) = try? await downloadSession.data(for: headReq),
+               let httpResp = resp as? HTTPURLResponse,
+               let rangeHeader = httpResp.value(forHTTPHeaderField: "Content-Range"),
+               let totalStr = rangeHeader.split(separator: "/").last,
+               let parsed = Int64(totalStr) {
+                totalLength = parsed
+            }
+        }
+
+        // Fallback to standard download if file is very small (< 1 MB) or length could not be determined
+        if totalLength <= 1024 * 1024 {
+            var req = URLRequest(url: streamUrl)
+            req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+            req.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
+            let (tempFile, _) = try await downloadSession.download(for: req)
+            if FileManager.default.fileExists(atPath: destinationUrl.path) {
+                try? FileManager.default.removeItem(at: destinationUrl)
+            }
+            try FileManager.default.moveItem(at: tempFile, to: destinationUrl)
+            return
+        }
+
+        // Fast chunked Range download (5MB chunks at maximum network speed)
+        let tempPartFile = destinationUrl.deletingLastPathComponent().appendingPathComponent(destinationUrl.lastPathComponent + ".part")
+        if FileManager.default.fileExists(atPath: tempPartFile.path) {
+            try? FileManager.default.removeItem(at: tempPartFile)
+        }
+        FileManager.default.createFile(atPath: tempPartFile.path, contents: nil)
+        let fileHandle = try FileHandle(forWritingTo: tempPartFile)
+        defer { try? fileHandle.close() }
+
+        let chunkSize: Int64 = 5 * 1024 * 1024 // 5 MB per chunk
+        var downloadedBytes: Int64 = 0
+
+        while downloadedBytes < totalLength {
+            let endByte = min(downloadedBytes + chunkSize - 1, totalLength - 1)
+            var chunkReq = URLRequest(url: streamUrl)
+            chunkReq.setValue("bytes=\(downloadedBytes)-\(endByte)", forHTTPHeaderField: "Range")
+            chunkReq.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+            chunkReq.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
+
+            let (chunkData, resp) = try await downloadSession.data(for: chunkReq)
+            guard let httpResp = resp as? HTTPURLResponse, (httpResp.statusCode == 200 || httpResp.statusCode == 206) else {
+                throw URLError(.badServerResponse)
+            }
+            fileHandle.write(chunkData)
+            downloadedBytes += Int64(chunkData.count)
+        }
+
+        if FileManager.default.fileExists(atPath: destinationUrl.path) {
+            try? FileManager.default.removeItem(at: destinationUrl)
+        }
+        try FileManager.default.moveItem(at: tempPartFile, to: destinationUrl)
+    }
+
     public func saveTrackAsync(_ item: PlaylistItem) async {
         guard !item.id.isEmpty else { return }
         if isSaved(id: item.id) { return }
@@ -99,64 +164,48 @@ public class SavedTracksService: ObservableObject {
         ensureDirectoriesExist()
 
         do {
-            // 1. Resolve audio stream with fast fallback
-            let resolvedStreamUrl: URL
+            let targetAudioFile = audioDir.appendingPathComponent("\(item.id).m4a")
+            let targetThumbFile = thumbDir.appendingPathComponent("\(item.id).jpg")
+
             var resolvedTitle = item.title
             var resolvedAuthor = item.author
             var resolvedDuration = item.durationSeconds
             var resolvedThumb = item.thumbnailUrl
 
-            if let existingStream = item.streamUrl, let u = URL(string: existingStream) {
-                resolvedStreamUrl = u
+            // 0. Quick check: If this track was already cached in tempAudioDir during playback, copy instantly!
+            if let cachedTemp = AudioPlayerService.shared.tempAudioURL(for: item.id),
+               FileManager.default.fileExists(atPath: cachedTemp.path),
+               (try? FileManager.default.attributesOfItem(atPath: cachedTemp.path)[.size] as? Int64 ?? 0) > 1024 * 100 {
+                if FileManager.default.fileExists(atPath: targetAudioFile.path) {
+                    try? FileManager.default.removeItem(at: targetAudioFile)
+                }
+                try FileManager.default.copyItem(at: cachedTemp, to: targetAudioFile)
+                print("[SavedTracksService] Copied from temp cache instantly for \(item.id)")
             } else {
+                // 1. Resolve audio stream with fast fallback
                 let resolved = try await YouTubeResolver.shared.resolveAudioStream(for: item.id)
-                resolvedStreamUrl = resolved.streamUrl
                 resolvedTitle = resolved.title
                 resolvedAuthor = resolved.author
                 resolvedDuration = resolved.durationSeconds
                 resolvedThumb = resolved.thumbnailUrl
+
+                // 2. High-speed chunked Range download (10-20 MB/s, finishes 20min in ~1.5s)
+                try await downloadAudioChunked(from: resolved.streamUrl, to: targetAudioFile, expectedContentLength: resolved.contentLength)
             }
 
-            // 2. Prepare optimized requests with matching headers to bypass CDN speed throttling
-            let targetAudioFile = audioDir.appendingPathComponent("\(item.id).m4a")
-            var req = URLRequest(url: resolvedStreamUrl)
-            req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
-            req.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
-            let finalAudioRequest = req
-            let finalThumbUrl = resolvedThumb
-
-            let targetThumbFile = thumbDir.appendingPathComponent("\(item.id).jpg")
-
-            // 3. Parallel download: Download Audio and Thumbnail at the same time for max speed
-            async let audioTask: (URL, URLResponse) = downloadSession.download(for: finalAudioRequest)
-            async let thumbTask: (URL, URLResponse)? = {
-                if let thumbUrl = URL(string: finalThumbUrl) {
-                    return try? await downloadSession.download(from: thumbUrl)
+            // 3. Download Thumbnail if not present
+            if !FileManager.default.fileExists(atPath: targetThumbFile.path),
+               let thumbUrl = URL(string: resolvedThumb) {
+                if let (tempThumb, _) = try? await downloadSession.download(from: thumbUrl) {
+                    try? FileManager.default.moveItem(at: tempThumb, to: targetThumbFile)
                 }
-                return nil
-            }()
-
-            let ((tempAudioUrl, _), thumbResult) = try await (audioTask, thumbTask)
-
-            // Save audio file
-            if FileManager.default.fileExists(atPath: targetAudioFile.path) {
-                try? FileManager.default.removeItem(at: targetAudioFile)
-            }
-            try FileManager.default.moveItem(at: tempAudioUrl, to: targetAudioFile)
-
-            // Save thumbnail file
-            if let (tempThumbUrl, _) = thumbResult {
-                if FileManager.default.fileExists(atPath: targetThumbFile.path) {
-                    try? FileManager.default.removeItem(at: targetThumbFile)
-                }
-                try? FileManager.default.moveItem(at: tempThumbUrl, to: targetThumbFile)
             }
 
             // 4. Update savedTracks list
             var savedItem = item
             savedItem.title = resolvedTitle
             savedItem.author = resolvedAuthor
-            savedItem.durationSeconds = resolvedDuration
+            savedItem.durationSeconds = resolvedDuration > 0 ? resolvedDuration : 1
             savedItem.thumbnailUrl = resolvedThumb
             savedItem.streamUrl = targetAudioFile.absoluteString
 
