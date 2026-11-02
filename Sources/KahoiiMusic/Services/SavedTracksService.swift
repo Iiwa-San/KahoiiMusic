@@ -30,6 +30,48 @@ public class SavedTracksService: ObservableObject {
         baseDir.appendingPathComponent("thumb", isDirectory: true)
     }
 
+    // MARK: - Temp Audio Cache (Matching PC KahoiiTemp/audio)
+    public var tempAudioDir: URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        return caches.appendingPathComponent("KahoiiTemp/audio", isDirectory: true)
+    }
+
+    public func tempAudioURL(for id: String) -> URL? {
+        guard !id.isEmpty else { return nil }
+        let file = tempAudioDir.appendingPathComponent("\(id).m4a")
+        if FileManager.default.fileExists(atPath: file.path),
+           let attr = try? FileManager.default.attributesOfItem(atPath: file.path),
+           let size = attr[.size] as? Int64, size > 1024 * 100 {
+            return file
+        }
+        return nil
+    }
+
+    public func cleanTempCacheLRU(maxSizeBytes: Int64 = 300 * 1024 * 1024) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: tempAudioDir, includingPropertiesForKeys: [.contentAccessDateKey, .contentModificationDateKey, .fileSizeKey], options: .skipsHiddenFiles) else { return }
+
+        var totalSize: Int64 = 0
+        var fileList: [(url: URL, date: Date, size: Int64)] = []
+
+        for file in files {
+            guard let res = try? file.resourceValues(forKeys: [.contentAccessDateKey, .contentModificationDateKey, .fileSizeKey]),
+                  let size = res.fileSize else { continue }
+            let date = res.contentAccessDate ?? res.contentModificationDate ?? Date.distantPast
+            totalSize += Int64(size)
+            fileList.append((url: file, date: date, size: Int64(size)))
+        }
+
+        if totalSize > maxSizeBytes {
+            fileList.sort { $0.date < $1.date }
+            for item in fileList {
+                if totalSize <= maxSizeBytes { break }
+                try? fm.removeItem(at: item.url)
+                totalSize -= item.size
+            }
+        }
+    }
+
     private var jsonFile: URL {
         baseDir.appendingPathComponent("saved_tracks.json")
     }
@@ -144,7 +186,7 @@ public class SavedTracksService: ObservableObject {
             guard let httpResp = resp as? HTTPURLResponse, (httpResp.statusCode == 200 || httpResp.statusCode == 206) else {
                 throw URLError(.badServerResponse)
             }
-            fileHandle.write(chunkData)
+            try fileHandle.write(contentsOf: chunkData)
             downloadedBytes += Int64(chunkData.count)
         }
 
@@ -173,7 +215,7 @@ public class SavedTracksService: ObservableObject {
             var resolvedThumb = item.thumbnailUrl
 
             // 0. Quick check: If this track was already cached in tempAudioDir during playback, copy instantly!
-            if let cachedTemp = AudioPlayerService.shared.tempAudioURL(for: item.id),
+            if let cachedTemp = tempAudioURL(for: item.id),
                FileManager.default.fileExists(atPath: cachedTemp.path),
                (try? FileManager.default.attributesOfItem(atPath: cachedTemp.path)[.size] as? Int64 ?? 0) > 1024 * 100 {
                 if FileManager.default.fileExists(atPath: targetAudioFile.path) {
