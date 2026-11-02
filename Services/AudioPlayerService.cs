@@ -39,6 +39,7 @@ namespace KahoiiMusic.Services
     public class AudioPlayerService : IDisposable
 
     {
+        public static AudioPlayerService Instance { get; private set; }
 
         private MediaFoundationReader _audioReader;
 
@@ -231,6 +232,7 @@ namespace KahoiiMusic.Services
         public AudioPlayerService()
 
         {
+            Instance = this;
 
             _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
 
@@ -259,6 +261,66 @@ namespace KahoiiMusic.Services
 
             ClearAudioCache();
 
+        }
+
+        public HashSet<string> GetProtectedTrackIdSet()
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(_currentVideoId)) set.Add(_currentVideoId);
+            if (!string.IsNullOrEmpty(_preloadingVideoId)) set.Add(_preloadingVideoId);
+            lock (_playlist)
+            {
+                if (_playlist != null)
+                {
+                    foreach (var item in _playlist)
+                    {
+                        if (item != null && !string.IsNullOrWhiteSpace(item.Id))
+                        {
+                            set.Add(item.Id);
+                        }
+                    }
+                }
+            }
+            return set;
+        }
+
+        public void CleanUnusedTempAudio(string currentActiveFile = null)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_cacheDirectory) || !Directory.Exists(_cacheDirectory)) return;
+                var protectedIds = GetProtectedTrackIdSet();
+
+                DirectoryInfo di = new DirectoryInfo(_cacheDirectory);
+                foreach (var fi in di.GetFiles())
+                {
+                    string ext = fi.Extension.ToLower();
+                    if (ext != ".webm" && ext != ".m4a" && ext != ".mp3" && ext != ".opus" && ext != ".aac" && ext != ".part" && ext != ".ytdl" && ext != ".tmp")
+                    {
+                        continue;
+                    }
+
+                    if (!string.IsNullOrEmpty(currentActiveFile) && fi.FullName.Equals(currentActiveFile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    string id = Path.GetFileNameWithoutExtension(fi.Name);
+                    // Protect if in active playlist or saved offline
+                    if (protectedIds.Contains(id) || SavedTracksService.Instance.IsTrackSaved(id))
+                    {
+                        continue;
+                    }
+
+                    // Not in playlist, not in saved list -> DELETE to free up disk space!
+                    for (int r = 0; r < 3; r++)
+                    {
+                        try { fi.Delete(); break; }
+                        catch { Thread.Sleep(20); }
+                    }
+                }
+            }
+            catch { }
         }
 
         public void MaintainCache(string currentActiveFile = null)
@@ -311,37 +373,13 @@ namespace KahoiiMusic.Services
 
                 }
 
-                // If within cache budget, keep everything for instant replay!
+                // Clean any temp audio that is neither in active playlist nor saved
+                CleanUnusedTempAudio(currentActiveFile);
 
                 if (totalSize <= MaxCacheSizeBytes && audioFiles.Count <= MaxCacheFileCount) return;
 
-                // Prioritize cleaning non-history files first, then oldest modified (LRU)
-
-                var historyIds = HistoryService.GetHistoryIdSet();
-
-                audioFiles.Sort((a, b) =>
-
-                {
-
-                    string idA = Path.GetFileNameWithoutExtension(a.Name);
-
-                    string idB = Path.GetFileNameWithoutExtension(b.Name);
-
-                    bool inHistA = historyIds.Contains(idA);
-
-                    bool inHistB = historyIds.Contains(idB);
-
-                    if (inHistA != inHistB)
-
-                    {
-
-                        return inHistA ? 1 : -1; // non-history files cleaned first
-
-                    }
-
-                    return a.LastWriteTime.CompareTo(b.LastWriteTime);
-
-                });
+                // Sort oldest modified first (LRU)
+                audioFiles.Sort((a, b) => a.LastWriteTime.CompareTo(b.LastWriteTime));
 
                 foreach (var fi in audioFiles)
 
@@ -403,7 +441,7 @@ namespace KahoiiMusic.Services
 
             {
 
-                HistoryService.CleanNonHistoryTempFiles();
+                CleanUnusedTempAudio();
 
             }
 
@@ -1239,6 +1277,8 @@ namespace KahoiiMusic.Services
             _currentPlaylistId = null;
 
             _currentPlaylistIndex = Math.Max(0, Math.Min(initialIndex, _playlist.Count - 1));
+
+            ThreadPool.QueueUserWorkItem(_ => CleanUnusedTempAudio());
 
             _syncContext.Post(delegate
 

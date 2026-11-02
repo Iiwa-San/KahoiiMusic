@@ -89,6 +89,9 @@
     <Compile Include="Controls\TimerButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\QuickDownloadButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\VolumePopup.cs">
       <SubType>Component</SubType>
     </Compile>

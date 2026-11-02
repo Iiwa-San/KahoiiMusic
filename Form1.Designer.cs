@@ -46,6 +46,7 @@ namespace KahoiiMusic
             this.btnNext = new KahoiiMusic.Controls.DirectionalButton();
             this.btnLoop = new KahoiiMusic.Controls.LoopButton();
             this.btnTimer = new KahoiiMusic.Controls.TimerButton();
+            this.btnQuickDownload = new KahoiiMusic.Controls.QuickDownloadButton();
             this.musicTrackBar = new KahoiiMusic.Controls.MusicTrackBar();
             this.lblCopyright = new System.Windows.Forms.Label();
             this.btnClose = new System.Windows.Forms.Label();
@@ -165,6 +166,7 @@ namespace KahoiiMusic
             // panelBottomControls
             // 
             this.panelBottomControls.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(54)))), ((int)(((byte)(88)))), ((int)(((byte)(6)))));
+            this.panelBottomControls.Controls.Add(this.btnQuickDownload);
             this.panelBottomControls.Controls.Add(this.btnVolume);
             this.panelBottomControls.Controls.Add(this.btnPrevious);
             this.panelBottomControls.Controls.Add(this.btnPlayPause);
@@ -177,6 +179,17 @@ namespace KahoiiMusic
             this.panelBottomControls.Name = "panelBottomControls";
             this.panelBottomControls.Size = new System.Drawing.Size(476, 100);
             this.panelBottomControls.TabIndex = 2;
+            // 
+            // btnQuickDownload
+            // 
+            this.btnQuickDownload.ActiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(168)))), ((int)(((byte)(85)))), ((int)(((byte)(247)))));
+            this.btnQuickDownload.BackColor = System.Drawing.Color.Transparent;
+            this.btnQuickDownload.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnQuickDownload.InactiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(220)))), ((int)(((byte)(220)))), ((int)(((byte)(220)))));
+            this.btnQuickDownload.Location = new System.Drawing.Point(80, 47);
+            this.btnQuickDownload.Name = "btnQuickDownload";
+            this.btnQuickDownload.Size = new System.Drawing.Size(28, 24);
+            this.btnQuickDownload.TabIndex = 7;
             // 
             // btnVolume
             // 
@@ -341,6 +354,7 @@ namespace KahoiiMusic
         private KahoiiMusic.Controls.VolumeButton btnVolume;
         private KahoiiMusic.Controls.LoopButton btnLoop;
         private KahoiiMusic.Controls.TimerButton btnTimer;
+        private KahoiiMusic.Controls.QuickDownloadButton btnQuickDownload;
         private KahoiiMusic.Controls.VolumePopup volumePopup;
         private KahoiiMusic.Controls.PlaylistButton btnPlaylist;
         private System.Windows.Forms.Label lblCopyright;

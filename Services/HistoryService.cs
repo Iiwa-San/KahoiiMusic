@@ -254,6 +254,9 @@ namespace KahoiiMusic.Services
             {
                 ThumbnailManager.DeleteThumb(id);
 
+                if (AudioPlayerService.Instance != null && AudioPlayerService.Instance.GetProtectedTrackIdSet().Contains(id)) return;
+                if (SavedTracksService.Instance.IsTrackSaved(id)) return;
+
                 string[] possiblePaths = new string[]
                 {
                     AppPaths.TempAudioDir,
@@ -289,43 +292,30 @@ namespace KahoiiMusic.Services
 
                 ThumbnailManager.CleanNonHistoryDiskThumbs(historyIds, cleanAll);
 
-                string[] possiblePaths = new string[]
+                // Audio files are NOT protected by history. Clean non-playlist, non-saved temp audio files:
+                if (AudioPlayerService.Instance != null)
                 {
-                    AppPaths.TempAudioDir,
-                    AppPaths.TempThumbDir
-                };
+                    AudioPlayerService.Instance.CleanUnusedTempAudio();
+                }
 
-                foreach (string dir in possiblePaths)
+                if (cleanAll)
                 {
-                    if (!Directory.Exists(dir)) continue;
-
-                    foreach (string file in Directory.GetFiles(dir))
+                    try
                     {
-                        string fileName = Path.GetFileName(file);
-                        if (string.Equals(fileName, "yt-dlp.exe", StringComparison.OrdinalIgnoreCase))
+                        if (Directory.Exists(AppPaths.TempAudioDir))
                         {
-                            continue;
-                        }
-
-                        string fileId = Path.GetFileNameWithoutExtension(file);
-
-                        // If cleanAll is true OR file is NOT in history -> DELETE
-                        if (cleanAll || !historyIds.Contains(fileId))
-                        {
-                            for (int retry = 0; retry < 3; retry++)
+                            foreach (string file in Directory.GetFiles(AppPaths.TempAudioDir))
                             {
-                                try
+                                string fileName = Path.GetFileName(file);
+                                if (string.Equals(fileName, "yt-dlp.exe", StringComparison.OrdinalIgnoreCase)) continue;
+                                for (int r = 0; r < 3; r++)
                                 {
-                                    File.Delete(file);
-                                    break;
-                                }
-                                catch
-                                {
-                                    System.Threading.Thread.Sleep(25);
+                                    try { File.Delete(file); break; } catch { System.Threading.Thread.Sleep(20); }
                                 }
                             }
                         }
                     }
+                    catch { }
                 }
             }
             catch { }

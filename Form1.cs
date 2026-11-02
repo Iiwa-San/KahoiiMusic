@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using KahoiiMusic.Services;
+using KahoiiMusic.Models;
 
 namespace KahoiiMusic
 {
@@ -186,11 +187,32 @@ namespace KahoiiMusic
             {
                 marqueeTitle.Text = title;
                 UpdateTrayTooltip(title);
+                if (btnQuickDownload != null && !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                {
+                    btnQuickDownload.SetCurrentTrack(new PlaylistItem
+                    {
+                        Id = _audioPlayer.CurrentVideoId,
+                        Title = title,
+                        DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
+                    });
+                }
             };
             _audioPlayer.ThumbnailUrlReady += AudioPlayer_ThumbnailUrlReady;
             _audioPlayer.PlaybackStateChanged += AudioPlayer_PlaybackStateChanged;
             _audioPlayer.PlaybackEnded += AudioPlayer_PlaybackEnded;
             _audioPlayer.PlaybackLooped += AudioPlayer_PlaybackLooped;
+            _audioPlayer.TrackLoaded += (s, args) =>
+            {
+                if (btnQuickDownload != null)
+                {
+                    btnQuickDownload.SetCurrentTrack(new PlaylistItem
+                    {
+                        Id = args.VideoId,
+                        Title = args.Title,
+                        DurationSeconds = (int)args.Duration.TotalSeconds
+                    });
+                }
+            };
 
             // Loop Button
             btnLoop.LoopChanged += (s, e) =>
