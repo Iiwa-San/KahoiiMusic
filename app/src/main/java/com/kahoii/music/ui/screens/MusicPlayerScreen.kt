@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kahoii.music.model.ActiveQueueSource
 import com.kahoii.music.model.PlaybackStatus
+import com.kahoii.music.model.UserPlaylist
 import com.kahoii.music.ui.components.ArtworkView
 import com.kahoii.music.ui.components.BottomActionsSection
 import com.kahoii.music.ui.components.DynamicGradientView

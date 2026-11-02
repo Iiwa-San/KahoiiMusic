@@ -14,6 +14,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.kahoii.music.data.HistoryRepository
+import com.kahoii.music.data.PlaylistCollectionRepository
 import com.kahoii.music.data.SavedTracksRepository
 import com.kahoii.music.data.YouTubeRepository
 import com.kahoii.music.model.ActiveQueueSource
@@ -22,6 +23,7 @@ import com.kahoii.music.model.PlaybackStatus
 import com.kahoii.music.model.PlayerUiState
 import com.kahoii.music.model.PlaylistItem
 import com.kahoii.music.model.SleepTimerOption
+import com.kahoii.music.model.UserPlaylist
 import com.kahoii.music.service.MusicPlaybackService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,7 +41,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val youTubeRepository = YouTubeRepository()
     private val historyRepository = HistoryRepository(application)
     private val savedTracksRepository = SavedTracksRepository(application)
-    private val playlistCollectionRepository = com.kahoii.music.data.PlaylistCollectionRepository(application)
+    private val playlistCollectionRepository = PlaylistCollectionRepository(application)
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -923,7 +925,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun playCollection(collection: com.kahoii.music.model.UserPlaylist, startIndex: Int = 0) {
+    fun playCollection(collection: UserPlaylist, startIndex: Int = 0) {
         if (collection.items.isNotEmpty()) {
             val safeIndex = startIndex.coerceIn(0, collection.items.size - 1)
             _uiState.update {
@@ -989,7 +991,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun downloadCollection(collection: com.kahoii.music.model.UserPlaylist) {
+    fun downloadCollection(collection: UserPlaylist) {
         viewModelScope.launch {
             var count = 0
             collection.items.forEach { track ->

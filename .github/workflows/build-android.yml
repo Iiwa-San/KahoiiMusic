@@ -26,7 +26,16 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Android Release APK
-        run: ./gradlew assembleRelease --stacktrace --no-daemon
+        run: |
+          set -o pipefail
+          ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee build.log || {
+            echo "### ❌ Build Android Failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -C 3 -E "e: |error:" build.log | head -n 100 >> $GITHUB_STEP_SUMMARY
+            tail -n 60 build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
 
       - name: Prepare APK Asset
         run: |
