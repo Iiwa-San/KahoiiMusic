@@ -110,7 +110,7 @@ class HistoryRepository(private val context: Context) {
                 title = if (track.title.isNotBlank() && track.title != "None" && !track.title.startsWith("Bài ")) track.title else existing.title,
                 artist = if (track.artist.isNotBlank()) track.artist else existing.artist,
                 durationSeconds = if (track.durationSeconds > 0) track.durationSeconds else existing.durationSeconds,
-                thumbnailUrl = if (track.thumbnailUrl.isNotBlank()) track.thumbnailUrl else existing.thumbnailUrl
+                customThumbnailUrl = if (!track.customThumbnailUrl.isNullOrBlank()) track.customThumbnailUrl else existing.customThumbnailUrl
             )
             current[index] = updated
             _history.value = current
