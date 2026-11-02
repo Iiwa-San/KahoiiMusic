@@ -563,7 +563,8 @@ public class AudioPlayerService: ObservableObject {
 
         var prevIndex = currentIndex - 1
         if prevIndex < 0 {
-            prevIndex = playlist.count - 1
+            seek(to: 0)
+            return
         }
 
         currentIndex = prevIndex
