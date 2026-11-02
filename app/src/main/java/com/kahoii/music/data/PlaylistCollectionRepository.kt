@@ -62,7 +62,7 @@ class PlaylistCollectionRepository(private val context: Context) {
             id = UUID.randomUUID().toString(),
             name = if (name.isBlank()) "Playlist" else name.trim(),
             createdAt = System.currentTimeMillis(),
-            items = items.toMutableList()
+            items = items.toList()
         )
         val current = _playlists.value.toMutableList()
         current.add(0, playlist)

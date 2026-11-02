@@ -64,7 +64,7 @@ data class PlayerUiState(
 
     val activeQueue: List<PlaylistItem>
         get() = when (activeQueueSource) {
-            ActiveQueueSource.PLAYLIST -> playlist
+            ActiveQueueSource.PLAYLIST, ActiveQueueSource.COLLECTION -> playlist
             ActiveQueueSource.SAVED -> savedTracks
             ActiveQueueSource.FAVORITES -> favorites
             ActiveQueueSource.HISTORY -> history

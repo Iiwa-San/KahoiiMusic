@@ -9,11 +9,11 @@ data class UserPlaylist(
     val id: String = UUID.randomUUID().toString(),
 
     @SerializedName("name")
-    var name: String = "",
+    val name: String = "",
 
     @SerializedName("createdAt")
     val createdAt: Long = System.currentTimeMillis(),
 
     @SerializedName("items")
-    val items: MutableList<PlaylistItem> = mutableListOf()
+    val items: List<PlaylistItem> = emptyList()
 ) : Serializable
