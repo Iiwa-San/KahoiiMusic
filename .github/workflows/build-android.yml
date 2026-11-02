@@ -44,9 +44,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: KahoiiMusic-Android-APK
-          path: |
-            KahoiiMusic.apk
-            KahoiiMusic-Appetize.zip
+          path: KahoiiMusic.apk
+          retention-days: 14
+
+      - name: Upload Appetize Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KahoiiMusic-Android-Appetize
+          path: KahoiiMusic-Appetize.zip
           retention-days: 14
 
       - name: Create or Update GitHub Release
