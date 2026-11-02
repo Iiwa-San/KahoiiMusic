@@ -23,8 +23,20 @@ class PlaylistCollectionRepository(private val context: Context) {
     private val _playlists = MutableStateFlow<List<UserPlaylist>>(emptyList())
     val playlists: StateFlow<List<UserPlaylist>> = _playlists.asStateFlow()
 
+    @Volatile
+    private var isLoaded = false
+
     init {
+        // Load immediately
+        loadPlaylists()
         CoroutineScope(Dispatchers.IO).launch {
+            ensureLoaded()
+        }
+    }
+
+    @Synchronized
+    private fun ensureLoaded() {
+        if (!isLoaded || (_playlists.value.isEmpty() && playlistsFile.exists())) {
             loadPlaylists()
         }
     }
@@ -34,30 +46,52 @@ class PlaylistCollectionRepository(private val context: Context) {
         try {
             if (playlistsFile.exists()) {
                 val json = playlistsFile.readText()
-                val listType = object : TypeToken<List<UserPlaylist>>() {}.type
-                val loadedList: List<UserPlaylist>? = gson.fromJson(json, listType)
-                if (loadedList != null) {
-                    _playlists.value = loadedList
+                if (json.isNotBlank()) {
+                    val listType = object : TypeToken<List<UserPlaylist>>() {}.type
+                    val loadedList: List<UserPlaylist>? = gson.fromJson(json, listType)
+                    if (loadedList != null) {
+                        _playlists.value = loadedList
+                        isLoaded = true
+                        return
+                    }
+                } else {
+                    _playlists.value = emptyList()
+                    isLoaded = true
                     return
                 }
+            } else {
+                _playlists.value = emptyList()
+                isLoaded = true
+                return
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        _playlists.value = emptyList()
+        isLoaded = true
     }
 
     @Synchronized
     private fun savePlaylists() {
         try {
             val json = gson.toJson(_playlists.value)
-            playlistsFile.writeText(json)
+            val tempFile = File(context.filesDir, "playlists.json.tmp")
+            tempFile.writeText(json)
+            if (tempFile.exists()) {
+                if (playlistsFile.exists()) {
+                    playlistsFile.delete()
+                }
+                tempFile.renameTo(playlistsFile)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
+            try {
+                playlistsFile.writeText(gson.toJson(_playlists.value))
+            } catch (ignored: Exception) {}
         }
     }
 
     suspend fun savePlaylist(name: String, items: List<PlaylistItem>): UserPlaylist = withContext(Dispatchers.IO) {
+        ensureLoaded()
         val playlist = UserPlaylist(
             id = UUID.randomUUID().toString(),
             name = if (name.isBlank()) "Playlist" else name.trim(),
@@ -76,6 +110,7 @@ class PlaylistCollectionRepository(private val context: Context) {
     }
 
     suspend fun deletePlaylist(id: String) = withContext(Dispatchers.IO) {
+        ensureLoaded()
         val current = _playlists.value.toMutableList()
         current.removeAll { it.id == id }
         _playlists.value = current
@@ -83,6 +118,7 @@ class PlaylistCollectionRepository(private val context: Context) {
     }
 
     suspend fun renamePlaylist(id: String, newName: String) = withContext(Dispatchers.IO) {
+        ensureLoaded()
         val current = _playlists.value.toMutableList()
         val index = current.indexOfFirst { it.id == id }
         if (index != -1) {
@@ -93,6 +129,7 @@ class PlaylistCollectionRepository(private val context: Context) {
     }
 
     suspend fun addTrackToPlaylist(playlistId: String, track: PlaylistItem) = withContext(Dispatchers.IO) {
+        ensureLoaded()
         val current = _playlists.value.toMutableList()
         val index = current.indexOfFirst { it.id == playlistId }
         if (index != -1) {
@@ -108,6 +145,7 @@ class PlaylistCollectionRepository(private val context: Context) {
     }
 
     suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String) = withContext(Dispatchers.IO) {
+        ensureLoaded()
         val current = _playlists.value.toMutableList()
         val index = current.indexOfFirst { it.id == playlistId }
         if (index != -1) {
