@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.kahoii.music.data.HistoryRepository
 import com.kahoii.music.data.SavedTracksRepository
 import com.kahoii.music.data.YouTubeRepository
+import com.kahoii.music.data.AudioStreamResult
 import com.kahoii.music.model.ActiveQueueSource
 import com.kahoii.music.model.LoopMode
 import com.kahoii.music.model.PlaylistItem
@@ -257,7 +258,7 @@ object MusicQueueManager {
                 }
 
                 // 1c. In-memory resolvedStreamCache
-                val cachedStream = YouTubeRepository.getCachedStream(track.id)
+                val cachedStream: AudioStreamResult? = youTubeRepository.getCachedStream(track.id)
                 if (cachedStream != null) {
                     val resolvedTrack = track.copy(
                         title = if (track.title.isBlank() || track.title.startsWith("Bài ")) cachedStream.title else track.title,

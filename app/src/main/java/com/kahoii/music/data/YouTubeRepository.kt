@@ -105,6 +105,8 @@ class YouTubeRepository {
         }
     }
 
+    fun getCachedStream(videoId: String): AudioStreamResult? = Companion.getCachedStream(videoId)
+
     suspend fun resolveAudio(input: String): Result<AudioStreamResult> = withContext(Dispatchers.IO) {
         val videoId = extractVideoId(input) ?: return@withContext Result.failure(
             IllegalArgumentException("Không tìm thấy Video ID hợp lệ")
