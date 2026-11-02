@@ -30,17 +30,23 @@ public class PlaylistCollectionService: ObservableObject {
         }
         do {
             let data = try Data(contentsOf: fileURL)
-            playlists = try JSONDecoder().decode([UserPlaylist].self, from: data)
+            let decoded = try JSONDecoder().decode([UserPlaylist].self, from: data)
+            playlists = decoded
         } catch {
             print("Failed to load playlists: \(error)")
-            playlists = []
         }
     }
 
     private func savePlaylists() {
         do {
-            let data = try JSONEncoder().encode(playlists)
-            try data.write(to: fileURL, options: .atomic)
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(playlists)
+            let tempURL = storageDirectory.appendingPathComponent("kahoii_playlists.tmp")
+            try data.write(to: tempURL, options: .atomic)
+            if fileManager.fileExists(atPath: fileURL.path) {
+                _ = try? fileManager.removeItem(at: fileURL)
+            }
+            try fileManager.moveItem(at: tempURL, to: fileURL)
         } catch {
             print("Failed to save playlists: \(error)")
         }
