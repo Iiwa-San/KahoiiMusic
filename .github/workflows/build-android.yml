@@ -37,13 +37,16 @@ jobs:
           fi
           echo "Found APK at: $APK_PATH"
           cp "$APK_PATH" KahoiiMusic.apk
-          ls -lh KahoiiMusic.apk
+          zip -y KahoiiMusic-Appetize.zip KahoiiMusic.apk
+          ls -lh KahoiiMusic.apk KahoiiMusic-Appetize.zip
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: KahoiiMusic-Android-APK
-          path: KahoiiMusic.apk
+          path: |
+            KahoiiMusic.apk
+            KahoiiMusic-Appetize.zip
           retention-days: 14
 
       - name: Create or Update GitHub Release
@@ -55,12 +58,14 @@ jobs:
           body: |
             ### 🤖 KahoiiMusic Android App Build
             - **KahoiiMusic.apk**: File cài đặt trực tiếp lên điện thoại / máy tính bảng Android (hỗ trợ Android 7.0 trở lên).
+            - **KahoiiMusic-Appetize.zip**: File nén chứa APK dùng để upload test trên Appetize.io.
           files: |
             KahoiiMusic.apk
+            KahoiiMusic-Appetize.zip
 
       - name: Summary
         run: |
-          echo "### 🎉 Đã tạo thành công file KahoiiMusic.apk!" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 Đã tạo thành công file KahoiiMusic.apk và KahoiiMusic-Appetize.zip!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **KahoiiMusic.apk**: Cài đặt trực tiếp lên điện thoại / máy tính bảng Android." >> $GITHUB_STEP_SUMMARY
-
+          echo "- **KahoiiMusic-Appetize.zip**: Dùng để test trên trình duyệt web qua Appetize.io." >> $GITHUB_STEP_SUMMARY
