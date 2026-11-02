@@ -91,8 +91,13 @@ class HistoryRepository(private val context: Context) {
     suspend fun addTrack(track: PlaylistItem) = withContext(Dispatchers.IO) {
         if (track.id.isBlank()) return@withContext
         val current = _history.value.toMutableList()
+        val existing = current.find { it.id.equals(track.id, ignoreCase = true) }
+        val finalTrack = if (existing != null && track.durationSeconds <= 0 && existing.durationSeconds > 0) {
+            track.copy(durationSeconds = existing.durationSeconds)
+        } else track
+
         current.removeAll { it.id.equals(track.id, ignoreCase = true) }
-        current.add(0, track)
+        current.add(0, finalTrack)
         if (current.size > 200) {
             current.removeAt(current.size - 1)
         }

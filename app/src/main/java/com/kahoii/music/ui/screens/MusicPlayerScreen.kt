@@ -368,6 +368,7 @@ fun MusicPlayerScreen(
                 favorites = uiState.favorites,
                 downloadingTrackIds = uiState.downloadingTrackIds,
                 currentTrackId = uiState.currentTrack?.id,
+                currentDurationMs = uiState.durationMs,
                 isPlaylistLoading = uiState.isPlaylistLoading,
                 initialTab = selectedSheetTab,
                 onPlaylistTrackSelected = { track, index ->

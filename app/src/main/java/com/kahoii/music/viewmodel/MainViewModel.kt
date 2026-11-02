@@ -86,12 +86,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val isPlaying = controller?.isPlaying == true
                         val newStatus = if (isPlaying) PlaybackStatus.PLAYING else PlaybackStatus.PAUSED
                         val duration = controller?.duration?.coerceAtLeast(0L) ?: 0L
-                        _uiState.update {
-                            it.copy(
+                        val durationSec = (duration / 1000L).toInt()
+
+                        _uiState.update { state ->
+                            val cur = state.currentTrack
+                            val updatedTrack = if (cur != null && cur.durationSeconds <= 0 && durationSec > 0) {
+                                cur.copy(durationSeconds = durationSec)
+                            } else cur
+                            val updatedPlaylist = state.playlist.map { pItem ->
+                                if (cur != null && pItem.id.equals(cur.id, ignoreCase = true) && pItem.durationSeconds <= 0 && durationSec > 0) {
+                                    pItem.copy(durationSeconds = durationSec)
+                                } else pItem
+                            }
+                            state.copy(
                                 status = newStatus,
                                 durationMs = duration,
+                                currentTrack = updatedTrack,
+                                playlist = updatedPlaylist,
                                 statusMessage = if (isPlaying) "Đang phát" else "Tạm dừng"
                             )
+                        }
+                        if (durationSec > 0) {
+                            _uiState.value.currentTrack?.let { trackToUpdate ->
+                                viewModelScope.launch(Dispatchers.IO) {
+                                    historyRepository.updateTrackInfoOnly(trackToUpdate)
+                                }
+                            }
                         }
                     }
                     Player.STATE_ENDED -> {
@@ -394,9 +414,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     durationSeconds = if (item.durationSeconds <= 0) stream.durationSeconds else item.durationSeconds
                 )
 
-                _uiState.update {
-                    it.copy(
+                _uiState.update { state ->
+                    val updatedPlaylist = state.playlist.map { pItem ->
+                        if (pItem.id.equals(resolvedTrack.id, ignoreCase = true)) {
+                            pItem.copy(
+                                title = resolvedTrack.title,
+                                artist = resolvedTrack.artist,
+                                durationSeconds = resolvedTrack.durationSeconds
+                            )
+                        } else pItem
+                    }
+                    state.copy(
                         currentTrack = resolvedTrack,
+                        playlist = updatedPlaylist,
                         durationMs = resolvedTrack.durationSeconds * 1000L
                     )
                 }
@@ -737,6 +767,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val result = youTubeRepository.resolveAudio(nextTrack.id)
                 result.onSuccess { stream ->
                     savedTracksRepository.cacheTempAudio(nextTrack.id, stream.audioUrl, stream.contentLength)
+                    if (stream.durationSeconds > 0) {
+                        _uiState.update { state ->
+                            val updatedPlaylist = state.playlist.map { pItem ->
+                                if (pItem.id.equals(nextTrack.id, ignoreCase = true)) {
+                                    pItem.copy(
+                                        title = if (pItem.title.isBlank() || pItem.title.startsWith("Bài ")) stream.title else pItem.title,
+                                        artist = if (pItem.artist.isBlank()) stream.artist else pItem.artist,
+                                        durationSeconds = stream.durationSeconds
+                                    )
+                                } else pItem
+                            }
+                            state.copy(playlist = updatedPlaylist)
+                        }
+                    }
                 }
             } catch (_: Exception) { }
         }

@@ -80,6 +80,7 @@ fun PlaylistBottomSheet(
     favorites: List<PlaylistItem>,
     downloadingTrackIds: Set<String>,
     currentTrackId: String?,
+    currentDurationMs: Long = 0L,
     isPlaylistLoading: Boolean,
     initialTab: Int = 0,
     onPlaylistTrackSelected: (PlaylistItem, Int) -> Unit,
@@ -275,6 +276,7 @@ fun PlaylistBottomSheet(
                                 isSaved = isSaved,
                                 isFavorite = isFav,
                                 isDownloading = isDownloading,
+                                currentDurationMs = currentDurationMs,
                                 onClick = { onPlaylistTrackSelected(item, index) },
                                 onDownload = { onDownloadTrack(item) },
                                 onToggleFavorite = { onToggleFavorite(item) },
@@ -377,6 +379,7 @@ fun PlaylistBottomSheet(
                                 isSaved = true,
                                 isFavorite = isFav,
                                 isDownloading = false,
+                                currentDurationMs = currentDurationMs,
                                 onClick = { onSavedTrackSelected(item, index) },
                                 onAddToPlaylist = {
                                     val added = onAddToPlaylist(item)
@@ -464,6 +467,7 @@ fun PlaylistBottomSheet(
                                 isSaved = isSaved,
                                 isFavorite = isFav,
                                 isDownloading = isDownloading,
+                                currentDurationMs = currentDurationMs,
                                 onClick = { onHistoryTrackSelected(item, index) },
                                 onAddToPlaylist = {
                                     val added = onAddToPlaylist(item)
@@ -572,6 +576,7 @@ fun PlaylistBottomSheet(
                                 isSaved = isSaved,
                                 isFavorite = true,
                                 isDownloading = isDownloading,
+                                currentDurationMs = currentDurationMs,
                                 onClick = { onFavoriteTrackSelected(item, index) },
                                 onAddToPlaylist = {
                                     val added = onAddToPlaylist(item)
@@ -603,6 +608,7 @@ private fun TrackRow(
     isSaved: Boolean = false,
     isFavorite: Boolean = false,
     isDownloading: Boolean = false,
+    currentDurationMs: Long = 0L,
     onClick: () -> Unit,
     onDownload: (() -> Unit)? = null,
     onToggleFavorite: (() -> Unit)? = null,
@@ -699,8 +705,23 @@ private fun TrackRow(
                     )
                     Text(text = " • ", color = Color.White.copy(alpha = 0.55f), fontSize = 11.5.sp)
                 }
+                val displayDuration = if (item.durationSeconds > 0) {
+                    item.formattedDuration
+                } else if (isPlaying && currentDurationMs > 0L) {
+                    val totalSec = (currentDurationMs / 1000L).toInt()
+                    val hours = totalSec / 3600
+                    val minutes = (totalSec % 3600) / 60
+                    val seconds = totalSec % 60
+                    if (hours > 0) {
+                        String.format(java.util.Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
+                    } else {
+                        String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds)
+                    }
+                } else {
+                    item.formattedDuration
+                }
                 Text(
-                    text = item.formattedDuration,
+                    text = displayDuration,
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 11.5.sp
                 )

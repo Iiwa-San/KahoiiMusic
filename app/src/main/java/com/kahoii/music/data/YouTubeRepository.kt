@@ -639,53 +639,91 @@ class YouTubeRepository {
         val seenIds = HashSet<String>()
 
         // 1. Try modern lockupViewModel (YouTube web playlist format)
-        val lockupPattern = Pattern.compile(
-            "\"lockupViewModel\":\\{.*?\"url\":\"https:\\/\\/i\\.ytimg\\.com\\/vi\\/([a-zA-Z0-9_-]{11})\\/.*?\"lockupMetadataViewModel\":\\{\"title\":\\{\"content\":\"([^\"]+)\".*?\"metadataParts\":\\[\\{\"text\":\\{\"content\":\"([^\"]+)\""
-        )
-        val lockupMatcher = lockupPattern.matcher(rawJson)
-        while (lockupMatcher.find()) {
-            val id = lockupMatcher.group(1) ?: continue
-            if (seenIds.add(id)) {
-                val title = unescapeJsonString(lockupMatcher.group(2) ?: "Bài hát")
-                val artist = unescapeJsonString(lockupMatcher.group(3) ?: "")
-                items.add(PlaylistItem(id = id, title = title, artist = artist, durationSeconds = 0))
+        val lockupBlocks = rawJson.split("\"lockupViewModel\":").drop(1)
+        for (block in lockupBlocks) {
+            val idMatcher = Pattern.compile("\"(?:contentId|url)\"\\s*:\\s*\"(?:https:\\/\\/i\\.ytimg\\.com\\/vi\\/)?([a-zA-Z0-9_-]{11})").matcher(block)
+            if (!idMatcher.find()) continue
+            val id = idMatcher.group(1) ?: continue
+            if (!seenIds.add(id)) continue
+
+            val titleMatcher = Pattern.compile("\"lockupMetadataViewModel\"\\s*:\\s*\\{.*?\"title\"\\s*:\\s*\\{\\s*\"content\"\\s*:\\s*\"([^\"]+)\"", Pattern.DOTALL).matcher(block)
+            val title = if (titleMatcher.find()) unescapeJsonString(titleMatcher.group(1) ?: "Bài hát") else "Bài hát"
+
+            val artistMatcher = Pattern.compile("\"metadataParts\"\\s*:\\s*\\[\\{\\s*\"text\"\\s*:\\s*\\{\\s*\"content\"\\s*:\\s*\"([^\"]+)\"", Pattern.DOTALL).matcher(block)
+            val artist = if (artistMatcher.find()) unescapeJsonString(artistMatcher.group(1) ?: "") else ""
+
+            val durMatcher = Pattern.compile("\"thumbnailBadgeViewModel\"\\s*:\\s*\\{.*?\"text\"\\s*:\\s*\"([0-9:]+)\"", Pattern.DOTALL).matcher(block)
+            val durText = if (durMatcher.find()) {
+                durMatcher.group(1) ?: ""
+            } else {
+                val simpleMatcher = Pattern.compile("\"simpleText\"\\s*:\\s*\"([0-9:]+)\"").matcher(block)
+                if (simpleMatcher.find()) simpleMatcher.group(1) ?: "" else ""
             }
+            val durationSeconds = parseDurationToSeconds(durText)
+
+            items.add(PlaylistItem(id = id, title = title, artist = artist, durationSeconds = durationSeconds))
         }
 
         // 2. Try playlistPanelVideoRenderer (Mix / Radio format)
         if (items.isEmpty()) {
-            val mixPattern = Pattern.compile(
-                "\"playlistPanelVideoRenderer\":\\{\"title\":\\{.*?\"simpleText\":\"([^\"]+)\".*?\"runs\":\\[\\{\"text\":\"([^\"]+)\".*?\"videoId\":\"([a-zA-Z0-9_-]{11})\""
-            )
-            val mixMatcher = mixPattern.matcher(rawJson)
-            while (mixMatcher.find()) {
-                val id = mixMatcher.group(3) ?: continue
-                if (seenIds.add(id)) {
-                    val title = unescapeJsonString(mixMatcher.group(1) ?: "Bài hát")
-                    val artist = unescapeJsonString(mixMatcher.group(2) ?: "")
-                    items.add(PlaylistItem(id = id, title = title, artist = artist, durationSeconds = 0))
+            val mixBlocks = rawJson.split("\"playlistPanelVideoRenderer\":").drop(1)
+            for (block in mixBlocks) {
+                val idMatcher = Pattern.compile("\"videoId\"\\s*:\\s*\"([a-zA-Z0-9_-]{11})\"").matcher(block)
+                if (!idMatcher.find()) continue
+                val id = idMatcher.group(1) ?: continue
+                if (!seenIds.add(id)) continue
+
+                val titleMatcher = Pattern.compile("\"title\"\\s*:\\s*\\{.*?\"simpleText\"\\s*:\\s*\"([^\"]+)\"", Pattern.DOTALL).matcher(block)
+                val title = if (titleMatcher.find()) unescapeJsonString(titleMatcher.group(1) ?: "Bài hát") else "Bài hát"
+
+                val artistMatcher = Pattern.compile("\"(?:shortBylineText|longBylineText)\"\\s*:\\s*\\{.*?\"runs\"\\s*:\\s*\\[\\{\\s*\"text\"\\s*:\\s*\"([^\"]+)\"", Pattern.DOTALL).matcher(block)
+                val artist = if (artistMatcher.find()) unescapeJsonString(artistMatcher.group(1) ?: "") else ""
+
+                val durMatcher = Pattern.compile("\"lengthText\"\\s*:\\s*\\{.*?\"simpleText\"\\s*:\\s*\"([0-9:]+)\"", Pattern.DOTALL).matcher(block)
+                val durText = if (durMatcher.find()) {
+                    durMatcher.group(1) ?: ""
+                } else {
+                    val timeStatus = Pattern.compile("\"thumbnailOverlayTimeStatusRenderer\"\\s*:\\s*\\{.*?\"simpleText\"\\s*:\\s*\"([0-9:]+)\"", Pattern.DOTALL).matcher(block)
+                    if (timeStatus.find()) timeStatus.group(1) ?: "" else ""
                 }
+                val durationSeconds = parseDurationToSeconds(durText)
+
+                items.add(PlaylistItem(id = id, title = title, artist = artist, durationSeconds = durationSeconds))
             }
         }
 
         // 3. Try standard playlistVideoRenderer
         if (items.isEmpty()) {
-            val pvrPattern = Pattern.compile(
-                "\"playlistVideoRenderer\":\\{\"videoId\":\"([a-zA-Z0-9_-]{11})\".*?\"title\":\\{(?:\"runs\":\\[\\{\"text\":\"([^\"]+)\"\\}|\"simpleText\":\"([^\"]+)\")"
-            )
-            val pvrMatcher = pvrPattern.matcher(rawJson)
-            while (pvrMatcher.find()) {
-                val id = pvrMatcher.group(1) ?: continue
-                if (seenIds.add(id)) {
-                    val title = unescapeJsonString(pvrMatcher.group(2) ?: pvrMatcher.group(3) ?: "Bài hát")
-                    items.add(PlaylistItem(id = id, title = title, artist = "", durationSeconds = 0))
+            val pvrBlocks = rawJson.split("\"playlistVideoRenderer\":").drop(1)
+            for (block in pvrBlocks) {
+                val idMatcher = Pattern.compile("\"videoId\"\\s*:\\s*\"([a-zA-Z0-9_-]{11})\"").matcher(block)
+                if (!idMatcher.find()) continue
+                val id = idMatcher.group(1) ?: continue
+                if (!seenIds.add(id)) continue
+
+                val titleMatcher = Pattern.compile("\"title\"\\s*:\\s*\\{(?:\"runs\"\\s*:\\s*\\[\\{\\s*\"text\"\\s*:\\s*\"([^\"]+)\"\\}|\"simpleText\"\\s*:\\s*\"([^\"]+)\")", Pattern.DOTALL).matcher(block)
+                val title = if (titleMatcher.find()) unescapeJsonString(titleMatcher.group(1) ?: titleMatcher.group(2) ?: "Bài hát") else "Bài hát"
+
+                val artistMatcher = Pattern.compile("\"shortBylineText\"\\s*:\\s*\\{.*?\"runs\"\\s*:\\s*\\[\\{\\s*\"text\"\\s*:\\s*\"([^\"]+)\"", Pattern.DOTALL).matcher(block)
+                val artist = if (artistMatcher.find()) unescapeJsonString(artistMatcher.group(1) ?: "") else ""
+
+                val secMatcher = Pattern.compile("\"lengthSeconds\"\\s*:\\s*\"(\\d+)\"").matcher(block)
+                var durationSeconds = if (secMatcher.find()) secMatcher.group(1)?.toIntOrNull() ?: 0 else 0
+
+                if (durationSeconds <= 0) {
+                    val txtMatcher = Pattern.compile("\"lengthText\"\\s*:\\s*\\{.*?\"simpleText\"\\s*:\\s*\"([0-9:]+)\"", Pattern.DOTALL).matcher(block)
+                    if (txtMatcher.find()) {
+                        durationSeconds = parseDurationToSeconds(txtMatcher.group(1) ?: "")
+                    }
                 }
+
+                items.add(PlaylistItem(id = id, title = title, artist = artist, durationSeconds = durationSeconds))
             }
         }
 
         // 4. Fallback: extract any 11-char videoId occurrences if no titles found
         if (items.isEmpty()) {
-            val genericPattern = Pattern.compile("\"videoId\":\"([a-zA-Z0-9_-]{11})\"")
+            val genericPattern = Pattern.compile("\"videoId\"\\s*:\\s*\"([a-zA-Z0-9_-]{11})\"")
             val genericMatcher = genericPattern.matcher(rawJson)
             var count = 1
             while (genericMatcher.find()) {
