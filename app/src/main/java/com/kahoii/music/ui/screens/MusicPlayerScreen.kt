@@ -213,61 +213,18 @@ fun MusicPlayerScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Quick Action Icons matching iOS trackInfoSection (Download Offline + Favorite Heart)
+                // Favorite Heart Button
                 if (uiState.currentTrack != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    IconButton(
+                        onClick = { viewModel.toggleFavorite() },
+                        modifier = Modifier.size(38.dp)
                     ) {
-                        // Offline Download Button
-                        IconButton(
-                            onClick = {
-                                val track = uiState.currentTrack
-                                if (track != null) {
-                                    if (uiState.isCurrentTrackSaved) {
-                                        viewModel.deleteSavedTrack(track.id)
-                                    } else {
-                                        viewModel.saveTrackOffline(track)
-                                    }
-                                }
-                            },
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            if (uiState.isCurrentTrackDownloading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = Color(0xFF22C55E),
-                                    strokeWidth = 2.dp
-                                )
-                            } else if (uiState.isCurrentTrackSaved) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Đã tải về máy",
-                                    tint = Color(0xFF22C55E),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Tải về nghe offline",
-                                    tint = Color.White.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-
-                        // Favorite Heart Button
-                        IconButton(
-                            onClick = { viewModel.toggleFavorite() },
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (uiState.isCurrentTrackFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Yêu thích",
-                                tint = if (uiState.isCurrentTrackFavorite) Color(0xFFFF2D55) else Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier.size(23.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = if (uiState.isCurrentTrackFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Yêu thích",
+                            tint = if (uiState.isCurrentTrackFavorite) Color(0xFFFF2D55) else Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(23.dp)
+                        )
                     }
                 }
             }

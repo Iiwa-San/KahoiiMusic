@@ -613,9 +613,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val nextTrack = queue[nextIndex]
         _uiState.update { it.copy(currentPlaylistIndex = nextIndex) }
         playTrack(nextTrack)
-
-        val msg = "[$queueName ${nextIndex + 1}/${queue.size}] ${nextTrack.title}"
-        Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
     }
 
     fun playPrevious() {
@@ -646,9 +643,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val prevTrack = queue[prevIndex]
         _uiState.update { it.copy(currentPlaylistIndex = prevIndex) }
         playTrack(prevTrack)
-
-        val msg = "[$queueName ${prevIndex + 1}/${queue.size}] ${prevTrack.title}"
-        Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
     }
 
     fun seekTo(progress: Float) {
@@ -708,21 +702,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(sleepTimerRemainingSeconds = totalSeconds) }
 
         sleepTimerJob = viewModelScope.launch {
-            var remaining = totalSeconds
-            while (remaining > 0 && isActive) {
-                delay(1000)
-                remaining--
-                _uiState.update { it.copy(sleepTimerRemainingSeconds = remaining) }
-            }
+            val originalVolume = controller?.volume ?: _uiState.value.volume
+            var isFading = false
+            try {
+                var remaining = totalSeconds
+                while (remaining > 3 && isActive) {
+                    delay(1000)
+                    remaining--
+                    _uiState.update { it.copy(sleepTimerRemainingSeconds = remaining) }
+                }
 
-            if (remaining <= 0) {
-                controller?.pause()
-                _uiState.update {
-                    it.copy(
-                        sleepTimerOption = SleepTimerOption.OFF,
-                        sleepTimerRemainingSeconds = 0L,
-                        statusMessage = "Hẹn giờ đã kết thúc - Đã tạm dừng nhạc"
-                    )
+                // Giảm dần âm lượng trong 3 giây trước khi tắt
+                if (isActive && remaining > 0) {
+                    isFading = true
+                    val startVol = controller?.volume ?: originalVolume
+                    val totalFadeMs = (remaining * 1000L).coerceAtMost(3000L)
+                    val steps = 30
+                    val stepDelay = (totalFadeMs / steps).coerceAtLeast(50L)
+                    for (step in 1..steps) {
+                        if (!isActive) break
+                        delay(stepDelay)
+                        val fraction = (steps - step).toFloat() / steps
+                        controller?.volume = (startVol * fraction).coerceIn(0f, 1f)
+                        val remSec = ((steps - step) * totalFadeMs / (steps * 1000L))
+                        _uiState.update { it.copy(sleepTimerRemainingSeconds = remSec) }
+                    }
+                }
+
+                if (isActive) {
+                    controller?.pause()
+                    controller?.volume = originalVolume
+                    _uiState.update {
+                        it.copy(
+                            sleepTimerOption = SleepTimerOption.OFF,
+                            sleepTimerRemainingSeconds = 0L,
+                            statusMessage = "Hẹn giờ đã kết thúc - Đã tạm dừng nhạc"
+                        )
+                    }
+                }
+            } finally {
+                if (isFading) {
+                    controller?.volume = originalVolume
                 }
             }
         }

@@ -151,6 +151,7 @@ fun ControlButtons(
                         ) {
                             Text(
                                 text = if (sleepTimerText.isNotBlank()) sleepTimerText else "•",
+                                color = Color.White,
                                 fontSize = 9.sp
                             )
                         }

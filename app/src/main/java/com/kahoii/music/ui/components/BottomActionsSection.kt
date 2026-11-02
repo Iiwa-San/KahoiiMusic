@@ -138,6 +138,7 @@ private fun BottomActionButton(
                     ) {
                         Text(
                             text = if (badgeCount > 99) "99+" else "$badgeCount",
+                            color = Color.White,
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold
                         )
