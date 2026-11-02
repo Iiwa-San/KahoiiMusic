@@ -203,6 +203,8 @@ public class SavedTracksService: ObservableObject {
             downloadedBytes += Int64(chunkData.count)
         }
 
+        try? fileHandle.close()
+
         if FileManager.default.fileExists(atPath: destinationUrl.path) {
             try? FileManager.default.removeItem(at: destinationUrl)
         }
@@ -228,9 +230,7 @@ public class SavedTracksService: ObservableObject {
             var resolvedThumb = item.thumbnailUrl
 
             // 0. Quick check: If this track was already cached in tempAudioDir during playback, copy instantly!
-            if let cachedTemp = tempAudioURL(for: item.id),
-               FileManager.default.fileExists(atPath: cachedTemp.path),
-               (try? FileManager.default.attributesOfItem(atPath: cachedTemp.path)[.size] as? Int64 ?? 0) > 1024 * 100 {
+            if let cachedTemp = tempAudioURL(for: item.id) {
                 if FileManager.default.fileExists(atPath: targetAudioFile.path) {
                     try? FileManager.default.removeItem(at: targetAudioFile)
                 }
