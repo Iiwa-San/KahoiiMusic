@@ -84,6 +84,12 @@ public struct MainPlayerView: View {
                 showingErrorLogsSheet = true
             })
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .onTapGesture {
+            #if canImport(UIKit)
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            #endif
+        }
         // Sheets
         .sheet(isPresented: $showingPlaylistSheet) {
             PlaylistQueueSheet(player: player)
