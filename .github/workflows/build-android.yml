@@ -30,12 +30,16 @@ jobs:
           set -o pipefail
           ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee build.log || {
             echo "### ❌ Build Android Failed" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            grep -C 3 -E "e: |error:" build.log | head -n 100 >> $GITHUB_STEP_SUMMARY
-            tail -n 60 build.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 50 build.log | while IFS= read -r l; do echo "::error::$l"; done
             exit 1
           }
+
+      - name: Upload Build Log Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Android-Build-Log
+          path: build.log
 
       - name: Prepare APK Asset
         run: |
