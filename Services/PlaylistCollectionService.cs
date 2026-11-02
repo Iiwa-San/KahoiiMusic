@@ -162,18 +162,65 @@ namespace KahoiiMusic.Services
                     string json = File.ReadAllText(AppPaths.PlaylistsJsonFile, Encoding.UTF8);
                     if (string.IsNullOrWhiteSpace(json)) return;
 
-                    // Parse playlists array using regex
-                    // Matches { "id": "...", "name": "...", "created": "...", "items": [ ... ] }
-                    var plRegex = new Regex(@"\{\s*""id""\s*:\s*""(?<id>[^""]*)""\s*,\s*""name""\s*:\s*""(?<name>(?:\\.|[^""])*)""\s*,\s*""created""\s*:\s*""(?<created>[^""]*)""\s*,\s*""items""\s*:\s*\[(?<items>[^\]]*)\]\s*\}", RegexOptions.Singleline);
+                    int i = 0;
+                    int len = json.Length;
+                    // Find opening array bracket '['
+                    while (i < len && json[i] != '[') i++;
+                    if (i >= len) return;
+                    i++; // skip '['
+
                     var itemRegex = new Regex(@"\{\s*""id""\s*:\s*""(?<id>[^""]*)""\s*,\s*""title""\s*:\s*""(?<title>(?:\\.|[^""])*)""\s*,\s*""duration""\s*:\s*(?<dur>\d+)\s*\}", RegexOptions.Singleline);
 
-                    var matches = plRegex.Matches(json);
-                    foreach (Match m in matches)
+                    while (i < len)
                     {
-                        string id = m.Groups["id"].Value;
-                        string name = UnescapeJson(m.Groups["name"].Value);
+                        // Find next playlist object start '{'
+                        while (i < len && json[i] != '{' && json[i] != ']') i++;
+                        if (i >= len || json[i] == ']') break;
+
+                        int objStart = i;
+                        int depth = 0;
+                        bool inString = false;
+                        bool escaped = false;
+
+                        // Scan balanced object boundaries correctly handling strings and escapes
+                        while (i < len)
+                        {
+                            char c = json[i];
+                            if (escaped)
+                            {
+                                escaped = false;
+                            }
+                            else if (c == '\\')
+                            {
+                                if (inString) escaped = true;
+                            }
+                            else if (c == '"')
+                            {
+                                inString = !inString;
+                            }
+                            else if (!inString)
+                            {
+                                if (c == '{') depth++;
+                                else if (c == '}')
+                                {
+                                    depth--;
+                                    if (depth == 0) { i++; break; }
+                                }
+                            }
+                            i++;
+                        }
+
+                        string plBlock = json.Substring(objStart, i - objStart);
+
+                        // Extract id, name, created from this playlist block
+                        var mId = Regex.Match(plBlock, @"""id""\s*:\s*""([^""]*)""");
+                        var mName = Regex.Match(plBlock, @"""name""\s*:\s*""((?:\\.|[^""])*)""");
+                        var mCreated = Regex.Match(plBlock, @"""created""\s*:\s*""([^""]*)""");
+
+                        string id = mId.Success ? mId.Groups[1].Value : Guid.NewGuid().ToString("N");
+                        string name = mName.Success ? UnescapeJson(mName.Groups[1].Value) : "Playlist";
                         DateTime created = DateTime.Now;
-                        DateTime.TryParse(m.Groups["created"].Value, out created);
+                        if (mCreated.Success) DateTime.TryParse(mCreated.Groups[1].Value, out created);
 
                         var pl = new UserPlaylist
                         {
@@ -183,21 +230,48 @@ namespace KahoiiMusic.Services
                             Items = new List<PlaylistItem>()
                         };
 
-                        string itemsBlock = m.Groups["items"].Value;
-                        var itemMatches = itemRegex.Matches(itemsBlock);
-                        foreach (Match im in itemMatches)
+                        // Extract items array block with balanced bracket scanning
+                        int itemsIdx = plBlock.IndexOf("\"items\"");
+                        if (itemsIdx >= 0)
                         {
-                            string songId = im.Groups["id"].Value;
-                            string title = UnescapeJson(im.Groups["title"].Value);
-                            int dur = 0;
-                            int.TryParse(im.Groups["dur"].Value, out dur);
-
-                            pl.Items.Add(new PlaylistItem
+                            int bStart = plBlock.IndexOf('[', itemsIdx);
+                            if (bStart >= 0)
                             {
-                                Id = songId,
-                                Title = title,
-                                DurationSeconds = dur
-                            });
+                                int bEnd = bStart + 1;
+                                int bDepth = 1;
+                                bool bInStr = false;
+                                bool bEsc = false;
+                                while (bEnd < plBlock.Length && bDepth > 0)
+                                {
+                                    char c = plBlock[bEnd];
+                                    if (bEsc) bEsc = false;
+                                    else if (c == '\\') { if (bInStr) bEsc = true; }
+                                    else if (c == '"') bInStr = !bInStr;
+                                    else if (!bInStr)
+                                    {
+                                        if (c == '[') bDepth++;
+                                        else if (c == ']') bDepth--;
+                                    }
+                                    bEnd++;
+                                }
+
+                                string itemsBlock = plBlock.Substring(bStart, bEnd - bStart);
+                                var itemMatches = itemRegex.Matches(itemsBlock);
+                                foreach (Match im in itemMatches)
+                                {
+                                    string songId = im.Groups["id"].Value;
+                                    string title = UnescapeJson(im.Groups["title"].Value);
+                                    int dur = 0;
+                                    int.TryParse(im.Groups["dur"].Value, out dur);
+
+                                    pl.Items.Add(new PlaylistItem
+                                    {
+                                        Id = songId,
+                                        Title = title,
+                                        DurationSeconds = dur
+                                    });
+                                }
+                            }
                         }
 
                         _playlists.Add(pl);
