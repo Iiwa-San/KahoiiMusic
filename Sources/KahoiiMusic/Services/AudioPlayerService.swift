@@ -556,11 +556,6 @@ public class AudioPlayerService: ObservableObject {
     }
 
     public func previousTrack() {
-        if currentTime > 3.0 {
-            seek(to: 0)
-            return
-        }
-
         guard !playlist.isEmpty, currentIndex >= 0 else {
             seek(to: 0)
             return
