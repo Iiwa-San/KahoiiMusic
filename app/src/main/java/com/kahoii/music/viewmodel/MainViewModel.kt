@@ -320,7 +320,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playFromQueueIndex(index: Int, source: ActiveQueueSource) {
         val queue = when (source) {
-            ActiveQueueSource.PLAYLIST -> _uiState.value.playlist
+            ActiveQueueSource.PLAYLIST, ActiveQueueSource.COLLECTION -> _uiState.value.playlist
             ActiveQueueSource.SAVED -> _uiState.value.savedTracks
             ActiveQueueSource.FAVORITES -> _uiState.value.favorites
             ActiveQueueSource.HISTORY -> _uiState.value.history
@@ -339,7 +339,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playFromQueue(item: PlaylistItem, source: ActiveQueueSource) {
         val queue = when (source) {
-            ActiveQueueSource.PLAYLIST -> _uiState.value.playlist
+            ActiveQueueSource.PLAYLIST, ActiveQueueSource.COLLECTION -> _uiState.value.playlist
             ActiveQueueSource.SAVED -> _uiState.value.savedTracks
             ActiveQueueSource.FAVORITES -> _uiState.value.favorites
             ActiveQueueSource.HISTORY -> _uiState.value.history
@@ -936,7 +936,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     activeQueueSource = ActiveQueueSource.PLAYLIST
                 )
             }
-            com.kahoii.music.service.MusicQueueManager.setQueue(collection.items, safeIndex)
             playFromQueueIndex(safeIndex, ActiveQueueSource.PLAYLIST)
             Toast.makeText(getApplication(), "Đang phát bộ sưu tập: ${collection.name}", Toast.LENGTH_SHORT).show()
         } else {
