@@ -240,45 +240,17 @@ public struct MainPlayerView: View {
             Spacer()
 
             if let track = player.currentTrack {
-                HStack(spacing: 2) {
-                    // Download Button (Offline)
-                    Button(action: {
-                        #if canImport(UIKit)
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        #endif
-                        Task {
-                            if savedService.isSaved(id: track.id) {
-                                savedService.deleteSavedTrack(id: track.id)
-                            } else {
-                                await savedService.saveTrackAsync(track)
-                            }
-                        }
-                    }) {
-                        if savedService.isDownloading(id: track.id) {
-                            ProgressView()
-                                .tint(.green)
-                                .scaleEffect(0.8)
-                                .frame(width: 40, height: 40)
-                        } else {
-                            Image(systemName: savedService.isSaved(id: track.id) ? "arrow.down.circle.fill" : "arrow.down.circle")
-                                .font(.system(size: 21))
-                                .foregroundColor(savedService.isSaved(id: track.id) ? .green : .white.opacity(0.5))
-                                .frame(width: 40, height: 40)
-                        }
-                    }
-
-                    // Favorite Button
-                    Button(action: {
-                        #if canImport(UIKit)
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        #endif
-                        historyService.toggleFavorite(track)
-                    }) {
-                        Image(systemName: historyService.isFavorite(id: track.id) ? "heart.fill" : "heart")
-                            .font(.system(size: 22))
-                            .foregroundColor(historyService.isFavorite(id: track.id) ? .pink : .white.opacity(0.5))
-                            .frame(width: 40, height: 40)
-                    }
+                // Favorite Button
+                Button(action: {
+                    #if canImport(UIKit)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    #endif
+                    historyService.toggleFavorite(track)
+                }) {
+                    Image(systemName: historyService.isFavorite(id: track.id) ? "heart.fill" : "heart")
+                        .font(.system(size: 22))
+                        .foregroundColor(historyService.isFavorite(id: track.id) ? .pink : .white.opacity(0.5))
+                        .frame(width: 40, height: 40)
                 }
             }
         }
@@ -288,6 +260,39 @@ public struct MainPlayerView: View {
 
     private var playbackControlsSection: some View {
         HStack(spacing: 0) {
+            // Quick Download Button (Nút tải nhanh)
+            Button(action: {
+                guard let track = player.currentTrack else { return }
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                Task {
+                    if savedService.isSaved(id: track.id) {
+                        savedService.deleteSavedTrack(id: track.id)
+                    } else {
+                        await savedService.saveTrackAsync(track)
+                    }
+                }
+            }) {
+                if let track = player.currentTrack, savedService.isDownloading(id: track.id) {
+                    ProgressView()
+                        .tint(.green)
+                        .scaleEffect(0.8)
+                        .frame(maxWidth: .infinity)
+                } else if let track = player.currentTrack, savedService.isSaved(id: track.id) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 19))
+                        .foregroundColor(.green)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 19))
+                        .foregroundColor(.white.opacity(0.5))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .disabled(player.currentTrack == nil)
+
             // Shuffle Button
             Button(action: {
                 #if canImport(UIKit)
@@ -495,8 +500,20 @@ public struct MainPlayerView: View {
                 showingHistorySheet = true
             }) {
                 VStack(spacing: 4) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 20))
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 20))
+
+                        if !historyService.history.isEmpty {
+                            Text("\(historyService.history.count)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(3)
+                                .background(Color.blue)
+                                .clipShape(Circle())
+                                .offset(x: 10, y: -6)
+                        }
+                    }
                     Text("Lịch sử")
                         .font(.system(size: 11, weight: .medium))
                 }
@@ -512,9 +529,21 @@ public struct MainPlayerView: View {
                 showingFavoritesSheet = true
             }) {
                 VStack(spacing: 4) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(historyService.favorites.isEmpty ? .white.opacity(0.75) : .pink.opacity(0.85))
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(historyService.favorites.isEmpty ? .white.opacity(0.75) : .pink.opacity(0.85))
+
+                        if !historyService.favorites.isEmpty {
+                            Text("\(historyService.favorites.count)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(3)
+                                .background(Color(red: 1.0, green: 0.17, blue: 0.33))
+                                .clipShape(Circle())
+                                .offset(x: 10, y: -6)
+                        }
+                    }
                     Text("Yêu thích")
                         .font(.system(size: 11, weight: .medium))
                 }

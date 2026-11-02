@@ -44,11 +44,22 @@ public class AudioPlayerService: ObservableObject {
     private var playerItemCancellables = Set<AnyCancellable>()
     private var originalPlaylist: [PlaylistItem] = []
     private var cancellables = Set<AnyCancellable>()
+    private var sleepFadeTask: Task<Void, Never>? = nil
 
     private init() {
         setupAudioSession()
         setupRemoteCommands()
         setupInterruptionNotifications()
+        SleepTimerService.shared.onTimerAlmostExpired = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.startSleepTimerFadeOut()
+            }
+        }
+        SleepTimerService.shared.onTimerCancelled = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.cancelSleepTimerFade()
+            }
+        }
         SleepTimerService.shared.onTimerExpired = { [weak self] in
             Task { @MainActor in
                 self?.pause()
@@ -693,6 +704,34 @@ public class AudioPlayerService: ObservableObject {
         let clamped = max(0.0, min(val, 1.0))
         volume = clamped
         avPlayer?.volume = clamped
+    }
+
+    private func startSleepTimerFadeOut() {
+        guard let _ = avPlayer, playbackState.isPlaying else { return }
+        sleepFadeTask?.cancel()
+        let origVol = self.volume
+        sleepFadeTask = Task { @MainActor in
+            let steps = 30
+            for i in 1...steps {
+                if Task.isCancelled {
+                    self.avPlayer?.volume = origVol
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                let factor = Float(steps - i) / Float(steps)
+                self.avPlayer?.volume = origVol * factor
+            }
+            if !Task.isCancelled {
+                self.pause()
+                self.avPlayer?.volume = origVol
+            }
+        }
+    }
+
+    private func cancelSleepTimerFade() {
+        sleepFadeTask?.cancel()
+        sleepFadeTask = nil
+        avPlayer?.volume = self.volume
     }
 
     public func addToQueue(_ track: PlaylistItem) {

@@ -12,6 +12,8 @@ public class SleepTimerService: ObservableObject {
 
     private var timer: Timer?
 
+    public var onTimerAlmostExpired: (() -> Void)?
+    public var onTimerCancelled: (() -> Void)?
     public var onTimerExpired: (() -> Void)?
 
     private init() {}
@@ -41,6 +43,9 @@ public class SleepTimerService: ObservableObject {
                 guard let self = self else { return }
                 if self.remainingSeconds > 1 {
                     self.remainingSeconds -= 1
+                    if self.remainingSeconds == 3 {
+                        self.onTimerAlmostExpired?()
+                    }
                 } else {
                     self.timerExpired()
                 }
@@ -61,6 +66,7 @@ public class SleepTimerService: ObservableObject {
         remainingSeconds = 0
         isActive = false
         isEndOfTrack = false
+        onTimerCancelled?()
     }
 
     private func timerExpired() {
