@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -61,6 +62,9 @@ fun ArtworkView(
     onSwipeLeft: () -> Unit = {},
     onSwipeRight: () -> Unit = {}
 ) {
+    val currentOnSwipeLeft by rememberUpdatedState(onSwipeLeft)
+    val currentOnSwipeRight by rememberUpdatedState(onSwipeRight)
+
     val scaleAnim by animateFloatAsState(
         targetValue = if (isPlaying) 1.0f else 0.92f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f),
@@ -91,7 +95,7 @@ fun ArtworkView(
                 // Subtle organic tilt during horizontal swipe
                 rotationZ = (offsetX.value / 32f).coerceIn(-12f, 12f)
             }
-            .pointerInput(thumbnailUrl) {
+            .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { },
                     onDragEnd = {
@@ -100,14 +104,14 @@ fun ArtworkView(
                             if (currentOffset < -swipeThresholdPx) {
                                 // Swipe Left -> Chuyển sang bài tiếp theo (Next Track)
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSwipeLeft()
+                                currentOnSwipeLeft()
                                 offsetX.animateTo(-exitDistancePx, tween(durationMillis = 140))
                                 offsetX.snapTo(exitDistancePx)
                                 offsetX.animateTo(0f, spring(dampingRatio = 0.78f, stiffness = 420f))
                             } else if (currentOffset > swipeThresholdPx) {
                                 // Swipe Right -> Quay về bài trước đó (Previous Track)
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSwipeRight()
+                                currentOnSwipeRight()
                                 offsetX.animateTo(exitDistancePx, tween(durationMillis = 140))
                                 offsetX.snapTo(-exitDistancePx)
                                 offsetX.animateTo(0f, spring(dampingRatio = 0.78f, stiffness = 420f))

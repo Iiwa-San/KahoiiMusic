@@ -320,8 +320,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playTrack(item)
     }
 
+    private var playTrackJob: Job? = null
+
     fun playTrack(item: PlaylistItem) {
-        viewModelScope.launch {
+        playTrackJob?.cancel()
+        playTrackJob = viewModelScope.launch {
             // 1. Check if track is saved offline first -> Instant playback with 0 delay!
             val savedTrack = savedTracksRepository.getSavedTrack(item.id)
             if (savedTrack != null && savedTrack.isOffline) {
@@ -500,8 +503,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .setMediaMetadata(mediaMetadata)
             .build()
 
+        p.stop()
         p.setMediaItem(mediaItem)
         p.prepare()
+        p.playWhenReady = true
         p.play()
     }
 
@@ -741,6 +746,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val protectedSet = mutableSetOf<String>()
             _uiState.value.currentTrack?.let { protectedSet.add(it.id) }
+            _uiState.value.activeQueue.forEach { protectedSet.add(it.id) }
             _uiState.value.playlist.forEach { protectedSet.add(it.id) }
             savedTracksRepository.cleanUnusedTempAudio(protectedSet)
         }
@@ -919,6 +925,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         progressJob?.cancel()
         sleepTimerJob?.cancel()
         preloadingJob?.cancel()
+        playTrackJob?.cancel()
         controller?.release()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null
