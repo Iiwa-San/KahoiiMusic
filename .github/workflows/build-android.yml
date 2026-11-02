@@ -30,7 +30,8 @@ jobs:
           set -o pipefail
           ./gradlew assembleRelease --stacktrace --no-daemon 2>&1 | tee build.log || {
             echo "### ❌ Build Android Failed" >> $GITHUB_STEP_SUMMARY
-            tail -n 50 build.log | while IFS= read -r l; do echo "::error::$l"; done
+            grep -E "e: " build.log | head -n 10 | while IFS= read -r l; do echo "::error::$l"; done
+            tail -n 20 build.log | while IFS= read -r l; do echo "::error::$l"; done
             exit 1
           }
 

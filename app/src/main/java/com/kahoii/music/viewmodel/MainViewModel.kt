@@ -996,7 +996,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             var count = 0
             collection.items.forEach { track ->
                 if (!savedTracksRepository.isTrackSaved(track.id)) {
-                    downloadTrack(track)
+                    saveTrackOffline(track)
                     count++
                 }
             }
