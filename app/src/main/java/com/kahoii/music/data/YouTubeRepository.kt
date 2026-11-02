@@ -37,6 +37,26 @@ class YouTubeRepository {
         private val LIST_ID_REGEX = Pattern.compile("[?&]list=([a-zA-Z0-9_-]+)")
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
+        private val resolvedStreamCache = java.util.concurrent.ConcurrentHashMap<String, Pair<AudioStreamResult, Long>>()
+        private const val CACHE_EXPIRY_MS = 2 * 3600 * 1000L // 2 hours
+
+        fun getCachedStream(videoId: String): AudioStreamResult? {
+            val cached = resolvedStreamCache[videoId] ?: return null
+            if (System.currentTimeMillis() - cached.second < CACHE_EXPIRY_MS) {
+                return cached.first
+            }
+            resolvedStreamCache.remove(videoId)
+            return null
+        }
+
+        fun cacheStream(videoId: String, stream: AudioStreamResult) {
+            resolvedStreamCache[videoId] = Pair(stream, System.currentTimeMillis())
+        }
+
+        fun invalidateCache(videoId: String) {
+            resolvedStreamCache.remove(videoId)
+        }
+
         fun extractVideoId(url: String?): String? {
             if (url.isNullOrBlank()) return null
             val trimmed = url.trim()
@@ -80,28 +100,6 @@ class YouTubeRepository {
             }
         } catch (e: Exception) {
             null
-        }
-    }
-
-    companion object {
-        private val resolvedStreamCache = java.util.concurrent.ConcurrentHashMap<String, Pair<AudioStreamResult, Long>>()
-        private const val CACHE_EXPIRY_MS = 2 * 3600 * 1000L // 2 hours
-
-        fun getCachedStream(videoId: String): AudioStreamResult? {
-            val cached = resolvedStreamCache[videoId] ?: return null
-            if (System.currentTimeMillis() - cached.second < CACHE_EXPIRY_MS) {
-                return cached.first
-            }
-            resolvedStreamCache.remove(videoId)
-            return null
-        }
-
-        fun cacheStream(videoId: String, stream: AudioStreamResult) {
-            resolvedStreamCache[videoId] = Pair(stream, System.currentTimeMillis())
-        }
-
-        fun invalidateCache(videoId: String) {
-            resolvedStreamCache.remove(videoId)
         }
     }
 
