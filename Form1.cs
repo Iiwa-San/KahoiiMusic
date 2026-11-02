@@ -655,6 +655,11 @@ namespace KahoiiMusic
             if (_audioPlayer != null)
             {
                 _audioPlayer.PlayPrevious();
+                if (_audioPlayer.CurrentPlaylistIndex <= 0)
+                {
+                    musicTrackBar.Value = 0f;
+                    artworkBox.TimeText = FormatTimeSpan(TimeSpan.Zero, _audioPlayer.TotalDuration);
+                }
             }
         }
 

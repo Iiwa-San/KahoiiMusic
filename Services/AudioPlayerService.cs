@@ -1194,34 +1194,6 @@ namespace KahoiiMusic.Services
 
             {
 
-                var history = HistoryService.GetHistory();
-
-                if (history != null && history.Count > 1)
-
-                {
-
-                    int currentIdx = -1;
-
-                    if (!string.IsNullOrEmpty(_currentVideoId))
-
-                    {
-
-                        currentIdx = history.FindIndex(x => x.Id == _currentVideoId);
-
-                    }
-
-                    if (currentIdx >= 0 && currentIdx + 1 < history.Count)
-
-                    {
-
-                        PlayHistory(history, currentIdx + 1);
-
-                        return;
-
-                    }
-
-                }
-
                 Position = TimeSpan.Zero;
 
                 return;
@@ -1234,7 +1206,9 @@ namespace KahoiiMusic.Services
 
             {
 
-                prev = _playlist.Count - 1;
+                Position = TimeSpan.Zero;
+
+                return;
 
             }
 
