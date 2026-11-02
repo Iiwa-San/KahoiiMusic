@@ -135,6 +135,9 @@ public class SavedTracksService: ObservableObject {
     public func downloadAudioChunked(from streamUrl: URL, to destinationUrl: URL, expectedContentLength: Int64? = nil) async throws {
         var totalLength: Int64 = expectedContentLength ?? 0
 
+        // Ensure parent directory exists
+        try FileManager.default.createDirectory(at: destinationUrl.deletingLastPathComponent(), withIntermediateDirectories: true)
+
         // If total length is unknown, query via Range: bytes=0-0 probe
         if totalLength <= 0 {
             var headReq = URLRequest(url: streamUrl)
@@ -142,11 +145,21 @@ public class SavedTracksService: ObservableObject {
             headReq.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
             headReq.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
             if let (_, resp) = try? await downloadSession.data(for: headReq),
-               let httpResp = resp as? HTTPURLResponse,
-               let rangeHeader = httpResp.value(forHTTPHeaderField: "Content-Range"),
-               let totalStr = rangeHeader.split(separator: "/").last,
-               let parsed = Int64(totalStr) {
-                totalLength = parsed
+               let httpResp = resp as? HTTPURLResponse {
+                var contentRangeStr: String? = httpResp.value(forHTTPHeaderField: "Content-Range")
+                if contentRangeStr == nil {
+                    for (k, v) in httpResp.allHeaderFields {
+                        if let keyStr = k as? String, keyStr.caseInsensitiveCompare("Content-Range") == .orderedSame, let valStr = v as? String {
+                            contentRangeStr = valStr
+                            break
+                        }
+                    }
+                }
+                if let rangeHeader = contentRangeStr,
+                   let totalPart = rangeHeader.split(separator: "/").last,
+                   let parsed = Int64(String(totalPart).trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    totalLength = parsed
+                }
             }
         }
 

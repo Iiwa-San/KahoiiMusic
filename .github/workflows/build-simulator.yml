@@ -23,6 +23,7 @@ jobs:
       # --- 1. BUILD IPA CHO IPHONE THẬT (ARM64 RELEASE) ---
       - name: Build for iOS Device (Release)
         run: |
+          set -o pipefail
           xcodebuild build \
             -project KahoiiMusic.xcodeproj \
             -scheme KahoiiMusic \
@@ -32,7 +33,13 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
+            AD_HOC_CODE_SIGNING_ALLOWED=YES 2>&1 | tee build_device.log || {
+              echo "### ❌ Build for iOS Device Failed" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              grep -C 3 -E "error:" build_device.log | head -n 100 >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              exit 1
+            }
 
       - name: Package .ipa File
         run: |
