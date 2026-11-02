@@ -652,15 +652,9 @@ namespace KahoiiMusic
 
         private void BtnPrevious_Click(object sender, EventArgs e)
         {
-            if (_audioPlayer.HasPlaylist && _audioPlayer.CurrentPlaylistIndex >= 0)
+            if (_audioPlayer != null)
             {
                 _audioPlayer.PlayPrevious();
-            }
-            else if (_audioPlayer.HasTrack)
-            {
-                _audioPlayer.Position = TimeSpan.Zero;
-                musicTrackBar.Value = 0f;
-                artworkBox.TimeText = FormatTimeSpan(TimeSpan.Zero, _audioPlayer.TotalDuration);
             }
         }
 
