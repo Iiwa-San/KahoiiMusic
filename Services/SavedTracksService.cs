@@ -16,6 +16,27 @@ namespace KahoiiMusic.Services
         public static SavedTracksService Instance => _instance.Value;
 
         private readonly object _lock = new object();
+        private Process _activeDownloadProc = null;
+        private readonly object _procLock = new object();
+
+        public void CancelAllDownloads()
+        {
+            lock (_procLock)
+            {
+                if (_activeDownloadProc != null)
+                {
+                    try
+                    {
+                        if (!_activeDownloadProc.HasExited)
+                        {
+                            _activeDownloadProc.Kill();
+                        }
+                    }
+                    catch { }
+                    _activeDownloadProc = null;
+                }
+            }
+        }
         private List<PlaylistItem> _savedTracks = new List<PlaylistItem>();
         private bool _isLoaded = false;
         private int _activeSavingCount = 0;
@@ -176,10 +197,16 @@ namespace KahoiiMusic.Services
                         psi.CreateNoWindow = true;
                         psi.UseShellExecute = false;
 
-                        using (Process proc = Process.Start(psi))
+                        Process proc = Process.Start(psi);
+                        lock (_procLock) { _activeDownloadProc = proc; }
+                        try
                         {
-                            // Keep normal priority for maximum download speed
                             proc?.WaitForExit(120000);
+                        }
+                        finally
+                        {
+                            lock (_procLock) { if (_activeDownloadProc == proc) _activeDownloadProc = null; }
+                            try { proc?.Dispose(); } catch { }
                         }
                     }
 

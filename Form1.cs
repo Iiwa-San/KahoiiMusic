@@ -792,6 +792,7 @@ namespace KahoiiMusic
             _isFormClosed = true;
             base.OnFormClosing(e);
             try { FirebaseSyncService.Instance.FlushSyncOnExit(); } catch { }
+            try { SavedTracksService.Instance.CancelAllDownloads(); } catch { }
             Application.RemoveMessageFilter(this);
 
             try { ThumbnailManager.ClearMemory(); } catch { }
@@ -833,6 +834,12 @@ namespace KahoiiMusic
                 _audioPlayer = null;
             }
         }
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            try { Environment.Exit(0); } catch { }
+        }
+
 
         private void panelPlayerCard_Paint(object sender, PaintEventArgs e)
         {

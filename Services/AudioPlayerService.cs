@@ -3108,7 +3108,6 @@ namespace KahoiiMusic.Services
 
                 GC.Collect();
 
-                GC.WaitForPendingFinalizers();
 
             }
 

@@ -38,6 +38,7 @@ namespace KahoiiMusic.Services
         public event EventHandler SyncStatusChanged;
 
         private System.Threading.Timer _autoUploadTimer;
+        private volatile bool _hasPendingAutoUpload = false;
         private readonly object _syncLock = new object();
         private volatile bool _isApplyingCloudPayload = false;
         private volatile bool _isAutoSyncInitialized = false;
@@ -82,6 +83,7 @@ namespace KahoiiMusic.Services
 
             lock (_syncLock)
             {
+                _hasPendingAutoUpload = true;
                 if (_autoUploadTimer == null)
                 {
                     _autoUploadTimer = new System.Threading.Timer(OnAutoUploadTimerFired, null, 2500, Timeout.Infinite);
@@ -108,18 +110,27 @@ namespace KahoiiMusic.Services
         {
             lock (_syncLock)
             {
+                _hasPendingAutoUpload = false;
                 _autoUploadTimer?.Change(Timeout.Infinite, Timeout.Infinite);
             }
         }
 
         public void FlushSyncOnExit()
         {
-            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
             try
             {
+                if (!_hasPendingAutoUpload || !FirebaseAuthService.Instance.IsLoggedIn)
+                {
+                    CancelPendingAutoUpload();
+                    return;
+                }
                 CancelPendingAutoUpload();
                 var payload = GetCurrentLocalPayload();
-                SyncUploadAsync(payload).GetAwaiter().GetResult();
+                var task = Task.Run(async () =>
+                {
+                    await SyncUploadAsync(payload).ConfigureAwait(false);
+                });
+                task.Wait(500);
             }
             catch { }
         }
@@ -185,7 +196,7 @@ namespace KahoiiMusic.Services
 
             try
             {
-                string token = await FirebaseAuthService.Instance.GetValidTokenAsync();
+                string token = await FirebaseAuthService.Instance.GetValidTokenAsync().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(token))
                 {
                     SyncStatusMessage = "Phiên đăng nhập hết hạn";
@@ -198,7 +209,7 @@ namespace KahoiiMusic.Services
                 var req = new HttpRequestMessage(HttpMethod.Get, url);
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-                var response = await _httpClient.SendAsync(req);
+                var response = await _httpClient.SendAsync(req).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
                     if ((int)response.StatusCode == 404)
@@ -216,7 +227,7 @@ namespace KahoiiMusic.Services
                     return null;
                 }
 
-                string respJson = await response.Content.ReadAsStringAsync();
+                string respJson = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var doc = _serializer.Deserialize<Dictionary<string, object>>(respJson);
 
                 if (doc.ContainsKey("fields") && doc["fields"] is Dictionary<string, object> fields)
@@ -263,7 +274,7 @@ namespace KahoiiMusic.Services
 
             try
             {
-                string token = await FirebaseAuthService.Instance.GetValidTokenAsync();
+                string token = await FirebaseAuthService.Instance.GetValidTokenAsync().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(token))
                 {
                     SyncStatusMessage = "Phiên đăng nhập hết hạn";
@@ -301,7 +312,7 @@ namespace KahoiiMusic.Services
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 req.Content = new StringContent(reqJson, Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.SendAsync(req);
+                var response = await _httpClient.SendAsync(req).ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {
                     SyncStatusMessage = "Đã tự động lưu đám mây lúc " + DateTime.Now.ToString("HH:mm");

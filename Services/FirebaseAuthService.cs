@@ -95,7 +95,7 @@ namespace KahoiiMusic.Services
                 { "returnSecureToken", true }
             };
 
-            return await ExecuteAuthRequestAsync(url, body, rememberMe);
+            return await ExecuteAuthRequestAsync(url, body, rememberMe).ConfigureAwait(false);
         }
 
         public async Task<Tuple<bool, string>> SendPasswordResetEmailAsync(string email)
@@ -117,8 +117,8 @@ namespace KahoiiMusic.Services
 
                 string jsonPayload = _serializer.Serialize(body);
                 var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync(url, content);
-                string respJson = await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.PostAsync(url, content).ConfigureAwait(false);
+                string respJson = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -164,7 +164,7 @@ namespace KahoiiMusic.Services
                 { "returnSecureToken", true }
             };
 
-            return await ExecuteAuthRequestAsync(url, body, rememberMe);
+            return await ExecuteAuthRequestAsync(url, body, rememberMe).ConfigureAwait(false);
         }
 
         private async Task<Tuple<bool, string>> ExecuteAuthRequestAsync(string url, Dictionary<string, object> body, bool rememberMe)
@@ -174,8 +174,8 @@ namespace KahoiiMusic.Services
                 string jsonPayload = _serializer.Serialize(body);
                 var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.PostAsync(url, content);
-                string respJson = await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.PostAsync(url, content).ConfigureAwait(false);
+                string respJson = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
                 var dict = _serializer.Deserialize<Dictionary<string, object>>(respJson);
                 if (dict == null)
@@ -240,7 +240,7 @@ namespace KahoiiMusic.Services
             long now = (long)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
             if (now >= CurrentUser.expiryTimestamp && !string.IsNullOrWhiteSpace(CurrentUser.refreshToken))
             {
-                bool refreshed = await RefreshTokenAsync();
+                bool refreshed = await RefreshTokenAsync().ConfigureAwait(false);
                 if (!refreshed && string.IsNullOrWhiteSpace(CurrentUser.idToken))
                 {
                     return null;
@@ -270,10 +270,10 @@ namespace KahoiiMusic.Services
                     Content = new FormUrlEncodedContent(kv)
                 };
 
-                var resp = await _httpClient.SendAsync(req);
+                var resp = await _httpClient.SendAsync(req).ConfigureAwait(false);
                 if (resp.IsSuccessStatusCode)
                 {
-                    string respJson = await resp.Content.ReadAsStringAsync();
+                    string respJson = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
                     var dict = _serializer.Deserialize<Dictionary<string, object>>(respJson);
 
                     if (dict.ContainsKey("id_token"))
