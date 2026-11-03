@@ -827,7 +827,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
                     Toast.makeText(getApplication(), "✓ Đã lưu bài hát vào mục Đã tải!", Toast.LENGTH_SHORT).show()
                     cleanUnusedTempAudio()
-                    triggerCloudUpload()
                 }.onFailure { err ->
                     _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
                     Toast.makeText(getApplication(), "Lỗi tải tệp: ${err.message}", Toast.LENGTH_LONG).show()
@@ -842,9 +841,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             authRepository.currentUser.collect { user ->
                 _uiState.update { it.copy(currentUser = user) }
-                if (user != null) {
-                    syncCloudData(user)
-                }
             }
         }
     }
