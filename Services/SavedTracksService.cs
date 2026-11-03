@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿﻿﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -288,12 +288,6 @@ namespace KahoiiMusic.Services
         {
             lock (_lock)
             {
-                PlaylistItem keepItem = null;
-                if (!string.IsNullOrWhiteSpace(exceptVideoId))
-                {
-                    keepItem = _savedTracks.Find(x => string.Equals(x.Id, exceptVideoId, StringComparison.OrdinalIgnoreCase));
-                }
-
                 try
                 {
                     if (Directory.Exists(AppPaths.SavedAudioDir))
@@ -319,10 +313,6 @@ namespace KahoiiMusic.Services
                 catch { }
 
                 _savedTracks.Clear();
-                if (keepItem != null)
-                {
-                    _savedTracks.Add(keepItem);
-                }
                 SaveToFile();
             }
             SavedTracksChanged?.Invoke(this, EventArgs.Empty);
