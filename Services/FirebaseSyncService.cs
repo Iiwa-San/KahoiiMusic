@@ -56,11 +56,18 @@ namespace KahoiiMusic.Services
 
             try
             {
+                string token = await FirebaseAuthService.Instance.GetValidTokenAsync();
+                if (string.IsNullOrEmpty(token))
+                {
+                    SyncStatusMessage = "Phiên đăng nhập hết hạn";
+                    return null;
+                }
+
                 string url = string.Format("https://firestore.googleapis.com/v1/projects/{0}/databases/(default)/documents/users/{1}?key={2}",
                     ProjectId, user.localId, ApiKey);
 
                 var req = new HttpRequestMessage(HttpMethod.Get, url);
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", user.idToken);
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 var response = await _httpClient.SendAsync(req);
                 if (!response.IsSuccessStatusCode)
@@ -116,6 +123,13 @@ namespace KahoiiMusic.Services
 
             try
             {
+                string token = await FirebaseAuthService.Instance.GetValidTokenAsync();
+                if (string.IsNullOrEmpty(token))
+                {
+                    SyncStatusMessage = "Phiên đăng nhập hết hạn";
+                    return false;
+                }
+
                 string url = string.Format("https://firestore.googleapis.com/v1/projects/{0}/databases/(default)/documents/users/{1}?updateMask.fieldPaths=musicDataJson&updateMask.fieldPaths=updatedAt&key={2}",
                     ProjectId, user.localId, ApiKey);
 
@@ -144,7 +158,7 @@ namespace KahoiiMusic.Services
 
                 string reqJson = _serializer.Serialize(firestoreBody);
                 var req = new HttpRequestMessage(new HttpMethod("PATCH"), url);
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", user.idToken);
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 req.Content = new StringContent(reqJson, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.SendAsync(req);

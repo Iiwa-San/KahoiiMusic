@@ -34,6 +34,7 @@ namespace KahoiiMusic
 
         private RoundedButton btnSubmit;
         private Label lblError;
+        private CustomCheckBox chkRememberMe;
         
         // Profile View (Logged in)
         private Panel pnlProfile;
@@ -170,10 +171,19 @@ namespace KahoiiMusic
             pnlConfirmPasswordBox.Visible = false;
             pnlContent.Controls.Add(pnlConfirmPasswordBox);
 
+            // Remember Login Checkbox
+            chkRememberMe = new CustomCheckBox
+            {
+                Location = new Point(20, 148),
+                Size = new Size(180, 22),
+                Checked = true
+            };
+            pnlContent.Controls.Add(chkRememberMe);
+
             // Error Label
             lblError = new Label
             {
-                Location = new Point(20, 148),
+                Location = new Point(20, 174),
                 Size = new Size(300, 20),
                 ForeColor = Color.FromArgb(255, 100, 125),
                 Font = new Font("Segoe UI", 8.5F),
@@ -186,7 +196,7 @@ namespace KahoiiMusic
             btnSubmit = new RoundedButton
             {
                 Text = "ĐĂNG NHẬP",
-                Location = new Point(20, 172),
+                Location = new Point(20, 196),
                 Size = new Size(300, 38),
                 ButtonColor = AccentPink,
                 TextColor = Color.White,
@@ -223,7 +233,7 @@ namespace KahoiiMusic
                         return;
                     }
 
-                    var res = await FirebaseAuthService.Instance.SignUpAsync(email, pass);
+                    var res = await FirebaseAuthService.Instance.SignUpAsync(email, pass, chkRememberMe.Checked);
                     if (!res.Item1)
                     {
                         ShowError(res.Item2);
@@ -247,7 +257,7 @@ namespace KahoiiMusic
                         return;
                     }
 
-                    var res = await FirebaseAuthService.Instance.SignInAsync(email, pass);
+                    var res = await FirebaseAuthService.Instance.SignInAsync(email, pass, chkRememberMe.Checked);
                     if (!res.Item1)
                     {
                         ShowError(res.Item2);
@@ -354,19 +364,21 @@ namespace KahoiiMusic
             if (register)
             {
                 pnlConfirmPasswordBox.Visible = true;
-                lblError.Location = new Point(20, 192);
-                btnSubmit.Location = new Point(20, 214);
+                chkRememberMe.Location = new Point(20, 194);
+                lblError.Location = new Point(20, 220);
+                btnSubmit.Location = new Point(20, 242);
                 btnSubmit.Text = "TẠO TÀI KHOẢN";
-                this.Height = 316;
+                this.Height = 344;
                 pnlContent.Height = this.Height - 40;
             }
             else
             {
                 pnlConfirmPasswordBox.Visible = false;
-                lblError.Location = new Point(20, 146);
-                btnSubmit.Location = new Point(20, 168);
+                chkRememberMe.Location = new Point(20, 148);
+                lblError.Location = new Point(20, 174);
+                btnSubmit.Location = new Point(20, 196);
                 btnSubmit.Text = "ĐĂNG NHẬP";
-                this.Height = 270;
+                this.Height = 298;
                 pnlContent.Height = this.Height - 40;
             }
         }
@@ -524,6 +536,7 @@ namespace KahoiiMusic
                 pnlEmailBox.Visible = false;
                 pnlPasswordBox.Visible = false;
                 pnlConfirmPasswordBox.Visible = false;
+                chkRememberMe.Visible = false;
                 btnSubmit.Visible = false;
                 lblError.Visible = false;
                 
@@ -543,6 +556,7 @@ namespace KahoiiMusic
                 tabSelector.Visible = true;
                 pnlEmailBox.Visible = true;
                 pnlPasswordBox.Visible = true;
+                chkRememberMe.Visible = true;
                 btnSubmit.Visible = true;
                                 SwitchTab(_isRegisterMode);
             }
@@ -827,6 +841,93 @@ namespace KahoiiMusic
                 int g = (int)(from.G + (to.G - from.G) * amount);
                 int b = (int)(from.B + (to.B - from.B) * amount);
                 return Color.FromArgb(r, g, b);
+            }
+        }
+
+        // 4. Custom Modern CheckBox Control for Remember Login
+        private class CustomCheckBox : Control
+        {
+            private bool _checked = true;
+            public bool Checked
+            {
+                get => _checked;
+                set { _checked = value; Invalidate(); }
+            }
+
+            public string LabelText { get; set; } = "Ghi nhớ đăng nhập";
+
+            public CustomCheckBox()
+            {
+                SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                         ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+                BackColor = Color.Transparent;
+                Size = new Size(180, 22);
+                Cursor = Cursors.Hand;
+            }
+
+            protected override void OnClick(EventArgs e)
+            {
+                base.OnClick(e);
+                Checked = !Checked;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                Graphics g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                int boxSize = 16;
+                int boxY = (Height - boxSize) / 2;
+                var boxRect = new Rectangle(0, boxY, boxSize, boxSize);
+
+                if (_checked)
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(255, 38, 128))) // Neon Pink
+                    using (var path = GetRoundedRect(boxRect, 4))
+                    {
+                        g.FillPath(brush, path);
+                    }
+
+                    // Checkmark '✓'
+                    using (var pen = new Pen(Color.White, 1.8f))
+                    {
+                        pen.StartCap = LineCap.Round;
+                        pen.EndCap = LineCap.Round;
+                        g.DrawLine(pen, 3, boxY + 8, 7, boxY + 12);
+                        g.DrawLine(pen, 7, boxY + 12, 13, boxY + 4);
+                    }
+                }
+                else
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(28, 25, 42)))
+                    using (var pen = new Pen(Color.FromArgb(90, 85, 115), 1.2f))
+                    using (var path = GetRoundedRect(boxRect, 4))
+                    {
+                        g.FillPath(brush, path);
+                        g.DrawPath(pen, path);
+                    }
+                }
+
+                // Text
+                var textRect = new Rectangle(boxSize + 8, 0, Width - boxSize - 8, Height);
+                using (var font = new Font("Segoe UI", 9F, FontStyle.Regular))
+                {
+                    TextRenderer.DrawText(g, LabelText, font, textRect, Color.FromArgb(195, 190, 215),
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                }
+            }
+
+            private GraphicsPath GetRoundedRect(Rectangle r, int radius)
+            {
+                GraphicsPath path = new GraphicsPath();
+                int d = radius * 2;
+                path.AddArc(r.X, r.Y, d, d, 180, 90);
+                path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+                path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+                path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+                path.CloseFigure();
+                return path;
             }
         }
     }
