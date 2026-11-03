@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -67,12 +67,32 @@ namespace KahoiiMusic
                 }
             };
 
-            FirebaseSyncService.Instance.SyncStatusChanged += (s, e) =>
+            EventHandler onSyncStatus = (s, e) =>
             {
-                if (IsHandleCreated)
+                if (IsHandleCreated && !IsDisposed)
                 {
-                    try { Invoke(new Action(UpdateSyncStatus)); } catch { }
+                    try { BeginInvoke(new Action(UpdateSyncStatus)); } catch { }
                 }
+            };
+            EventHandler onDataChanged = (s, e) =>
+            {
+                if (IsHandleCreated && !IsDisposed)
+                {
+                    try { BeginInvoke(new Action(UpdateStats)); } catch { }
+                }
+            };
+
+            FirebaseSyncService.Instance.SyncStatusChanged += onSyncStatus;
+            SavedTracksService.Instance.SavedTracksChanged += onDataChanged;
+            HistoryService.HistoryChanged += onDataChanged;
+            PlaylistCollectionService.Instance.PlaylistsChanged += onDataChanged;
+
+            this.FormClosed += (s, e) =>
+            {
+                FirebaseSyncService.Instance.SyncStatusChanged -= onSyncStatus;
+                SavedTracksService.Instance.SavedTracksChanged -= onDataChanged;
+                HistoryService.HistoryChanged -= onDataChanged;
+                PlaylistCollectionService.Instance.PlaylistsChanged -= onDataChanged;
             };
         }
 
@@ -575,6 +595,11 @@ namespace KahoiiMusic
 
         private void UpdateStats()
         {
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(UpdateStats)); } catch { }
+                return;
+            }
             int savedCount = SavedTracksService.Instance.GetSavedTracks().Count;
             int historyCount = HistoryService.GetHistory().Count;
             int collectionCount = PlaylistCollectionService.Instance.GetPlaylists().Count;
@@ -585,7 +610,19 @@ namespace KahoiiMusic
 
         private void UpdateSyncStatus()
         {
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(UpdateSyncStatus)); } catch { }
+                return;
+            }
             lblSyncStatus.Text = FirebaseSyncService.Instance.SyncStatusMessage;
+            if (btnSyncNow != null)
+            {
+                bool syncing = FirebaseSyncService.Instance.IsSyncing;
+                btnSyncNow.Enabled = !syncing;
+                btnSyncNow.Text = syncing ? "⟳  Đang Đồng Bộ..." : "⟳  Đồng Bộ Ngay (Tự Động Bật)";
+            }
+            UpdateStats();
         }
 
         private static GraphicsPath GetRoundedRect(Rectangle r, int radius)
