@@ -50,6 +50,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = FirebaseAuthRepository(application)
     private val syncRepository = FirebaseSyncRepository()
     private var syncJob: Job? = null
+    private var isApplyingCloudPayload = false
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -165,6 +166,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             historyRepository.history.collect { histList ->
                 _uiState.update { it.copy(history = histList) }
+                if (!isApplyingCloudPayload && _uiState.value.currentUser != null) {
+                    triggerCloudUpload()
+                }
             }
         }
     }
@@ -173,6 +177,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             savedTracksRepository.savedTracks.collect { savedList ->
                 _uiState.update { it.copy(savedTracks = savedList) }
+                if (!isApplyingCloudPayload && _uiState.value.currentUser != null) {
+                    triggerCloudUpload()
+                }
             }
         }
     }
@@ -181,6 +188,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             historyRepository.favorites.collect { favList ->
                 _uiState.update { it.copy(favorites = favList) }
+                if (!isApplyingCloudPayload && _uiState.value.currentUser != null) {
+                    triggerCloudUpload()
+                }
             }
         }
     }
@@ -841,6 +851,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             authRepository.currentUser.collect { user ->
                 _uiState.update { it.copy(currentUser = user) }
+                if (user != null) {
+                    syncCloudData(user)
+                }
             }
         }
     }
@@ -895,13 +908,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val currentTrack = _uiState.value.currentTrack
             if (currentTrack != null) {
-                _uiState.update { it.copy(playlist = listOf(currentTrack), currentTrackIndex = 0) }
+                _uiState.update { it.copy(playlist = listOf(currentTrack), currentPlaylistIndex = 0) }
             } else {
-                _uiState.update { it.copy(playlist = emptyList(), currentTrackIndex = -1) }
+                _uiState.update { it.copy(playlist = emptyList(), currentPlaylistIndex = -1) }
             }
-            historyRepository.clearHistoryExcept(currentTrack?.id)
-            savedTracksRepository.clearAllExcept(currentTrack?.id)
+            historyRepository.clearAll()
+            savedTracksRepository.clearAll()
             playlistCollectionRepository.clearAll()
+            _uiState.update {
+                it.copy(
+                    savedTracks = emptyList(),
+                    history = emptyList(),
+                    favorites = emptyList(),
+                    playlists = emptyList()
+                )
+            }
         }
     }
 
@@ -923,7 +944,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val res = syncRepository.downloadMusicData(user)
             res.onSuccess { cloudPayload ->
                 if (cloudPayload != null) {
-                    applyCloudPayload(cloudPayload)
+                    isApplyingCloudPayload = true
+                    try {
+                        applyCloudPayload(cloudPayload)
+                    } finally {
+                        isApplyingCloudPayload = false
+                    }
                     _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đã đồng bộ từ đám mây!") }
                 } else {
                     uploadCurrentDataToCloud(user)
@@ -971,9 +997,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerCloudUpload() {
         val user = _uiState.value.currentUser ?: return
+        if (isApplyingCloudPayload) return
         syncJob?.cancel()
         syncJob = viewModelScope.launch {
-            delay(1500)
+            delay(2500)
             uploadCurrentDataToCloud(user)
         }
     }
@@ -1118,6 +1145,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             playlistCollectionRepository.playlists.collect { list ->
                 _uiState.update { it.copy(playlists = list) }
+                if (!isApplyingCloudPayload && _uiState.value.currentUser != null) {
+                    triggerCloudUpload()
+                }
             }
         }
     }

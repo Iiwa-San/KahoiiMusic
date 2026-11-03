@@ -450,6 +450,9 @@ fun MusicPlayerScreen(
                 currentUser = uiState.currentUser,
                 isSyncing = uiState.isSyncing,
                 syncStatusMessage = uiState.syncStatusMessage,
+                savedTracksCount = uiState.savedTracks.size,
+                collectionsCount = uiState.playlists.size,
+                historyCount = uiState.history.size,
                 onSignIn = { email, pass ->
                     viewModel.signIn(email, pass)
                 },

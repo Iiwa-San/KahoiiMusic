@@ -130,6 +130,13 @@ class HistoryRepository(private val context: Context) {
         saveHistory()
     }
 
+    suspend fun clearAll() = withContext(Dispatchers.IO) {
+        _history.value = emptyList()
+        _favorites.value = emptyList()
+        saveHistory()
+        saveFavorites()
+    }
+
     suspend fun clearHistory() = withContext(Dispatchers.IO) {
         _history.value = emptyList()
         saveHistory()

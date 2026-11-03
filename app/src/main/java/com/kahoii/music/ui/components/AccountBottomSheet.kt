@@ -73,6 +73,9 @@ fun AccountBottomSheet(
     currentUser: FirebaseUser?,
     isSyncing: Boolean,
     syncStatusMessage: String?,
+    savedTracksCount: Int = 0,
+    collectionsCount: Int = 0,
+    historyCount: Int = 0,
     onSignIn: (String, String) -> Unit,
     onSignUp: (String, String) -> Unit,
     onSignOut: () -> Unit,
@@ -87,6 +90,49 @@ fun AccountBottomSheet(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
+
+    if (showSignOutConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showSignOutConfirm = false },
+            title = {
+                Text(
+                    text = "Đăng xuất",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Bạn có muốn đăng xuất tài khoản không?\n\n(Danh sách bài hát của bạn đã được lưu an toàn trên đám mây và sẽ tự động tải về khi bạn đăng nhập lại).",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 13.5.sp,
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSignOutConfirm = false
+                        onSignOut()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF4B6E)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Đăng xuất", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showSignOutConfirm = false },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Hủy", color = Color.White)
+                }
+            },
+            containerColor = Color(0xFF1E1830)
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -111,149 +157,117 @@ fun AccountBottomSheet(
             Spacer(modifier = Modifier.height(14.dp))
 
             if (currentUser != null) {
-                // ================= LOGGED IN VIEW =================
-                Row(
+                // ================= LOGGED IN VIEW (STREAMLINED LIKE PC) =================
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(60.dp)
                             .clip(CircleShape)
                             .background(NeonPink.copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        val initial = currentUser.email.firstOrNull()?.uppercaseChar()?.toString() ?: "U"
                         Text(
-                            text = initial,
-                            color = NeonPink,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "👤",
+                            fontSize = 28.sp
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Tài Khoản Kahoii",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Active",
-                                tint = Color(0xFF22C55E),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        Text(
-                            text = currentUser.email,
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Cloud Sync Status Box
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.05f))
-                        .padding(14.dp)
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (isSyncing) Icons.Default.CloudSync else Icons.Default.CloudDone,
-                                contentDescription = "Cloud",
-                                tint = NeonPink,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Đồng Bộ Đám Mây Firebase",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = syncStatusMessage ?: "Mọi danh sách (hàng đợi, yêu thích, lịch sử, bộ sưu tập, đã tải) được lưu trữ dạng JSON trên Firebase.",
-                            color = Color.White.copy(alpha = 0.65f),
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.DownloadDone,
-                                    contentDescription = "Auto",
-                                    tint = Color(0xFF22C55E),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Tự động tải lại bài offline",
-                                    color = Color(0xFF22C55E),
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-
-                            Button(
-                                onClick = onSyncNow,
-                                enabled = !isSyncing,
-                                colors = ButtonDefaults.buttonColors(containerColor = NeonPink),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.height(34.dp)
-                            ) {
-                                if (isSyncing) {
-                                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                                } else {
-                                    Icon(imageVector = Icons.Default.Sync, contentDescription = "Sync", modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Đồng bộ ngay", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Sign Out Button
-                OutlinedButton(
-                    onClick = onSignOut,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Logout,
-                        contentDescription = "Sign Out",
-                        tint = Color(0xFFFF4B6E),
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        text = currentUser.email,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Đăng xuất tài khoản", color = Color(0xFFFF4B6E), fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-                }
 
+                    Spacer(modifier = Modifier.height(3.dp))
+
+                    Text(
+                        text = "UID: ${currentUser.localId}",
+                        color = Color(0xFF87829B),
+                        fontSize = 11.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Stats Card (matching PC)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.06f))
+                            .padding(vertical = 12.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Đã tải: $savedTracksCount bài  •  Bộ sưu tập: $collectionsCount",
+                                color = Color(0xFFC8C3DC),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Lịch sử nghe: $historyCount bài",
+                                color = Color(0xFFC8C3DC),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Sync Status message
+                    Text(
+                        text = syncStatusMessage ?: "Đồng bộ tự động đám mây đang bật",
+                        color = NeonPink,
+                        fontSize = 12.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Single Action Button: Đồng Bộ Ngay (Tự Động Bật)
+                    Button(
+                        onClick = onSyncNow,
+                        enabled = !isSyncing,
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonPink),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("⟳  Đang Đồng Bộ...", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("⟳  Đồng Bộ Ngay (Tự Động Bật)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Sign Out Button
+                    OutlinedButton(
+                        onClick = { showSignOutConfirm = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color(0xFFFF7882)
+                        )
+                    ) {
+                        Text("Đăng Xuất", color = Color(0xFFFF7882), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             } else {
                 // ================= AUTH FORM (LOGIN / REGISTER) =================
                 Text(
