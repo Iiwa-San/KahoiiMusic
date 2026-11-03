@@ -590,6 +590,7 @@ namespace KahoiiMusic
                 pnlPasswordBox.Visible = false;
                 pnlConfirmPasswordBox.Visible = false;
                 chkRememberMe.Visible = false;
+                if (btnForgotPassword != null) btnForgotPassword.Visible = false;
                 btnSubmit.Visible = false;
                 lblError.Visible = false;
                 
