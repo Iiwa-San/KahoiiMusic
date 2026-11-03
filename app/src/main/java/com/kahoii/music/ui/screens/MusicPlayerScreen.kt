@@ -473,9 +473,10 @@ fun MusicPlayerScreen(
         }
 
         // 4. Cellular Download Warning Dialog
-        if (uiState.pendingCellularDownloadTrack != null || uiState.pendingCellularDownloadTracks != null) {
+        val hasCellularWarning = uiState.pendingCellularDownloadTrack != null || uiState.pendingCellularDownloadTracks.isNotEmpty()
+        if (hasCellularWarning) {
             val title = uiState.pendingCellularDownloadTrack?.title
-                ?: uiState.pendingCellularDownloadTracks?.let { "${it.size} bài hát" }
+                ?: "${uiState.pendingCellularDownloadTracks.size} bài hát"
             CellularDownloadDialog(
                 trackTitle = title,
                 onConfirm = {
