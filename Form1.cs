@@ -164,12 +164,6 @@ namespace KahoiiMusic
             btnMinimize.MouseLeave += (s, e) => btnMinimize.ForeColor = Color.FromArgb(140, 140, 140);
 
             _userToolTip = new ToolTip();
-            btnUser.MouseEnter += (s, e) =>
-            {
-                if (!FirebaseAuthService.Instance.IsLoggedIn)
-                    btnUser.ForeColor = Color.White;
-            };
-            btnUser.MouseLeave += (s, e) => UpdateUserButtonAppearance();
             UpdateUserButtonAppearance();
             FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
             {
@@ -1279,14 +1273,13 @@ namespace KahoiiMusic
         {
             if (FirebaseAuthService.Instance.IsLoggedIn)
             {
-                btnUser.ForeColor = Color.FromArgb(255, 45, 120); // Neon Pink
                 _userToolTip?.SetToolTip(btnUser, "Tài khoản: " + FirebaseAuthService.Instance.CurrentUser.email);
             }
             else
             {
-                btnUser.ForeColor = Color.FromArgb(140, 140, 140);
                 _userToolTip?.SetToolTip(btnUser, "Đăng nhập / Đăng ký tài khoản Kahoii");
             }
+            btnUser.Invalidate();
         }
 
     }}

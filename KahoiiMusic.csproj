@@ -96,6 +96,7 @@
     <Compile Include="Controls\VolumePopup.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\UserAccountButton.cs" />
     <Compile Include="Controls\PlaylistButton.cs">
       <SubType>Component</SubType>
     </Compile>

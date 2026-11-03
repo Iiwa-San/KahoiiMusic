@@ -51,7 +51,7 @@ namespace KahoiiMusic
             this.lblCopyright = new System.Windows.Forms.Label();
             this.btnClose = new System.Windows.Forms.Label();
             this.btnMinimize = new System.Windows.Forms.Label();
-            this.btnUser = new System.Windows.Forms.Label();
+            this.btnUser = new KahoiiMusic.Controls.UserAccountButton();
             this.playbackTimer = new System.Windows.Forms.Timer(this.components);
             this.panelPlayerCard.SuspendLayout();
             this.panelTopBar.SuspendLayout();
@@ -97,6 +97,7 @@ namespace KahoiiMusic
             this.panelTopBar.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(47)))), ((int)(((byte)(20)))));
             this.panelTopBar.Controls.Add(this.btnPlaylist);
             this.panelTopBar.Controls.Add(this.searchPillBox);
+            this.panelTopBar.Controls.Add(this.btnUser);
             this.panelTopBar.Location = new System.Drawing.Point(0, 0);
             this.panelTopBar.Name = "panelTopBar";
             this.panelTopBar.Size = new System.Drawing.Size(476, 30);
@@ -106,7 +107,7 @@ namespace KahoiiMusic
             // 
             this.btnPlaylist.BackColor = System.Drawing.Color.Transparent;
             this.btnPlaylist.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnPlaylist.Location = new System.Drawing.Point(14, 3);
+            this.btnPlaylist.Location = new System.Drawing.Point(12, 3);
             this.btnPlaylist.Name = "btnPlaylist";
             this.btnPlaylist.Size = new System.Drawing.Size(28, 24);
             this.btnPlaylist.TabIndex = 1;
@@ -114,10 +115,10 @@ namespace KahoiiMusic
             // searchPillBox
             // 
             this.searchPillBox.BackColor = System.Drawing.Color.Transparent;
-            this.searchPillBox.Location = new System.Drawing.Point(58, 5);
+            this.searchPillBox.Location = new System.Drawing.Point(46, 4);
             this.searchPillBox.Name = "searchPillBox";
             this.searchPillBox.PlaceholderText = "link youtube...";
-            this.searchPillBox.Size = new System.Drawing.Size(360, 20);
+            this.searchPillBox.Size = new System.Drawing.Size(384, 22);
             this.searchPillBox.TabIndex = 0;
             // 
             // gradientPanel
@@ -295,16 +296,12 @@ namespace KahoiiMusic
             // 
             // btnUser
             // 
-            this.btnUser.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnUser.BackColor = System.Drawing.Color.Transparent;
             this.btnUser.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnUser.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.btnUser.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
-            this.btnUser.Location = new System.Drawing.Point(404, 3);
+            this.btnUser.Location = new System.Drawing.Point(436, 3);
             this.btnUser.Name = "btnUser";
-            this.btnUser.Size = new System.Drawing.Size(22, 18);
-            this.btnUser.TabIndex = 0;
-            this.btnUser.Text = "👤";
-            this.btnUser.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.btnUser.Size = new System.Drawing.Size(28, 24);
+            this.btnUser.TabIndex = 2;
             this.btnUser.Click += new System.EventHandler(this.btnUser_Click);
             // 
             // btnMinimize
@@ -330,7 +327,6 @@ namespace KahoiiMusic
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
             this.ClientSize = new System.Drawing.Size(480, 348);
-            this.Controls.Add(this.btnUser);
             this.Controls.Add(this.btnMinimize);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.panelPlayerCard);
@@ -357,7 +353,7 @@ namespace KahoiiMusic
         private KahoiiMusic.Controls.MarqueeLabel marqueeTitle;
         private System.Windows.Forms.Label btnClose;
         private System.Windows.Forms.Label btnMinimize;
-        private System.Windows.Forms.Label btnUser;
+        private KahoiiMusic.Controls.UserAccountButton btnUser;
         private System.Windows.Forms.Panel panelPlayerCard;
         private System.Windows.Forms.Panel panelTopBar;
         private KahoiiMusic.Controls.SearchPillBox searchPillBox;
