@@ -33,11 +33,13 @@ namespace KahoiiMusic
         private AudioPlayerService _audioPlayer;
         public AudioPlayerService AudioPlayer => _audioPlayer;
         private Controls.PlaylistPopup playlistPopup;
+        private AccountForm accountPopup;
         private System.Windows.Forms.Timer _ramTimer;
         private NotifyIcon _trayIcon;
         private ContextMenuStrip _trayMenu;
         private ToolStripMenuItem _trayItemLoop;
         private volatile bool _isFormClosed = false;
+        public bool IsFormClosed => _isFormClosed;
 
         public Form1() : this(null)
         {
@@ -125,6 +127,9 @@ namespace KahoiiMusic
             playlistPopup = new Controls.PlaylistPopup();
             playlistPopup.Owner = this;
             playlistPopup.AudioPlayer = _audioPlayer;
+
+            accountPopup = new AccountForm();
+            accountPopup.Owner = this;
 
             ToolTip menuTip = new ToolTip();
             menuTip.SetToolTip(btnPlaylist, "Menu (Danh sách phát, Lịch sử, Đã tải)");
@@ -271,6 +276,10 @@ namespace KahoiiMusic
             // Playlist Button and Popup Events
             btnPlaylist.Click += (s, e) =>
             {
+                if (accountPopup != null && accountPopup.Visible)
+                {
+                    accountPopup.Hide();
+                }
                 if (playlistPopup.Visible || playlistPopup.JustDeactivated)
                 {
                     playlistPopup.Hide();
@@ -307,6 +316,12 @@ namespace KahoiiMusic
                 if (playlistPopup != null && playlistPopup.Visible)
                 {
                     playlistPopup.Location = panelTopBar.PointToScreen(new Point(12, btnPlaylist.Bottom + 4));
+                }
+                if (accountPopup != null && accountPopup.Visible)
+                {
+                    int x = this.Location.X + (this.Width - accountPopup.Width) / 2;
+                    int y = this.Location.Y + (this.Height - accountPopup.Height) / 2;
+                    accountPopup.Location = new Point(Math.Max(0, x), Math.Max(0, y));
                 }
             };
 
@@ -438,6 +453,16 @@ namespace KahoiiMusic
                     {
                         playlistPopup.Hide();
                         btnPlaylist.IsOpen = false;
+                        this.Activate();
+                    }
+                }
+                if (accountPopup != null && accountPopup.Visible && !accountPopup.IsShowingChildDialog)
+                {
+                    Rectangle popupScreenRect = accountPopup.Bounds;
+                    Rectangle btnScreenRect = panelTopBar.RectangleToScreen(btnUser.Bounds);
+                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur))
+                    {
+                        accountPopup.Hide();
                         this.Activate();
                     }
                 }
@@ -790,6 +815,8 @@ namespace KahoiiMusic
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             _isFormClosed = true;
+            if (playlistPopup != null) try { playlistPopup.Hide(); } catch { }
+            if (accountPopup != null) try { accountPopup.Hide(); } catch { }
             base.OnFormClosing(e);
             try { FirebaseSyncService.Instance.FlushSyncOnExit(); } catch { }
             try { SavedTracksService.Instance.CancelAllDownloads(); } catch { }
@@ -827,6 +854,11 @@ namespace KahoiiMusic
             {
                 try { playlistPopup.Dispose(); } catch { }
                 playlistPopup = null;
+            }
+            if (accountPopup != null)
+            {
+                try { accountPopup.Dispose(); } catch { }
+                accountPopup = null;
             }
             if (_audioPlayer != null)
             {
@@ -1079,6 +1111,10 @@ namespace KahoiiMusic
                 playlistPopup.Hide();
                 btnPlaylist.IsOpen = false;
             }
+            if (accountPopup != null && accountPopup.Visible)
+            {
+                accountPopup.Hide();
+            }
             if (volumePopup != null && volumePopup.Visible)
             {
                 volumePopup.Visible = false;
@@ -1274,11 +1310,34 @@ namespace KahoiiMusic
 
         private void btnUser_Click(object sender, EventArgs e)
         {
-            using (var accountForm = new AccountForm())
+            if (accountPopup != null && (accountPopup.Visible || accountPopup.JustDeactivated))
             {
-                accountForm.ShowDialog(this);
+                accountPopup.Hide();
+                this.Activate();
             }
-            UpdateUserButtonAppearance();
+            else
+            {
+                if (playlistPopup != null && playlistPopup.Visible)
+                {
+                    playlistPopup.Hide();
+                    btnPlaylist.IsOpen = false;
+                }
+                ShowAccountPopup();
+            }
+        }
+
+        private void ShowAccountPopup()
+        {
+            if (accountPopup == null || accountPopup.IsDisposed)
+            {
+                accountPopup = new AccountForm();
+                accountPopup.Owner = this;
+            }
+            int x = this.Location.X + (this.Width - accountPopup.Width) / 2;
+            int y = this.Location.Y + (this.Height - accountPopup.Height) / 2;
+            accountPopup.Location = new Point(Math.Max(0, x), Math.Max(0, y));
+            accountPopup.Show(this);
+            accountPopup.Activate();
         }
 
         private void UpdateUserButtonAppearance()

@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -23,6 +23,11 @@ namespace KahoiiMusic
         // Custom Tab Control
         private CustomTabPill tabSelector;
         private bool _isRegisterMode = false;
+
+        private DateTime _lastDeactivatedTime = DateTime.MinValue;
+        public bool JustDeactivated => (DateTime.UtcNow - _lastDeactivatedTime).TotalMilliseconds < 250;
+        public bool IsShowingChildDialog => _isShowingChildDialog;
+        private bool _isShowingChildDialog = false;
 
         // Input Panels
         private Panel pnlEmailBox;
@@ -99,7 +104,10 @@ namespace KahoiiMusic
         private void InitializeComponent()
         {
             this.FormBorderStyle = FormBorderStyle.None;
-            this.StartPosition = FormStartPosition.CenterParent;
+            this.StartPosition = FormStartPosition.Manual;
+
+            this.KeyPreview = true;
+            this.Text = "Tài Khoản Kahoii";
             this.Size = new Size(340, 270);
             this.BackColor = BgDark;
             this.ShowInTaskbar = false;
@@ -146,7 +154,7 @@ namespace KahoiiMusic
                 Location = new Point(302, 7),
                 Size = new Size(26, 26)
             };
-            btnClose.Click += (s, e) => this.Close();
+            btnClose.Click += (s, e) => this.Hide();
 
             pnlHeader.Controls.Add(lblTitle);
             pnlHeader.Controls.Add(btnClose);
@@ -230,7 +238,7 @@ namespace KahoiiMusic
 
                 if (res.Item1)
                 {
-                    MessageBox.Show(res.Item2, "Khôi phục mật khẩu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ShowMessageBox(res.Item2, "Khôi phục mật khẩu", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
@@ -537,7 +545,7 @@ namespace KahoiiMusic
             };
             btnSignOut.Click += (s, e) =>
             {
-                var ask = MessageBox.Show("Bạn có muốn đăng xuất tài khoản không?\n\n(Danh sách bài hát của bạn đã được lưu an toàn trên đám mây và sẽ tự động tải về khi bạn đăng nhập lại).",
+                var ask = ShowMessageBox("Bạn có muốn đăng xuất tài khoản không?\n\n(Danh sách bài hát của bạn đã được lưu an toàn trên đám mây và sẽ tự động tải về khi bạn đăng nhập lại).",
                     "Đăng xuất", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (ask == DialogResult.Yes)
                 {
@@ -635,6 +643,69 @@ namespace KahoiiMusic
             path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
             path.CloseFigure();
             return path;
+        }
+
+
+        private DialogResult ShowMessageBox(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon)
+        {
+            _isShowingChildDialog = true;
+            try
+            {
+                return MessageBox.Show(this, text, caption, buttons, icon);
+            }
+            finally
+            {
+                _isShowingChildDialog = false;
+            }
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ClassStyle |= 0x20000; // CS_DROPSHADOW
+                return cp;
+            }
+        }
+
+        protected override void OnDeactivate(EventArgs e)
+        {
+            base.OnDeactivate(e);
+            _lastDeactivatedTime = DateTime.UtcNow;
+            if (_isShowingChildDialog) return;
+            Hide();
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode == Keys.Escape)
+            {
+                Hide();
+            }
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (this.Visible)
+            {
+                RefreshViewState();
+            }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                this.Hide();
+            }
+            else
+            {
+                base.OnFormClosing(e);
+            }
         }
 
         // ================= HELPER CONTROLS =================

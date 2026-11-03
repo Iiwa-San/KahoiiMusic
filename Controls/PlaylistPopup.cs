@@ -258,6 +258,7 @@ namespace KahoiiMusic.Controls
         {
             base.OnDeactivate(e);
             _lastDeactivatedTime = DateTime.UtcNow;
+            if (Owner is Form1 f1 && f1.IsFormClosed) { Hide(); return; }
             if (Owner != null && !Owner.IsDisposed)
             {
                 try { Owner.Activate(); } catch { }
