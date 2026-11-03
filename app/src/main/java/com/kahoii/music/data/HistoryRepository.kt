@@ -131,6 +131,33 @@ class HistoryRepository(private val context: Context) {
         saveHistory()
     }
 
+    suspend fun mergeHistory(cloudHistory: List<PlaylistItem>) = withContext(Dispatchers.IO) {
+        if (cloudHistory.isEmpty()) return@withContext
+        val current = _history.value.toMutableList()
+        for (track in cloudHistory) {
+            if (track.id.isBlank()) continue
+            if (!current.any { it.id.equals(track.id, ignoreCase = true) }) {
+                current.add(track)
+            }
+        }
+        val finalHistory = if (current.size > 200) current.take(200) else current
+        _history.value = finalHistory
+        saveHistory()
+    }
+
+    suspend fun mergeFavorites(cloudFavorites: List<PlaylistItem>) = withContext(Dispatchers.IO) {
+        if (cloudFavorites.isEmpty()) return@withContext
+        val current = _favorites.value.toMutableList()
+        for (fav in cloudFavorites) {
+            if (fav.id.isBlank()) continue
+            if (!current.any { it.id.equals(fav.id, ignoreCase = true) }) {
+                current.add(fav)
+            }
+        }
+        _favorites.value = current
+        saveFavorites()
+    }
+
     suspend fun clearAll() = withContext(Dispatchers.IO) {
         _history.value = emptyList()
         _favorites.value = emptyList()

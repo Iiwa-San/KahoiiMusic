@@ -61,3 +61,4 @@ object GsonUtils {
         .registerTypeAdapter(Long::class.javaObjectType, SafeLongDeserializer())
         .create()
 }
+

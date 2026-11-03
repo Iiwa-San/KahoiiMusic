@@ -110,6 +110,29 @@ class PlaylistCollectionRepository(private val context: Context) {
         savePlaylist(name, emptyList())
     }
 
+    suspend fun mergeCollections(cloudCollections: List<UserPlaylist>) = withContext(Dispatchers.IO) {
+        if (cloudCollections.isEmpty()) return@withContext
+        ensureLoaded()
+        val current = _playlists.value.toMutableList()
+        for (cloudCol in cloudCollections) {
+            val existingIndex = current.indexOfFirst { it.name.equals(cloudCol.name, ignoreCase = true) }
+            if (existingIndex < 0) {
+                current.add(cloudCol)
+            } else {
+                val existing = current[existingIndex]
+                val mergedItems = existing.items.toMutableList()
+                for (item in cloudCol.items) {
+                    if (!mergedItems.any { it.id.equals(item.id, ignoreCase = true) }) {
+                        mergedItems.add(item)
+                    }
+                }
+                current[existingIndex] = existing.copy(items = mergedItems)
+            }
+        }
+        _playlists.value = current
+        savePlaylists()
+    }
+
     suspend fun clearAll() = withContext(Dispatchers.IO) {
         _playlists.value = emptyList()
         savePlaylists()

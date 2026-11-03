@@ -739,9 +739,7 @@ fun PlaylistBottomSheet(
                                 currentDurationMs = currentDurationMs,
                                 onClick = { onSavedTrackSelected(item, index) },
                                 onAddToPlaylist = {
-                                    val added = onAddToPlaylist(item)
-                                    val msg = if (added) "Đã thêm vào danh sách phát" else "Bài hát đã có trong danh sách phát"
-                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    onAddToPlaylist(item)
                                 },
                                 onToggleFavorite = { onToggleFavorite(item) },
                                 onAddToCollection = { trackForCollectionPicker = item },
@@ -828,9 +826,7 @@ fun PlaylistBottomSheet(
                                 currentDurationMs = currentDurationMs,
                                 onClick = { onHistoryTrackSelected(item, index) },
                                 onAddToPlaylist = {
-                                    val added = onAddToPlaylist(item)
-                                    val msg = if (added) "Đã thêm vào danh sách phát" else "Bài hát đã có trong danh sách phát"
-                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    onAddToPlaylist(item)
                                 },
                                 onToggleFavorite = { onToggleFavorite(item) },
                                 onAddToCollection = { trackForCollectionPicker = item },
@@ -938,9 +934,7 @@ fun PlaylistBottomSheet(
                                 currentDurationMs = currentDurationMs,
                                 onClick = { onFavoriteTrackSelected(item, index) },
                                 onAddToPlaylist = {
-                                    val added = onAddToPlaylist(item)
-                                    val msg = if (added) "Đã thêm vào danh sách phát" else "Bài hát đã có trong danh sách phát"
-                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    onAddToPlaylist(item)
                                 },
                                 onToggleFavorite = { onToggleFavorite(item) },
                                 onAddToCollection = { trackForCollectionPicker = item },
@@ -1088,12 +1082,10 @@ fun PlaylistBottomSheet(
                 onSelectCollection = { collectionId ->
                     onAddTrackToCollection(collectionId, targetTrack)
                     trackForCollectionPicker = null
-                    Toast.makeText(context, "Đã thêm \"${targetTrack.title}\" vào bộ sưu tập!", Toast.LENGTH_SHORT).show()
                 },
                 onCreateCollectionAndAdd = { newName ->
                     onCreateCollection(newName)
                     trackForCollectionPicker = null
-                    Toast.makeText(context, "Đã tạo bộ sưu tập \"$newName\"!", Toast.LENGTH_SHORT).show()
                 },
                 onDismiss = { trackForCollectionPicker = null }
             )

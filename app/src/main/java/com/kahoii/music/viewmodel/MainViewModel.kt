@@ -593,17 +593,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val newShuffle = !_uiState.value.isShuffled
         _uiState.update { it.copy(isShuffled = newShuffle) }
         com.kahoii.music.service.MusicQueueManager.isShuffled = newShuffle
-        val msg = if (newShuffle) "Đã bật trộn bài (Shuffle On)" else "Đã tắt trộn bài (Shuffle Off)"
-        Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
     }
 
     fun toggleFavorite(track: PlaylistItem? = _uiState.value.currentTrack) {
         val target = track ?: _uiState.value.currentTrack ?: return
         if (target.id.isBlank()) return
         viewModelScope.launch {
-            val isFav = historyRepository.toggleFavorite(target)
-            val msg = if (isFav) "Đã thêm vào Yêu thích ❤️" else "Đã xóa khỏi Yêu thích"
-            Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
+            historyRepository.toggleFavorite(target)
         }
     }
 
@@ -806,10 +802,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveTrackOffline(item: PlaylistItem, bypassCellularWarning: Boolean = false) {
         if (item.id.isBlank()) return
-        if (savedTracksRepository.isTrackSaved(item.id)) {
-            Toast.makeText(getApplication(), "Bài hát đã được lưu trong mục Đã tải", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (savedTracksRepository.isTrackSaved(item.id)) return
 
         if (!bypassCellularWarning && NetworkUtils.isCellular(getApplication())) {
             _uiState.update { it.copy(pendingCellularDownloadTrack = item) }
@@ -820,30 +813,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun executeDownloadTrack(item: PlaylistItem) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(downloadingTrackIds = it.downloadingTrackIds + item.id) }
-            Toast.makeText(getApplication(), "Đang tải bài hát về máy: ${item.title}...", Toast.LENGTH_SHORT).show()
-
-            val streamResult = youTubeRepository.resolveAudio(item.id)
-            streamResult.onSuccess { stream ->
-                val fullItem = item.copy(
-                    title = if (item.title.isBlank() || item.title == "Đang tải...") stream.title else item.title,
-                    artist = if (item.artist.isBlank()) stream.artist else item.artist,
-                    durationSeconds = if (item.durationSeconds <= 0) stream.durationSeconds else item.durationSeconds
-                )
-
-                val saveResult = savedTracksRepository.saveTrack(fullItem, stream.audioUrl, stream.thumbnailUrl, stream.contentLength)
-                saveResult.onSuccess {
-                    _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
-                    Toast.makeText(getApplication(), "✓ Đã lưu bài hát vào mục Đã tải!", Toast.LENGTH_SHORT).show()
+            try {
+                val streamResult = youTubeRepository.resolveAudio(item.id)
+                streamResult.onSuccess { stream ->
+                    val fullItem = item.copy(
+                        title = if (item.title.isBlank() || item.title == "Đang tải...") stream.title else item.title,
+                        artist = if (item.artist.isBlank()) stream.artist else item.artist,
+                        durationSeconds = if (item.durationSeconds <= 0) stream.durationSeconds else item.durationSeconds
+                    )
+                    savedTracksRepository.saveTrack(fullItem, stream.audioUrl, stream.thumbnailUrl, stream.contentLength)
                     cleanUnusedTempAudio()
-                }.onFailure { err ->
-                    _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
-                    Toast.makeText(getApplication(), "Lỗi tải tệp: ${err.message}", Toast.LENGTH_LONG).show()
                 }
-            }.onFailure { err ->
+            } catch (_: Exception) {
+            } finally {
                 _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
-                Toast.makeText(getApplication(), "Lỗi phân giải luồng tải: ${err.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -938,9 +923,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         syncCloudData(user)
     }
 
+    private var backgroundDownloadJob: kotlinx.coroutines.Job? = null
+
+    private fun startSequentialBackgroundDownload(tracks: List<PlaylistItem>) {
+        backgroundDownloadJob?.cancel()
+        backgroundDownloadJob = viewModelScope.launch(Dispatchers.IO) {
+            for (track in tracks) {
+                if (!isActive) break
+                if (savedTracksRepository.isTrackSaved(track.id)) continue
+                _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds + track.id) }
+                try {
+                    val streamResult = youTubeRepository.resolveAudio(track.id)
+                    streamResult.onSuccess { stream ->
+                        val fullItem = track.copy(
+                            title = if (track.title.isBlank() || track.title == "Đang tải...") stream.title else track.title,
+                            artist = if (track.artist.isBlank()) stream.artist else track.artist,
+                            durationSeconds = if (track.durationSeconds <= 0) stream.durationSeconds else track.durationSeconds
+                        )
+                        savedTracksRepository.saveTrack(fullItem, stream.audioUrl, stream.thumbnailUrl, stream.contentLength)
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - track.id) }
+                }
+                delay(800)
+            }
+        }
+    }
+
     private fun syncCloudData(user: FirebaseUser) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang đồng bộ từ đám mây...") }
+            _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang đồng bộ...") }
             val res = syncRepository.downloadMusicData(user)
             res.onSuccess { cloudPayload ->
                 if (cloudPayload != null) {
@@ -948,9 +961,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     try {
                         applyCloudPayload(cloudPayload)
                     } finally {
+                        delay(600)
                         isApplyingCloudPayload = false
                     }
-                    _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đã đồng bộ từ đám mây!") }
+                    _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đồng bộ đám mây đã hoàn tất") }
+
+                    // Tự động tải lại bài đã lưu tuần tự ngầm, không spam thông báo
+                    val missingTracks = cloudPayload.savedTracks.filter { !savedTracksRepository.isTrackSaved(it.id) }
+                    if (missingTracks.isNotEmpty()) {
+                        if (NetworkUtils.isCellular(getApplication())) {
+                            _uiState.update { it.copy(pendingCellularDownloadTracks = missingTracks) }
+                        } else {
+                            startSequentialBackgroundDownload(missingTracks)
+                        }
+                    }
                 } else {
                     uploadCurrentDataToCloud(user)
                 }
@@ -960,39 +984,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun applyCloudPayload(payload: CloudMusicPayload) {
-        viewModelScope.launch {
-            if (payload.playlist.isNotEmpty()) {
-                _uiState.update { it.copy(playlist = payload.playlist) }
-            }
-            payload.favorites.forEach {
-                if (!historyRepository.isFavorite(it.id)) {
-                    historyRepository.toggleFavorite(it)
-                }
-            }
-            payload.history.forEach { historyRepository.addTrack(it) }
-            payload.collections.forEach { col ->
-                val existing = playlistCollectionRepository.playlists.value.find { it.name == col.name }
-                if (existing == null) {
-                    playlistCollectionRepository.savePlaylist(col.name, col.items)
-                } else {
-                    col.items.forEach { item ->
-                        playlistCollectionRepository.addTrackToPlaylist(existing.id, item)
-                    }
-                }
-            }
-
-            // Tự động tải lại bài đã lưu nếu thiết bị chưa có file
-            val missingTracks = payload.savedTracks.filter { !savedTracksRepository.isTrackSaved(it.id) }
-            if (missingTracks.isNotEmpty()) {
-                if (NetworkUtils.isCellular(getApplication())) {
-                    _uiState.update { it.copy(pendingCellularDownloadTracks = missingTracks) }
-                } else {
-                    Toast.makeText(getApplication(), "Tự động tải lại ${missingTracks.size} bài hát đã lưu...", Toast.LENGTH_SHORT).show()
-                    missingTracks.forEach { executeDownloadTrack(it) }
-                }
-            }
+    private suspend fun applyCloudPayload(payload: CloudMusicPayload) = withContext(Dispatchers.IO) {
+        if (payload.playlist.isNotEmpty()) {
+            _uiState.update { it.copy(playlist = payload.playlist) }
         }
+        historyRepository.mergeFavorites(payload.favorites)
+        historyRepository.mergeHistory(payload.history)
+        playlistCollectionRepository.mergeCollections(payload.collections)
     }
 
     fun triggerCloudUpload() {
@@ -1031,7 +1029,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             executeDownloadTrack(single)
         }
         if (list.isNotEmpty()) {
-            list.forEach { executeDownloadTrack(it) }
+            startSequentialBackgroundDownload(list)
         }
     }
 
@@ -1046,10 +1044,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteSavedTrack(id: String) {
         viewModelScope.launch {
-            val success = savedTracksRepository.deleteTrack(id)
-            if (success) {
-                Toast.makeText(getApplication(), "Đã xóa bài hát khỏi mục Đã tải", Toast.LENGTH_SHORT).show()
-            }
+            savedTracksRepository.deleteTrack(id)
         }
     }
 
@@ -1173,62 +1168,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val currentList = _uiState.value.playlist
             if (currentList.isNotEmpty()) {
-                val saved = playlistCollectionRepository.savePlaylist(name, currentList)
-                Toast.makeText(getApplication(), "Đã lưu '${saved.name}' (${saved.items.size} bài) vào Bộ sưu tập!", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(getApplication(), "Danh sách phát hiện tại đang trống", Toast.LENGTH_SHORT).show()
+                playlistCollectionRepository.savePlaylist(name, currentList)
             }
         }
     }
 
     fun createCollection(name: String) {
         viewModelScope.launch {
-            val created = playlistCollectionRepository.createPlaylist(name)
-            Toast.makeText(getApplication(), "Đã tạo bộ sưu tập: ${created.name}", Toast.LENGTH_SHORT).show()
+            playlistCollectionRepository.createPlaylist(name)
         }
     }
 
     fun deleteCollection(id: String) {
         viewModelScope.launch {
             playlistCollectionRepository.deletePlaylist(id)
-            Toast.makeText(getApplication(), "Đã xóa bộ sưu tập", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun renameCollection(id: String, newName: String) {
         viewModelScope.launch {
             playlistCollectionRepository.renamePlaylist(id, newName)
-            Toast.makeText(getApplication(), "Đã đổi tên bộ sưu tập", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun addTrackToCollection(playlistId: String, track: PlaylistItem) {
         viewModelScope.launch {
             playlistCollectionRepository.addTrackToPlaylist(playlistId, track)
-            Toast.makeText(getApplication(), "Đã thêm vào bộ sưu tập", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun removeTrackFromCollection(playlistId: String, trackId: String) {
         viewModelScope.launch {
             playlistCollectionRepository.removeTrackFromPlaylist(playlistId, trackId)
-            Toast.makeText(getApplication(), "Đã xóa khỏi bộ sưu tập", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun downloadCollection(collection: UserPlaylist) {
         viewModelScope.launch {
-            var count = 0
-            collection.items.forEach { track ->
-                if (!savedTracksRepository.isTrackSaved(track.id)) {
-                    saveTrackOffline(track)
-                    count++
+            val missing = collection.items.filter { !savedTracksRepository.isTrackSaved(it.id) }
+            if (missing.isNotEmpty()) {
+                if (NetworkUtils.isCellular(getApplication())) {
+                    _uiState.update { it.copy(pendingCellularDownloadTracks = missing) }
+                } else {
+                    startSequentialBackgroundDownload(missing)
                 }
-            }
-            if (count > 0) {
-                Toast.makeText(getApplication(), "Đang tải $count bài hát từ '${collection.name}'...", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(getApplication(), "Tất cả bài hát đã được lưu trong máy", Toast.LENGTH_SHORT).show()
             }
         }
     }
