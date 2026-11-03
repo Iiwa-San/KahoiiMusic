@@ -79,7 +79,7 @@ namespace KahoiiMusic
         {
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.CenterParent;
-            this.Size = new Size(340, 320);
+            this.Size = new Size(340, 270);
             this.BackColor = BgDark;
             this.ShowInTaskbar = false;
             this.DoubleBuffered = true;
@@ -122,8 +122,8 @@ namespace KahoiiMusic
 
             btnClose = new GradientCloseButton
             {
-                Location = new Point(304, 8),
-                Size = new Size(24, 24)
+                Location = new Point(302, 7),
+                Size = new Size(26, 26)
             };
             btnClose.Click += (s, e) => this.Close();
 
@@ -267,7 +267,7 @@ namespace KahoiiMusic
             if (pnlHeader != null)
             {
                 pnlHeader.Width = this.Width;
-                if (btnClose != null) btnClose.Location = new Point(this.Width - 34, 8);
+                if (btnClose != null) btnClose.Location = new Point(this.Width - 34, 7);
             }
             if (pnlContent != null)
             {
@@ -346,10 +346,10 @@ namespace KahoiiMusic
             if (register)
             {
                 pnlConfirmPasswordBox.Visible = true;
-                lblError.Location = new Point(20, 194);
-                btnSubmit.Location = new Point(20, 216);
+                lblError.Location = new Point(20, 192);
+                btnSubmit.Location = new Point(20, 214);
                 btnSubmit.Text = "TẠO TÀI KHOẢN";
-                this.Height = 286;
+                this.Height = 316;
                 pnlContent.Height = this.Height - 40;
             }
             else
@@ -358,7 +358,7 @@ namespace KahoiiMusic
                 lblError.Location = new Point(20, 146);
                 btnSubmit.Location = new Point(20, 168);
                 btnSubmit.Text = "ĐĂNG NHẬP";
-                this.Height = 238;
+                this.Height = 270;
                 pnlContent.Height = this.Height - 40;
             }
         }
@@ -666,34 +666,64 @@ namespace KahoiiMusic
             }
         }
 
-        // 3. Gradient Close Button with App Signature Pink-Purple Gradient on Hover
+        // 3. Gradient Close Button with Smooth Pink-Purple Color Transition on Hover
         private class GradientCloseButton : Control
         {
-            private bool _isHovered = false;
+            private float _hoverProgress = 0f;
+            private float _targetProgress = 0f;
             private bool _isPressed = false;
+            private Timer _animTimer;
 
             public GradientCloseButton()
             {
                 SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
                          ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
                 BackColor = Color.Transparent;
-                Size = new Size(24, 24);
+                Size = new Size(26, 26);
                 Cursor = Cursors.Hand;
+
+                _animTimer = new Timer();
+                _animTimer.Interval = 15;
+                _animTimer.Tick += (s, e) =>
+                {
+                    float diff = _targetProgress - _hoverProgress;
+                    if (Math.Abs(diff) < 0.05f)
+                    {
+                        _hoverProgress = _targetProgress;
+                        _animTimer.Stop();
+                    }
+                    else
+                    {
+                        _hoverProgress += diff * 0.35f;
+                    }
+                    Invalidate();
+                };
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing && _animTimer != null)
+                {
+                    _animTimer.Stop();
+                    _animTimer.Dispose();
+                    _animTimer = null;
+                }
+                base.Dispose(disposing);
             }
 
             protected override void OnMouseEnter(EventArgs e)
             {
                 base.OnMouseEnter(e);
-                _isHovered = true;
-                Invalidate();
+                _targetProgress = 1.0f;
+                _animTimer.Start();
             }
 
             protected override void OnMouseLeave(EventArgs e)
             {
                 base.OnMouseLeave(e);
-                _isHovered = false;
+                _targetProgress = 0.0f;
                 _isPressed = false;
-                Invalidate();
+                _animTimer.Start();
             }
 
             protected override void OnMouseDown(MouseEventArgs e)
@@ -719,49 +749,71 @@ namespace KahoiiMusic
                 g.SmoothingMode = SmoothingMode.HighQuality;
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-                if (_isHovered)
+                int cx = Width / 2;
+                int cy = Height / 2;
+                int r = _isPressed ? 4 : 5;
+
+                // Subtle soft ambient glow background on hover (NOT an opaque solid circle)
+                if (_hoverProgress > 0.02f)
                 {
-                    // Gradient: Deep Purple (43, 16, 127) to Vibrant Neon Pink (255, 38, 128)
-                    Color startColor = _isPressed ? Color.FromArgb(70, 20, 160) : Color.FromArgb(120, 25, 190);
-                    Color endColor = _isPressed ? Color.FromArgb(220, 30, 110) : Color.FromArgb(255, 45, 130);
-
-                    var rect = new Rectangle(1, 1, Width - 3, Height - 3);
-                    using (var brush = new LinearGradientBrush(rect, startColor, endColor, 45f))
+                    int bgAlpha = (int)(25 * _hoverProgress);
+                    using (var bgBrush = new SolidBrush(Color.FromArgb(bgAlpha, 255, 45, 140)))
+                    using (var path = GetRoundedRect(new Rectangle(2, 2, Width - 5, Height - 5), 6))
                     {
-                        g.FillEllipse(brush, rect);
+                        g.FillPath(bgBrush, path);
                     }
 
-                    using (var penGlow = new Pen(Color.FromArgb(180, 255, 90, 170), 1f))
+                    // Soft neon bloom behind the 'X'
+                    int glowAlpha = (int)(65 * _hoverProgress);
+                    using (var glowPen = new Pen(Color.FromArgb(glowAlpha, 255, 50, 150), 3.8f))
                     {
-                        g.DrawEllipse(penGlow, rect);
+                        glowPen.StartCap = LineCap.Round;
+                        glowPen.EndCap = LineCap.Round;
+                        g.DrawLine(glowPen, cx - r, cy - r, cx + r, cy + r);
+                        g.DrawLine(glowPen, cx + r, cy - r, cx - r, cy + r);
                     }
+                }
 
-                    // Crisp White '✕'
-                    using (var pen = new Pen(Color.White, 1.8f))
+                if (_hoverProgress < 0.02f)
+                {
+                    // Clean Muted '✕' in default state
+                    using (var pen = new Pen(Color.FromArgb(160, 160, 175), 1.6f))
                     {
                         pen.StartCap = LineCap.Round;
                         pen.EndCap = LineCap.Round;
-                        int cx = Width / 2;
-                        int cy = Height / 2;
-                        int r = 4;
                         g.DrawLine(pen, cx - r, cy - r, cx + r, cy + r);
                         g.DrawLine(pen, cx + r, cy - r, cx - r, cy + r);
                     }
                 }
                 else
                 {
-                    // Clean Muted '✕'
-                    using (var pen = new Pen(Color.FromArgb(160, 160, 175), 1.5f))
+                    // Gradient '✕' with Smooth Color Shift (Purple #7819BE to Neon Pink #FF2680)
+                    var gradRect = new Rectangle(cx - r - 1, cy - r - 1, (r * 2) + 2, (r * 2) + 2);
+                    Color purple = _isPressed ? Color.FromArgb(160, 40, 240) : Color.FromArgb(180, 50, 255);
+                    Color pink = _isPressed ? Color.FromArgb(255, 90, 170) : Color.FromArgb(255, 38, 128);
+
+                    // Interpolate starting colors with muted grey based on progress
+                    Color startC = BlendColor(Color.FromArgb(160, 160, 175), purple, _hoverProgress);
+                    Color endC = BlendColor(Color.FromArgb(160, 160, 175), pink, _hoverProgress);
+
+                    using (var gradBrush = new LinearGradientBrush(gradRect, startC, endC, 45f))
+                    using (var pen = new Pen(gradBrush, 2.0f))
                     {
                         pen.StartCap = LineCap.Round;
                         pen.EndCap = LineCap.Round;
-                        int cx = Width / 2;
-                        int cy = Height / 2;
-                        int r = 4;
                         g.DrawLine(pen, cx - r, cy - r, cx + r, cy + r);
                         g.DrawLine(pen, cx + r, cy - r, cx - r, cy + r);
                     }
                 }
+            }
+
+            private Color BlendColor(Color from, Color to, float amount)
+            {
+                amount = Math.Max(0f, Math.Min(1f, amount));
+                int r = (int)(from.R + (to.R - from.R) * amount);
+                int g = (int)(from.G + (to.G - from.G) * amount);
+                int b = (int)(from.B + (to.B - from.B) * amount);
+                return Color.FromArgb(r, g, b);
             }
         }
     }
