@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -172,13 +172,13 @@ namespace KahoiiMusic.Services
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = ytdlpPath;
                         psi.WorkingDirectory = AppPaths.SavedAudioDir;
-                        psi.Arguments = string.Format("--extractor-args \"youtube:player_client=android,web,tv\" -f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]/b\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
+                        psi.Arguments = string.Format("--extractor-args \"youtube:player_client=android\" -f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]/b\" -N 8 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
                         psi.CreateNoWindow = true;
                         psi.UseShellExecute = false;
 
                         using (Process proc = Process.Start(psi))
                         {
-                            try { if (proc != null) proc.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+                            // Keep normal priority for maximum download speed
                             proc?.WaitForExit(120000);
                         }
                     }
