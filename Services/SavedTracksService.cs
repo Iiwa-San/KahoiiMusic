@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -72,7 +72,7 @@ namespace KahoiiMusic.Services
             if (string.IsNullOrWhiteSpace(videoId)) return null;
             try
             {
-                string[] exts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac" };
+                string[] exts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac", ".mp4" };
                 foreach (string ext in exts)
                 {
                     string path = Path.Combine(AppPaths.SavedAudioDir, videoId + ext);
@@ -119,7 +119,7 @@ namespace KahoiiMusic.Services
 
                     // 1. Check if audio already exists in KahoiiTemp/audio/
                     string existingTempAudio = null;
-                    string[] exts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac" };
+                    string[] exts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac", ".mp4" };
                     foreach (string ext in exts)
                     {
                         string p = Path.Combine(AppPaths.TempAudioDir, videoId + ext);
@@ -172,14 +172,14 @@ namespace KahoiiMusic.Services
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = ytdlpPath;
                         psi.WorkingDirectory = AppPaths.SavedAudioDir;
-                        psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
+                        psi.Arguments = string.Format("--extractor-args \"youtube:player_client=android,web,tv\" -f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]/b\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
                         psi.CreateNoWindow = true;
                         psi.UseShellExecute = false;
 
                         using (Process proc = Process.Start(psi))
                         {
                             try { if (proc != null) proc.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
-                            proc?.WaitForExit(60000);
+                            proc?.WaitForExit(120000);
                         }
                     }
 
@@ -228,6 +228,7 @@ namespace KahoiiMusic.Services
                     // 3. Verify audio exists in Saved/audio/
                     if (FindSavedAudioFile(videoId) == null)
                     {
+                        try { if (File.Exists(destThumb)) File.Delete(destThumb); } catch { }
                         callback?.Invoke(false, "Không thể lưu tệp âm thanh.");
                         return;
                     }

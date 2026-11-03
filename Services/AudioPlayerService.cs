@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 
 using System.Collections.Generic;
 
@@ -297,7 +297,7 @@ namespace KahoiiMusic.Services
                 foreach (var fi in di.GetFiles())
                 {
                     string ext = fi.Extension.ToLower();
-                    if (ext != ".webm" && ext != ".m4a" && ext != ".mp3" && ext != ".opus" && ext != ".aac" && ext != ".part" && ext != ".ytdl" && ext != ".tmp")
+                    if (ext != ".webm" && ext != ".m4a" && ext != ".mp3" && ext != ".opus" && ext != ".aac" && ext != ".mp4" && ext != ".part" && ext != ".ytdl" && ext != ".tmp")
                     {
                         continue;
                     }
@@ -347,7 +347,7 @@ namespace KahoiiMusic.Services
 
                     string ext = fi.Extension.ToLower();
 
-                    if (ext == ".webm" || ext == ".m4a" || ext == ".mp3" || ext == ".opus" || ext == ".aac")
+                    if (ext == ".webm" || ext == ".m4a" || ext == ".mp3" || ext == ".opus" || ext == ".aac" || ext == ".mp4")
 
                     {
 
@@ -720,7 +720,7 @@ namespace KahoiiMusic.Services
 
                     psi.WorkingDirectory = _cacheDirectory;
 
-                    psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
+                    psi.Arguments = string.Format("--extractor-args \"youtube:player_client=android,web,tv\" -f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]/b\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
 
                     psi.CreateNoWindow = true;
 
@@ -1260,7 +1260,7 @@ namespace KahoiiMusic.Services
                     var singleItem = new PlaylistItem
                     {
                         Id = _currentVideoId,
-                        Title = CurrentTitle ?? "Bài hát dang phát"
+                        Title = CurrentTitle ?? "BÃ i hÃ¡t Ä‘ang phÃ¡t"
                     };
                     _playlist = new List<PlaylistItem> { singleItem };
                     _currentPlaylistIndex = 0;
@@ -2217,7 +2217,7 @@ namespace KahoiiMusic.Services
 
                         psi.WorkingDirectory = _cacheDirectory;
 
-                        psi.Arguments = string.Format("-f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"{1}\"", _cacheDirectory, targetArg);
+                        psi.Arguments = string.Format("--extractor-args \"youtube:player_client=android,web,tv\" -f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]/b\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"{1}\"", _cacheDirectory, targetArg);
 
                         psi.CreateNoWindow = true;
 
@@ -2515,7 +2515,7 @@ namespace KahoiiMusic.Services
 
             try
             {
-                string[] prioritizedExts = new string[] { ".webm", ".opus", ".mp3", ".m4a", ".aac" };
+                string[] prioritizedExts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac", ".mp4" };
 
                 // 1. Check Saved/audio first (Highest priority: Offline music)
                 foreach (string ext in prioritizedExts)
@@ -2573,7 +2573,7 @@ namespace KahoiiMusic.Services
 
                     string ext = Path.GetExtension(file).ToLower();
 
-                    if (ext == ".webm" || ext == ".m4a" || ext == ".mp3" || ext == ".opus" || ext == ".aac" || ext == ".ogg")
+                    if (ext == ".webm" || ext == ".m4a" || ext == ".mp3" || ext == ".opus" || ext == ".aac" || ext == ".mp4" || ext == ".ogg")
 
                     {
 
