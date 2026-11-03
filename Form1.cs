@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -80,6 +80,7 @@ namespace KahoiiMusic
             SetupEvents();
             InitializeTrayIcon();
             StartSingleInstanceIpcServer();
+            FirebaseSyncService.Instance.InitializeAutoSync();
 
             if (!string.IsNullOrEmpty(initialUrl))
             {
@@ -790,6 +791,7 @@ namespace KahoiiMusic
         {
             _isFormClosed = true;
             base.OnFormClosing(e);
+            try { FirebaseSyncService.Instance.FlushSyncOnExit(); } catch { }
             Application.RemoveMessageFilter(this);
 
             try { ThumbnailManager.ClearMemory(); } catch { }

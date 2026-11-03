@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using KahoiiMusic.Models;
@@ -36,10 +37,138 @@ namespace KahoiiMusic.Services
 
         public event EventHandler SyncStatusChanged;
 
+        private System.Threading.Timer _autoUploadTimer;
+        private readonly object _syncLock = new object();
+        private volatile bool _isApplyingCloudPayload = false;
+        private volatile bool _isAutoSyncInitialized = false;
+
         private FirebaseSyncService()
         {
             _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
             _serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+        }
+
+        public void InitializeAutoSync()
+        {
+            if (_isAutoSyncInitialized) return;
+            _isAutoSyncInitialized = true;
+
+            FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
+            {
+                if (FirebaseAuthService.Instance.IsLoggedIn)
+                {
+                    Task.Run(() => TriggerAutoFetchAsync());
+                }
+                else
+                {
+                    CancelPendingAutoUpload();
+                }
+            };
+
+            SavedTracksService.Instance.SavedTracksChanged += (s, e) => RequestAutoUpload();
+            HistoryService.HistoryChanged += (s, e) => RequestAutoUpload();
+            PlaylistCollectionService.Instance.PlaylistsChanged += (s, e) => RequestAutoUpload();
+
+            if (FirebaseAuthService.Instance.IsLoggedIn)
+            {
+                Task.Run(() => TriggerAutoFetchAsync());
+            }
+        }
+
+        public void RequestAutoUpload()
+        {
+            if (_isApplyingCloudPayload) return;
+            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
+
+            lock (_syncLock)
+            {
+                if (_autoUploadTimer == null)
+                {
+                    _autoUploadTimer = new System.Threading.Timer(OnAutoUploadTimerFired, null, 2500, Timeout.Infinite);
+                }
+                else
+                {
+                    _autoUploadTimer.Change(2500, Timeout.Infinite);
+                }
+            }
+        }
+
+        private async void OnAutoUploadTimerFired(object state)
+        {
+            if (_isApplyingCloudPayload || !FirebaseAuthService.Instance.IsLoggedIn) return;
+            try
+            {
+                var payload = GetCurrentLocalPayload();
+                await SyncUploadAsync(payload);
+            }
+            catch { }
+        }
+
+        public void CancelPendingAutoUpload()
+        {
+            lock (_syncLock)
+            {
+                _autoUploadTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            }
+        }
+
+        public void FlushSyncOnExit()
+        {
+            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
+            try
+            {
+                CancelPendingAutoUpload();
+                var payload = GetCurrentLocalPayload();
+                SyncUploadAsync(payload).GetAwaiter().GetResult();
+            }
+            catch { }
+        }
+
+        public CloudMusicPayload GetCurrentLocalPayload()
+        {
+            return new CloudMusicPayload
+            {
+                savedTracks = SavedTracksService.Instance.GetSavedTracks(),
+                history = HistoryService.GetHistory(),
+                collections = PlaylistCollectionService.Instance.GetPlaylists()
+            };
+        }
+
+        public async Task TriggerAutoFetchAsync(Action<int> onDownloadingMissingTracks = null)
+        {
+            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
+            try
+            {
+                var payload = await SyncFetchAsync();
+                if (payload != null)
+                {
+                    _isApplyingCloudPayload = true;
+                    try
+                    {
+                        ApplyCloudPayload(payload, onDownloadingMissingTracks);
+                    }
+                    finally
+                    {
+                        _isApplyingCloudPayload = false;
+                    }
+                }
+                else
+                {
+                    // Tài khoản mới chưa có tài liệu đám mây: tự động tạo bản lưu khởi tạo đầu tiên
+                    var localPayload = GetCurrentLocalPayload();
+                    await SyncUploadAsync(localPayload);
+                }
+            }
+            catch { }
+        }
+
+        public async Task TriggerManualSyncAsync(Action<int> onDownloadingMissingTracks = null)
+        {
+            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
+            CancelPendingAutoUpload();
+            var localPayload = GetCurrentLocalPayload();
+            await SyncUploadAsync(localPayload);
+            await TriggerAutoFetchAsync(onDownloadingMissingTracks);
         }
 
         public async Task<CloudMusicPayload> SyncFetchAsync()
@@ -175,7 +304,7 @@ namespace KahoiiMusic.Services
                 var response = await _httpClient.SendAsync(req);
                 if (response.IsSuccessStatusCode)
                 {
-                    SyncStatusMessage = "Đã lưu lên đám mây lúc " + DateTime.Now.ToString("HH:mm");
+                    SyncStatusMessage = "Đã tự động lưu đám mây lúc " + DateTime.Now.ToString("HH:mm");
                     return true;
                 }
 
@@ -264,4 +393,3 @@ namespace KahoiiMusic.Services
         }
     }
 }
-

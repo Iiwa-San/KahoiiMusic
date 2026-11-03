@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -44,8 +44,7 @@ namespace KahoiiMusic
         private Label lblUserId;
         private Label lblStats;
         private Label lblSyncStatus;
-        private RoundedButton btnUploadCloud;
-        private RoundedButton btnFetchCloud;
+        private RoundedButton btnSyncNow;
         private RoundedButton btnSignOut;
 
         private readonly Color BgDark = Color.FromArgb(18, 16, 25);
@@ -284,12 +283,7 @@ namespace KahoiiMusic
                         Form1.Instance?.AudioPlayer?.RetainOnlyCurrentTrack();
                         FirebaseAuthService.Instance.ClearUserDataExceptPlayingTrack(currentPlayingId);
 
-                        var payload = await FirebaseSyncService.Instance.SyncFetchAsync();
-                        FirebaseSyncService.Instance.ApplyCloudPayload(payload, missingCount =>
-                        {
-                            MessageBox.Show("Tài khoản của bạn có " + missingCount + " bài hát đã lưu. Ứng dụng đang tự động tải nhạc về máy...",
-                                "Tự động tải bài hát", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        });
+                        await FirebaseSyncService.Instance.TriggerAutoFetchAsync();
                     }
                 }
                 else
@@ -312,12 +306,7 @@ namespace KahoiiMusic
                         Form1.Instance?.AudioPlayer?.RetainOnlyCurrentTrack();
                         FirebaseAuthService.Instance.ClearUserDataExceptPlayingTrack(currentPlayingId);
 
-                        var payload = await FirebaseSyncService.Instance.SyncFetchAsync();
-                        FirebaseSyncService.Instance.ApplyCloudPayload(payload, missingCount =>
-                        {
-                            MessageBox.Show("Tài khoản của bạn có " + missingCount + " bài hát đã lưu. Ứng dụng đang tự động tải nhạc về máy...",
-                                "Tự động tải bài hát", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        });
+                        await FirebaseSyncService.Instance.TriggerAutoFetchAsync();
                     }
                 }
                 btnSubmit.Enabled = true;
@@ -498,9 +487,9 @@ namespace KahoiiMusic
                 TextAlign = ContentAlignment.MiddleCenter
             };
 
-            btnUploadCloud = new RoundedButton
+            btnSyncNow = new RoundedButton
             {
-                Text = "☁  Lưu Dữ Liệu Lên Cloud",
+                Text = "⟳  Đồng Bộ Ngay (Tự Động Bật)",
                 Location = new Point(20, 190),
                 Size = new Size(300, 36),
                 ButtonColor = AccentPink,
@@ -508,50 +497,19 @@ namespace KahoiiMusic
                 Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
                 Cursor = Cursors.Hand
             };
-            btnUploadCloud.Click += async (s, e) =>
+            btnSyncNow.Click += async (s, e) =>
             {
-                btnUploadCloud.Enabled = false;
-                var payload = new CloudMusicPayload
-                {
-                    savedTracks = SavedTracksService.Instance.GetSavedTracks(),
-                    history = HistoryService.GetHistory(),
-                    collections = PlaylistCollectionService.Instance.GetPlaylists()
-                };
-                await FirebaseSyncService.Instance.SyncUploadAsync(payload);
-                btnUploadCloud.Enabled = true;
-            };
-
-            btnFetchCloud = new RoundedButton
-            {
-                Text = "⟳  Tải Dữ Liệu Từ Cloud",
-                Location = new Point(20, 234),
-                Size = new Size(300, 36),
-                ButtonColor = CardBg,
-                TextColor = Color.White,
-                Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
-                Cursor = Cursors.Hand
-            };
-            btnFetchCloud.Click += async (s, e) =>
-            {
-                btnFetchCloud.Enabled = false;
-                var payload = await FirebaseSyncService.Instance.SyncFetchAsync();
-                if (payload != null)
-                {
-                    FirebaseSyncService.Instance.ApplyCloudPayload(payload, missingCount =>
-                    {
-                        MessageBox.Show("Đang tự động tải lại " + missingCount + " bài hát đã lưu từ tài khoản của bạn.",
-                            "Tự động tải lại bài đã lưu", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    });
-                }
-                btnFetchCloud.Enabled = true;
+                btnSyncNow.Enabled = false;
+                await FirebaseSyncService.Instance.TriggerManualSyncAsync();
+                btnSyncNow.Enabled = true;
                 UpdateStats();
             };
 
             btnSignOut = new RoundedButton
             {
                 Text = "Đăng Xuất",
-                Location = new Point(20, 282),
-                Size = new Size(300, 32),
+                Location = new Point(20, 236),
+                Size = new Size(300, 34),
                 ButtonColor = Color.FromArgb(38, 20, 28),
                 TextColor = Color.FromArgb(255, 120, 130),
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
@@ -574,8 +532,7 @@ namespace KahoiiMusic
             pnlProfile.Controls.Add(lblUserId);
             pnlProfile.Controls.Add(lblStats);
             pnlProfile.Controls.Add(lblSyncStatus);
-            pnlProfile.Controls.Add(btnUploadCloud);
-            pnlProfile.Controls.Add(btnFetchCloud);
+            pnlProfile.Controls.Add(btnSyncNow);
             pnlProfile.Controls.Add(btnSignOut);
 
             pnlContent.Controls.Add(pnlProfile);
@@ -595,7 +552,7 @@ namespace KahoiiMusic
                 lblError.Visible = false;
                 
                 pnlProfile.Visible = true;
-                this.Height = 380;
+                this.Height = 330;
                 pnlContent.Height = this.Height - 40;
 
                 var user = FirebaseAuthService.Instance.CurrentUser;
