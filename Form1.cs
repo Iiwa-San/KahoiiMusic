@@ -163,6 +163,20 @@ namespace KahoiiMusic
             btnMinimize.MouseEnter += (s, e) => btnMinimize.ForeColor = Color.White;
             btnMinimize.MouseLeave += (s, e) => btnMinimize.ForeColor = Color.FromArgb(140, 140, 140);
 
+            _userToolTip = new ToolTip();
+            btnUser.MouseEnter += (s, e) =>
+            {
+                if (!FirebaseAuthService.Instance.IsLoggedIn)
+                    btnUser.ForeColor = Color.White;
+            };
+            btnUser.MouseLeave += (s, e) => UpdateUserButtonAppearance();
+            UpdateUserButtonAppearance();
+            FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
+            {
+                if (InvokeRequired) Invoke(new Action(UpdateUserButtonAppearance));
+                else UpdateUserButtonAppearance();
+            };
+
             // Periodic lightweight memory trimming timer (every 30s) running on threadpool to avoid any animation hitch
             _ramTimer = new Timer();
             _ramTimer.Interval = 30000;
@@ -1249,5 +1263,30 @@ namespace KahoiiMusic
             }
         }
 
-}
-}
+
+        private ToolTip _userToolTip;
+
+        private void btnUser_Click(object sender, EventArgs e)
+        {
+            using (var accountForm = new AccountForm())
+            {
+                accountForm.ShowDialog(this);
+            }
+            UpdateUserButtonAppearance();
+        }
+
+        private void UpdateUserButtonAppearance()
+        {
+            if (FirebaseAuthService.Instance.IsLoggedIn)
+            {
+                btnUser.ForeColor = Color.FromArgb(255, 45, 120); // Neon Pink
+                _userToolTip?.SetToolTip(btnUser, "Tài khoản: " + FirebaseAuthService.Instance.CurrentUser.email);
+            }
+            else
+            {
+                btnUser.ForeColor = Color.FromArgb(140, 140, 140);
+                _userToolTip?.SetToolTip(btnUser, "Đăng nhập / Đăng ký tài khoản Kahoii");
+            }
+        }
+
+    }}

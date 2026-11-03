@@ -51,6 +51,7 @@ namespace KahoiiMusic
             this.lblCopyright = new System.Windows.Forms.Label();
             this.btnClose = new System.Windows.Forms.Label();
             this.btnMinimize = new System.Windows.Forms.Label();
+            this.btnUser = new System.Windows.Forms.Label();
             this.playbackTimer = new System.Windows.Forms.Timer(this.components);
             this.panelPlayerCard.SuspendLayout();
             this.panelTopBar.SuspendLayout();
@@ -292,6 +293,20 @@ namespace KahoiiMusic
             this.btnClose.Text = "✕";
             this.btnClose.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
+            // btnUser
+            // 
+            this.btnUser.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnUser.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnUser.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnUser.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
+            this.btnUser.Location = new System.Drawing.Point(404, 3);
+            this.btnUser.Name = "btnUser";
+            this.btnUser.Size = new System.Drawing.Size(22, 18);
+            this.btnUser.TabIndex = 0;
+            this.btnUser.Text = "👤";
+            this.btnUser.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.btnUser.Click += new System.EventHandler(this.btnUser_Click);
+            // 
             // btnMinimize
             // 
             this.btnMinimize.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
@@ -315,6 +330,7 @@ namespace KahoiiMusic
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
             this.ClientSize = new System.Drawing.Size(480, 348);
+            this.Controls.Add(this.btnUser);
             this.Controls.Add(this.btnMinimize);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.panelPlayerCard);
@@ -341,6 +357,7 @@ namespace KahoiiMusic
         private KahoiiMusic.Controls.MarqueeLabel marqueeTitle;
         private System.Windows.Forms.Label btnClose;
         private System.Windows.Forms.Label btnMinimize;
+        private System.Windows.Forms.Label btnUser;
         private System.Windows.Forms.Panel panelPlayerCard;
         private System.Windows.Forms.Panel panelTopBar;
         private KahoiiMusic.Controls.SearchPillBox searchPillBox;

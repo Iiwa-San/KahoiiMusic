@@ -43,7 +43,8 @@
     <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Net.Http" />
-    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
     <Reference Include="PresentationCore" />
     <Reference Include="WindowsBase" />
@@ -147,6 +148,11 @@
     <Compile Include="Services\AppPaths.cs" />
 
     <Compile Include="Services\SavedTracksService.cs" />
+    <Compile Include="Services\FirebaseAuthService.cs" />
+    <Compile Include="Services\FirebaseSyncService.cs" />
+    <Compile Include="AccountForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Services\PlaylistCollectionService.cs" />
   </ItemGroup>
   <ItemGroup>
