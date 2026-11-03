@@ -1219,41 +1219,66 @@ namespace KahoiiMusic.Services
         }
 
         public void ClearPlaylist()
-
         {
-
             _playlist = new List<PlaylistItem>();
-
             _currentPlaylistId = null;
-
             CurrentPlaylistTitle = null;
-
             _currentPlaylistIndex = -1;
-
             _syncContext.Post(delegate
-
             {
-
                 if (PlaylistLoaded != null)
-
                 {
-
                     PlaylistLoaded(this, _playlist);
-
                 }
-
                 if (PlaylistIndexChanged != null)
-
                 {
-
                     PlaylistIndexChanged(this, -1);
-
                 }
-
             }, null);
-
         }
 
+        public void RetainOnlyCurrentTrack()
+        {
+            lock (_playlist)
+            {
+                if (_playlist != null && _currentPlaylistIndex >= 0 && _currentPlaylistIndex < _playlist.Count)
+                {
+                    var currentItem = _playlist[_currentPlaylistIndex];
+                    _playlist = new List<PlaylistItem> { currentItem };
+                    _currentPlaylistIndex = 0;
+                    _currentPlaylistId = null;
+                    CurrentPlaylistTitle = null;
+
+                    _syncContext?.Post(delegate
+                    {
+                        PlaylistLoaded?.Invoke(this, _playlist);
+                        PlaylistIndexChanged?.Invoke(this, 0);
+                    }, null);
+                }
+                else if (!string.IsNullOrEmpty(_currentVideoId))
+                {
+                    var singleItem = new PlaylistItem
+                    {
+                        Id = _currentVideoId,
+                        Title = CurrentTitle ?? "Bài hát dang phát"
+                    };
+                    _playlist = new List<PlaylistItem> { singleItem };
+                    _currentPlaylistIndex = 0;
+                    _currentPlaylistId = null;
+                    CurrentPlaylistTitle = null;
+
+                    _syncContext?.Post(delegate
+                    {
+                        PlaylistLoaded?.Invoke(this, _playlist);
+                        PlaylistIndexChanged?.Invoke(this, 0);
+                    }, null);
+                }
+                else
+                {
+                    ClearPlaylist();
+                }
+            }
+        }
         private bool _isPlayingFromHistory = false;
         public bool IsPlayingFromHistory
         {

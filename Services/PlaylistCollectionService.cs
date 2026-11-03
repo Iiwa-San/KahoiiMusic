@@ -69,6 +69,17 @@ namespace KahoiiMusic.Services
             return playlist;
         }
 
+        public void ClearAllPlaylists()
+        {
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                _playlists.Clear();
+                SaveToFile();
+            }
+            PlaylistsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         public bool DeletePlaylist(string id)
         {
             if (string.IsNullOrWhiteSpace(id)) return false;

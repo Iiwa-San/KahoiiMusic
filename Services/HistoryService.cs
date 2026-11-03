@@ -267,11 +267,21 @@ namespace KahoiiMusic.Services
             }
         }
 
-        public static void ClearHistory()
+        public static void ClearHistory(string exceptVideoId = null)
         {
             lock (_lock)
             {
+                PlaylistItem keepItem = null;
+                if (!string.IsNullOrWhiteSpace(exceptVideoId))
+                {
+                    keepItem = _history.Find(x => string.Equals(x.Id, exceptVideoId, StringComparison.OrdinalIgnoreCase));
+                }
+
                 _history.Clear();
+                if (keepItem != null)
+                {
+                    _history.Add(keepItem);
+                }
                 SaveHistory();
             }
             CleanNonHistoryTempFiles(true);

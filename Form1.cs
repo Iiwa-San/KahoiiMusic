@@ -29,7 +29,9 @@ namespace KahoiiMusic
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
         private const int SW_RESTORE = 9;
 
+        public static Form1 Instance { get; private set; }
         private AudioPlayerService _audioPlayer;
+        public AudioPlayerService AudioPlayer => _audioPlayer;
         private Controls.PlaylistPopup playlistPopup;
         private System.Windows.Forms.Timer _ramTimer;
         private NotifyIcon _trayIcon;
@@ -43,6 +45,7 @@ namespace KahoiiMusic
 
         public Form1(string initialUrl)
         {
+            Instance = this;
             InitializeComponent();
 
             // Wire player card seamless continuous gradient without visible borders ("không còn viền")

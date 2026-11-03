@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -98,6 +98,56 @@ namespace KahoiiMusic.Services
             return await ExecuteAuthRequestAsync(url, body, rememberMe);
         }
 
+        public async Task<Tuple<bool, string>> SendPasswordResetEmailAsync(string email)
+        {
+            email = email?.Trim();
+            if (string.IsNullOrWhiteSpace(email) || !email.Contains("@"))
+            {
+                return Tuple.Create(false, "Vui lòng nhập địa chỉ email hợp lệ.");
+            }
+
+            try
+            {
+                string url = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=" + ApiKey;
+                var body = new Dictionary<string, object>
+                {
+                    { "requestType", "PASSWORD_RESET" },
+                    { "email", email }
+                };
+
+                string jsonPayload = _serializer.Serialize(body);
+                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+                string respJson = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return Tuple.Create(true, "Đã gửi email khôi phục mật khẩu. Vui lòng kiểm tra hộp thư (kể cả mục Spam) của bạn.");
+                }
+
+                var dict = _serializer.Deserialize<Dictionary<string, object>>(respJson);
+                if (dict != null && dict.ContainsKey("error") && dict["error"] is Dictionary<string, object> errObj)
+                {
+                    string message = errObj.ContainsKey("message") ? errObj["message"]?.ToString() : "";
+                    if (message.Contains("EMAIL_NOT_FOUND"))
+                    {
+                        return Tuple.Create(false, "Email này chưa được đăng ký tài khoản.");
+                    }
+                    return Tuple.Create(false, "Lỗi: " + message);
+                }
+
+                return Tuple.Create(false, "Gửi email khôi phục thất bại (Mã " + (int)response.StatusCode + ")");
+            }
+            catch (Exception ex)
+            {
+                return Tuple.Create(false, "Lỗi kết nối: " + ex.Message);
+            }
+            finally
+            {
+                MemoryOptimizer.TrimMemoryAsync(300, aggressive: true);
+            }
+        }
+
         public async Task<Tuple<bool, string>> SignInAsync(string email, string password, bool rememberMe = true)
         {
             email = email?.Trim();
@@ -123,17 +173,23 @@ namespace KahoiiMusic.Services
             {
                 string jsonPayload = _serializer.Serialize(body);
                 var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
                 var response = await _httpClient.PostAsync(url, content);
                 string respJson = await response.Content.ReadAsStringAsync();
 
                 var dict = _serializer.Deserialize<Dictionary<string, object>>(respJson);
+                if (dict == null)
+                {
+                    return Tuple.Create(false, "Phản hồi máy chủ không hợp lệ.");
+                }
 
                 if (response.IsSuccessStatusCode)
                 {
-                    string localId = dict.ContainsKey("localId") ? dict["localId"]?.ToString() : "";
-                    string email = dict.ContainsKey("email") ? dict["email"]?.ToString() : "";
                     string idToken = dict.ContainsKey("idToken") ? dict["idToken"]?.ToString() : "";
+                    string email = dict.ContainsKey("email") ? dict["email"]?.ToString() : "";
                     string refreshToken = dict.ContainsKey("refreshToken") ? dict["refreshToken"]?.ToString() : "";
+                    string localId = dict.ContainsKey("localId") ? dict["localId"]?.ToString() : "";
+
                     long expiresIn = 3600;
                     if (dict.ContainsKey("expiresIn") && long.TryParse(dict["expiresIn"]?.ToString(), out long exp))
                     {
@@ -249,10 +305,21 @@ namespace KahoiiMusic.Services
             }
         }
 
-        public void SignOut()
+        public void ClearUserDataExceptPlayingTrack(string exceptVideoId = null)
         {
+            try
+            {
+                SavedTracksService.Instance.ClearAllSaved(exceptVideoId);
+                HistoryService.ClearHistory(exceptVideoId);
+                PlaylistCollectionService.Instance.ClearAllPlaylists();
+            }
+            catch { }
+        }
+
+        public void SignOut(string exceptVideoId = null)
+        {
+            ClearUserDataExceptPlayingTrack(exceptVideoId);
             SaveSession(null);
         }
     }
 }
-

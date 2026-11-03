@@ -35,6 +35,7 @@ namespace KahoiiMusic
         private RoundedButton btnSubmit;
         private Label lblError;
         private CustomCheckBox chkRememberMe;
+        private Label btnForgotPassword;
         
         // Profile View (Logged in)
         private Panel pnlProfile;
@@ -175,10 +176,49 @@ namespace KahoiiMusic
             chkRememberMe = new CustomCheckBox
             {
                 Location = new Point(20, 148),
-                Size = new Size(180, 22),
+                Size = new Size(160, 22),
                 Checked = true
             };
             pnlContent.Controls.Add(chkRememberMe);
+
+            // Forgot Password Button
+            btnForgotPassword = new Label
+            {
+                Text = "Quên mật khẩu?",
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Underline),
+                ForeColor = Color.FromArgb(170, 165, 195),
+                Location = new Point(190, 149),
+                Size = new Size(130, 20),
+                TextAlign = ContentAlignment.MiddleRight,
+                Cursor = Cursors.Hand
+            };
+            btnForgotPassword.MouseEnter += (s, e) => btnForgotPassword.ForeColor = AccentPink;
+            btnForgotPassword.MouseLeave += (s, e) => btnForgotPassword.ForeColor = Color.FromArgb(170, 165, 195);
+            btnForgotPassword.Click += async (s, e) =>
+            {
+                string email = txtEmail.Text.Trim();
+                if (string.IsNullOrWhiteSpace(email) || !email.Contains("@"))
+                {
+                    ShowError("Vui lòng nhập email hợp lệ để nhận link khôi phục.");
+                    txtEmail.Focus();
+                    return;
+                }
+
+                btnForgotPassword.Enabled = false;
+                lblError.Visible = false;
+                var res = await FirebaseAuthService.Instance.SendPasswordResetEmailAsync(email);
+                btnForgotPassword.Enabled = true;
+
+                if (res.Item1)
+                {
+                    MessageBox.Show(res.Item2, "Khôi phục mật khẩu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    ShowError(res.Item2);
+                }
+            };
+            pnlContent.Controls.Add(btnForgotPassword);
 
             // Error Label
             lblError = new Label
@@ -240,6 +280,10 @@ namespace KahoiiMusic
                     }
                     else
                     {
+                        string currentPlayingId = Form1.Instance?.AudioPlayer?.CurrentVideoId;
+                        Form1.Instance?.AudioPlayer?.RetainOnlyCurrentTrack();
+                        FirebaseAuthService.Instance.ClearUserDataExceptPlayingTrack(currentPlayingId);
+
                         var payload = await FirebaseSyncService.Instance.SyncFetchAsync();
                         FirebaseSyncService.Instance.ApplyCloudPayload(payload, missingCount =>
                         {
@@ -264,6 +308,10 @@ namespace KahoiiMusic
                     }
                     else
                     {
+                        string currentPlayingId = Form1.Instance?.AudioPlayer?.CurrentVideoId;
+                        Form1.Instance?.AudioPlayer?.RetainOnlyCurrentTrack();
+                        FirebaseAuthService.Instance.ClearUserDataExceptPlayingTrack(currentPlayingId);
+
                         var payload = await FirebaseSyncService.Instance.SyncFetchAsync();
                         FirebaseSyncService.Instance.ApplyCloudPayload(payload, missingCount =>
                         {
@@ -364,6 +412,7 @@ namespace KahoiiMusic
             if (register)
             {
                 pnlConfirmPasswordBox.Visible = true;
+                if (btnForgotPassword != null) btnForgotPassword.Visible = false;
                 chkRememberMe.Location = new Point(20, 194);
                 lblError.Location = new Point(20, 220);
                 btnSubmit.Location = new Point(20, 242);
@@ -374,7 +423,9 @@ namespace KahoiiMusic
             else
             {
                 pnlConfirmPasswordBox.Visible = false;
+                if (btnForgotPassword != null) btnForgotPassword.Visible = true;
                 chkRememberMe.Location = new Point(20, 148);
+                if (btnForgotPassword != null) btnForgotPassword.Location = new Point(190, 149);
                 lblError.Location = new Point(20, 174);
                 btnSubmit.Location = new Point(20, 196);
                 btnSubmit.Text = "ĐĂNG NHẬP";
@@ -512,7 +563,9 @@ namespace KahoiiMusic
                     "Đăng xuất", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (ask == DialogResult.Yes)
                 {
-                    FirebaseAuthService.Instance.SignOut();
+                    string currentPlayingId = Form1.Instance?.AudioPlayer?.CurrentVideoId;
+                    Form1.Instance?.AudioPlayer?.RetainOnlyCurrentTrack();
+                    FirebaseAuthService.Instance.SignOut(currentPlayingId);
                 }
             };
 

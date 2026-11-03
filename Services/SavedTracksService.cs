@@ -283,6 +283,50 @@ namespace KahoiiMusic.Services
             }
         }
 
+        public void ClearAllSaved(string exceptVideoId = null)
+        {
+            lock (_lock)
+            {
+                PlaylistItem keepItem = null;
+                if (!string.IsNullOrWhiteSpace(exceptVideoId))
+                {
+                    keepItem = _savedTracks.Find(x => string.Equals(x.Id, exceptVideoId, StringComparison.OrdinalIgnoreCase));
+                }
+
+                try
+                {
+                    if (Directory.Exists(AppPaths.SavedAudioDir))
+                    {
+                        foreach (var f in Directory.GetFiles(AppPaths.SavedAudioDir))
+                        {
+                            if (!string.IsNullOrWhiteSpace(exceptVideoId) && Path.GetFileNameWithoutExtension(f).Equals(exceptVideoId, StringComparison.OrdinalIgnoreCase))
+                                continue;
+                            try { File.Delete(f); } catch { }
+                        }
+                    }
+
+                    if (Directory.Exists(AppPaths.SavedThumbDir))
+                    {
+                        foreach (var f in Directory.GetFiles(AppPaths.SavedThumbDir))
+                        {
+                            if (!string.IsNullOrWhiteSpace(exceptVideoId) && Path.GetFileNameWithoutExtension(f).Equals(exceptVideoId, StringComparison.OrdinalIgnoreCase))
+                                continue;
+                            try { File.Delete(f); } catch { }
+                        }
+                    }
+                }
+                catch { }
+
+                _savedTracks.Clear();
+                if (keepItem != null)
+                {
+                    _savedTracks.Add(keepItem);
+                }
+                SaveToFile();
+            }
+            SavedTracksChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         private void LoadFromFile()
         {
             lock (_lock)

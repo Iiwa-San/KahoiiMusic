@@ -72,7 +72,18 @@ namespace KahoiiMusic.Services
                 var response = await _httpClient.SendAsync(req);
                 if (!response.IsSuccessStatusCode)
                 {
-                    SyncStatusMessage = "Chưa có dữ liệu đám mây";
+                    if ((int)response.StatusCode == 404)
+                    {
+                        SyncStatusMessage = "Chưa có dữ liệu trên đám mây";
+                    }
+                    else if ((int)response.StatusCode == 403)
+                    {
+                        SyncStatusMessage = "Lỗi 403: Chưa mở quyền (Rules) trong Firestore Database.";
+                    }
+                    else
+                    {
+                        SyncStatusMessage = "Tải đám mây thất bại (Mã " + (int)response.StatusCode + ")";
+                    }
                     return null;
                 }
 
@@ -168,7 +179,18 @@ namespace KahoiiMusic.Services
                     return true;
                 }
 
-                SyncStatusMessage = "Lưu đám mây không thành công (Mã " + (int)response.StatusCode + ")";
+                if ((int)response.StatusCode == 403)
+                {
+                    SyncStatusMessage = "Lỗi 403: Chưa mở quyền (Rules) trong Firestore Database.";
+                }
+                else if ((int)response.StatusCode == 404)
+                {
+                    SyncStatusMessage = "Lỗi 404: Chưa tạo Firestore Database trên Firebase Console.";
+                }
+                else
+                {
+                    SyncStatusMessage = "Lưu đám mây không thành công (Mã " + (int)response.StatusCode + ")";
+                }
                 return false;
             }
             catch (Exception ex)
