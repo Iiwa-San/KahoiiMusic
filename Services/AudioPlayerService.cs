@@ -1,4 +1,4 @@
-﻿﻿using System;
+using System;
 
 using System.Collections.Generic;
 
@@ -720,7 +720,7 @@ namespace KahoiiMusic.Services
 
                     psi.WorkingDirectory = _cacheDirectory;
 
-                    psi.Arguments = string.Format("--extractor-args \"youtube:player_client=android\" -f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]/b\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
+                    psi.Arguments = string.Format("-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
 
                     psi.CreateNoWindow = true;
 
@@ -2217,7 +2217,7 @@ namespace KahoiiMusic.Services
 
                         psi.WorkingDirectory = _cacheDirectory;
 
-                        psi.Arguments = string.Format("--extractor-args \"youtube:player_client=android\" -f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]/b\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"{1}\"", _cacheDirectory, targetArg);
+                        psi.Arguments = string.Format("-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"{1}\"", _cacheDirectory, targetArg);
 
                         psi.CreateNoWindow = true;
 
