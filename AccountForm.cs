@@ -231,7 +231,11 @@ namespace KahoiiMusic
                     else
                     {
                         var payload = await FirebaseSyncService.Instance.SyncFetchAsync();
-                        FirebaseSyncService.Instance.ApplyCloudPayload(payload);
+                        FirebaseSyncService.Instance.ApplyCloudPayload(payload, missingCount =>
+                        {
+                            MessageBox.Show("Tài khoản của bạn có " + missingCount + " bài hát đã lưu. Ứng dụng đang tự động tải nhạc về máy...",
+                                "Tự động tải bài hát", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        });
                     }
                 }
                 else
@@ -251,7 +255,11 @@ namespace KahoiiMusic
                     else
                     {
                         var payload = await FirebaseSyncService.Instance.SyncFetchAsync();
-                        FirebaseSyncService.Instance.ApplyCloudPayload(payload);
+                        FirebaseSyncService.Instance.ApplyCloudPayload(payload, missingCount =>
+                        {
+                            MessageBox.Show("Tài khoản của bạn có " + missingCount + " bài hát đã lưu. Ứng dụng đang tự động tải nhạc về máy...",
+                                "Tự động tải bài hát", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        });
                     }
                 }
                 btnSubmit.Enabled = true;
@@ -488,7 +496,12 @@ namespace KahoiiMusic
             };
             btnSignOut.Click += (s, e) =>
             {
-                FirebaseAuthService.Instance.SignOut();
+                var ask = MessageBox.Show("Bạn có muốn đăng xuất tài khoản không?\n\n(Danh sách bài hát của bạn đã được lưu an toàn trên đám mây và sẽ tự động tải về khi bạn đăng nhập lại).",
+                    "Đăng xuất", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (ask == DialogResult.Yes)
+                {
+                    FirebaseAuthService.Instance.SignOut();
+                }
             };
 
             pnlProfile.Controls.Add(lblUserAvatar);
