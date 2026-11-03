@@ -25,6 +25,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Verify Release Keystore
+        run: |
+          echo "=== Verifying persistent release keystore ==="
+          keytool -list -v -keystore app/kahoii.p12 -storepass kahoii123456
+
       - name: Build Android Release APK
         run: |
           set -o pipefail
