@@ -17,7 +17,7 @@ namespace KahoiiMusic
 
         private Panel pnlHeader;
         private Label lblTitle;
-        private Label btnClose;
+        private GradientCloseButton btnClose;
         private Panel pnlContent;
 
         // Custom Tab Control
@@ -34,8 +34,7 @@ namespace KahoiiMusic
 
         private RoundedButton btnSubmit;
         private Label lblError;
-        private Label lblHint;
-
+        
         // Profile View (Logged in)
         private Panel pnlProfile;
         private Label lblUserAvatar;
@@ -121,19 +120,12 @@ namespace KahoiiMusic
                 AutoSize = true
             };
 
-            btnClose = new Label
+            btnClose = new GradientCloseButton
             {
-                Text = "✕",
-                Font = new Font("Segoe UI", 10F, FontStyle.Regular),
-                ForeColor = Color.FromArgb(160, 160, 175),
-                Location = new Point(306, 8),
-                Size = new Size(24, 24),
-                Cursor = Cursors.Hand,
-                TextAlign = ContentAlignment.MiddleCenter
+                Location = new Point(304, 8),
+                Size = new Size(24, 24)
             };
             btnClose.Click += (s, e) => this.Close();
-            btnClose.MouseEnter += (s, e) => btnClose.ForeColor = Color.White;
-            btnClose.MouseLeave += (s, e) => btnClose.ForeColor = Color.FromArgb(160, 160, 175);
 
             pnlHeader.Controls.Add(lblTitle);
             pnlHeader.Controls.Add(btnClose);
@@ -266,17 +258,7 @@ namespace KahoiiMusic
             };
             pnlContent.Controls.Add(btnSubmit);
 
-            // Hint Info
-            lblHint = new Label
-            {
-                Text = "• Tự động đồng bộ bài hát, yêu thích và đã tải với Firebase",
-                Location = new Point(14, 222),
-                Size = new Size(312, 34),
-                ForeColor = Color.FromArgb(135, 130, 155),
-                Font = new Font("Segoe UI", 8F),
-                TextAlign = ContentAlignment.TopCenter
-            };
-            pnlContent.Controls.Add(lblHint);
+
         }
 
         protected override void OnResize(EventArgs e)
@@ -364,21 +346,19 @@ namespace KahoiiMusic
             if (register)
             {
                 pnlConfirmPasswordBox.Visible = true;
-                lblError.Location = new Point(20, 196);
-                btnSubmit.Location = new Point(20, 220);
+                lblError.Location = new Point(20, 194);
+                btnSubmit.Location = new Point(20, 216);
                 btnSubmit.Text = "TẠO TÀI KHOẢN";
-                lblHint.Location = new Point(14, 270);
-                this.Height = 360;
+                this.Height = 286;
                 pnlContent.Height = this.Height - 40;
             }
             else
             {
                 pnlConfirmPasswordBox.Visible = false;
-                lblError.Location = new Point(20, 148);
-                btnSubmit.Location = new Point(20, 172);
+                lblError.Location = new Point(20, 146);
+                btnSubmit.Location = new Point(20, 168);
                 btnSubmit.Text = "ĐĂNG NHẬP";
-                lblHint.Location = new Point(14, 222);
-                this.Height = 310;
+                this.Height = 238;
                 pnlContent.Height = this.Height - 40;
             }
         }
@@ -533,8 +513,7 @@ namespace KahoiiMusic
                 pnlConfirmPasswordBox.Visible = false;
                 btnSubmit.Visible = false;
                 lblError.Visible = false;
-                lblHint.Visible = false;
-
+                
                 pnlProfile.Visible = true;
                 this.Height = 380;
                 pnlContent.Height = this.Height - 40;
@@ -552,8 +531,7 @@ namespace KahoiiMusic
                 pnlEmailBox.Visible = true;
                 pnlPasswordBox.Visible = true;
                 btnSubmit.Visible = true;
-                lblHint.Visible = true;
-                SwitchTab(_isRegisterMode);
+                                SwitchTab(_isRegisterMode);
             }
         }
 
@@ -684,6 +662,105 @@ namespace KahoiiMusic
                 {
                     TextRenderer.DrawText(g, "Đăng Ký", f2, new Rectangle(Width / 2, 3, tabW, tabH), c2,
                         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
+            }
+        }
+
+        // 3. Gradient Close Button with App Signature Pink-Purple Gradient on Hover
+        private class GradientCloseButton : Control
+        {
+            private bool _isHovered = false;
+            private bool _isPressed = false;
+
+            public GradientCloseButton()
+            {
+                SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                         ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+                BackColor = Color.Transparent;
+                Size = new Size(24, 24);
+                Cursor = Cursors.Hand;
+            }
+
+            protected override void OnMouseEnter(EventArgs e)
+            {
+                base.OnMouseEnter(e);
+                _isHovered = true;
+                Invalidate();
+            }
+
+            protected override void OnMouseLeave(EventArgs e)
+            {
+                base.OnMouseLeave(e);
+                _isHovered = false;
+                _isPressed = false;
+                Invalidate();
+            }
+
+            protected override void OnMouseDown(MouseEventArgs e)
+            {
+                base.OnMouseDown(e);
+                if (e.Button == MouseButtons.Left)
+                {
+                    _isPressed = true;
+                    Invalidate();
+                }
+            }
+
+            protected override void OnMouseUp(MouseEventArgs e)
+            {
+                base.OnMouseUp(e);
+                _isPressed = false;
+                Invalidate();
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                Graphics g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                if (_isHovered)
+                {
+                    // Gradient: Deep Purple (43, 16, 127) to Vibrant Neon Pink (255, 38, 128)
+                    Color startColor = _isPressed ? Color.FromArgb(70, 20, 160) : Color.FromArgb(120, 25, 190);
+                    Color endColor = _isPressed ? Color.FromArgb(220, 30, 110) : Color.FromArgb(255, 45, 130);
+
+                    var rect = new Rectangle(1, 1, Width - 3, Height - 3);
+                    using (var brush = new LinearGradientBrush(rect, startColor, endColor, 45f))
+                    {
+                        g.FillEllipse(brush, rect);
+                    }
+
+                    using (var penGlow = new Pen(Color.FromArgb(180, 255, 90, 170), 1f))
+                    {
+                        g.DrawEllipse(penGlow, rect);
+                    }
+
+                    // Crisp White '✕'
+                    using (var pen = new Pen(Color.White, 1.8f))
+                    {
+                        pen.StartCap = LineCap.Round;
+                        pen.EndCap = LineCap.Round;
+                        int cx = Width / 2;
+                        int cy = Height / 2;
+                        int r = 4;
+                        g.DrawLine(pen, cx - r, cy - r, cx + r, cy + r);
+                        g.DrawLine(pen, cx + r, cy - r, cx - r, cy + r);
+                    }
+                }
+                else
+                {
+                    // Clean Muted '✕'
+                    using (var pen = new Pen(Color.FromArgb(160, 160, 175), 1.5f))
+                    {
+                        pen.StartCap = LineCap.Round;
+                        pen.EndCap = LineCap.Round;
+                        int cx = Width / 2;
+                        int cy = Height / 2;
+                        int r = 4;
+                        g.DrawLine(pen, cx - r, cy - r, cx + r, cy + r);
+                        g.DrawLine(pen, cx + r, cy - r, cx - r, cy + r);
+                    }
                 }
             }
         }
