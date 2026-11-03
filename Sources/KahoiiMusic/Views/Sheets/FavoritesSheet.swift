@@ -7,6 +7,7 @@ public struct FavoritesSheet: View {
     @ObservedObject var player: AudioPlayerService
     @ObservedObject var historyService = HistoryService.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var trackToAddToCollection: PlaylistItem? = nil
 
     public init(player: AudioPlayerService) {
         self.player = player
@@ -108,6 +109,9 @@ public struct FavoritesSheet: View {
                     .fontWeight(.semibold)
                 }
             }
+            .sheet(item: $trackToAddToCollection) { track in
+                AddToCollectionSheet(track: track)
+            }
         }
     }
 
@@ -153,6 +157,20 @@ public struct FavoritesSheet: View {
                 }
 
                 Spacer()
+
+                // Add to collection button
+                Button(action: {
+                    #if canImport(UIKit)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    #endif
+                    trackToAddToCollection = item
+                }) {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 15))
+                        .foregroundColor(.white.opacity(0.6))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(PlainButtonStyle())
 
                 Button(action: {
                     #if canImport(UIKit)

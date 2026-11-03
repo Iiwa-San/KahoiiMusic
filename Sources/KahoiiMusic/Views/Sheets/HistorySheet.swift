@@ -8,6 +8,7 @@ public struct HistorySheet: View {
     @ObservedObject var historyService = HistoryService.shared
     @ObservedObject var savedService = SavedTracksService.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var trackToAddToCollection: PlaylistItem? = nil
 
     public init(player: AudioPlayerService) {
         self.player = player
@@ -179,6 +180,20 @@ public struct HistorySheet: View {
                 #endif
                 player.playTrack(item, keepQueue: true)
             }
+
+            // Add to Collection Button
+            Button(action: {
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                #endif
+                trackToAddToCollection = item
+            }) {
+                Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 15))
+                    .foregroundColor(.white.opacity(0.45))
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
 
             // Download Button
             Button(action: {

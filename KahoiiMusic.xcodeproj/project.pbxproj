@@ -34,6 +34,11 @@
 		AA0001012C12340000000025 /* ErrorLogsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000025 /* ErrorLogsSheet.swift */; };
 		AA0001012C12340000000026 /* UserPlaylist.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000026 /* UserPlaylist.swift */; };
 		AA0001012C12340000000027 /* PlaylistCollectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000027 /* PlaylistCollectionService.swift */; };
+		AA0001012C12340000000028 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000028 /* NetworkMonitor.swift */; };
+		AA0001012C12340000000029 /* FirebaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C12340000000029 /* FirebaseAuthService.swift */; };
+		AA0001012C1234000000002A /* FirebaseSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C1234000000002A /* FirebaseSyncService.swift */; };
+		AA0001012C1234000000002B /* AddToCollectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C1234000000002B /* AddToCollectionSheet.swift */; };
+		AA0001012C1234000000002C /* AccountSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001002C1234000000002C /* AccountSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +71,11 @@
 		AA0001002C12340000000025 /* ErrorLogsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorLogsSheet.swift; sourceTree = "<group>"; };
 		AA0001002C12340000000026 /* UserPlaylist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPlaylist.swift; sourceTree = "<group>"; };
 		AA0001002C12340000000027 /* PlaylistCollectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistCollectionService.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000028 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		AA0001002C12340000000029 /* FirebaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseAuthService.swift; sourceTree = "<group>"; };
+		AA0001002C1234000000002A /* FirebaseSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseSyncService.swift; sourceTree = "<group>"; };
+		AA0001002C1234000000002B /* AddToCollectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToCollectionSheet.swift; sourceTree = "<group>"; };
+		AA0001002C1234000000002C /* AccountSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +130,9 @@
 				AA0001002C12340000000021 /* SleepTimerService.swift */,
 				AA0001002C12340000000023 /* ErrorLogService.swift */,
 				AA0001002C12340000000027 /* PlaylistCollectionService.swift */,
+				AA0001002C12340000000028 /* NetworkMonitor.swift */,
+				AA0001002C12340000000029 /* FirebaseAuthService.swift */,
+				AA0001002C1234000000002A /* FirebaseSyncService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -158,6 +171,8 @@
 				AA0001002C12340000000018 /* FavoritesSheet.swift */,
 				AA0001002C12340000000022 /* SavedTracksSheet.swift */,
 				AA0001002C12340000000025 /* ErrorLogsSheet.swift */,
+				AA0001002C1234000000002B /* AddToCollectionSheet.swift */,
+				AA0001002C1234000000002C /* AccountSheet.swift */,
 			);
 			path = Sheets;
 			sourceTree = "<group>";
@@ -264,6 +279,11 @@
 				AA0001012C12340000000025 /* ErrorLogsSheet.swift in Sources */,
 				AA0001012C12340000000026 /* UserPlaylist.swift in Sources */,
 				AA0001012C12340000000027 /* PlaylistCollectionService.swift in Sources */,
+				AA0001012C12340000000028 /* NetworkMonitor.swift in Sources */,
+				AA0001012C12340000000029 /* FirebaseAuthService.swift in Sources */,
+				AA0001012C1234000000002A /* FirebaseSyncService.swift in Sources */,
+				AA0001012C1234000000002B /* AddToCollectionSheet.swift in Sources */,
+				AA0001012C1234000000002C /* AccountSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

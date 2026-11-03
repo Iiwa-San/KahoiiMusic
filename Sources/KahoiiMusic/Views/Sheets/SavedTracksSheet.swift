@@ -7,6 +7,7 @@ public struct SavedTracksSheet: View {
     @ObservedObject var player: AudioPlayerService
     @ObservedObject var savedService = SavedTracksService.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var trackToAddToCollection: PlaylistItem? = nil
 
     public init(player: AudioPlayerService) {
         self.player = player
@@ -202,6 +203,12 @@ public struct SavedTracksSheet: View {
                     player.addToQueue(item)
                 }) {
                     Label("Thêm vào danh sách chờ", systemImage: "text.badge.plus")
+                }
+
+                Button(action: {
+                    trackToAddToCollection = item
+                }) {
+                    Label("Thêm vào bộ sưu tập", systemImage: "folder.badge.plus")
                 }
 
                 Button(role: .destructive, action: {

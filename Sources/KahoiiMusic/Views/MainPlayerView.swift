@@ -8,6 +8,12 @@ public struct MainPlayerView: View {
     @StateObject private var historyService = HistoryService.shared
     @StateObject private var savedService = SavedTracksService.shared
     @StateObject private var sleepTimer = SleepTimerService.shared
+    @ObservedObject private var authService = FirebaseAuthService.shared
+
+    @State private var showingAccountSheet: Bool = false
+    @State private var trackForCollection: PlaylistItem? = nil
+    @State private var pendingCellularDownloadTrack: PlaylistItem? = nil
+    @State private var showingCellularAlert: Bool = false
 
     @State private var searchInput: String = ""
     @State private var isSearching: Bool = false
@@ -114,6 +120,25 @@ public struct MainPlayerView: View {
         .sheet(isPresented: $showingErrorLogsSheet) {
             ErrorLogsSheet()
         }
+        .sheet(isPresented: $showingAccountSheet) {
+            AccountSheet()
+        }
+        .sheet(item: $trackForCollection) { track in
+            AddToCollectionSheet(track: track)
+        }
+        .alert("Cảnh báo dữ liệu di động (4G/5G)", isPresented: $showingCellularAlert) {
+            Button("Hủy", role: .cancel) {
+                pendingCellularDownloadTrack = nil
+            }
+            Button("Tiếp tục tải") {
+                if let track = pendingCellularDownloadTrack {
+                    Task { await savedService.saveTrackAsync(track) }
+                }
+                pendingCellularDownloadTrack = nil
+            }
+        } message: {
+            Text("Bạn đang kết nối dữ liệu di động. Tải bài hát có thể làm tiêu tốn dung lượng gói cước. Bạn có muốn tiếp tục không?")
+        }
     }
 
     // MARK: - Header & Search
@@ -134,7 +159,7 @@ public struct MainPlayerView: View {
 
                 Spacer()
 
-                // Status Indicator
+                // Status Indicator (to the left of User Icon)
                 Text(player.statusMessage)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
@@ -163,6 +188,19 @@ public struct MainPlayerView: View {
                         .padding(6)
                         .background(Color.white.opacity(0.06))
                         .clipShape(Circle())
+                }
+
+                // User Account Button at top right
+                Button(action: {
+                    #if canImport(UIKit)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    #endif
+                    showingAccountSheet = true
+                }) {
+                    Image(systemName: authService.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                        .font(.system(size: 22))
+                        .foregroundColor(authService.isLoggedIn ? Color(red: 1.0, green: 0.2, blue: 0.6) : .white.opacity(0.85))
+                        .frame(width: 32, height: 32)
                 }
             }
 
@@ -240,6 +278,19 @@ public struct MainPlayerView: View {
             Spacer()
 
             if let track = player.currentTrack {
+                // Add to Collection Button
+                Button(action: {
+                    #if canImport(UIKit)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    #endif
+                    trackForCollection = track
+                }) {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 19))
+                        .foregroundColor(.white.opacity(0.65))
+                        .frame(width: 36, height: 36)
+                }
+
                 // Favorite Button
                 Button(action: {
                     #if canImport(UIKit)
@@ -266,11 +317,14 @@ public struct MainPlayerView: View {
                 #if canImport(UIKit)
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 #endif
-                Task {
-                    if savedService.isSaved(id: track.id) {
-                        savedService.deleteSavedTrack(id: track.id)
+                if savedService.isSaved(id: track.id) {
+                    savedService.deleteSavedTrack(id: track.id)
+                } else {
+                    if NetworkMonitor.shared.isCellular {
+                        pendingCellularDownloadTrack = track
+                        showingCellularAlert = true
                     } else {
-                        await savedService.saveTrackAsync(track)
+                        Task { await savedService.saveTrackAsync(track) }
                     }
                 }
             }) {
