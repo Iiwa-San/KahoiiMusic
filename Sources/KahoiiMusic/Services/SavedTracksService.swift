@@ -277,6 +277,31 @@ public class SavedTracksService: ObservableObject {
         }
     }
 
+    public func clearAllSaved(exceptId: String? = nil) {
+        let keep = savedTracks.first(where: { !($0.id.isEmpty) && $0.id == exceptId })
+        let fm = FileManager.default
+        if let files = try? fm.contentsOfDirectory(at: audioDir, includingPropertiesForKeys: nil) {
+            for f in files {
+                let name = f.deletingPathExtension().lastPathComponent
+                if let ex = exceptId, !ex.isEmpty, name == ex { continue }
+                try? fm.removeItem(at: f)
+            }
+        }
+        if let thumbs = try? fm.contentsOfDirectory(at: thumbDir, includingPropertiesForKeys: nil) {
+            for t in thumbs {
+                let name = t.deletingPathExtension().lastPathComponent
+                if let ex = exceptId, !ex.isEmpty, name == ex { continue }
+                try? fm.removeItem(at: t)
+            }
+        }
+        if let k = keep {
+            savedTracks = [k]
+        } else {
+            savedTracks = []
+        }
+        saveToFile()
+    }
+
     public func deleteSavedTrack(id: String) {
         guard !id.isEmpty else { return }
 

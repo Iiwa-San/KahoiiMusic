@@ -820,6 +820,16 @@ public class AudioPlayerService: ObservableObject {
         }
     }
 
+    public func retainOnlyCurrentTrack() {
+        if let current = currentTrack {
+            playlist = [current]
+            currentIndex = 0
+        } else {
+            playlist.removeAll()
+            currentIndex = -1
+        }
+    }
+
     public func clearQueue() {
         playlist.removeAll()
         currentIndex = -1

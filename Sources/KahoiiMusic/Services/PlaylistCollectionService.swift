@@ -66,6 +66,11 @@ public class PlaylistCollectionService: ObservableObject {
         return savePlaylist(name: name, items: [])
     }
 
+    public func clearAllPlaylists() {
+        playlists.removeAll()
+        savePlaylists()
+    }
+
     public func deletePlaylist(id: String) {
         playlists.removeAll { $0.id == id }
         savePlaylists()

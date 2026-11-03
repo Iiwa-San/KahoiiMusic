@@ -167,7 +167,60 @@ public class FirebaseAuthService: ObservableObject {
         }
     }
 
-    public func signOut() {
+    public func sendPasswordReset(email: String) async -> Result<String, AuthError> {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedEmail.isEmpty || !trimmedEmail.contains("@") {
+            return .failure(.custom("Vui lòng nhập địa chỉ email hợp lệ."))
+        }
+
+        let endpoint = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=\(apiKey)"
+        guard let url = URL(string: endpoint) else {
+            return .failure(.custom("URL không hợp lệ."))
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "requestType": "PASSWORD_RESET",
+            "email": trimmedEmail
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return .failure(.custom("Lỗi kết nối máy chủ."))
+            }
+
+            if httpResponse.statusCode == 200 {
+                return .success("Đã gửi email khôi phục mật khẩu. Vui lòng kiểm tra hộp thư (kể cả mục Spam) của bạn.")
+            }
+
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errObj = json["error"] as? [String: Any],
+               let message = errObj["message"] as? String {
+                if message.contains("EMAIL_NOT_FOUND") {
+                    return .failure(.custom("Email này chưa được đăng ký tài khoản."))
+                }
+                return .failure(.custom("Lỗi: \(message)"))
+            }
+
+            return .failure(.custom("Gửi email thất bại (Mã lỗi \(httpResponse.statusCode))."))
+        } catch {
+            return .failure(.custom("Lỗi kết nối: \(error.localizedDescription)"))
+        }
+    }
+
+    public func clearUserDataExceptPlayingTrack(currentPlayingId: String?) {
+        AudioPlayerService.shared.retainOnlyCurrentTrack()
+        HistoryService.shared.clearHistory(exceptId: currentPlayingId)
+        SavedTracksService.shared.clearAllSaved(exceptId: currentPlayingId)
+        PlaylistCollectionService.shared.clearAllPlaylists()
+    }
+
+    public func signOut(currentPlayingId: String? = nil) {
+        clearUserDataExceptPlayingTrack(currentPlayingId: currentPlayingId)
         saveUser(nil)
     }
 }

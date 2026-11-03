@@ -65,9 +65,16 @@ public class HistoryService: ObservableObject {
         saveHistory()
     }
 
-    public func clearHistory() {
-        history.removeAll()
+    public func clearHistory(exceptId: String? = nil) {
+        let keep = history.first(where: { !($0.id.isEmpty) && $0.id == exceptId })
+        if let k = keep {
+            history = [k]
+        } else {
+            history = []
+        }
+        favorites.removeAll()
         saveHistory()
+        saveFavorites()
     }
 
     // MARK: - Favorites Management

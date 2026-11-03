@@ -17,6 +17,8 @@ public struct AccountSheet: View {
     @State private var isProcessing: Bool = false
     @State private var showCellularAlert: Bool = false
     @State private var pendingSyncTracksToDownload: [PlaylistItem] = []
+    @State private var alertMessage: String = ""
+    @State private var showAlert: Bool = false
 
     public init() {}
 
@@ -45,6 +47,11 @@ public struct AccountSheet: View {
                     }
                     .foregroundColor(.white)
                 }
+            }
+            .alert("Thông báo", isPresented: $showAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(alertMessage)
             }
             .alert("Cảnh báo dữ liệu di động (4G/5G)", isPresented: $showCellularAlert) {
                 Button("Hủy", role: .cancel) {
@@ -153,7 +160,8 @@ public struct AccountSheet: View {
 
             // Sign out button
             Button(action: {
-                authService.signOut()
+                let currentId = player.currentTrack?.id
+                authService.signOut(currentPlayingId: currentId)
             }) {
                 HStack(spacing: 8) {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
@@ -231,6 +239,39 @@ public struct AccountSheet: View {
                 .padding(12)
                 .background(Color.white.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            // Quên mật khẩu chỉ xuất hiện ở tab Đăng nhập
+            if selectedTab == 0 {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        let email = emailInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if email.isEmpty || !email.contains("@") {
+                            errorMessage = "Vui lòng nhập email hợp lệ ở trên để nhận liên kết khôi phục."
+                            return
+                        }
+                        isProcessing = true
+                        Task {
+                            let res = await authService.sendPasswordReset(email: email)
+                            isProcessing = false
+                            switch res {
+                            case .success(let msg):
+                                errorMessage = nil
+                                alertMessage = msg
+                                showAlert = true
+                            case .failure(let err):
+                                errorMessage = err.localizedDescription
+                            }
+                        }
+                    }) {
+                        Text("Quên mật khẩu?")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundColor(Color(red: 1.0, green: 0.2, blue: 0.6))
+                            .underline()
+                    }
+                }
+                .padding(.top, 2)
             }
 
             // Confirm Password Field (only for Sign up)
@@ -317,6 +358,8 @@ public struct AccountSheet: View {
             isProcessing = false
             switch result {
             case .success(let user):
+                let currentId = player.currentTrack?.id
+                authService.clearUserDataExceptPlayingTrack(currentPlayingId: currentId)
                 #if canImport(UIKit)
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 #endif
