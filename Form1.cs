@@ -1323,6 +1323,7 @@ namespace KahoiiMusic
                     btnPlaylist.IsOpen = false;
                 }
                 ShowAccountPopup();
+                this.Activate();
             }
         }
 
@@ -1337,7 +1338,6 @@ namespace KahoiiMusic
             int y = this.Location.Y + (this.Height - accountPopup.Height) / 2;
             accountPopup.Location = new Point(Math.Max(0, x), Math.Max(0, y));
             accountPopup.Show(this);
-            accountPopup.Activate();
         }
 
         private void UpdateUserButtonAppearance()

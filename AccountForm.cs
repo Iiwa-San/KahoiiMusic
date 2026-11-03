@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -659,6 +659,11 @@ namespace KahoiiMusic
             }
         }
 
+        protected override bool ShowWithoutActivation
+        {
+            get { return true; }
+        }
+
         protected override CreateParams CreateParams
         {
             get
@@ -669,11 +674,49 @@ namespace KahoiiMusic
             }
         }
 
+        private const int WM_MOUSEACTIVATE = 0x0021;
+        private const int MA_ACTIVATE = 1;
+        private const int MA_NOACTIVATE = 3;
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_MOUSEACTIVATE)
+            {
+                if (FirebaseAuthService.Instance.IsLoggedIn)
+                {
+                    m.Result = (IntPtr)MA_NOACTIVATE;
+                    return;
+                }
+
+                Point p = PointToClient(Cursor.Position);
+                Control child = GetChildAtPoint(p);
+                if (child == pnlContent)
+                {
+                    Point pContent = pnlContent.PointToClient(Cursor.Position);
+                    Control contentChild = pnlContent.GetChildAtPoint(pContent);
+                    if (contentChild == pnlEmailBox || contentChild == pnlPasswordBox || contentChild == pnlConfirmPasswordBox)
+                    {
+                        m.Result = (IntPtr)MA_ACTIVATE;
+                        base.WndProc(ref m);
+                        return;
+                    }
+                }
+                m.Result = (IntPtr)MA_NOACTIVATE;
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
         protected override void OnDeactivate(EventArgs e)
         {
             base.OnDeactivate(e);
             _lastDeactivatedTime = DateTime.UtcNow;
             if (_isShowingChildDialog) return;
+            if (Owner is Form1 f1 && f1.IsFormClosed) { Hide(); return; }
+            if (Owner != null && !Owner.IsDisposed)
+            {
+                try { Owner.Activate(); } catch { }
+            }
             Hide();
         }
 
@@ -692,6 +735,13 @@ namespace KahoiiMusic
             if (this.Visible)
             {
                 RefreshViewState();
+            }
+            else
+            {
+                if (Owner != null && !Owner.IsDisposed)
+                {
+                    try { Owner.Activate(); } catch { }
+                }
             }
         }
 
