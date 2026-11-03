@@ -156,6 +156,10 @@ namespace KahoiiMusic.Services
             {
                 return Tuple.Create(false, "Lỗi kết nối: " + ex.Message);
             }
+            finally
+            {
+                MemoryOptimizer.TrimMemoryAsync(300, aggressive: true);
+            }
         }
 
         public void SignOut()

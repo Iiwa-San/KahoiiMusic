@@ -98,6 +98,7 @@ namespace KahoiiMusic.Services
             {
                 IsSyncing = false;
                 SyncStatusChanged?.Invoke(this, EventArgs.Empty);
+                MemoryOptimizer.TrimMemoryAsync(300, aggressive: true);
             }
         }
 
@@ -165,6 +166,7 @@ namespace KahoiiMusic.Services
             {
                 IsSyncing = false;
                 SyncStatusChanged?.Invoke(this, EventArgs.Empty);
+                MemoryOptimizer.TrimMemoryAsync(300, aggressive: true);
             }
         }
 
