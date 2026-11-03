@@ -303,6 +303,24 @@ class SavedTracksRepository(private val context: Context) {
         }
     }
 
+    suspend fun clearAllExcept(exceptId: String?) = withContext(Dispatchers.IO) {
+        val keep = _savedTracks.value.find { !exceptId.isNullOrBlank() && it.id.equals(exceptId, ignoreCase = true) }
+        val files = savedDir.listFiles() ?: emptyArray()
+        for (f in files) {
+            val name = f.nameWithoutExtension
+            if (!exceptId.isNullOrBlank() && name.equals(exceptId, ignoreCase = true)) continue
+            try { f.delete() } catch (_: Exception) {}
+        }
+        val thumbs = thumbDir.listFiles() ?: emptyArray()
+        for (t in thumbs) {
+            val name = t.nameWithoutExtension
+            if (!exceptId.isNullOrBlank() && name.equals(exceptId, ignoreCase = true)) continue
+            try { t.delete() } catch (_: Exception) {}
+        }
+        _savedTracks.value = if (keep != null) listOf(keep) else emptyList()
+        saveMetadata(_savedTracks.value)
+    }
+
     suspend fun deleteTrack(id: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val item = _savedTracks.value.find { it.id.equals(id, ignoreCase = true) }

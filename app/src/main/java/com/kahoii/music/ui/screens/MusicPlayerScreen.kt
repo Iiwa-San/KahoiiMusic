@@ -462,6 +462,9 @@ fun MusicPlayerScreen(
                 onSyncNow = {
                     viewModel.syncNow()
                 },
+                onForgotPassword = { email ->
+                    viewModel.forgotPassword(email)
+                },
                 onDismissRequest = { showAccountSheet = false }
             )
         }

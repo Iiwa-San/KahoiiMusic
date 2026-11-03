@@ -59,6 +59,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kahoii.music.data.FirebaseUser
@@ -74,8 +77,10 @@ fun AccountBottomSheet(
     onSignUp: (String, String) -> Unit,
     onSignOut: () -> Unit,
     onSyncNow: () -> Unit,
+    onForgotPassword: (String) -> Unit = {},
     onDismissRequest: () -> Unit
 ) {
+    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Đăng nhập, 1: Đăng ký
 
@@ -362,6 +367,32 @@ fun AccountBottomSheet(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                // Quên mật khẩu chỉ xuất hiện ở tab Đăng Nhập
+                if (selectedTab == 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Text(
+                            text = "Quên mật khẩu?",
+                            color = NeonPink,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            textDecoration = TextDecoration.Underline,
+                            modifier = Modifier
+                                .clickable {
+                                    if (email.isBlank()) {
+                                        Toast.makeText(context, "Vui lòng nhập địa chỉ email vào ô trên trước.", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        onForgotPassword(email)
+                                    }
+                                }
+                                .padding(vertical = 4.dp, horizontal = 2.dp)
+                        )
+                    }
+                }
 
                 if (!syncStatusMessage.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))

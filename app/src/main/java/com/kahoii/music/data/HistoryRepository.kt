@@ -135,6 +135,14 @@ class HistoryRepository(private val context: Context) {
         saveHistory()
     }
 
+    suspend fun clearHistoryExcept(exceptId: String?) = withContext(Dispatchers.IO) {
+        val keep = _history.value.find { !exceptId.isNullOrBlank() && it.id.equals(exceptId, ignoreCase = true) }
+        _history.value = if (keep != null) listOf(keep) else emptyList()
+        _favorites.value = emptyList()
+        saveHistory()
+        saveFavorites()
+    }
+
     fun isFavorite(id: String): Boolean {
         if (id.isBlank()) return false
         return _favorites.value.any { it.id.equals(id, ignoreCase = true) }

@@ -141,6 +141,36 @@ class FirebaseAuthRepository(private val context: Context) {
         }
     }
 
+    suspend fun sendPasswordResetEmail(email: String): Result<String> = withContext(Dispatchers.IO) {
+        val trimmedEmail = email.trim()
+        if (trimmedEmail.isBlank() || !trimmedEmail.contains("@")) {
+            return@withContext Result.failure(IllegalArgumentException("Vui lòng nhập địa chỉ email hợp lệ"))
+        }
+
+        try {
+            val payload = JsonObject().apply {
+                addProperty("requestType", "PASSWORD_RESET")
+                addProperty("email", trimmedEmail)
+            }
+
+            val request = Request.Builder()
+                .url(FirebaseConfig.AUTH_PASSWORD_RESET_URL)
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    Result.success("Đã gửi email khôi phục mật khẩu. Vui lòng kiểm tra hộp thư (kể cả mục Spam) của bạn.")
+                } else {
+                    Result.failure(Exception(parseAuthError(body)))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi kết nối máy chủ Firebase: ${e.localizedMessage ?: e.message}"))
+        }
+    }
+
     fun signOut() {
         saveUser(null)
     }
@@ -155,7 +185,9 @@ class FirebaseAuthRepository(private val context: Context) {
                     "Dịch vụ xác thực chưa được bật trên Firebase Console (Vui lòng vào Build -> Authentication -> Bật Email/Password)."
                 message.contains("EMAIL_EXISTS") ->
                     "Email này đã được sử dụng. Vui lòng đăng nhập hoặc dùng email khác."
-                message.contains("INVALID_LOGIN_CREDENTIALS") || message.contains("EMAIL_NOT_FOUND") || message.contains("INVALID_PASSWORD") ->
+                message.contains("EMAIL_NOT_FOUND") ->
+                    "Email này chưa được đăng ký tài khoản."
+                message.contains("INVALID_LOGIN_CREDENTIALS") || message.contains("INVALID_PASSWORD") ->
                     "Email hoặc mật khẩu không chính xác."
                 message.contains("WEAK_PASSWORD") ->
                     "Mật khẩu quá yếu (cần tối thiểu 6 ký tự)."

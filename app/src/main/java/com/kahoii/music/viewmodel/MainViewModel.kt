@@ -850,6 +850,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang tạo tài khoản...") }
             val res = authRepository.signUp(email, pass)
             res.onSuccess { user ->
+                clearUserDataExceptCurrentPlaying()
                 _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đăng ký thành công!") }
                 Toast.makeText(getApplication(), "Đăng ký thành công!", Toast.LENGTH_SHORT).show()
                 uploadCurrentDataToCloud(user)
@@ -865,6 +866,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang đăng nhập...") }
             val res = authRepository.signIn(email, pass)
             res.onSuccess { user ->
+                clearUserDataExceptCurrentPlaying()
                 _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đăng nhập thành công!") }
                 Toast.makeText(getApplication(), "Đăng nhập thành công!", Toast.LENGTH_SHORT).show()
                 syncCloudData(user)
@@ -875,7 +877,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun forgotPassword(email: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang gửi email khôi phục...") }
+            val res = authRepository.sendPasswordResetEmail(email)
+            res.onSuccess { msg ->
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = msg) }
+                Toast.makeText(getApplication(), msg, Toast.LENGTH_LONG).show()
+            }.onFailure { err ->
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = err.message) }
+                Toast.makeText(getApplication(), err.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun clearUserDataExceptCurrentPlaying() {
+        viewModelScope.launch {
+            val currentTrack = _uiState.value.currentTrack
+            if (currentTrack != null) {
+                _uiState.update { it.copy(playlist = listOf(currentTrack), currentTrackIndex = 0) }
+            } else {
+                _uiState.update { it.copy(playlist = emptyList(), currentTrackIndex = -1) }
+            }
+            historyRepository.clearHistoryExcept(currentTrack?.id)
+            savedTracksRepository.clearAllExcept(currentTrack?.id)
+            playlistCollectionRepository.clearAll()
+        }
+    }
+
     fun signOut() {
+        clearUserDataExceptCurrentPlaying()
         authRepository.signOut()
         _uiState.update { it.copy(currentUser = null, syncStatusMessage = null) }
         Toast.makeText(getApplication(), "Đã đăng xuất", Toast.LENGTH_SHORT).show()

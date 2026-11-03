@@ -109,6 +109,11 @@ class PlaylistCollectionRepository(private val context: Context) {
         savePlaylist(name, emptyList())
     }
 
+    suspend fun clearAll() = withContext(Dispatchers.IO) {
+        _playlists.value = emptyList()
+        savePlaylists()
+    }
+
     suspend fun deletePlaylist(id: String) = withContext(Dispatchers.IO) {
         ensureLoaded()
         val current = _playlists.value.toMutableList()
