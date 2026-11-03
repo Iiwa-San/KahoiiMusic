@@ -47,6 +47,7 @@ public class PlaylistCollectionService: ObservableObject {
                 _ = try? fileManager.removeItem(at: fileURL)
             }
             try fileManager.moveItem(at: tempURL, to: fileURL)
+            FirebaseSyncService.shared.requestAutoUpload()
         } catch {
             print("Failed to save playlists: \(error)")
         }

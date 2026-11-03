@@ -102,6 +102,7 @@ public class HistoryService: ObservableObject {
         do {
             let data = try JSONEncoder().encode(history)
             try data.write(to: url, options: .atomic)
+            FirebaseSyncService.shared.requestAutoUpload()
         } catch {
             print("[HistoryService] Failed to save history: \(error)")
         }
@@ -123,6 +124,7 @@ public class HistoryService: ObservableObject {
         do {
             let data = try JSONEncoder().encode(favorites)
             try data.write(to: url, options: .atomic)
+            FirebaseSyncService.shared.requestAutoUpload()
         } catch {
             print("[HistoryService] Failed to save favorites: \(error)")
         }

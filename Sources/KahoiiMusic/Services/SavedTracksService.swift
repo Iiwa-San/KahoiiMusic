@@ -334,6 +334,7 @@ public class SavedTracksService: ObservableObject {
         do {
             let data = try JSONEncoder().encode(savedTracks)
             try data.write(to: jsonFile, options: .atomic)
+            FirebaseSyncService.shared.requestAutoUpload()
         } catch {
             print("[SavedTracksService] Save error: \(error)")
             ErrorLogService.shared.log("Lỗi ghi danh sách tải", error.localizedDescription, category: "Hệ thống")

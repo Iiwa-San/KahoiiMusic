@@ -30,6 +30,8 @@ public class FirebaseSyncService: ObservableObject {
 
     @Published public var isSyncing: Bool = false
     @Published public var syncStatusMessage: String = ""
+    public var isApplyingCloudPayload: Bool = false
+    private var autoUploadTask: Task<Void, Never>? = nil
 
     private let projectId = "kahoiimusic"
     private let apiKey = "AIzaSyB4fUCZZN41WmnxGeH8jSdz1M5mi2LhLX8"
@@ -115,6 +117,70 @@ public class FirebaseSyncService: ObservableObject {
         } catch {
             syncStatusMessage = "Lỗi lưu đám mây: \(error.localizedDescription)"
             return false
+        }
+    }
+
+    public func requestAutoUpload() {
+        guard let user = FirebaseAuthService.shared.currentUser, !isApplyingCloudPayload else { return }
+        autoUploadTask?.cancel()
+        autoUploadTask = Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard !Task.isCancelled else { return }
+            let payload = CloudMusicPayload(
+                playlists: AudioPlayerService.shared.playlist,
+                savedTracks: SavedTracksService.shared.savedTracks,
+                history: HistoryService.shared.history,
+                favorites: HistoryService.shared.favorites,
+                collections: PlaylistCollectionService.shared.playlists
+            )
+            _ = await syncUpload(userId: user.localId, idToken: user.idToken, payload: payload)
+        }
+    }
+
+    public func triggerAutoFetch() {
+        guard let user = FirebaseAuthService.shared.currentUser else { return }
+        Task {
+            if let payload = await syncFetch(userId: user.localId, idToken: user.idToken) {
+                isApplyingCloudPayload = true
+                applyCloudPayload(payload)
+                isApplyingCloudPayload = false
+            } else {
+                requestAutoUpload()
+            }
+        }
+    }
+
+    public func applyCloudPayload(_ payload: CloudMusicPayload) {
+        // 1. Favorites
+        for fav in payload.favorites {
+            if !HistoryService.shared.favorites.contains(where: { $0.id == fav.id }) {
+                HistoryService.shared.favorites.append(fav)
+            }
+        }
+
+        // 2. Collections
+        for cloudCol in payload.collections {
+            if let localCol = PlaylistCollectionService.shared.playlists.first(where: { $0.id == cloudCol.id }) {
+                for item in cloudCol.items {
+                    if !localCol.items.contains(where: { $0.id == item.id }) {
+                        PlaylistCollectionService.shared.addTrack(to: localCol.id, track: item)
+                    }
+                }
+            } else {
+                let created = PlaylistCollectionService.shared.createPlaylist(name: cloudCol.name)
+                for item in cloudCol.items {
+                    PlaylistCollectionService.shared.addTrack(to: created.id, track: item)
+                }
+            }
+        }
+
+        // 3. Auto-download missing savedTracks
+        Task {
+            for track in payload.savedTracks {
+                if !SavedTracksService.shared.isSaved(id: track.id) {
+                    await SavedTracksService.shared.saveTrackAsync(track)
+                }
+            }
         }
     }
 }

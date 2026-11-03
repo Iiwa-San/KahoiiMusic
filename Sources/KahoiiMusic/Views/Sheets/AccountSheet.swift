@@ -19,6 +19,7 @@ public struct AccountSheet: View {
     @State private var pendingSyncTracksToDownload: [PlaylistItem] = []
     @State private var alertMessage: String = ""
     @State private var showAlert: Bool = false
+    @State private var showSignOutAlert: Bool = false
 
     public init() {}
 
@@ -70,111 +71,89 @@ public struct AccountSheet: View {
     // MARK: - Logged In View
     @ViewBuilder
     private func loggedInView(user: FirebaseUserInfo) -> some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             // Profile Header
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 72))
+                    .font(.system(size: 64))
                     .foregroundColor(Color(red: 1.0, green: 0.2, blue: 0.6))
 
                 Text(user.email)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.white)
 
                 Text("UID: \(user.localId)")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.45))
+                    .foregroundColor(Color(red: 0.53, green: 0.51, blue: 0.61))
                     .lineLimit(1)
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 6)
 
-            // Cloud Sync Status Card
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "icloud.and.arrow.up.fill")
-                        .foregroundColor(Color(red: 1.0, green: 0.2, blue: 0.6))
-                    Text("Đồng bộ đám mây (JSON)")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
+            // Stats Card (Streamlined matching PC)
+            VStack(spacing: 4) {
+                Text("Đã tải: \(savedService.savedTracks.count) bài  •  Bộ sưu tập: \(collectionService.playlists.count)")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Color(red: 0.78, green: 0.76, blue: 0.86))
+                Text("Lịch sử nghe: \(historyService.history.count) bài")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Color(red: 0.78, green: 0.76, blue: 0.86))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            // Sync Status
+            Text(syncService.syncStatusMessage.isEmpty ? "Đồng bộ tự động đám mây đang bật" : syncService.syncStatusMessage)
+                .font(.system(size: 12, weight: .medium))
+                .italic()
+                .foregroundColor(Color(red: 1.0, green: 0.2, blue: 0.6))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 10)
+
+            // Action: Single Unified Button (Matching PC)
+            Button(action: {
+                performManualSync()
+            }) {
+                HStack(spacing: 8) {
                     if syncService.isSyncing {
                         ProgressView().tint(.white)
+                        Text("⟳  Đang Đồng Bộ...")
+                    } else {
+                        Text("⟳  Đồng Bộ Ngay (Tự Động Bật)")
                     }
                 }
-
-                if !syncService.syncStatusMessage.isEmpty {
-                    Text(syncService.syncStatusMessage)
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(red: 1.0, green: 0.2, blue: 0.6))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                Divider().background(Color.white.opacity(0.1))
-
-                // Stats grid
-                HStack(spacing: 12) {
-                    statPill(title: "Đã tải", count: savedService.savedTracks.count)
-                    statPill(title: "Yêu thích", count: historyService.favorites.count)
-                    statPill(title: "Bộ sưu tập", count: collectionService.playlists.count)
-                    statPill(title: "Lịch sử", count: historyService.history.count)
-                }
-
-                // Action buttons
-                HStack(spacing: 12) {
-                    Button(action: {
-                        performUpload()
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.clockwise.icloud.fill")
-                            Text("Lưu lên Cloud")
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color(red: 1.0, green: 0.2, blue: 0.6))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .disabled(syncService.isSyncing)
-
-                    Button(action: {
-                        performFetch()
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "icloud.and.arrow.down.fill")
-                            Text("Tải từ Cloud")
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .disabled(syncService.isSyncing)
-                }
+                .font(.system(size: 13.5, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color(red: 1.0, green: 0.2, blue: 0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .padding(16)
-            .background(Color.white.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .disabled(syncService.isSyncing)
 
             // Sign out button
             Button(action: {
-                let currentId = player.currentTrack?.id
-                authService.signOut(currentPlayingId: currentId)
+                showSignOutAlert = true
             }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                    Text("Đăng xuất")
-                }
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.red.opacity(0.9))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.red.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Text("Đăng Xuất")
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundColor(Color(red: 1.0, green: 0.45, blue: 0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(Color(red: 0.15, green: 0.08, blue: 0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .padding(.top, 10)
+            .alert("Đăng xuất", isPresented: $showSignOutAlert) {
+                Button("Hủy", role: .cancel) {}
+                Button("Đăng xuất", role: .destructive) {
+                    let currentId = player.currentTrack?.id
+                    authService.signOut(currentPlayingId: currentId)
+                }
+            } message: {
+                Text("Bạn có muốn đăng xuất tài khoản không?\n\n(Danh sách bài hát của bạn đã được lưu an toàn trên đám mây và sẽ tự động tải về khi bạn đăng nhập lại).")
+            }
         }
     }
 
@@ -384,6 +363,10 @@ public struct AccountSheet: View {
         Task {
             _ = await syncService.syncUpload(userId: user.localId, idToken: user.idToken, payload: payload)
         }
+    }
+
+    private func performManualSync() {
+        performFetch()
     }
 
     private func performFetch() {

@@ -214,8 +214,8 @@ public class FirebaseAuthService: ObservableObject {
 
     public func clearUserDataExceptPlayingTrack(currentPlayingId: String?) {
         AudioPlayerService.shared.retainOnlyCurrentTrack()
-        HistoryService.shared.clearHistory(exceptId: currentPlayingId)
-        SavedTracksService.shared.clearAllSaved(exceptId: currentPlayingId)
+        HistoryService.shared.clearHistory(exceptId: nil)
+        SavedTracksService.shared.clearAllSaved(exceptId: nil)
         PlaylistCollectionService.shared.clearAllPlaylists()
     }
 
