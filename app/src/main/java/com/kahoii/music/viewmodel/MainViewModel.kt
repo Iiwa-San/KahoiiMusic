@@ -13,10 +13,15 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import com.kahoii.music.data.CloudMusicPayload
+import com.kahoii.music.data.FirebaseAuthRepository
+import com.kahoii.music.data.FirebaseSyncRepository
+import com.kahoii.music.data.FirebaseUser
 import com.kahoii.music.data.HistoryRepository
 import com.kahoii.music.data.PlaylistCollectionRepository
 import com.kahoii.music.data.SavedTracksRepository
 import com.kahoii.music.data.YouTubeRepository
+import com.kahoii.music.util.NetworkUtils
 import com.kahoii.music.model.ActiveQueueSource
 import com.kahoii.music.model.LoopMode
 import com.kahoii.music.model.PlaybackStatus
@@ -42,6 +47,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val historyRepository = HistoryRepository(application)
     private val savedTracksRepository = SavedTracksRepository(application)
     private val playlistCollectionRepository = PlaylistCollectionRepository(application)
+    private val authRepository = FirebaseAuthRepository(application)
+    private val syncRepository = FirebaseSyncRepository()
+    private var syncJob: Job? = null
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -58,6 +66,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         observeSavedTracks()
         observeFavorites()
         observePlaylists()
+        observeAuth()
         com.kahoii.music.service.MusicQueueManager.onTrackChanged = { track ->
             _uiState.update { it.copy(currentTrack = track) }
         }
@@ -785,18 +794,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveTrackOffline(item: PlaylistItem) {
+    fun saveTrackOffline(item: PlaylistItem, bypassCellularWarning: Boolean = false) {
         if (item.id.isBlank()) return
         if (savedTracksRepository.isTrackSaved(item.id)) {
             Toast.makeText(getApplication(), "Bài hát đã được lưu trong mục Đã tải", Toast.LENGTH_SHORT).show()
             return
         }
 
+        if (!bypassCellularWarning && NetworkUtils.isCellular(getApplication())) {
+            _uiState.update { it.copy(pendingCellularDownloadTrack = item) }
+            return
+        }
+
+        executeDownloadTrack(item)
+    }
+
+    private fun executeDownloadTrack(item: PlaylistItem) {
         viewModelScope.launch {
             _uiState.update { it.copy(downloadingTrackIds = it.downloadingTrackIds + item.id) }
             Toast.makeText(getApplication(), "Đang tải bài hát về máy: ${item.title}...", Toast.LENGTH_SHORT).show()
 
-            // Resolve audio stream if needed
             val streamResult = youTubeRepository.resolveAudio(item.id)
             streamResult.onSuccess { stream ->
                 val fullItem = item.copy(
@@ -810,6 +827,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
                     Toast.makeText(getApplication(), "✓ Đã lưu bài hát vào mục Đã tải!", Toast.LENGTH_SHORT).show()
                     cleanUnusedTempAudio()
+                    triggerCloudUpload()
                 }.onFailure { err ->
                     _uiState.update { s -> s.copy(downloadingTrackIds = s.downloadingTrackIds - item.id) }
                     Toast.makeText(getApplication(), "Lỗi tải tệp: ${err.message}", Toast.LENGTH_LONG).show()
@@ -820,6 +838,158 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+    private fun observeAuth() {
+        viewModelScope.launch {
+            authRepository.currentUser.collect { user ->
+                _uiState.update { it.copy(currentUser = user) }
+                if (user != null) {
+                    syncCloudData(user)
+                }
+            }
+        }
+    }
+
+    fun signUp(email: String, pass: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang tạo tài khoản...") }
+            val res = authRepository.signUp(email, pass)
+            res.onSuccess { user ->
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đăng ký thành công!") }
+                Toast.makeText(getApplication(), "Đăng ký thành công!", Toast.LENGTH_SHORT).show()
+                uploadCurrentDataToCloud(user)
+            }.onFailure { err ->
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = err.message) }
+                Toast.makeText(getApplication(), err.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    fun signIn(email: String, pass: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang đăng nhập...") }
+            val res = authRepository.signIn(email, pass)
+            res.onSuccess { user ->
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đăng nhập thành công!") }
+                Toast.makeText(getApplication(), "Đăng nhập thành công!", Toast.LENGTH_SHORT).show()
+                syncCloudData(user)
+            }.onFailure { err ->
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = err.message) }
+                Toast.makeText(getApplication(), err.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    fun signOut() {
+        authRepository.signOut()
+        _uiState.update { it.copy(currentUser = null, syncStatusMessage = null) }
+        Toast.makeText(getApplication(), "Đã đăng xuất", Toast.LENGTH_SHORT).show()
+    }
+
+    fun syncNow() {
+        val user = _uiState.value.currentUser ?: return
+        syncCloudData(user)
+    }
+
+    private fun syncCloudData(user: FirebaseUser) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang đồng bộ từ đám mây...") }
+            val res = syncRepository.downloadMusicData(user)
+            res.onSuccess { cloudPayload ->
+                if (cloudPayload != null) {
+                    applyCloudPayload(cloudPayload)
+                    _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đã đồng bộ từ đám mây!") }
+                } else {
+                    uploadCurrentDataToCloud(user)
+                }
+            }.onFailure { err ->
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Lỗi đồng bộ: ${err.message}") }
+            }
+        }
+    }
+
+    private fun applyCloudPayload(payload: CloudMusicPayload) {
+        viewModelScope.launch {
+            if (payload.playlist.isNotEmpty()) {
+                _uiState.update { it.copy(playlist = payload.playlist) }
+            }
+            payload.favorites.forEach {
+                if (!historyRepository.isFavorite(it.id)) {
+                    historyRepository.toggleFavorite(it)
+                }
+            }
+            payload.history.forEach { historyRepository.addTrack(it) }
+            payload.collections.forEach { col ->
+                val existing = playlistCollectionRepository.playlists.value.find { it.name == col.name }
+                if (existing == null) {
+                    playlistCollectionRepository.savePlaylist(col.name, col.items)
+                } else {
+                    col.items.forEach { item ->
+                        playlistCollectionRepository.addTrackToPlaylist(existing.id, item)
+                    }
+                }
+            }
+
+            // Tự động tải lại bài đã lưu nếu thiết bị chưa có file
+            val missingTracks = payload.savedTracks.filter { !savedTracksRepository.isTrackSaved(it.id) }
+            if (missingTracks.isNotEmpty()) {
+                if (NetworkUtils.isCellular(getApplication())) {
+                    _uiState.update { it.copy(pendingCellularDownloadTracks = missingTracks) }
+                } else {
+                    Toast.makeText(getApplication(), "Tự động tải lại ${missingTracks.size} bài hát đã lưu...", Toast.LENGTH_SHORT).show()
+                    missingTracks.forEach { executeDownloadTrack(it) }
+                }
+            }
+        }
+    }
+
+    fun triggerCloudUpload() {
+        val user = _uiState.value.currentUser ?: return
+        syncJob?.cancel()
+        syncJob = viewModelScope.launch {
+            delay(1500)
+            uploadCurrentDataToCloud(user)
+        }
+    }
+
+    private suspend fun uploadCurrentDataToCloud(user: FirebaseUser) {
+        _uiState.update { it.copy(isSyncing = true) }
+        val payload = CloudMusicPayload(
+            playlist = _uiState.value.playlist,
+            favorites = _uiState.value.favorites,
+            history = _uiState.value.history,
+            savedTracks = _uiState.value.savedTracks,
+            collections = _uiState.value.playlists,
+            updatedAt = System.currentTimeMillis()
+        )
+        val res = syncRepository.uploadMusicData(user, payload)
+        res.onSuccess {
+            _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đã lưu đám mây lúc ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}") }
+        }.onFailure { err ->
+            _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Lỗi đồng bộ: ${err.message}") }
+        }
+    }
+
+    fun confirmCellularDownload() {
+        val single = _uiState.value.pendingCellularDownloadTrack
+        val list = _uiState.value.pendingCellularDownloadTracks
+        _uiState.update { it.copy(pendingCellularDownloadTrack = null, pendingCellularDownloadTracks = emptyList()) }
+
+        if (single != null) {
+            executeDownloadTrack(single)
+        }
+        if (list.isNotEmpty()) {
+            list.forEach { executeDownloadTrack(it) }
+        }
+    }
+
+    fun proceedCellularDownload() = confirmCellularDownload()
+
+    fun dismissCellularDownload() {
+        _uiState.update { it.copy(pendingCellularDownloadTrack = null, pendingCellularDownloadTracks = emptyList()) }
+    }
+
+    fun cancelCellularDownload() = dismissCellularDownload()
+
 
     fun deleteSavedTrack(id: String) {
         viewModelScope.launch {

@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistAdd
+import com.kahoii.music.ui.components.AddToCollectionDialog
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -135,6 +137,7 @@ fun PlaylistBottomSheet(
     var renameCollectionName by remember { mutableStateOf("") }
 
     var inspectingCollectionId by remember { mutableStateOf<String?>(null) }
+    var trackForCollectionPicker by remember { mutableStateOf<PlaylistItem?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -356,6 +359,7 @@ fun PlaylistBottomSheet(
                                 onClick = { onPlaylistTrackSelected(item, index) },
                                 onDownload = { onDownloadTrack(item) },
                                 onToggleFavorite = { onToggleFavorite(item) },
+                                onAddToCollection = { trackForCollectionPicker = item },
                                 onDelete = { onRemoveFromPlaylist(index) },
                                 deleteIcon = Icons.Default.Close,
                                 deleteContentDescription = "Xóa khỏi danh sách"
@@ -740,6 +744,7 @@ fun PlaylistBottomSheet(
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 },
                                 onToggleFavorite = { onToggleFavorite(item) },
+                                onAddToCollection = { trackForCollectionPicker = item },
                                 onDelete = { onDeleteSavedTrack(item.id) },
                                 deleteIcon = Icons.Default.Delete,
                                 deleteContentDescription = "Xóa khỏi bộ nhớ"
@@ -828,6 +833,7 @@ fun PlaylistBottomSheet(
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 },
                                 onToggleFavorite = { onToggleFavorite(item) },
+                                onAddToCollection = { trackForCollectionPicker = item },
                                 onDownload = { onDownloadTrack(item) },
                                 onDelete = { onDeleteHistoryItem(item.id) },
                                 deleteIcon = Icons.Default.Delete,
@@ -937,6 +943,7 @@ fun PlaylistBottomSheet(
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 },
                                 onToggleFavorite = { onToggleFavorite(item) },
+                                onAddToCollection = { trackForCollectionPicker = item },
                                 onDownload = { onDownloadTrack(item) },
                                 onDelete = { onToggleFavorite(item) },
                                 deleteIcon = Icons.Default.Delete,
@@ -1071,6 +1078,26 @@ fun PlaylistBottomSheet(
                 )
             }
         }
+
+        // Dialog thêm từng bài vào bộ sưu tập
+        if (trackForCollectionPicker != null) {
+            val targetTrack = trackForCollectionPicker!!
+            AddToCollectionDialog(
+                track = targetTrack,
+                collections = playlists,
+                onSelectCollection = { collectionId ->
+                    onAddTrackToCollection(collectionId, targetTrack)
+                    trackForCollectionPicker = null
+                    Toast.makeText(context, "Đã thêm \"${targetTrack.title}\" vào bộ sưu tập!", Toast.LENGTH_SHORT).show()
+                },
+                onCreateCollectionAndAdd = { newName ->
+                    onCreateCollection(newName)
+                    trackForCollectionPicker = null
+                    Toast.makeText(context, "Đã tạo bộ sưu tập \"$newName\"!", Toast.LENGTH_SHORT).show()
+                },
+                onDismiss = { trackForCollectionPicker = null }
+            )
+        }
     }
 }
 
@@ -1090,6 +1117,7 @@ private fun TrackRow(
     onDownload: (() -> Unit)? = null,
     onToggleFavorite: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
+    onAddToCollection: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     deleteIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.Delete,
     deleteContentDescription: String = "Xóa"
@@ -1243,6 +1271,20 @@ private fun TrackRow(
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Thêm vào danh sách phát",
+                        tint = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            if (onAddToCollection != null) {
+                IconButton(
+                    onClick = onAddToCollection,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlaylistAdd,
+                        contentDescription = "Thêm vào bộ sưu tập",
                         tint = Color.White.copy(alpha = 0.6f),
                         modifier = Modifier.size(20.dp)
                     )

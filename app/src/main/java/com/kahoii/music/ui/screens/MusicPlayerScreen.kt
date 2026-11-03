@@ -25,6 +25,10 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.outlined.AccountCircle
+import com.kahoii.music.ui.components.AccountBottomSheet
+import com.kahoii.music.ui.components.CellularDownloadDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,6 +79,7 @@ fun MusicPlayerScreen(
     var showPlaylistSheet by remember { mutableStateOf(false) }
     var selectedSheetTab by remember { mutableIntStateOf(0) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var showAccountSheet by remember { mutableStateOf(false) }
 
     // Dynamic animated backdrop matching iOS DynamicGradientView
     DynamicGradientView(
@@ -139,17 +144,34 @@ fun MusicPlayerScreen(
                         )
                     }
 
-                    // Status Indicator Capsule (matching iOS Text(player.statusMessage))
-                    Text(
-                        text = uiState.statusMessage,
-                        color = Color.White.copy(alpha = 0.65f),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(percent = 50))
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
+                    // Status Indicator Capsule & User Icon (Status to the left of User Icon)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = uiState.statusMessage,
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(percent = 50))
+                                .background(Color.White.copy(alpha = 0.08f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+
+                        IconButton(
+                            onClick = { showAccountSheet = true },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.isLoggedIn) Icons.Default.AccountCircle else Icons.Outlined.AccountCircle,
+                                contentDescription = "Tài khoản",
+                                tint = if (uiState.isLoggedIn) NeonPink else Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
                 }
 
                 // Search Pill Bar (with instant Clipboard Paste button)
@@ -419,6 +441,43 @@ fun MusicPlayerScreen(
                     viewModel.setSleepTimer(option)
                 },
                 onDismissRequest = { showSleepTimerDialog = false }
+            )
+        }
+
+        // 3. Account Bottom Sheet
+        if (showAccountSheet) {
+            AccountBottomSheet(
+                currentUser = uiState.currentUser,
+                isSyncing = uiState.isSyncing,
+                syncStatusMessage = uiState.syncStatusMessage,
+                onSignIn = { email, pass ->
+                    viewModel.signIn(email, pass)
+                },
+                onSignUp = { email, pass ->
+                    viewModel.signUp(email, pass)
+                },
+                onSignOut = {
+                    viewModel.signOut()
+                },
+                onSyncNow = {
+                    viewModel.syncNow()
+                },
+                onDismissRequest = { showAccountSheet = false }
+            )
+        }
+
+        // 4. Cellular Download Warning Dialog
+        if (uiState.pendingCellularDownloadTrack != null || uiState.pendingCellularDownloadTracks != null) {
+            val title = uiState.pendingCellularDownloadTrack?.title
+                ?: uiState.pendingCellularDownloadTracks?.let { "${it.size} bài hát" }
+            CellularDownloadDialog(
+                trackTitle = title,
+                onConfirm = {
+                    viewModel.proceedCellularDownload()
+                },
+                onDismiss = {
+                    viewModel.cancelCellularDownload()
+                }
             )
         }
     }

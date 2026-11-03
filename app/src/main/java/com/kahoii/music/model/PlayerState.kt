@@ -42,8 +42,15 @@ data class PlayerUiState(
     val sleepTimerRemainingSeconds: Long = 0L,
     val searchResults: List<PlaylistItem> = emptyList(),
     val isSearching: Boolean = false,
-    val isPlaylistLoading: Boolean = false
+    val isPlaylistLoading: Boolean = false,
+    val currentUser: com.kahoii.music.data.FirebaseUser? = null,
+    val isSyncing: Boolean = false,
+    val syncStatusMessage: String? = null,
+    val pendingCellularDownloadTrack: PlaylistItem? = null,
+    val pendingCellularDownloadTracks: List<PlaylistItem> = emptyList()
 ) {
+    val isLoggedIn: Boolean
+        get() = currentUser != null
     val isPlaying: Boolean
         get() = status == PlaybackStatus.PLAYING
 
