@@ -1,7 +1,7 @@
 package com.kahoii.music.data
 
-import com.google.gson.Gson
 import com.google.gson.JsonObject
+import com.kahoii.music.util.GsonUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 class FirebaseSyncRepository {
 
-    private val gson = Gson()
+    private val gson = GsonUtils.gson
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     private val client = OkHttpClient.Builder()
@@ -30,7 +30,7 @@ class FirebaseSyncRepository {
                     addProperty("stringValue", musicDataJson)
                 })
                 add("updatedAt", JsonObject().apply {
-                    addProperty("integerValue", payload.updatedAt.toString())
+                    addProperty("stringValue", payload.updatedAt)
                 })
             }
             val requestBody = JsonObject().apply {

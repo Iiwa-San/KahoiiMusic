@@ -1012,8 +1012,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             favorites = _uiState.value.favorites,
             history = _uiState.value.history,
             savedTracks = _uiState.value.savedTracks,
-            collections = _uiState.value.playlists,
-            updatedAt = System.currentTimeMillis()
+            collections = _uiState.value.playlists
         )
         val res = syncRepository.uploadMusicData(user, payload)
         res.onSuccess {

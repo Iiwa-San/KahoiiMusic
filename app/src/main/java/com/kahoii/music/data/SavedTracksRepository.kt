@@ -2,6 +2,7 @@ package com.kahoii.music.data
 
 import android.content.Context
 import com.google.gson.Gson
+import com.kahoii.music.util.GsonUtils
 import com.google.gson.reflect.TypeToken
 import com.kahoii.music.model.PlaylistItem
 import kotlinx.coroutines.CoroutineScope
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeUnit
 
 class SavedTracksRepository(private val context: Context) {
 
-    private val gson = Gson()
+    private val gson = GsonUtils.gson
     private val savedDir = File(context.filesDir, "saved_audio").apply { if (!exists()) mkdirs() }
     private val thumbDir = File(context.filesDir, "saved_thumb").apply { if (!exists()) mkdirs() }
     private val metadataFile = File(context.filesDir, "saved_tracks.json")

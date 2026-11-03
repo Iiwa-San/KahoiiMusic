@@ -6,22 +6,22 @@ import java.io.Serializable
 import java.util.Locale
 
 data class PlaylistItem(
-    @SerializedName("id")
+    @SerializedName("id", alternate = ["Id"])
     val id: String,
 
-    @SerializedName("title")
+    @SerializedName("title", alternate = ["Title"])
     val title: String = "",
 
-    @SerializedName("artist")
+    @SerializedName("artist", alternate = ["Artist"])
     val artist: String = "",
 
-    @SerializedName("durationSeconds")
+    @SerializedName("durationSeconds", alternate = ["DurationSeconds"])
     val durationSeconds: Int = 0,
 
-    @SerializedName("thumbnailUrl")
+    @SerializedName("thumbnailUrl", alternate = ["ThumbnailUrl"])
     val customThumbnailUrl: String? = null,
 
-    @SerializedName("localAudioPath")
+    @SerializedName("localAudioPath", alternate = ["LocalAudioPath"])
     val localAudioPath: String? = null
 ) : Serializable {
 

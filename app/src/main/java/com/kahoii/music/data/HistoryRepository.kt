@@ -2,6 +2,7 @@ package com.kahoii.music.data
 
 import android.content.Context
 import com.google.gson.Gson
+import com.kahoii.music.util.GsonUtils
 import com.google.gson.reflect.TypeToken
 import com.kahoii.music.model.PlaylistItem
 import kotlinx.coroutines.CoroutineScope
@@ -15,7 +16,7 @@ import java.io.File
 
 class HistoryRepository(private val context: Context) {
 
-    private val gson = Gson()
+    private val gson = GsonUtils.gson
     private val historyFile = File(context.filesDir, "history.json")
     private val favoritesFile = File(context.filesDir, "favorites.json")
 

@@ -1,5 +1,17 @@
 package com.kahoii.music.data
 
+import com.google.gson.annotations.SerializedName
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
+fun currentIsoUtcTimestamp(): String {
+    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+    sdf.timeZone = TimeZone.getTimeZone("UTC")
+    return sdf.format(Date())
+}
+
 object FirebaseConfig {
     const val API_KEY = "AIzaSyB4fUCZZN41WmnxGeH8jSdz1M5mi2LhLX8"
     const val PROJECT_ID = "kahoiimusic"
@@ -25,10 +37,21 @@ data class FirebaseUser(
 )
 
 data class CloudMusicPayload(
+    @SerializedName("playlist", alternate = ["playlists", "Playlists"])
     val playlist: List<com.kahoii.music.model.PlaylistItem> = emptyList(),
+
+    @SerializedName("favorites", alternate = ["Favorites"])
     val favorites: List<com.kahoii.music.model.PlaylistItem> = emptyList(),
+
+    @SerializedName("history", alternate = ["History"])
     val history: List<com.kahoii.music.model.PlaylistItem> = emptyList(),
+
+    @SerializedName("savedTracks", alternate = ["SavedTracks"])
     val savedTracks: List<com.kahoii.music.model.PlaylistItem> = emptyList(),
+
+    @SerializedName("collections", alternate = ["Collections"])
     val collections: List<com.kahoii.music.model.UserPlaylist> = emptyList(),
-    val updatedAt: Long = System.currentTimeMillis()
+
+    @SerializedName("updatedAt", alternate = ["UpdatedAt"])
+    val updatedAt: String = currentIsoUtcTimestamp()
 )

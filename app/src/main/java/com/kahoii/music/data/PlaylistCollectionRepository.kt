@@ -2,6 +2,7 @@ package com.kahoii.music.data
 
 import android.content.Context
 import com.google.gson.Gson
+import com.kahoii.music.util.GsonUtils
 import com.google.gson.reflect.TypeToken
 import com.kahoii.music.model.PlaylistItem
 import com.kahoii.music.model.UserPlaylist
@@ -17,7 +18,7 @@ import java.util.UUID
 
 class PlaylistCollectionRepository(private val context: Context) {
 
-    private val gson = Gson()
+    private val gson = GsonUtils.gson
     private val playlistsFile = File(context.filesDir, "playlists.json")
 
     private val _playlists = MutableStateFlow<List<UserPlaylist>>(emptyList())
