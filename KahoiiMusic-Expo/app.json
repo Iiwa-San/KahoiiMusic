@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "KahoiiMusic",
+    "slug": "kahoii-music",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/AppIcon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0d0f18",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kahoii.music",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "audio"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/AppIcon.png"
+      },
+      "package": "com.kahoii.music",
+      "permissions": [
+        "WAKE_LOCK",
+        "INTERNET",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/app_logo.png",
+      "bundler": "metro",
+      "name": "KahoiiMusic",
+      "shortName": "Kahoii",
+      "themeColor": "#0d0f18",
+      "backgroundColor": "#0d0f18",
+      "display": "standalone",
+      "orientation": "portrait"
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b3554633-b4cd-41c7-89c4-21dd643e6342"
+      }
+    }
+  }
+}
