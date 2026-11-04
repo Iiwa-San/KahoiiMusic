@@ -1,4 +1,4 @@
-package com.kahoii.music.ui.components
+﻿package com.kahoii.music.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,6 +90,9 @@ fun AccountBottomSheet(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var confirmPassword by remember { mutableStateOf("") }
+    var showConfirmPassword by remember { mutableStateOf(false) }
+    var localError by remember { mutableStateOf<String?>(null) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
 
     if (showSignOutConfirm) {
@@ -300,7 +303,11 @@ fun AccountBottomSheet(
                 ) {
                     Tab(
                         selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
+                        onClick = {
+                            selectedTab = 0
+                            confirmPassword = ""
+                            localError = null
+                        },
                         text = {
                             Text(
                                 "Đăng Nhập",
@@ -311,7 +318,11 @@ fun AccountBottomSheet(
                     )
                     Tab(
                         selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
+                        onClick = {
+                            selectedTab = 1
+                            confirmPassword = ""
+                            localError = null
+                        },
                         text = {
                             Text(
                                 "Đăng Ký Mới",
@@ -327,7 +338,10 @@ fun AccountBottomSheet(
                 // Email Field
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = {
+                        email = it
+                        localError = null
+                    },
                     label = { Text("Địa chỉ Email", fontSize = 12.sp) },
                     leadingIcon = {
                         Icon(imageVector = Icons.Default.Email, contentDescription = "Email", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
@@ -350,7 +364,10 @@ fun AccountBottomSheet(
                 // Password Field
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it },
+                    onValueChange = {
+                        password = it
+                        localError = null
+                    },
                     label = { Text("Mật khẩu", fontSize = 12.sp) },
                     leadingIcon = {
                         Icon(imageVector = Icons.Default.Lock, contentDescription = "Password", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
@@ -366,9 +383,9 @@ fun AccountBottomSheet(
                         }
                     },
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = if (selectedTab == 0) ImeAction.Done else ImeAction.Next),
                     keyboardActions = KeyboardActions(onDone = {
-                        if (selectedTab == 0) onSignIn(email, password) else onSignUp(email, password)
+                        if (selectedTab == 0) onSignIn(email, password)
                     }),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -381,6 +398,53 @@ fun AccountBottomSheet(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                // Confirm Password Field (Chỉ xuất hiện ở tab Đăng Ký Mới)
+                if (selectedTab == 1) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = {
+                            confirmPassword = it
+                            localError = null
+                        },
+                        label = { Text("Nhập lại mật khẩu", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Default.Lock, contentDescription = "Confirm Password", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { showConfirmPassword = !showConfirmPassword }) {
+                                Icon(
+                                    imageVector = if (showConfirmPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "Toggle confirm password",
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            if (password != confirmPassword) {
+                                localError = "Mật khẩu xác nhận không khớp."
+                            } else if (password.length < 6) {
+                                localError = "Mật khẩu phải có ít nhất 6 ký tự."
+                            } else {
+                                onSignUp(email, password)
+                            }
+                        }),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonPink,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            focusedLabelColor = NeonPink,
+                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
                 // Quên mật khẩu chỉ xuất hiện ở tab Đăng Nhập
                 if (selectedTab == 0) {
@@ -408,10 +472,11 @@ fun AccountBottomSheet(
                     }
                 }
 
-                if (!syncStatusMessage.isNullOrBlank()) {
+                val displayError = localError ?: syncStatusMessage
+                if (!displayError.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = syncStatusMessage,
+                        text = displayError,
                         color = Color(0xFFFF6B81),
                         fontSize = 12.sp,
                         lineHeight = 16.sp
@@ -423,9 +488,23 @@ fun AccountBottomSheet(
                 // Submit Button
                 Button(
                     onClick = {
-                        if (selectedTab == 0) onSignIn(email, password) else onSignUp(email, password)
+                        if (selectedTab == 0) {
+                            onSignIn(email, password)
+                        } else {
+                            if (password != confirmPassword) {
+                                localError = "Mật khẩu xác nhận không khớp."
+                                Toast.makeText(context, "Mật khẩu xác nhận không khớp.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (password.length < 6) {
+                                localError = "Mật khẩu phải có ít nhất 6 ký tự."
+                                Toast.makeText(context, "Mật khẩu phải có ít nhất 6 ký tự.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            onSignUp(email, password)
+                        }
                     },
-                    enabled = !isSyncing && email.isNotBlank() && password.isNotBlank(),
+                    enabled = !isSyncing && email.isNotBlank() && password.isNotBlank() && (selectedTab == 0 || confirmPassword.isNotBlank()),
                     colors = ButtonDefaults.buttonColors(containerColor = NeonPink),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
