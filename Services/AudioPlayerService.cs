@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 using System.Collections.Generic;
 
@@ -17,6 +17,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 
 using NAudio.Wave;
+
+using NAudio.CoreAudioApi;
 
 using KahoiiMusic.Models;
 
@@ -45,7 +47,7 @@ namespace KahoiiMusic.Services
 
         private ManagedAudioStream _managedStream;
 
-        private WaveOutEvent _outputDevice;
+        private IWavePlayer _outputDevice;
 
         private SynchronizationContext _syncContext;
 
@@ -2321,7 +2323,18 @@ namespace KahoiiMusic.Services
 
                                 CleanupCurrentTrack();
 
-                                _audioReader = new MediaFoundationReader(audioPath);
+                                try
+                                {
+                                    var mfSettings = new MediaFoundationReader.MediaFoundationReaderSettings
+                                    {
+                                        RequestFloatOutput = true
+                                    };
+                                    _audioReader = new MediaFoundationReader(audioPath, mfSettings);
+                                }
+                                catch
+                                {
+                                    _audioReader = new MediaFoundationReader(audioPath);
+                                }
 
                                 _totalDuration = _audioReader.TotalTime;
 
@@ -2329,17 +2342,30 @@ namespace KahoiiMusic.Services
 
                                 _managedStream = new ManagedAudioStream(_audioReader, this, clusters);
 
-                                _outputDevice = new WaveOutEvent();
-
-                                _outputDevice.DeviceNumber = -1; // Default Windows playback device (Bluetooth / Headphones)
-
-                                _outputDevice.DesiredLatency = 300; // 300ms buffer provides generous headroom against background disk I/O & process spikes
-
-                                _outputDevice.NumberOfBuffers = 3;
-
-                                _outputDevice.PlaybackStopped += OutputDevice_PlaybackStopped;
-
-                                _outputDevice.Init(_managedStream);
+                                try
+                                {
+                                    _outputDevice = new WasapiOut(AudioClientShareMode.Shared, 200);
+                                    _outputDevice.PlaybackStopped += OutputDevice_PlaybackStopped;
+                                    _outputDevice.Init(_managedStream);
+                                }
+                                catch (Exception wasapiEx)
+                                {
+                                    Debug.WriteLine("WASAPI init failed, falling back to WaveOutEvent: " + wasapiEx.Message);
+                                    if (_outputDevice != null)
+                                    {
+                                        try { _outputDevice.Dispose(); } catch { }
+                                        _outputDevice = null;
+                                    }
+                                    var waveOut = new WaveOutEvent
+                                    {
+                                        DeviceNumber = -1,
+                                        DesiredLatency = 300,
+                                        NumberOfBuffers = 3
+                                    };
+                                    waveOut.PlaybackStopped += OutputDevice_PlaybackStopped;
+                                    waveOut.Init(_managedStream);
+                                    _outputDevice = waveOut;
+                                }
 
                                 _outputDevice.Play();
 
@@ -3492,22 +3518,33 @@ namespace KahoiiMusic.Services
 
                         bool isSilent = true;
 
-                        for (int i = offset; i < offset + read - 1; i += 2)
-
+                        if (WaveFormat.BitsPerSample == 16)
                         {
-
-                            short sample = (short)(buffer[i] | (buffer[i + 1] << 8));
-
-                            if (sample > 30 || sample < -30)
-
+                            for (int i = offset; i < offset + read - 1; i += 2)
                             {
-
-                                isSilent = false;
-
-                                break;
-
+                                short sample = (short)(buffer[i] | (buffer[i + 1] << 8));
+                                if (sample > 30 || sample < -30)
+                                {
+                                    isSilent = false;
+                                    break;
+                                }
                             }
-
+                        }
+                        else if (WaveFormat.BitsPerSample == 32)
+                        {
+                            FloatUnion u = default(FloatUnion);
+                            for (int i = offset; i < offset + read - 3; i += 4)
+                            {
+                                u.B0 = buffer[i];
+                                u.B1 = buffer[i + 1];
+                                u.B2 = buffer[i + 2];
+                                u.B3 = buffer[i + 3];
+                                if (u.FloatValue > 0.001f || u.FloatValue < -0.001f)
+                                {
+                                    isSilent = false;
+                                    break;
+                                }
+                            }
                         }
 
                         if (isSilent)
