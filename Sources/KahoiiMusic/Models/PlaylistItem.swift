@@ -1,4 +1,4 @@
-import Foundation
+﻿import Foundation
 
 public struct PlaylistItem: Identifiable, Codable, Hashable, Equatable, Sendable {
     public let id: String
@@ -28,6 +28,73 @@ public struct PlaylistItem: Identifiable, Codable, Hashable, Equatable, Sendable
         self.streamUrl = streamUrl
         self.addedAt = addedAt
         self.isFavorite = isFavorite
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, Id
+        case title, Title
+        case author, Artist, artist
+        case durationSeconds, DurationSeconds
+        case thumbnailUrl, ThumbnailUrl
+        case streamUrl, localAudioPath, LocalAudioPath
+        case addedAt, AddedAt
+        case isFavorite, IsFavorite
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decodeIfPresent(String.self, forKey: .id))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .Id))
+            ?? ""
+
+        self.title = (try? container.decodeIfPresent(String.self, forKey: .title))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .Title))
+            ?? ""
+
+        self.author = (try? container.decodeIfPresent(String.self, forKey: .author))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .artist))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .Artist))
+            ?? ""
+
+        self.durationSeconds = (try? container.decodeIfPresent(Int.self, forKey: .durationSeconds))
+            ?? (try? container.decodeIfPresent(Int.self, forKey: .DurationSeconds))
+            ?? 0
+
+        let thumb = (try? container.decodeIfPresent(String.self, forKey: .thumbnailUrl))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .ThumbnailUrl))
+            ?? ""
+        self.thumbnailUrl = thumb.isEmpty ? "https://i.ytimg.com/vi/\(self.id)/hqdefault.jpg" : thumb
+
+        self.streamUrl = (try? container.decodeIfPresent(String.self, forKey: .streamUrl))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .localAudioPath))
+            ?? (try? container.decodeIfPresent(String.self, forKey: .LocalAudioPath))
+
+        if let date = try? container.decodeIfPresent(Date.self, forKey: .addedAt) {
+            self.addedAt = date
+        } else if let ms = try? container.decodeIfPresent(Double.self, forKey: .addedAt) {
+            self.addedAt = ms > 100_000_000_000 ? Date(timeIntervalSince1970: ms / 1000.0) : Date(timeIntervalSince1970: ms)
+        } else if let intMs = try? container.decodeIfPresent(Int64.self, forKey: .addedAt) {
+            self.addedAt = intMs > 100_000_000_000 ? Date(timeIntervalSince1970: Double(intMs) / 1000.0) : Date(timeIntervalSince1970: Double(intMs))
+        } else {
+            self.addedAt = Date()
+        }
+
+        self.isFavorite = (try? container.decodeIfPresent(Bool.self, forKey: .isFavorite))
+            ?? (try? container.decodeIfPresent(Bool.self, forKey: .IsFavorite))
+            ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(author, forKey: .author)
+        try container.encode(author, forKey: .artist)
+        try container.encode(durationSeconds, forKey: .durationSeconds)
+        try container.encode(thumbnailUrl, forKey: .thumbnailUrl)
+        try container.encodeIfPresent(streamUrl, forKey: .streamUrl)
+        try container.encode(Int64(addedAt.timeIntervalSince1970 * 1000), forKey: .addedAt)
+        try container.encode(isFavorite, forKey: .isFavorite)
     }
 
     public var youtubeUrl: String {
