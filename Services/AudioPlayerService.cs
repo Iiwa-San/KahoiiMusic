@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using System.Collections.Generic;
 
@@ -2541,7 +2541,24 @@ namespace KahoiiMusic.Services
 
             try
             {
-                string[] prioritizedExts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac", ".mp4" };
+                try
+                {
+                    string legacySavedMp4 = Path.Combine(AppPaths.SavedAudioDir, videoId + ".mp4");
+                    if (File.Exists(legacySavedMp4)) File.Delete(legacySavedMp4);
+                }
+                catch { }
+
+                try
+                {
+                    if (!string.IsNullOrEmpty(_cacheDirectory))
+                    {
+                        string legacyCacheMp4 = Path.Combine(_cacheDirectory, videoId + ".mp4");
+                        if (File.Exists(legacyCacheMp4)) File.Delete(legacyCacheMp4);
+                    }
+                }
+                catch { }
+
+                string[] prioritizedExts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac" };
 
                 // 1. Check Saved/audio first (Highest priority: Offline music)
                 foreach (string ext in prioritizedExts)
@@ -2599,7 +2616,7 @@ namespace KahoiiMusic.Services
 
                     string ext = Path.GetExtension(file).ToLower();
 
-                    if (ext == ".webm" || ext == ".m4a" || ext == ".mp3" || ext == ".opus" || ext == ".aac" || ext == ".mp4" || ext == ".ogg")
+                    if (ext == ".webm" || ext == ".m4a" || ext == ".mp3" || ext == ".opus" || ext == ".aac" || ext == ".ogg")
 
                     {
 

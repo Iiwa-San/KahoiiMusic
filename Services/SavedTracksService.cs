@@ -47,7 +47,30 @@ namespace KahoiiMusic.Services
         private SavedTracksService()
         {
             AppPaths.EnsureDirectoriesExist();
+            CleanupLegacyDegradedAudio();
             LoadFromFile();
+        }
+
+        private void CleanupLegacyDegradedAudio()
+        {
+            try
+            {
+                if (Directory.Exists(AppPaths.SavedAudioDir))
+                {
+                    foreach (var f in Directory.GetFiles(AppPaths.SavedAudioDir, "*.mp4"))
+                    {
+                        try { File.Delete(f); } catch { }
+                    }
+                }
+                if (Directory.Exists(AppPaths.TempAudioDir))
+                {
+                    foreach (var f in Directory.GetFiles(AppPaths.TempAudioDir, "*.mp4"))
+                    {
+                        try { File.Delete(f); } catch { }
+                    }
+                }
+            }
+            catch { }
         }
 
         public List<PlaylistItem> GetSavedTracks()
@@ -93,7 +116,13 @@ namespace KahoiiMusic.Services
             if (string.IsNullOrWhiteSpace(videoId)) return null;
             try
             {
-                string[] exts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac", ".mp4" };
+                string legacyMp4 = Path.Combine(AppPaths.SavedAudioDir, videoId + ".mp4");
+                if (File.Exists(legacyMp4))
+                {
+                    try { File.Delete(legacyMp4); } catch { }
+                }
+
+                string[] exts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac" };
                 foreach (string ext in exts)
                 {
                     string path = Path.Combine(AppPaths.SavedAudioDir, videoId + ext);
@@ -140,7 +169,7 @@ namespace KahoiiMusic.Services
 
                     // 1. Check if audio already exists in KahoiiTemp/audio/
                     string existingTempAudio = null;
-                    string[] exts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac", ".mp4" };
+                    string[] exts = new string[] { ".webm", ".opus", ".m4a", ".mp3", ".aac" };
                     foreach (string ext in exts)
                     {
                         string p = Path.Combine(AppPaths.TempAudioDir, videoId + ext);
@@ -193,7 +222,7 @@ namespace KahoiiMusic.Services
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = ytdlpPath;
                         psi.WorkingDirectory = AppPaths.SavedAudioDir;
-                        psi.Arguments = string.Format("--extractor-args \"youtube:player_client=android\" -f \"ba[ext=webm]/ba[ext=m4a]/ba/b[height<=480]/b\" -N 8 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
+                        psi.Arguments = string.Format("-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio\" -N 8 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
                         psi.CreateNoWindow = true;
                         psi.UseShellExecute = false;
 
@@ -354,6 +383,8 @@ namespace KahoiiMusic.Services
 
                 if (!File.Exists(AppPaths.SavedJsonFile)) return;
 
+                var missingAudio = new List<PlaylistItem>();
+
                 try
                 {
                     string json = File.ReadAllText(AppPaths.SavedJsonFile, Encoding.UTF8);
@@ -365,20 +396,33 @@ namespace KahoiiMusic.Services
                         int duration = 0;
                         int.TryParse(m.Groups[3].Value, out duration);
 
-                        // Only include if physical audio file exists in Saved/audio
-                        if (FindSavedAudioFile(id) != null)
+                        var item = new PlaylistItem
                         {
-                            var item = new PlaylistItem
-                            {
-                                Id = id,
-                                Title = title,
-                                DurationSeconds = duration
-                            };
-                            _savedTracks.Add(item);
+                            Id = id,
+                            Title = title,
+                            DurationSeconds = duration
+                        };
+                        _savedTracks.Add(item);
+
+                        // If high-quality audio file doesn't exist yet, queue background download
+                        if (FindSavedAudioFile(id) == null)
+                        {
+                            missingAudio.Add(item);
                         }
                     }
                 }
                 catch { }
+
+                if (missingAudio.Count > 0)
+                {
+                    ThreadPool.QueueUserWorkItem(_ =>
+                    {
+                        foreach (var track in missingAudio)
+                        {
+                            SaveTrackAsync(track);
+                        }
+                    });
+                }
             }
         }
 
