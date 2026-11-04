@@ -43,18 +43,52 @@ class SavedTracksRepository(private val context: Context) {
         }
     }
 
+    private fun cleanupLegacyDegradedAudio() {
+        try {
+            savedDir.listFiles()?.forEach { file ->
+                if (file.extension.equals("mp4", ignoreCase = true)) {
+                    file.delete()
+                }
+            }
+            tempAudioDir.listFiles()?.forEach { file ->
+                if (file.extension.equals("mp4", ignoreCase = true)) {
+                    file.delete()
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun getSavedAudioFile(id: String): File? {
+        if (id.isNullOrBlank()) return null
+        val candidates = listOf(
+            File(savedDir, "$id.webm"),
+            File(savedDir, "$id.opus"),
+            File(savedDir, "$id.m4a"),
+            File(savedDir, "$id.mp3")
+        )
+        for (f in candidates) {
+            if (f.exists() && f.length() > 50000 && !f.name.endsWith(".mp4", ignoreCase = true)) return f
+        }
+        return null
+    }
+
     @Synchronized
     private fun loadSavedTracks() {
         try {
+            cleanupLegacyDegradedAudio()
             if (metadataFile.exists()) {
                 val json = metadataFile.readText()
                 val listType = object : TypeToken<List<PlaylistItem>>() {}.type
                 val loadedList: List<PlaylistItem>? = gson.fromJson(json, listType)
                 if (loadedList != null) {
-                    // Filter out tracks whose audio files no longer exist on disk
-                    val validList = loadedList.filter { item ->
+                    val validList = loadedList.mapNotNull { item ->
                         val localPath = item.localAudioPath
-                        !localPath.isNullOrBlank() && File(localPath).exists() && File(localPath).length() > 50000
+                        val file = if (!localPath.isNullOrBlank()) File(localPath) else getSavedAudioFile(item.safeId)
+                        if (file != null && file.exists() && file.length() > 50000 && !file.name.endsWith(".mp4", ignoreCase = true)) {
+                            item.copy(localAudioPath = file.absolutePath)
+                        } else {
+                            null
+                        }
                     }
                     _savedTracks.value = validList
                     if (validList.size != loadedList.size) {
@@ -82,24 +116,37 @@ class SavedTracksRepository(private val context: Context) {
     fun isTrackSaved(id: String): Boolean {
         if (id.isNullOrBlank()) return false
         val item = _savedTracks.value.find { it.id.equals(id, ignoreCase = true) }
-        if (item?.localAudioPath == null) return false
-        val file = File(item.localAudioPath)
-        return file.exists() && file.length() > 50000
+        val localPath = item?.localAudioPath
+        if (!localPath.isNullOrBlank()) {
+            val file = File(localPath)
+            if (file.exists() && file.length() > 50000 && !file.name.endsWith(".mp4", ignoreCase = true)) return true
+        }
+        val file = getSavedAudioFile(id)
+        return file != null && file.exists() && file.length() > 50000 && !file.name.endsWith(".mp4", ignoreCase = true)
     }
 
     fun getSavedTrack(id: String): PlaylistItem? {
         if (id.isNullOrBlank()) return null
-        return _savedTracks.value.find { it.id.equals(id, ignoreCase = true) }
+        val item = _savedTracks.value.find { it.id.equals(id, ignoreCase = true) }
+        if (item != null) {
+            if (item.localAudioPath.isNullOrBlank() || !File(item.localAudioPath).exists()) {
+                val f = getSavedAudioFile(id)
+                if (f != null) return item.copy(localAudioPath = f.absolutePath)
+            }
+        }
+        return item
     }
 
     fun getTempAudioFile(id: String): File? {
         if (id.isNullOrBlank()) return null
         val candidates = listOf(
-            File(tempAudioDir, "$id.mp3"),
-            File(tempAudioDir, "$id.m4a")
+            File(tempAudioDir, "$id.webm"),
+            File(tempAudioDir, "$id.opus"),
+            File(tempAudioDir, "$id.m4a"),
+            File(tempAudioDir, "$id.mp3")
         )
         for (f in candidates) {
-            if (f.exists() && f.length() > 50000) return f
+            if (f.exists() && f.length() > 50000 && !f.name.endsWith(".mp4", ignoreCase = true)) return f
         }
         return null
     }
@@ -208,7 +255,8 @@ class SavedTracksRepository(private val context: Context) {
         val existing = getTempAudioFile(trackId)
         if (existing != null) return@withContext existing
 
-        val target = File(tempAudioDir, "$trackId.mp3")
+        val ext = if (streamUrl.contains("mime=audio%2Fwebm") || streamUrl.contains("audio/webm")) ".webm" else ".m4a"
+        val target = File(tempAudioDir, "$trackId$ext")
         val ok = downloadAudioChunked(streamUrl, target, expectedLength)
         if (ok && target.exists() && target.length() > 50000) {
             target
@@ -251,11 +299,19 @@ class SavedTracksRepository(private val context: Context) {
                 return@withContext Result.failure(IllegalArgumentException("ID bài hát không hợp lệ"))
             }
 
-            val audioFile = File(savedDir, "${track.id}.mp3")
-            val thumbFile = File(thumbDir, "${track.id}.jpg")
-
             // 0. Kiểm tra nếu bài hát đã được lưu trong bộ nhớ tạm (temp_audio), sao chép tức thì (0s)
             val cachedTemp = getTempAudioFile(track.id)
+            val ext = if (cachedTemp != null) {
+                cachedTemp.extension.let { if (it.isNotBlank()) ".$it" else ".webm" }
+            } else if (streamUrl.contains("mime=audio%2Fwebm") || streamUrl.contains("audio/webm")) {
+                ".webm"
+            } else {
+                ".m4a"
+            }
+
+            val audioFile = File(savedDir, "${track.id}$ext")
+            val thumbFile = File(thumbDir, "${track.id}.jpg")
+
             if (cachedTemp != null && cachedTemp.exists() && cachedTemp.length() > 50000) {
                 if (audioFile.exists()) audioFile.delete()
                 cachedTemp.copyTo(audioFile, overwrite = true)
