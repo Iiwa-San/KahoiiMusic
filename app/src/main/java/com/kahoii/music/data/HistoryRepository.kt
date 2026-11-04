@@ -1,4 +1,4 @@
-package com.kahoii.music.data
+﻿package com.kahoii.music.data
 
 import android.content.Context
 import com.google.gson.Gson
@@ -90,7 +90,7 @@ class HistoryRepository(private val context: Context) {
     }
 
     suspend fun addTrack(track: PlaylistItem) = withContext(Dispatchers.IO) {
-        if (track.id.isBlank()) return@withContext
+        if (track.safeId.isBlank()) return@withContext
         val current = _history.value.toMutableList()
         val existing = current.find { it.id.equals(track.id, ignoreCase = true) }
         val finalTrack = if (existing != null && track.durationSeconds <= 0 && existing.durationSeconds > 0) {
@@ -107,14 +107,16 @@ class HistoryRepository(private val context: Context) {
     }
 
     suspend fun updateTrackInfoOnly(track: PlaylistItem) = withContext(Dispatchers.IO) {
-        if (track.id.isBlank()) return@withContext
+        if (track.safeId.isBlank()) return@withContext
         val current = _history.value.toMutableList()
         val index = current.indexOfFirst { it.id.equals(track.id, ignoreCase = true) }
         if (index >= 0) {
             val existing = current[index]
+            val tTitle = track.safeTitle
+            val tArtist = track.safeArtist
             val updated = existing.copy(
-                title = if (track.title.isNotBlank() && track.title != "None" && !track.title.startsWith("Bài ")) track.title else existing.title,
-                artist = if (track.artist.isNotBlank()) track.artist else existing.artist,
+                title = if (tTitle.isNotBlank() && tTitle != "None" && !tTitle.startsWith("Bài ")) tTitle else existing.safeTitle,
+                artist = if (tArtist.isNotBlank()) tArtist else existing.safeArtist,
                 durationSeconds = if (track.durationSeconds > 0) track.durationSeconds else existing.durationSeconds,
                 customThumbnailUrl = if (!track.customThumbnailUrl.isNullOrBlank()) track.customThumbnailUrl else existing.customThumbnailUrl
             )
@@ -135,7 +137,7 @@ class HistoryRepository(private val context: Context) {
         if (cloudHistory.isEmpty()) return@withContext
         val current = _history.value.toMutableList()
         for (track in cloudHistory) {
-            if (track.id.isBlank()) continue
+            if (track.safeId.isBlank()) continue
             if (!current.any { it.id.equals(track.id, ignoreCase = true) }) {
                 current.add(track)
             }
@@ -149,7 +151,7 @@ class HistoryRepository(private val context: Context) {
         if (cloudFavorites.isEmpty()) return@withContext
         val current = _favorites.value.toMutableList()
         for (fav in cloudFavorites) {
-            if (fav.id.isBlank()) continue
+            if (fav.safeId.isBlank()) continue
             if (!current.any { it.id.equals(fav.id, ignoreCase = true) }) {
                 current.add(fav)
             }
@@ -179,12 +181,12 @@ class HistoryRepository(private val context: Context) {
     }
 
     fun isFavorite(id: String): Boolean {
-        if (id.isBlank()) return false
+        if (id.isNullOrBlank()) return false
         return _favorites.value.any { it.id.equals(id, ignoreCase = true) }
     }
 
     suspend fun toggleFavorite(track: PlaylistItem): Boolean = withContext(Dispatchers.IO) {
-        if (track.id.isBlank()) return@withContext false
+        if (track.safeId.isBlank()) return@withContext false
         val current = _favorites.value.toMutableList()
         val existingIndex = current.indexOfFirst { it.id.equals(track.id, ignoreCase = true) }
         val isNowFavorite = if (existingIndex >= 0) {
@@ -207,7 +209,7 @@ class HistoryRepository(private val context: Context) {
     }
 
     fun getTrackTitle(id: String): String? {
-        if (id.isBlank()) return null
+        if (id.isNullOrBlank()) return null
         val match = _favorites.value.find { it.id.equals(id, ignoreCase = true) }
             ?: _history.value.find { it.id.equals(id, ignoreCase = true) }
         return if (match != null && match.title.isNotBlank() && match.title != "None" && match.title != "NA") {

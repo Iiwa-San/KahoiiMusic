@@ -7,7 +7,7 @@ import java.util.Locale
 
 data class PlaylistItem(
     @SerializedName("id", alternate = ["Id"])
-    val id: String,
+    val id: String = "",
 
     @SerializedName("title", alternate = ["Title"])
     val title: String = "",
@@ -25,14 +25,23 @@ data class PlaylistItem(
     val localAudioPath: String? = null
 ) : Serializable {
 
+    val safeTitle: String
+        get() = (title as? String?).orEmpty()
+
+    val safeArtist: String
+        get() = (artist as? String?).orEmpty()
+
+    val safeId: String
+        get() = (id as? String?).orEmpty()
+
     val isOffline: Boolean
         get() = !localAudioPath.isNullOrBlank() && File(localAudioPath).exists()
 
     val url: String
-        get() = if (isOffline) localAudioPath!! else "https://www.youtube.com/watch?v=$id"
+        get() = if (isOffline) localAudioPath!! else "https://www.youtube.com/watch?v=$safeId"
 
     val thumbnailUrl: String
-        get() = customThumbnailUrl ?: "https://img.youtube.com/vi/$id/hqdefault.jpg"
+        get() = customThumbnailUrl ?: "https://img.youtube.com/vi/$safeId/hqdefault.jpg"
 
     val formattedDuration: String
         get() {

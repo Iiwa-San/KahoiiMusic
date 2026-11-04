@@ -1,4 +1,4 @@
-package com.kahoii.music.service
+﻿package com.kahoii.music.service
 
 import android.content.Context
 import android.net.Uri
@@ -260,9 +260,11 @@ object MusicQueueManager {
                 // 1c. In-memory resolvedStreamCache
                 val cachedStream: AudioStreamResult? = youTubeRepository.getCachedStream(track.id)
                 if (cachedStream != null) {
+                    val curTitle = track.safeTitle
+                    val curArtist = track.safeArtist
                     val resolvedTrack = track.copy(
-                        title = if (track.title.isBlank() || track.title.startsWith("Bài ")) cachedStream.title else track.title,
-                        artist = if (track.artist.isBlank()) cachedStream.artist else track.artist,
+                        title = if (curTitle.isBlank() || curTitle.startsWith("Bài ")) cachedStream.title else curTitle,
+                        artist = if (curArtist.isBlank()) cachedStream.artist else curArtist,
                         durationSeconds = if (track.durationSeconds <= 0) cachedStream.durationSeconds else track.durationSeconds
                     )
                     currentTrack = resolvedTrack
@@ -276,9 +278,11 @@ object MusicQueueManager {
                 onStatusMessage?.invoke("Đang nạp âm thanh...")
                 val result = youTubeRepository.resolveAudio(track.id)
                 result.onSuccess { stream ->
+                    val curTitle = track.safeTitle
+                    val curArtist = track.safeArtist
                     val resolvedTrack = track.copy(
-                        title = if (track.title.isBlank() || track.title.startsWith("Bài ")) stream.title else track.title,
-                        artist = if (track.artist.isBlank()) stream.artist else track.artist,
+                        title = if (curTitle.isBlank() || curTitle.startsWith("Bài ")) stream.title else curTitle,
+                        artist = if (curArtist.isBlank()) stream.artist else curArtist,
                         durationSeconds = if (track.durationSeconds <= 0) stream.durationSeconds else track.durationSeconds
                     )
                     currentTrack = resolvedTrack

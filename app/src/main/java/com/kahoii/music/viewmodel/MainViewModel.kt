@@ -1,4 +1,4 @@
-package com.kahoii.music.viewmodel
+﻿package com.kahoii.music.viewmodel
 
 import android.app.Application
 import android.content.ComponentName
@@ -445,13 +445,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val result = youTubeRepository.resolveAudio(item.id)
             result.onSuccess { stream ->
+                val curTitle = item.safeTitle
+                val curArtist = item.safeArtist
                 val resolvedTrack = item.copy(
-                    title = if (item.title.isBlank() || item.title == "Đang tải..." || item.title.startsWith("Bài ")) {
-                        stream.title.ifBlank { item.title }
+                    title = if (curTitle.isBlank() || curTitle == "Đang tải..." || curTitle.startsWith("Bài ")) {
+                        stream.title.ifBlank { curTitle }
                     } else {
-                        item.title
+                        curTitle
                     },
-                    artist = if (item.artist.isBlank() || item.artist == "Đang tải...") stream.artist else item.artist,
+                    artist = if (curArtist.isBlank() || curArtist == "Đang tải...") stream.artist else curArtist,
                     durationSeconds = if (item.durationSeconds <= 0) stream.durationSeconds else item.durationSeconds
                 )
 
@@ -776,9 +778,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         _uiState.update { state ->
                             val updatedPlaylist = state.playlist.map { pItem ->
                                 if (pItem.id.equals(nextTrack.id, ignoreCase = true)) {
+                                    val curTitle = pItem.safeTitle
+                                    val curArtist = pItem.safeArtist
                                     pItem.copy(
-                                        title = if (pItem.title.isBlank() || pItem.title.startsWith("Bài ")) stream.title else pItem.title,
-                                        artist = if (pItem.artist.isBlank()) stream.artist else pItem.artist,
+                                        title = if (curTitle.isBlank() || curTitle.startsWith("Bài ")) stream.title else curTitle,
+                                        artist = if (curArtist.isBlank()) stream.artist else curArtist,
                                         durationSeconds = stream.durationSeconds
                                     )
                                 } else pItem
@@ -802,7 +806,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveTrackOffline(item: PlaylistItem, bypassCellularWarning: Boolean = false) {
-        if (item.id.isBlank()) return
+        if (item.safeId.isBlank()) return
         if (savedTracksRepository.isTrackSaved(item.id)) return
 
         if (!bypassCellularWarning && NetworkUtils.isCellular(getApplication())) {
@@ -819,9 +823,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val streamResult = youTubeRepository.resolveAudio(item.id)
                 streamResult.onSuccess { stream ->
+                    val curTitle = item.safeTitle
+                    val curArtist = item.safeArtist
                     val fullItem = item.copy(
-                        title = if (item.title.isBlank() || item.title == "Đang tải...") stream.title else item.title,
-                        artist = if (item.artist.isBlank()) stream.artist else item.artist,
+                        title = if (curTitle.isBlank() || curTitle == "Đang tải...") stream.title else curTitle,
+                        artist = if (curArtist.isBlank()) stream.artist else curArtist,
                         durationSeconds = if (item.durationSeconds <= 0) stream.durationSeconds else item.durationSeconds
                     )
                     savedTracksRepository.saveTrack(fullItem, stream.audioUrl, stream.thumbnailUrl, stream.contentLength)
@@ -936,9 +942,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     val streamResult = youTubeRepository.resolveAudio(track.id)
                     streamResult.onSuccess { stream ->
+                        val curTitle = track.safeTitle
+                        val curArtist = track.safeArtist
                         val fullItem = track.copy(
-                            title = if (track.title.isBlank() || track.title == "Đang tải...") stream.title else track.title,
-                            artist = if (track.artist.isBlank()) stream.artist else track.artist,
+                            title = if (curTitle.isBlank() || curTitle == "Đang tải...") stream.title else curTitle,
+                            artist = if (curArtist.isBlank()) stream.artist else curArtist,
                             durationSeconds = if (track.durationSeconds <= 0) stream.durationSeconds else track.durationSeconds
                         )
                         savedTracksRepository.saveTrack(fullItem, stream.audioUrl, stream.thumbnailUrl, stream.contentLength)

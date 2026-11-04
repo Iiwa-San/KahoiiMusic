@@ -1,4 +1,4 @@
-package com.kahoii.music.data
+﻿package com.kahoii.music.data
 
 import android.content.Context
 import com.google.gson.Gson
@@ -80,7 +80,7 @@ class SavedTracksRepository(private val context: Context) {
     }
 
     fun isTrackSaved(id: String): Boolean {
-        if (id.isBlank()) return false
+        if (id.isNullOrBlank()) return false
         val item = _savedTracks.value.find { it.id.equals(id, ignoreCase = true) }
         if (item?.localAudioPath == null) return false
         val file = File(item.localAudioPath)
@@ -88,12 +88,12 @@ class SavedTracksRepository(private val context: Context) {
     }
 
     fun getSavedTrack(id: String): PlaylistItem? {
-        if (id.isBlank()) return null
+        if (id.isNullOrBlank()) return null
         return _savedTracks.value.find { it.id.equals(id, ignoreCase = true) }
     }
 
     fun getTempAudioFile(id: String): File? {
-        if (id.isBlank()) return null
+        if (id.isNullOrBlank()) return null
         val candidates = listOf(
             File(tempAudioDir, "$id.mp3"),
             File(tempAudioDir, "$id.m4a")
@@ -247,7 +247,7 @@ class SavedTracksRepository(private val context: Context) {
         contentLength: Long? = null
     ): Result<PlaylistItem> = withContext(Dispatchers.IO) {
         try {
-            if (track.id.isBlank()) {
+            if (track.safeId.isBlank()) {
                 return@withContext Result.failure(IllegalArgumentException("ID bài hát không hợp lệ"))
             }
 
