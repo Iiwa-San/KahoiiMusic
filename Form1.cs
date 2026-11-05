@@ -220,6 +220,12 @@ namespace KahoiiMusic
             _audioPlayer.PlaybackLooped += AudioPlayer_PlaybackLooped;
             _audioPlayer.TrackLoaded += (s, args) =>
             {
+                string curT = !string.IsNullOrEmpty(args.Title) ? args.Title : _audioPlayer.CurrentTitle;
+                if (!string.IsNullOrEmpty(curT))
+                {
+                    marqueeTitle.Text = curT;
+                    UpdateTrayTooltip(curT);
+                }
                 if (btnQuickDownload != null)
                 {
                     btnQuickDownload.SetCurrentTrack(new PlaylistItem
@@ -234,12 +240,15 @@ namespace KahoiiMusic
             // Loop Button
             btnLoop.LoopChanged += (s, e) =>
             {
-                _audioPlayer.IsLooping = btnLoop.IsLooping;
+                _audioPlayer.LoopMode = btnLoop.Mode;
+                UpdateLoopTooltip();
                 if (_trayItemLoop != null)
                 {
                     _trayItemLoop.Checked = btnLoop.IsLooping;
+                    _trayItemLoop.Text = GetLoopMenuText(btnLoop.Mode);
                 }
             };
+            UpdateLoopTooltip();
 
             // Sleep Timer
             KahoiiMusic.Services.SleepTimerService.Instance.TimerExpired += (s, e) =>
@@ -520,9 +529,14 @@ namespace KahoiiMusic
                     return true;
 
                 case Keys.L:
-                    btnLoop.IsLooping = !btnLoop.IsLooping;
-                    _audioPlayer.IsLooping = btnLoop.IsLooping;
-                    if (_trayItemLoop != null) _trayItemLoop.Checked = btnLoop.IsLooping;
+                    btnLoop.CycleNextMode();
+                    _audioPlayer.LoopMode = btnLoop.Mode;
+                    UpdateLoopTooltip();
+                    if (_trayItemLoop != null)
+                    {
+                        _trayItemLoop.Checked = btnLoop.IsLooping;
+                        _trayItemLoop.Text = GetLoopMenuText(btnLoop.Mode);
+                    }
                     return true;
 
                 case Keys.Escape:
@@ -592,9 +606,13 @@ namespace KahoiiMusic
             }
             else
             {
-                if (!_audioPlayer.HasTrack || string.IsNullOrEmpty(_audioPlayer.CurrentTitle))
+                if (!_audioPlayer.HasTrack)
                 {
                     marqueeTitle.Text = status;
+                }
+                else
+                {
+                    marqueeTitle.Text = !string.IsNullOrEmpty(_audioPlayer.CurrentTitle) ? _audioPlayer.CurrentTitle : status;
                 }
             }
         }
@@ -612,6 +630,11 @@ namespace KahoiiMusic
             if (_audioPlayer.HasTrack)
             {
                 artworkBox.TimeText = FormatTimeSpan(_audioPlayer.Position, _audioPlayer.TotalDuration);
+                if (!string.IsNullOrEmpty(_audioPlayer.CurrentTitle) && marqueeTitle.Text != _audioPlayer.CurrentTitle)
+                {
+                    marqueeTitle.Text = _audioPlayer.CurrentTitle;
+                    UpdateTrayTooltip(_audioPlayer.CurrentTitle);
+                }
             }
         }
 
@@ -815,6 +838,7 @@ namespace KahoiiMusic
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             _isFormClosed = true;
+            try { this.Hide(); } catch { }
             if (playlistPopup != null) try { playlistPopup.Hide(); } catch { }
             if (accountPopup != null) try { accountPopup.Hide(); } catch { }
             base.OnFormClosing(e);
@@ -970,9 +994,14 @@ namespace KahoiiMusic
                 _trayItemLoop.Checked = (btnLoop != null) ? btnLoop.IsLooping : (_audioPlayer != null && _audioPlayer.IsLooping);
                 _trayItemLoop.Click += (s, e) =>
                 {
-                    bool newLoop = _trayItemLoop.Checked;
-                    if (btnLoop != null) btnLoop.IsLooping = newLoop;
-                    if (_audioPlayer != null) _audioPlayer.IsLooping = newLoop;
+                    if (btnLoop != null)
+                    {
+                        btnLoop.CycleNextMode();
+                        _audioPlayer.LoopMode = btnLoop.Mode;
+                        _trayItemLoop.Checked = btnLoop.IsLooping;
+                        _trayItemLoop.Text = GetLoopMenuText(btnLoop.Mode);
+                        UpdateLoopTooltip();
+                    }
                 };
 
                 var itemExit = new ToolStripMenuItem("Tho\u00e1t");
@@ -1338,6 +1367,44 @@ namespace KahoiiMusic
             int y = this.Location.Y + (this.Height - accountPopup.Height) / 2;
             accountPopup.Location = new Point(Math.Max(0, x), Math.Max(0, y));
             accountPopup.Show(this);
+        }
+
+        private ToolTip _loopToolTip;
+
+        private void UpdateLoopTooltip()
+        {
+            if (btnLoop == null) return;
+            if (_loopToolTip == null) _loopToolTip = new ToolTip();
+            string tip;
+            switch (btnLoop.Mode)
+            {
+                case LoopMode.All:
+                    tip = "Chế độ: Lặp lại danh sách (Bấm để đổi)";
+                    break;
+                case LoopMode.One:
+                    tip = "Chế độ: Lặp lại 1 bài (Bấm để đổi)";
+                    break;
+                case LoopMode.Shuffle:
+                    tip = "Chế độ: Phát ngẫu nhiên & Lặp lại khi hết (Bấm để đổi)";
+                    break;
+                case LoopMode.Off:
+                default:
+                    tip = "Chế độ: Phát tuần tự / Tắt lặp (Bấm để đổi)";
+                    break;
+            }
+            _loopToolTip.SetToolTip(btnLoop, tip);
+        }
+
+        private string GetLoopMenuText(LoopMode mode)
+        {
+            switch (mode)
+            {
+                case LoopMode.All: return "Lặp: Toàn bộ danh sách";
+                case LoopMode.One: return "Lặp: 1 bài hát";
+                case LoopMode.Shuffle: return "Lặp: Phát ngẫu nhiên";
+                case LoopMode.Off:
+                default: return "Lặp: Tắt (Tuần tự)";
+            }
         }
 
         private void UpdateUserButtonAppearance()

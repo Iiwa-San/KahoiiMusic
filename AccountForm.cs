@@ -528,9 +528,18 @@ namespace KahoiiMusic
             btnSyncNow.Click += async (s, e) =>
             {
                 btnSyncNow.Enabled = false;
-                await FirebaseSyncService.Instance.TriggerManualSyncAsync();
-                btnSyncNow.Enabled = true;
-                UpdateStats();
+                btnSyncNow.Text = "⟳  Đang Đồng Bộ...";
+                try
+                {
+                    await FirebaseSyncService.Instance.TriggerManualSyncAsync();
+                }
+                finally
+                {
+                    btnSyncNow.Enabled = true;
+                    btnSyncNow.Text = "⟳  Đồng Bộ Ngay (Tự Động Bật)";
+                    UpdateSyncStatus();
+                    UpdateStats();
+                }
             };
 
             btnSignOut = new RoundedButton

@@ -65,6 +65,12 @@ namespace KahoiiMusic.Services
 
         private bool _isLooping = false;
 
+        private LoopMode _loopMode = LoopMode.Off;
+
+        private readonly List<int> _shufflePlayedIndices = new List<int>();
+
+        private readonly Random _random = new Random();
+
         private object _lock = new object();
 
         private Process _activeDownloadProc;
@@ -159,21 +165,41 @@ namespace KahoiiMusic.Services
 
         {
 
-            get { return HasPlaylist && _currentPlaylistIndex >= 0 && (_currentPlaylistIndex + 1 < _playlist.Count || _isLooping); }
+            get
+            {
+                if (!HasPlaylist) return false;
+                if (_loopMode == LoopMode.Shuffle || _loopMode == LoopMode.All) return true;
+                return _currentPlaylistIndex >= 0 && _currentPlaylistIndex + 1 < _playlist.Count;
+            }
 
         }
 
-        public bool IsLooping
+        public bool CanPlayPrevious
 
         {
 
-            get { return _isLooping; }
+            get
+            {
+                if (!HasPlaylist) return false;
+                if (_loopMode == LoopMode.Shuffle || _loopMode == LoopMode.All) return true;
+                return _currentPlaylistIndex > 0;
+            }
+
+        }
+
+        public LoopMode LoopMode
+
+        {
+
+            get => _loopMode;
 
             set
 
             {
 
-                _isLooping = value;
+                _loopMode = value;
+
+                _isLooping = (value != LoopMode.Off);
 
                 lock (_lock)
 
@@ -183,13 +209,23 @@ namespace KahoiiMusic.Services
 
                     {
 
-                        _managedStream.IsLooping = value;
+                        _managedStream.IsLooping = (value == LoopMode.One);
 
                     }
 
                 }
 
             }
+
+        }
+
+        public bool IsLooping
+
+        {
+
+            get { return _loopMode != LoopMode.Off; }
+
+            set { LoopMode = value ? LoopMode.All : LoopMode.Off; }
 
         }
 
@@ -1160,13 +1196,19 @@ namespace KahoiiMusic.Services
 
             if (!HasPlaylist) return;
 
+            if (_loopMode == LoopMode.Shuffle)
+            {
+                PlayRandomNext();
+                return;
+            }
+
             int next = _currentPlaylistIndex + 1;
 
             if (next >= _playlist.Count)
 
             {
 
-                if (_isLooping)
+                if (_loopMode == LoopMode.All)
 
                 {
 
@@ -1190,6 +1232,49 @@ namespace KahoiiMusic.Services
 
         }
 
+        public void PlayRandomNext()
+        {
+            if (!HasPlaylist || _playlist == null || _playlist.Count == 0) return;
+            if (_playlist.Count == 1)
+            {
+                PlayTrackAtIndex(0);
+                return;
+            }
+
+            lock (_shufflePlayedIndices)
+            {
+                if (!_shufflePlayedIndices.Contains(_currentPlaylistIndex) && _currentPlaylistIndex >= 0)
+                {
+                    _shufflePlayedIndices.Add(_currentPlaylistIndex);
+                }
+
+                var unplayed = new List<int>();
+                for (int i = 0; i < _playlist.Count; i++)
+                {
+                    if (!_shufflePlayedIndices.Contains(i))
+                    {
+                        unplayed.Add(i);
+                    }
+                }
+
+                if (unplayed.Count == 0)
+                {
+                    _shufflePlayedIndices.Clear();
+                    for (int i = 0; i < _playlist.Count; i++)
+                    {
+                        if (i != _currentPlaylistIndex)
+                        {
+                            unplayed.Add(i);
+                        }
+                    }
+                }
+
+                int nextIndex = unplayed.Count > 0 ? unplayed[_random.Next(unplayed.Count)] : 0;
+                _shufflePlayedIndices.Add(nextIndex);
+                PlayTrackAtIndex(nextIndex);
+            }
+        }
+
         public void PlayPrevious()
 
         {
@@ -1204,15 +1289,32 @@ namespace KahoiiMusic.Services
 
             }
 
+            if (_loopMode == LoopMode.Shuffle && _shufflePlayedIndices.Count > 1)
+            {
+                lock (_shufflePlayedIndices)
+                {
+                    _shufflePlayedIndices.RemoveAt(_shufflePlayedIndices.Count - 1);
+                    int shuffPrev = _shufflePlayedIndices[_shufflePlayedIndices.Count - 1];
+                    PlayTrackAtIndex(shuffPrev);
+                    return;
+                }
+            }
+
             int prev = _currentPlaylistIndex - 1;
 
             if (prev < 0)
 
             {
 
-                Position = TimeSpan.Zero;
-
-                return;
+                if (_loopMode == LoopMode.All || _loopMode == LoopMode.Shuffle)
+                {
+                    prev = _playlist.Count - 1;
+                }
+                else
+                {
+                    Position = TimeSpan.Zero;
+                    return;
+                }
 
             }
 
@@ -2435,6 +2537,8 @@ namespace KahoiiMusic.Services
 
                             RaiseStatus(display);
 
+                            RaiseTitleChanged(_currentTitle);
+
                             RaisePlaybackStateChanged();
 
                             if (TrackLoaded != null)
@@ -2699,14 +2803,26 @@ namespace KahoiiMusic.Services
                         return;
                     }
 
-                    if (!_isLooping && HasPlaylist && CanPlayNext)
-
+                    if (_loopMode == LoopMode.One)
                     {
-
-                        PlayNext();
-
+                        Position = TimeSpan.Zero;
+                        Play();
                         return;
+                    }
 
+                    if (HasPlaylist)
+                    {
+                        if (_loopMode == LoopMode.Shuffle)
+                        {
+                            PlayRandomNext();
+                            return;
+                        }
+
+                        if (_loopMode == LoopMode.All || CanPlayNext)
+                        {
+                            PlayNext();
+                            return;
+                        }
                     }
 
                     if (PlaybackEnded != null)

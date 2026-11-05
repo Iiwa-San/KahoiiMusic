@@ -3,12 +3,13 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using KahoiiMusic.Models;
 
 namespace KahoiiMusic.Controls
 {
     public class LoopButton : Control
     {
-        private bool _isLooping = false;
+        private LoopMode _mode = LoopMode.Off;
         private bool _isHovered = false;
         private bool _isPressed = false;
 
@@ -33,21 +34,35 @@ namespace KahoiiMusic.Controls
             DoubleBuffered = true;
         }
 
+        [Category("Behavior")]
+        [DefaultValue(LoopMode.Off)]
+        public LoopMode Mode
+        {
+            get => _mode;
+            set
+            {
+                if (_mode != value)
+                {
+                    _mode = value;
+                    Invalidate();
+                    LoopChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+        }
+
         [Category("Appearance")]
         [DefaultValue(false)]
         public bool IsLooping
         {
-            get { return _isLooping; }
+            get => _mode != LoopMode.Off;
             set
             {
-                if (_isLooping != value)
+                LoopMode target = value ? LoopMode.All : LoopMode.Off;
+                if (_mode != target)
                 {
-                    _isLooping = value;
+                    _mode = target;
                     Invalidate();
-                    if (LoopChanged != null)
-                    {
-                        LoopChanged(this, EventArgs.Empty);
-                    }
+                    LoopChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
         }
@@ -55,15 +70,35 @@ namespace KahoiiMusic.Controls
         [Category("Appearance")]
         public Color ActiveColor
         {
-            get { return _activeColor; }
+            get => _activeColor;
             set { _activeColor = value; Invalidate(); }
         }
 
         [Category("Appearance")]
         public Color InactiveColor
         {
-            get { return _inactiveColor; }
+            get => _inactiveColor;
             set { _inactiveColor = value; Invalidate(); }
+        }
+
+        public void CycleNextMode()
+        {
+            switch (_mode)
+            {
+                case LoopMode.Off:
+                    Mode = LoopMode.All;
+                    break;
+                case LoopMode.All:
+                    Mode = LoopMode.One;
+                    break;
+                case LoopMode.One:
+                    Mode = LoopMode.Shuffle;
+                    break;
+                case LoopMode.Shuffle:
+                default:
+                    Mode = LoopMode.Off;
+                    break;
+            }
         }
 
         protected override void OnMouseEnter(EventArgs e)
@@ -97,7 +132,7 @@ namespace KahoiiMusic.Controls
             if (_isPressed && e.Button == MouseButtons.Left)
             {
                 _isPressed = false;
-                IsLooping = !IsLooping;
+                CycleNextMode();
             }
         }
 
@@ -108,8 +143,9 @@ namespace KahoiiMusic.Controls
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
+            bool isActive = _mode != LoopMode.Off;
             Color drawColor;
-            if (_isLooping)
+            if (isActive)
             {
                 drawColor = _isHovered ? _activeHoverColor : _activeColor;
             }
@@ -125,10 +161,35 @@ namespace KahoiiMusic.Controls
                                            Math.Max(0, drawColor.B - 30));
             }
 
-            float left = 7.0f;
-            float right = 19.0f;
-            float top = 5.0f;
-            float bottom = 15.0f;
+            if (_mode == LoopMode.Shuffle)
+            {
+                // Draw Shuffle crossed arrows
+                DrawShuffleIcon(g, drawColor);
+            }
+            else
+            {
+                // Draw Loop arrows (Off, All, One)
+                DrawLoopIcon(g, drawColor, _mode == LoopMode.One);
+            }
+
+            // Indicator dot below when active
+            if (isActive)
+            {
+                using (SolidBrush dotBrush = new SolidBrush(drawColor))
+                {
+                    float dotX = (Width / 2.0f) - 1.25f;
+                    float dotY = Height - 3.5f;
+                    g.FillEllipse(dotBrush, dotX, dotY, 2.5f, 2.5f);
+                }
+            }
+        }
+
+        private void DrawLoopIcon(Graphics g, Color drawColor, bool isRepeatOne)
+        {
+            float left = 6.5f;
+            float right = 19.5f;
+            float top = 4.5f;
+            float bottom = 15.5f;
             float radius = 4.0f;
 
             using (Pen pen = new Pen(drawColor, 1.8f))
@@ -166,13 +227,77 @@ namespace KahoiiMusic.Controls
                 };
                 g.FillPolygon(brush, arrow2);
 
-                // Active loop indicator dot below
-                if (_isLooping)
+                // If Repeat One, draw "1" in the center
+                if (isRepeatOne)
                 {
-                    float dotX = (Width / 2.0f) - 1.25f;
-                    float dotY = Height - 3.5f;
-                    g.FillEllipse(brush, dotX, dotY, 2.5f, 2.5f);
+                    using (Font font = new Font("Segoe UI", 7.0f, FontStyle.Bold))
+                    {
+                        using (StringFormat sf = new StringFormat
+                        {
+                            Alignment = StringAlignment.Center,
+                            LineAlignment = StringAlignment.Center
+                        })
+                        {
+                            RectangleF textRect = new RectangleF(left - 2f, top - 2f, (right - left) + 4f, (bottom - top) + 4f);
+                            g.DrawString("1", font, brush, textRect, sf);
+                        }
+                    }
                 }
+            }
+        }
+
+        private void DrawShuffleIcon(Graphics g, Color drawColor)
+        {
+            float left = 6.0f;
+            float right = 20.0f;
+            float top = 5.0f;
+            float bottom = 15.0f;
+
+            using (Pen pen = new Pen(drawColor, 1.8f))
+            {
+                pen.StartCap = LineCap.Round;
+                pen.EndCap = LineCap.Round;
+
+                // Top line going to bottom
+                using (GraphicsPath path1 = new GraphicsPath())
+                {
+                    path1.AddBezier(left, top, left + 5f, top, right - 5f, bottom, right, bottom);
+                    g.DrawPath(pen, path1);
+                }
+
+                // Bottom line crossing to top
+                using (GraphicsPath path2 = new GraphicsPath())
+                {
+                    path2.AddBezier(left, bottom, left + 4f, bottom, left + 5.5f, (top + bottom) / 2f + 1.5f, left + 6.5f, (top + bottom) / 2f + 1.5f);
+                    g.DrawPath(pen, path2);
+                }
+
+                using (GraphicsPath path3 = new GraphicsPath())
+                {
+                    path3.AddBezier(right - 6.5f, (top + bottom) / 2f - 1.5f, right - 5.5f, (top + bottom) / 2f - 1.5f, right - 4f, top, right, top);
+                    g.DrawPath(pen, path3);
+                }
+            }
+
+            using (SolidBrush brush = new SolidBrush(drawColor))
+            {
+                // Arrowhead at (right, top) pointing right
+                PointF[] arrowTop = new PointF[]
+                {
+                    new PointF(right + 2.5f, top),
+                    new PointF(right - 1.5f, top - 3.0f),
+                    new PointF(right - 1.5f, top + 3.0f)
+                };
+                g.FillPolygon(brush, arrowTop);
+
+                // Arrowhead at (right, bottom) pointing right
+                PointF[] arrowBottom = new PointF[]
+                {
+                    new PointF(right + 2.5f, bottom),
+                    new PointF(right - 1.5f, bottom - 3.0f),
+                    new PointF(right - 1.5f, bottom + 3.0f)
+                };
+                g.FillPolygon(brush, arrowBottom);
             }
         }
     }

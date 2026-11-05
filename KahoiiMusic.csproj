@@ -43,7 +43,8 @@
     <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Net.Http" />
-    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Windows.Forms" />
+
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
     <Reference Include="PresentationCore" />
@@ -107,7 +108,8 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Models\PlaylistItem.cs" />
-    <Compile Include="Models\UserPlaylist.cs" />
+    <Compile Include="Models\UserPlaylist.cs" />
+    <Compile Include="Models\LoopMode.cs" />
     <Compile Include="Controls\InputDialog.cs">
       <SubType>Form</SubType>
     </Compile>

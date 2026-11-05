@@ -130,7 +130,7 @@ namespace KahoiiMusic.Services
                 {
                     await SyncUploadAsync(payload).ConfigureAwait(false);
                 });
-                task.Wait(500);
+                task.Wait(180);
             }
             catch { }
         }
