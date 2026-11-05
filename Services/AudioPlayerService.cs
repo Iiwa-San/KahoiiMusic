@@ -1837,14 +1837,10 @@ namespace KahoiiMusic.Services
                                 id = parts[1].Trim();
                                 title = parts[2].Trim();
                                 int.TryParse(parts[3].Trim(), out dur);
-                            }
-                            if (parts.Length >= 5)
-                            {
-                                author = parts[4].Trim();
-                            }
-                            if (string.IsNullOrWhiteSpace(author) && !string.IsNullOrWhiteSpace(title))
-                            {
-                                author = ExtractAuthorFromTitle(title);
+                                if (parts.Length >= 5)
+                                {
+                                    author = parts[4].Trim();
+                                }
                             }
                             else if (parts.Length >= 2)
                             {
@@ -1853,12 +1849,25 @@ namespace KahoiiMusic.Services
                                 if (parts.Length >= 3) int.TryParse(parts[2].Trim(), out dur);
                             }
 
+                            if (!string.IsNullOrWhiteSpace(author) && author != "NA" && author != "None")
+                            {
+                                author = CleanAuthor(author);
+                            }
+                            else if (!string.IsNullOrWhiteSpace(title))
+                            {
+                                author = ExtractAuthorFromTitle(title);
+                            }
+                            else
+                            {
+                                author = string.Empty;
+                            }
+
                             if (!string.IsNullOrEmpty(plTitle) && plTitle != "NA" && plTitle != "None")
                             {
                                 CurrentPlaylistTitle = plTitle;
                             }
 
-                            if (id.Length == 11)
+                            if (!string.IsNullOrEmpty(id) && id.Length == 11)
 
                                 {
 
