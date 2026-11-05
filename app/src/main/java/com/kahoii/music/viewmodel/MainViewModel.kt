@@ -340,7 +340,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playFromQueueIndex(index: Int, source: ActiveQueueSource) {
         val queue = when (source) {
-            ActiveQueueSource.PLAYLIST, ActiveQueueSource.COLLECTION -> _uiState.value.playlist
+            ActiveQueueSource.PLAYLIST -> _uiState.value.playlist
+            ActiveQueueSource.COLLECTION -> _uiState.value.collectionTracks
             ActiveQueueSource.SAVED -> _uiState.value.savedTracks
             ActiveQueueSource.FAVORITES -> _uiState.value.favorites
             ActiveQueueSource.HISTORY -> _uiState.value.history
@@ -359,7 +360,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playFromQueue(item: PlaylistItem, source: ActiveQueueSource) {
         val queue = when (source) {
-            ActiveQueueSource.PLAYLIST, ActiveQueueSource.COLLECTION -> _uiState.value.playlist
+            ActiveQueueSource.PLAYLIST -> _uiState.value.playlist
+            ActiveQueueSource.COLLECTION -> _uiState.value.collectionTracks
             ActiveQueueSource.SAVED -> _uiState.value.savedTracks
             ActiveQueueSource.FAVORITES -> _uiState.value.favorites
             ActiveQueueSource.HISTORY -> _uiState.value.history
@@ -621,6 +623,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.kahoii.music.service.MusicQueueManager.activeQueue = _uiState.value.activeQueue
         com.kahoii.music.service.MusicQueueManager.loopMode = _uiState.value.loopMode
         com.kahoii.music.service.MusicQueueManager.isShuffled = _uiState.value.isShuffled
+        com.kahoii.music.service.MusicQueueManager.activeQueueSource = _uiState.value.activeQueueSource
         com.kahoii.music.service.MusicQueueManager.playNext()
     }
 
@@ -628,6 +631,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.kahoii.music.service.MusicQueueManager.activeQueue = _uiState.value.activeQueue
         com.kahoii.music.service.MusicQueueManager.loopMode = _uiState.value.loopMode
         com.kahoii.music.service.MusicQueueManager.isShuffled = _uiState.value.isShuffled
+        com.kahoii.music.service.MusicQueueManager.activeQueueSource = _uiState.value.activeQueueSource
         com.kahoii.music.service.MusicQueueManager.playPrevious()
     }
 
@@ -1189,6 +1193,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.kahoii.music.service.MusicQueueManager.activeQueue = _uiState.value.activeQueue
         com.kahoii.music.service.MusicQueueManager.loopMode = _uiState.value.loopMode
         com.kahoii.music.service.MusicQueueManager.isShuffled = _uiState.value.isShuffled
+        com.kahoii.music.service.MusicQueueManager.activeQueueSource = _uiState.value.activeQueueSource
         com.kahoii.music.service.MusicQueueManager.handleTrackEnded()
     }
 
@@ -1208,13 +1213,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val safeIndex = startIndex.coerceIn(0, collection.items.size - 1)
             _uiState.update {
                 it.copy(
-                    playlist = collection.items,
+                    collectionTracks = collection.items,
                     currentPlaylistIndex = safeIndex,
                     currentPlaylistTitle = collection.name,
-                    activeQueueSource = ActiveQueueSource.PLAYLIST
+                    activeQueueSource = ActiveQueueSource.COLLECTION
                 )
             }
-            playFromQueueIndex(safeIndex, ActiveQueueSource.PLAYLIST)
+            playFromQueueIndex(safeIndex, ActiveQueueSource.COLLECTION)
             Toast.makeText(getApplication(), "Đang phát bộ sưu tập: ${collection.name}", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(getApplication(), "Bộ sưu tập này chưa có bài hát nào", Toast.LENGTH_SHORT).show()

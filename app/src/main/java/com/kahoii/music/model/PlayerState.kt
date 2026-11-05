@@ -30,6 +30,7 @@ data class PlayerUiState(
     val isMuted: Boolean = false,
     val preMuteVolume: Float = 1.0f,
     val playlist: List<PlaylistItem> = emptyList(),
+    val collectionTracks: List<PlaylistItem> = emptyList(),
     val currentPlaylistIndex: Int = -1,
     val currentPlaylistId: String? = null,
     val currentPlaylistTitle: String? = null,
@@ -71,7 +72,8 @@ data class PlayerUiState(
 
     val activeQueue: List<PlaylistItem>
         get() = when (activeQueueSource) {
-            ActiveQueueSource.PLAYLIST, ActiveQueueSource.COLLECTION -> playlist
+            ActiveQueueSource.PLAYLIST -> playlist
+            ActiveQueueSource.COLLECTION -> collectionTracks
             ActiveQueueSource.SAVED -> savedTracks
             ActiveQueueSource.FAVORITES -> favorites
             ActiveQueueSource.HISTORY -> history
