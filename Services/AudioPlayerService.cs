@@ -42,6 +42,8 @@ namespace KahoiiMusic.Services
 
         public string Title { get; set; }
 
+        public string Author { get; set; }
+
         public TimeSpan Duration { get; set; }
 
     }
@@ -66,6 +68,37 @@ namespace KahoiiMusic.Services
         private string _currentVideoId;
 
         private string _currentTitle = string.Empty;
+        private string _currentAuthor = string.Empty;
+        public string CurrentAuthor => _currentAuthor;
+        public event EventHandler<string> AuthorChanged;
+
+        public static string ExtractAuthorFromTitle(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+            string[] separators = new string[] { " - ", " – ", " — ", " | " };
+            foreach (var sep in separators)
+            {
+                int idx = title.IndexOf(sep, StringComparison.Ordinal);
+                if (idx > 0)
+                {
+                    string candidate = title.Substring(0, idx).Trim();
+                    if (candidate.Length >= 2 && candidate.Length <= 60 && !candidate.StartsWith("[") && !candidate.StartsWith("("))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            return string.Empty;
+        }
+
+        private void RaiseAuthorChanged(string author)
+        {
+            _currentAuthor = author ?? string.Empty;
+            _syncContext?.Post(delegate
+            {
+                try { AuthorChanged?.Invoke(this, _currentAuthor); } catch { }
+            }, null);
+        }
 
         private TimeSpan _totalDuration = TimeSpan.Zero;
 
@@ -1708,7 +1741,7 @@ namespace KahoiiMusic.Services
 
                     psi.FileName = ytdlpPath;
 
-                    psi.Arguments = string.Format("--encoding utf-8 --flat-playlist --print \"%(playlist_title)s\t%(id)s\t%(title)s\t%(duration)s\" \"{0}\"", targetUrl);
+                    psi.Arguments = string.Format("--encoding utf-8 --flat-playlist --print \"%(playlist_title)s\t%(id)s\t%(title)s\t%(duration)s\t%(uploader)s\" \"{0}\"", targetUrl);
 
                     psi.CreateNoWindow = true;
 
@@ -1750,6 +1783,7 @@ namespace KahoiiMusic.Services
                             string id = null;
                             string title = null;
                             int dur = 0;
+                            string author = null;
 
                             if (parts.Length >= 4)
                             {
@@ -1757,6 +1791,14 @@ namespace KahoiiMusic.Services
                                 id = parts[1].Trim();
                                 title = parts[2].Trim();
                                 int.TryParse(parts[3].Trim(), out dur);
+                            }
+                            if (parts.Length >= 5)
+                            {
+                                author = parts[4].Trim();
+                            }
+                            if (string.IsNullOrWhiteSpace(author) && !string.IsNullOrWhiteSpace(title))
+                            {
+                                author = ExtractAuthorFromTitle(title);
                             }
                             else if (parts.Length >= 2)
                             {
@@ -1774,7 +1816,7 @@ namespace KahoiiMusic.Services
 
                                 {
 
-                                    var item = new PlaylistItem { Id = id, Title = title, DurationSeconds = dur };
+                                    var item = new PlaylistItem { Id = id, Title = title, DurationSeconds = dur, Author = author };
 
                                     list.Add(item);
 
@@ -1966,7 +2008,7 @@ namespace KahoiiMusic.Services
 
                                             string json = wc.DownloadString(oembedUrl);
 
-                    Match m = Regex.Match(json, "\"title\":\"((?:\\\\.|[^\"])*)\"");
+                    Match m = Regex.Match(json, @"""title""\s*:\s*""([^""]+)""");
 
                                             if (m.Success)
 
@@ -2244,11 +2286,30 @@ namespace KahoiiMusic.Services
 
                         // CRITICAL: Never retain previous track's title when playing a new track!
 
+                        string resolvedAuthor = HistoryService.GetTrackAuthor(videoId);
+                        if (string.IsNullOrWhiteSpace(resolvedAuthor))
+                        {
+                            resolvedAuthor = SavedTracksService.Instance.GetTrackAuthor(videoId);
+                        }
+                        if (string.IsNullOrWhiteSpace(resolvedAuthor) && _playlist != null)
+                        {
+                            var matchItem = _playlist.Find(x => x.Id == videoId);
+                            if (matchItem != null && !string.IsNullOrWhiteSpace(matchItem.Author))
+                            {
+                                resolvedAuthor = matchItem.Author;
+                            }
+                        }
+                        if (string.IsNullOrWhiteSpace(resolvedAuthor) && !string.IsNullOrWhiteSpace(resolvedTitle))
+                        {
+                            resolvedAuthor = ExtractAuthorFromTitle(resolvedTitle);
+                        }
+
                         if (isNewTrack)
 
                         {
 
                             _currentTitle = resolvedTitle ?? string.Empty;
+                            _currentAuthor = resolvedAuthor ?? string.Empty;
 
                             if (!string.IsNullOrWhiteSpace(_currentTitle))
 
@@ -2257,17 +2318,22 @@ namespace KahoiiMusic.Services
                                 RaiseTitleChanged(_currentTitle);
 
                             }
+                            RaiseAuthorChanged(_currentAuthor);
 
                         }
 
-                        else if (!string.IsNullOrWhiteSpace(resolvedTitle))
-
+                        else
                         {
-
-                            _currentTitle = resolvedTitle;
-
-                            RaiseTitleChanged(_currentTitle);
-
+                            if (!string.IsNullOrWhiteSpace(resolvedTitle))
+                            {
+                                _currentTitle = resolvedTitle;
+                                RaiseTitleChanged(_currentTitle);
+                            }
+                            if (!string.IsNullOrWhiteSpace(resolvedAuthor))
+                            {
+                                _currentAuthor = resolvedAuthor;
+                                RaiseAuthorChanged(_currentAuthor);
+                            }
                         }
 
                         // Immediate thumbnail display (instant visual feedback)
@@ -2612,6 +2678,8 @@ namespace KahoiiMusic.Services
 
                                     Title = _currentTitle,
 
+                                    Author = _currentAuthor,
+
                                     Duration = _totalDuration
 
                                 });
@@ -2633,6 +2701,8 @@ namespace KahoiiMusic.Services
                                         Id = _currentVideoId,
 
                                         Title = titleForHistory,
+
+                                        Author = _currentAuthor,
 
                                         DurationSeconds = (int)_totalDuration.TotalSeconds
 
@@ -2991,13 +3061,26 @@ namespace KahoiiMusic.Services
 
                     string json = wc.DownloadString(oembedUrl);
 
-                    Match m = Regex.Match(json, "\"title\":\"((?:\\\\.|[^\"])*)\"");
+                    Match m = Regex.Match(json, @"""title""\s*:\s*""([^""]+)""");
+                    Match mAuthor = Regex.Match(json, @"""author_name""\s*:\s*""([^""]+)""");
 
-                    if (m.Success)
+                    if (m.Success || mAuthor.Success)
 
                     {
 
-                        string fetchedTitle = Regex.Unescape(m.Groups[1].Value);
+                        string fetchedTitle = m.Success ? Regex.Unescape(m.Groups[1].Value) : null;
+                        string fetchedAuthor = mAuthor.Success ? Regex.Unescape(mAuthor.Groups[1].Value) : null;
+                        if (string.IsNullOrWhiteSpace(fetchedAuthor) && !string.IsNullOrWhiteSpace(fetchedTitle))
+                        {
+                            fetchedAuthor = ExtractAuthorFromTitle(fetchedTitle);
+                        }
+                        if (!string.IsNullOrWhiteSpace(fetchedAuthor))
+                        {
+                            _currentAuthor = fetchedAuthor;
+                            RaiseAuthorChanged(_currentAuthor);
+                        }
+                        try { HistoryService.UpdateTitleAndAuthor(videoId, fetchedTitle, fetchedAuthor); } catch { }
+                        try { SavedTracksService.Instance.UpdateTitleAndAuthor(videoId, fetchedTitle, fetchedAuthor); } catch { }
 
                         if (!string.IsNullOrWhiteSpace(fetchedTitle))
 

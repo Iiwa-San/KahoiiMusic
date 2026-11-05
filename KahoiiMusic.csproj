@@ -101,6 +101,7 @@
     <Compile Include="Controls\PlaylistButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\PlaylistSearchBox.cs" />
     <Compile Include="Controls\PlaylistPopup.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -108,7 +109,8 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Models\PlaylistItem.cs" />
-    <Compile Include="Models\UserPlaylist.cs" />
+    <Compile Include="Models\UserPlaylist.cs" />
+
     <Compile Include="Models\LoopMode.cs" />
     <Compile Include="Controls\InputDialog.cs">
       <SubType>Form</SubType>

@@ -112,6 +112,20 @@ namespace KahoiiMusic.Services
             }
             return null;
         }
+        public static string GetTrackAuthor(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            lock (_lock)
+            {
+                var match = _history.Find(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+                if (match != null && !string.IsNullOrWhiteSpace(match.Author))
+                {
+                    return match.Author;
+                }
+            }
+            return null;
+        }
+
 
         public static void AddTrack(PlaylistItem item)
         {
@@ -127,6 +141,10 @@ namespace KahoiiMusic.Services
                     if (!string.IsNullOrWhiteSpace(item.Title) && item.Title != "None" && item.Title != "NA" && !item.Title.StartsWith("Bài "))
                     {
                         existing.Title = item.Title;
+                    }
+                    if (!string.IsNullOrWhiteSpace(item.Author))
+                    {
+                        existing.Author = item.Author;
                     }
                     if (item.DurationSeconds > 0)
                     {
@@ -190,6 +208,39 @@ namespace KahoiiMusic.Services
                     }
                 }
             }
+            if (changed)
+            {
+                HistoryChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
+
+                public static void UpdateTitleAndAuthor(string id, string newTitle, string newAuthor)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return;
+
+            bool changed = false;
+            lock (_lock)
+            {
+                var match = _history.Find(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(newTitle) && match.Title != newTitle && newTitle != "None" && newTitle != "NA" && !newTitle.StartsWith("Bài "))
+                    {
+                        match.Title = newTitle;
+                        changed = true;
+                    }
+                    if (!string.IsNullOrWhiteSpace(newAuthor) && match.Author != newAuthor)
+                    {
+                        match.Author = newAuthor;
+                        changed = true;
+                    }
+                    if (changed)
+                    {
+                        SaveHistory();
+                    }
+                }
+            }
+
             if (changed)
             {
                 HistoryChanged?.Invoke(null, EventArgs.Empty);

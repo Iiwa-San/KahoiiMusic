@@ -6,6 +6,13 @@ namespace KahoiiMusic.Models
     {
         public string Id { get; set; }
         public string Title { get; set; }
+        public string Author { get; set; }
+
+        public string Artist
+        {
+            get => Author;
+            set { if (!string.IsNullOrEmpty(value)) Author = value; }
+        }
         public int DurationSeconds { get; set; }
 
         public string Url

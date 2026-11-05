@@ -200,6 +200,17 @@ namespace KahoiiMusic
 
             // Audio Player Events
             _audioPlayer.StatusMessageChanged += AudioPlayer_StatusMessageChanged;
+            _audioPlayer.AuthorChanged += (s, author) =>
+            {
+                if (InvokeRequired)
+                {
+                    try { BeginInvoke(new Action(() => marqueeAuthor.Text = author ?? string.Empty)); } catch { }
+                }
+                else
+                {
+                    marqueeAuthor.Text = author ?? string.Empty;
+                }
+            };
             _audioPlayer.TitleChanged += (s, title) =>
             {
                 marqueeTitle.Text = title;
@@ -226,6 +237,8 @@ namespace KahoiiMusic
                     marqueeTitle.Text = curT;
                     UpdateTrayTooltip(curT);
                 }
+                string curA = !string.IsNullOrEmpty(args.Author) ? args.Author : _audioPlayer.CurrentAuthor;
+                marqueeAuthor.Text = curA ?? string.Empty;
                 if (btnQuickDownload != null)
                 {
                     btnQuickDownload.SetCurrentTrack(new PlaylistItem
@@ -310,6 +323,10 @@ namespace KahoiiMusic
             {
                 if (playlistPopup != null && playlistPopup.Visible)
                 {
+                    Point cur = Cursor.Position;
+                    if (playlistPopup.Bounds.Contains(cur)) return;
+                    if (playlistPopup.ContainsFocus) return;
+
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
                 }
@@ -762,6 +779,7 @@ namespace KahoiiMusic
                 btnPlayPause.IsPlaying = false;
                 playbackTimer.Stop();
                 marqueeTitle.Text = string.Empty;
+                marqueeAuthor.Text = string.Empty;
                 btnPlaylist.HasPlaylist = false;
                 btnPlaylist.IsOpen = false;
                 playlistPopup.Visible = false;

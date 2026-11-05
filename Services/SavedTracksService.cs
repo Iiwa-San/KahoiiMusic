@@ -82,6 +82,33 @@ namespace KahoiiMusic.Services
             }
         }
 
+        
+        public void UpdateTitleAndAuthor(string videoId, string newTitle, string newAuthor)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return;
+            bool changed = false;
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                var match = _savedTracks.Find(x => string.Equals(x.Id, videoId, StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(newTitle) && match.Title != newTitle && newTitle != "None" && newTitle != "NA" && !newTitle.StartsWith("Bài "))
+                    {
+                        match.Title = newTitle;
+                        changed = true;
+                    }
+                    if (!string.IsNullOrWhiteSpace(newAuthor) && match.Author != newAuthor)
+                    {
+                        match.Author = newAuthor;
+                        changed = true;
+                    }
+                    if (changed) SaveToFile();
+                }
+            }
+            if (changed) SavedTracksChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         public string GetTrackTitle(string videoId)
         {
             if (string.IsNullOrWhiteSpace(videoId)) return null;
@@ -96,6 +123,21 @@ namespace KahoiiMusic.Services
             }
             return null;
         }
+        public string GetTrackAuthor(string videoId)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return null;
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                var match = _savedTracks.Find(x => string.Equals(x.Id, videoId, StringComparison.OrdinalIgnoreCase));
+                if (match != null && !string.IsNullOrWhiteSpace(match.Author))
+                {
+                    return match.Author;
+                }
+            }
+            return null;
+        }
+
 
         public bool IsTrackSaved(string videoId)
         {

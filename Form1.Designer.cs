@@ -39,6 +39,7 @@ namespace KahoiiMusic
             this.volumePopup = new KahoiiMusic.Controls.VolumePopup();
             this.artworkBox = new KahoiiMusic.Controls.ArtworkBox();
             this.marqueeTitle = new KahoiiMusic.Controls.MarqueeLabel();
+            this.marqueeAuthor = new KahoiiMusic.Controls.MarqueeLabel();
             this.panelBottomControls = new System.Windows.Forms.Panel();
             this.btnVolume = new KahoiiMusic.Controls.VolumeButton();
             this.btnPrevious = new KahoiiMusic.Controls.DirectionalButton();
@@ -127,6 +128,7 @@ namespace KahoiiMusic
             this.gradientPanel.Controls.Add(this.volumePopup);
             this.gradientPanel.Controls.Add(this.artworkBox);
             this.gradientPanel.Controls.Add(this.marqueeTitle);
+            this.gradientPanel.Controls.Add(this.marqueeAuthor);
             this.gradientPanel.Location = new System.Drawing.Point(0, 30);
             this.gradientPanel.Name = "gradientPanel";
             this.gradientPanel.Size = new System.Drawing.Size(476, 192);
@@ -157,13 +159,24 @@ namespace KahoiiMusic
             // marqueeTitle
             // 
             this.marqueeTitle.BackColor = System.Drawing.Color.Transparent;
-            this.marqueeTitle.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.marqueeTitle.Location = new System.Drawing.Point(23, 166);
+            this.marqueeTitle.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.marqueeTitle.Location = new System.Drawing.Point(23, 163);
             this.marqueeTitle.Name = "marqueeTitle";
-            this.marqueeTitle.Size = new System.Drawing.Size(430, 22);
+            this.marqueeTitle.Size = new System.Drawing.Size(430, 20);
             this.marqueeTitle.TabIndex = 2;
             this.marqueeTitle.Text = "";
             this.marqueeTitle.TextColor = System.Drawing.Color.White;
+            // 
+            // marqueeAuthor
+            // 
+            this.marqueeAuthor.BackColor = System.Drawing.Color.Transparent;
+            this.marqueeAuthor.Font = new System.Drawing.Font("Segoe UI", 8.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.marqueeAuthor.Location = new System.Drawing.Point(23, 185);
+            this.marqueeAuthor.Name = "marqueeAuthor";
+            this.marqueeAuthor.Size = new System.Drawing.Size(430, 18);
+            this.marqueeAuthor.TabIndex = 3;
+            this.marqueeAuthor.Text = "";
+            this.marqueeAuthor.TextColor = System.Drawing.Color.FromArgb(((int)(((byte)(200)))), ((int)(((byte)(195)))), ((int)(((byte)(215)))));
             // 
             // panelBottomControls
             // 
@@ -351,6 +364,7 @@ namespace KahoiiMusic
         private System.Windows.Forms.PictureBox picLogo;
         private System.Windows.Forms.Label lblLogo;
         private KahoiiMusic.Controls.MarqueeLabel marqueeTitle;
+        private KahoiiMusic.Controls.MarqueeLabel marqueeAuthor;
         private System.Windows.Forms.Label btnClose;
         private System.Windows.Forms.Label btnMinimize;
         private KahoiiMusic.Controls.UserAccountButton btnUser;
