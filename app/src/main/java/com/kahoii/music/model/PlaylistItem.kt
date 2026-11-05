@@ -26,10 +26,19 @@ data class PlaylistItem(
 ) : Serializable {
 
     val safeTitle: String
-        get() = (title as? String?).orEmpty()
+        get() = com.kahoii.music.util.ArtistUtils.cleanDisplayTitle((title as? String?).orEmpty())
 
     val safeArtist: String
         get() = (artist as? String?).orEmpty()
+
+    val displayArtist: String
+        get() {
+            val a = com.kahoii.music.util.ArtistUtils.cleanArtist(safeArtist)
+            if (a.isNotBlank() && !a.equals("YouTube", ignoreCase = true) && !a.equals("NA", ignoreCase = true) && !a.equals("None", ignoreCase = true)) {
+                return a
+            }
+            return ""
+        }
 
     val safeId: String
         get() = (id as? String?).orEmpty()

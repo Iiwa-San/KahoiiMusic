@@ -195,7 +195,13 @@ object MusicQueueManager {
                     queue.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
                 } else -1
 
-                if (currIdx >= 0 && currIdx + 1 < queue.size) {
+                val canPlayNext = if (currIdx >= 0) {
+                    currIdx + 1 < queue.size
+                } else {
+                    queue.isNotEmpty()
+                }
+
+                if (canPlayNext) {
                     playNext()
                     serviceScope.launch {
                         delay(800)
@@ -222,9 +228,17 @@ object MusicQueueManager {
             return
         }
         if (queue.size == 1) {
-            player?.seekTo(0L)
-            player?.play()
-            return
+            if (currentTrack?.id == queue[0].id) {
+                player?.seekTo(0L)
+                player?.play()
+                return
+            } else {
+                currentIndex = 0
+                val nextTrack = queue[0]
+                onPlaylistIndexChanged?.invoke(0)
+                playTrack(nextTrack)
+                return
+            }
         }
 
         val currentId = currentTrack?.id
@@ -380,9 +394,6 @@ object MusicQueueManager {
                     currentTrack = resolvedTrack
                     playStreamUrl(stream.audioUrl, resolvedTrack, stream.artworkBytes)
 
-                    serviceScope.launch(Dispatchers.IO) {
-                        savedRepo?.cacheTempAudio(resolvedTrack.id, stream.audioUrl, stream.contentLength)
-                    }
                     preloadNextTrack(resolvedTrack.id)
                     onResolved?.invoke(resolvedTrack)
                 }.onFailure { err ->
@@ -404,7 +415,7 @@ object MusicQueueManager {
         val p = player ?: return
         val mediaMetadata = MediaMetadata.Builder()
             .setTitle(track.title)
-            .setArtist(track.artist)
+            .setArtist(track.displayArtist.ifBlank { track.artist })
             .setArtworkUri(Uri.parse(track.thumbnailUrl))
             .apply {
                 if (artworkBytes != null && artworkBytes.isNotEmpty()) {

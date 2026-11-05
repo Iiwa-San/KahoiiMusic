@@ -235,24 +235,137 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val listId = YouTubeRepository.extractPlaylistId(trimmed)
             val videoId = YouTubeRepository.extractVideoId(trimmed)
 
-            // 1. If a single video ID is found
-            if (!videoId.isNullOrBlank()) {
-                playVideoById(videoId)
+            // If a playlist is specified in URL (pure playlist or video+playlist)
+            if (!listId.isNullOrBlank()) {
+                val isCurrentlyPlaying = _uiState.value.status == PlaybackStatus.PLAYING || _uiState.value.currentTrack != null
+                if (isCurrentlyPlaying) {
+                    // Do NOT interrupt the current song!
+                    // Clear old playlist from queue and load new playlist in background.
+                    // The current song continues playing and is kept in history.
+                    loadPlaylistWithoutInterrupting(trimmed, listId)
+                    return@launch
+                }
 
-                if (!listId.isNullOrBlank()) {
+                // If not playing, load and play
+                if (!videoId.isNullOrBlank()) {
+                    playVideoById(videoId)
                     loadPlaylistBackground(trimmed, videoId)
+                } else {
+                    loadPlaylist(trimmed, null)
                 }
                 return@launch
             }
 
-            // 2. If a pure playlist URL was provided
-            if (!listId.isNullOrBlank()) {
-                loadPlaylist(trimmed, null)
+            // 1. If a single video ID is found
+            if (!videoId.isNullOrBlank()) {
+                val isCurrentlyPlaying = _uiState.value.status == PlaybackStatus.PLAYING || _uiState.value.currentTrack != null
+                if (isCurrentlyPlaying) {
+                    loadSingleTrackWithoutInterrupting(videoId)
+                    return@launch
+                }
+                playVideoById(videoId)
                 return@launch
             }
 
             // 3. Otherwise search query
             searchAndPlayTop(trimmed)
+        }
+    }
+
+    private fun loadSingleTrackWithoutInterrupting(videoId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isPlaylistLoading = true, statusMessage = "Đang nạp bài hát vào danh sách phát...") }
+            val current = _uiState.value.currentTrack
+            current?.let { historyRepository.addTrack(it) }
+
+            val streamRes = youTubeRepository.resolveAudio(videoId)
+            val title = streamRes.getOrNull()?.title ?: "Bài hát"
+            val artist = streamRes.getOrNull()?.artist ?: ""
+            val duration = streamRes.getOrNull()?.durationSeconds ?: 0
+
+            val singleItem = PlaylistItem(
+                id = videoId,
+                title = title,
+                artist = artist,
+                durationSeconds = duration
+            )
+            val items = listOf(singleItem)
+
+            _uiState.update {
+                it.copy(
+                    playlist = items,
+                    isPlaylistLoading = false,
+                    currentPlaylistId = null,
+                    currentPlaylistIndex = -1,
+                    activeQueueSource = ActiveQueueSource.PLAYLIST,
+                    statusMessage = "Đã nạp 1 bài vào danh sách phát"
+                )
+            }
+
+            com.kahoii.music.service.MusicQueueManager.activeQueue = items
+            com.kahoii.music.service.MusicQueueManager.activeQueueSource = ActiveQueueSource.PLAYLIST
+            com.kahoii.music.service.MusicQueueManager.currentIndex = -1
+
+            streamRes.onSuccess { stream ->
+                savedTracksRepository.cacheTempAudio(videoId, stream.audioUrl, stream.contentLength)
+            }
+            cleanUnusedTempAudio()
+        }
+    }
+
+    private fun loadPlaylistWithoutInterrupting(playlistUrl: String, listId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isPlaylistLoading = true, statusMessage = "Đang nạp danh sách mới...") }
+            val current = _uiState.value.currentTrack
+            val currentId = current?.id
+
+            // Ensure current track is kept in history
+            current?.let { historyRepository.addTrack(it) }
+
+            val targetVideoId = YouTubeRepository.extractVideoId(playlistUrl)
+            val result = youTubeRepository.resolvePlaylist(playlistUrl, targetVideoId)
+            result.onSuccess { items ->
+                if (items.isNotEmpty()) {
+                    val targetIndex = if (!currentId.isNullOrBlank()) {
+                        items.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
+                    } else -1
+
+                    _uiState.update {
+                        it.copy(
+                            playlist = items,
+                            isPlaylistLoading = false,
+                            currentPlaylistId = listId,
+                            currentPlaylistIndex = if (targetIndex >= 0) targetIndex else -1,
+                            activeQueueSource = ActiveQueueSource.PLAYLIST,
+                            statusMessage = "Đã nạp ${items.size} bài vào danh sách phát"
+                        )
+                    }
+
+                    // Update activeQueue in MusicQueueManager to new playlist
+                    com.kahoii.music.service.MusicQueueManager.activeQueue = items
+                    com.kahoii.music.service.MusicQueueManager.activeQueueSource = ActiveQueueSource.PLAYLIST
+                    com.kahoii.music.service.MusicQueueManager.currentIndex = if (targetIndex >= 0) targetIndex else -1
+
+                    // Preload ONLY the 1 next track ahead
+                    val nextTrackToPreload = if (targetIndex >= 0 && targetIndex + 1 < items.size) {
+                        items[targetIndex + 1]
+                    } else {
+                        items[0]
+                    }
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val streamRes = youTubeRepository.resolveAudio(nextTrackToPreload.id)
+                        streamRes.onSuccess { stream ->
+                            savedTracksRepository.cacheTempAudio(nextTrackToPreload.id, stream.audioUrl, stream.contentLength)
+                        }
+                    }
+
+                    cleanUnusedTempAudio()
+                } else {
+                    _uiState.update { it.copy(isPlaylistLoading = false, statusMessage = "Danh sách phát trống") }
+                }
+            }.onFailure { err ->
+                _uiState.update { it.copy(isPlaylistLoading = false, statusMessage = "Lỗi nạp danh sách: ${err.message}") }
+            }
         }
     }
 
@@ -486,10 +599,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Play in ExoPlayer
                 playStreamUrl(stream.audioUrl, resolvedTrack, stream.artworkBytes)
 
-                // Background auto-cache current track & preload next 1 track
-                viewModelScope.launch(Dispatchers.IO) {
-                    savedTracksRepository.cacheTempAudio(resolvedTrack.id, stream.audioUrl, stream.contentLength)
-                }
+                // Preload only 1 next track ahead & clean old session audio
                 preloadNextTrack(resolvedTrack.id)
                 cleanUnusedTempAudio()
             }.onFailure { error ->
@@ -566,7 +676,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val mediaMetadata = MediaMetadata.Builder()
             .setTitle(track.title)
-            .setArtist(track.artist)
+            .setArtist(track.displayArtist.ifBlank { track.artist })
             .setArtworkUri(Uri.parse(track.thumbnailUrl))
             .apply {
                 if (artworkBytes != null && artworkBytes.isNotEmpty()) {
@@ -811,8 +921,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val protectedSet = mutableSetOf<String>()
             _uiState.value.currentTrack?.let { protectedSet.add(it.id) }
-            _uiState.value.activeQueue.forEach { protectedSet.add(it.id) }
-            _uiState.value.playlist.forEach { protectedSet.add(it.id) }
+
+            // Only protect the 1 next preloaded track in queue
+            val queue = _uiState.value.activeQueue
+            val curId = _uiState.value.currentTrack?.id
+            val curIdx = if (!curId.isNullOrBlank()) queue.indexOfFirst { it.id.equals(curId, ignoreCase = true) } else -1
+            val nextIdx = if (curIdx >= 0) curIdx + 1 else 0
+            if (nextIdx in queue.indices) {
+                protectedSet.add(queue[nextIdx].id)
+            }
+
             savedTracksRepository.cleanUnusedTempAudio(protectedSet)
         }
     }

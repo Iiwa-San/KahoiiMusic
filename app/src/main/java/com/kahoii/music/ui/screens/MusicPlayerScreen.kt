@@ -278,7 +278,7 @@ fun MusicPlayerScreen(
                     val subtitle = when {
                         uiState.currentTrack != null -> {
                             val queueInfo = uiState.activeQueueTitle
-                            val artist = uiState.currentTrack?.artist?.ifBlank { "YouTube" } ?: "YouTube"
+                            val artist = uiState.currentTrack?.displayArtist?.ifBlank { "YouTube" } ?: "YouTube"
                             val offlineTag = if (uiState.currentTrack?.isOffline == true) " • Offline" else ""
                             "$queueInfo • $artist$offlineTag"
                         }

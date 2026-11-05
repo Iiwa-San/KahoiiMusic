@@ -1,6 +1,7 @@
 package com.kahoii.music.data
 
 import com.kahoii.music.model.PlaylistItem
+import com.kahoii.music.util.ArtistUtils.cleanArtist
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -243,7 +244,8 @@ class YouTubeRepository {
 
             val videoDetails = root.optJSONObject("videoDetails")
             val title = videoDetails?.optString("title", "Kahoii Music") ?: "Kahoii Music"
-            val artist = videoDetails?.optString("author", "") ?: ""
+            val rawArtist = videoDetails?.optString("author", "") ?: ""
+            val artist = cleanArtist(rawArtist)
             val durationSeconds = videoDetails?.optInt("lengthSeconds", 0) ?: 0
 
             val streamingData = root.optJSONObject("streamingData") ?: return null
@@ -324,7 +326,8 @@ class YouTubeRepository {
 
             val videoDetails = root.optJSONObject("videoDetails")
             val title = videoDetails?.optString("title", "Kahoii Music") ?: "Kahoii Music"
-            val artist = videoDetails?.optString("author", "") ?: ""
+            val rawArtist = videoDetails?.optString("author", "") ?: ""
+            val artist = cleanArtist(rawArtist)
             val durationSeconds = videoDetails?.optInt("lengthSeconds", 0) ?: 0
 
             val streamingData = root.optJSONObject("streamingData") ?: return null
@@ -387,7 +390,8 @@ class YouTubeRepository {
                     val root = JSONObject(body)
 
                     val title = root.optString("title", "Kahoii Music")
-                    val artist = root.optString("uploader", "")
+                    val rawArtist = root.optString("uploader", "")
+                    val artist = cleanArtist(rawArtist)
                     val duration = root.optInt("duration", 0)
                     val audioStreams = root.optJSONArray("audioStreams") ?: return@use
 
@@ -441,7 +445,8 @@ class YouTubeRepository {
                     val root = JSONObject(body)
 
                     val title = root.optString("title", "Kahoii Music")
-                    val artist = root.optString("author", "")
+                    val rawArtist = root.optString("author", "")
+                    val artist = cleanArtist(rawArtist)
                     val duration = root.optInt("lengthSeconds", 0)
                     val adaptiveFormats = root.optJSONArray("adaptiveFormats") ?: return@use
 
@@ -546,11 +551,12 @@ class YouTubeRepository {
 
                             val durationSeconds = parseDurationToSeconds(lengthText)
 
+                            val finalArtist = cleanArtist(artist)
                             items.add(
                                 PlaylistItem(
                                     id = videoId,
                                     title = title,
-                                    artist = artist,
+                                    artist = finalArtist,
                                     durationSeconds = durationSeconds
                                 )
                             )
@@ -703,7 +709,8 @@ class YouTubeRepository {
             }
             val durationSeconds = parseDurationToSeconds(durText)
 
-            items.add(PlaylistItem(id = id, title = title, artist = artist, durationSeconds = durationSeconds))
+            val finalArtist = cleanArtist(artist)
+            items.add(PlaylistItem(id = id, title = title, artist = finalArtist, durationSeconds = durationSeconds))
         }
 
         // 2. Try playlistPanelVideoRenderer (Mix / Radio format)
@@ -730,7 +737,8 @@ class YouTubeRepository {
                 }
                 val durationSeconds = parseDurationToSeconds(durText)
 
-                items.add(PlaylistItem(id = id, title = title, artist = artist, durationSeconds = durationSeconds))
+                val finalArtist = cleanArtist(artist)
+            items.add(PlaylistItem(id = id, title = title, artist = finalArtist, durationSeconds = durationSeconds))
             }
         }
 
@@ -759,7 +767,8 @@ class YouTubeRepository {
                     }
                 }
 
-                items.add(PlaylistItem(id = id, title = title, artist = artist, durationSeconds = durationSeconds))
+                val finalArtist = cleanArtist(artist)
+            items.add(PlaylistItem(id = id, title = title, artist = finalArtist, durationSeconds = durationSeconds))
             }
         }
 

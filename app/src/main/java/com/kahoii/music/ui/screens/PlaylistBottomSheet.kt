@@ -32,8 +32,12 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.graphics.SolidColor
 import com.kahoii.music.ui.components.AddToCollectionDialog
+import com.kahoii.music.util.ArtistUtils.removeDiacritics
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -139,6 +143,13 @@ fun PlaylistBottomSheet(
     var inspectingCollectionId by remember { mutableStateOf<String?>(null) }
     var trackForCollectionPicker by remember { mutableStateOf<PlaylistItem?>(null) }
 
+    var searchPlaylistQuery by remember { mutableStateOf("") }
+    var searchCollectionsQuery by remember { mutableStateOf("") }
+    var searchCollectionTracksQuery by remember { mutableStateOf("") }
+    var searchSavedQuery by remember { mutableStateOf("") }
+    var searchHistoryQuery by remember { mutableStateOf("") }
+    var searchFavoritesQuery by remember { mutableStateOf("") }
+
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
@@ -240,6 +251,17 @@ fun PlaylistBottomSheet(
 
             // ================= TAB 0: PLAYLIST QUEUE =================
             if (selectedTab == 0) {
+                val filteredPlaylist = remember(playlist, searchPlaylistQuery) {
+                    if (searchPlaylistQuery.isBlank()) playlist
+                    else {
+                        val q = removeDiacritics(searchPlaylistQuery)
+                        playlist.filter {
+                            removeDiacritics(it.title).contains(q) ||
+                            removeDiacritics(it.displayArtist).contains(q)
+                        }
+                    }
+                }
+
                 if (playlist.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -249,7 +271,8 @@ fun PlaylistBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Danh sách chờ (${playlist.size} bài)",
+                            text = if (searchPlaylistQuery.isBlank()) "Danh sách chờ (${playlist.size} bài)"
+                                   else "Kết quả (${filteredPlaylist.size}/${playlist.size} bài)",
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = 12.sp
                         )
@@ -307,6 +330,12 @@ fun PlaylistBottomSheet(
                             }
                         }
                     }
+
+                    PlaylistSearchBar(
+                        query = searchPlaylistQuery,
+                        onQueryChange = { searchPlaylistQuery = it },
+                        placeholder = "Tìm trong danh sách chờ..."
+                    )
                 }
 
                 if (isPlaylistLoading) {
@@ -336,31 +365,46 @@ fun PlaylistBottomSheet(
                             textAlign = TextAlign.Center
                         )
                     }
+                } else if (filteredPlaylist.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Không tìm thấy bài hát nào phù hợp với \"$searchPlaylistQuery\"",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
-                        itemsIndexed(playlist, key = { index, item -> "pl_${item.id}_$index" }) { index, item ->
+                        itemsIndexed(filteredPlaylist, key = { index, item -> "pl_${item.id}_$index" }) { index, item ->
                             val isPlayingThis = item.id.equals(currentTrackId, ignoreCase = true)
                             val isSaved = savedTracks.any { it.id.equals(item.id, ignoreCase = true) }
                             val isFav = favorites.any { it.id.equals(item.id, ignoreCase = true) }
                             val isDownloading = downloadingTrackIds.contains(item.id)
+                            val originalIndex = playlist.indexOfFirst { it.id == item.id }.takeIf { it >= 0 } ?: index
 
                             TrackRow(
                                 item = item,
-                                index = index + 1,
+                                index = originalIndex + 1,
                                 isPlaying = isPlayingThis,
                                 isSaved = isSaved,
                                 isFavorite = isFav,
                                 isDownloading = isDownloading,
                                 currentDurationMs = currentDurationMs,
-                                onClick = { onPlaylistTrackSelected(item, index) },
+                                onClick = { onPlaylistTrackSelected(item, originalIndex) },
                                 onDownload = { onDownloadTrack(item) },
                                 onToggleFavorite = { onToggleFavorite(item) },
                                 onAddToCollection = { trackForCollectionPicker = item },
-                                onDelete = { onRemoveFromPlaylist(index) },
+                                onDelete = { onRemoveFromPlaylist(originalIndex) },
                                 deleteIcon = Icons.Default.Close,
                                 deleteContentDescription = "Xóa khỏi danh sách"
                             )
@@ -372,7 +416,18 @@ fun PlaylistBottomSheet(
             else if (selectedTab == 1) {
                 val currentInspecting = playlists.find { it.id == inspectingCollectionId }
                 if (currentInspecting != null) {
-                    // Chi tiết 1 bộ sưu tập
+                    // Chi tiết 1 bộ sưu tập (Có thanh tìm kiếm riêng cho bài hát trong BST)
+                    val filteredCollectionTracks = remember(currentInspecting.items, searchCollectionTracksQuery) {
+                        if (searchCollectionTracksQuery.isBlank()) currentInspecting.items
+                        else {
+                            val q = removeDiacritics(searchCollectionTracksQuery)
+                            currentInspecting.items.filter {
+                                removeDiacritics(it.title).contains(q) ||
+                                removeDiacritics(it.displayArtist).contains(q)
+                            }
+                        }
+                    }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -384,7 +439,10 @@ fun PlaylistBottomSheet(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { inspectingCollectionId = null }
+                                .clickable {
+                                    inspectingCollectionId = null
+                                    searchCollectionTracksQuery = ""
+                                }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
@@ -456,6 +514,14 @@ fun PlaylistBottomSheet(
                         }
                     }
 
+                    if (currentInspecting.items.isNotEmpty()) {
+                        PlaylistSearchBar(
+                            query = searchCollectionTracksQuery,
+                            onQueryChange = { searchCollectionTracksQuery = it },
+                            placeholder = "Tìm bài hát trong ${currentInspecting.name}..."
+                        )
+                    }
+
                     if (currentInspecting.items.isEmpty()) {
                         Box(
                             modifier = Modifier
@@ -470,27 +536,42 @@ fun PlaylistBottomSheet(
                                 textAlign = TextAlign.Center
                             )
                         }
+                    } else if (filteredCollectionTracks.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Không tìm thấy bài hát nào phù hợp với \"$searchCollectionTracksQuery\"",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
                         ) {
-                            itemsIndexed(currentInspecting.items, key = { index, item -> "coll_${item.id}_$index" }) { index, item ->
+                            itemsIndexed(filteredCollectionTracks, key = { index, item -> "coll_${item.id}_$index" }) { index, item ->
                                 val isPlayingThis = item.id.equals(currentTrackId, ignoreCase = true)
                                 val isSaved = savedTracks.any { it.id.equals(item.id, ignoreCase = true) }
                                 val isFav = favorites.any { it.id.equals(item.id, ignoreCase = true) }
                                 val isDownloading = downloadingTrackIds.contains(item.id)
+                                val originalIndex = currentInspecting.items.indexOfFirst { it.id == item.id }.takeIf { it >= 0 } ?: index
 
                                 TrackRow(
                                     item = item,
-                                    index = index + 1,
+                                    index = originalIndex + 1,
                                     isPlaying = isPlayingThis,
                                     isSaved = isSaved,
                                     isFavorite = isFav,
                                     isDownloading = isDownloading,
                                     currentDurationMs = currentDurationMs,
-                                    onClick = { onCollectionTrackSelected(currentInspecting, index) },
+                                    onClick = { onCollectionTrackSelected(currentInspecting, originalIndex) },
                                     onDownload = { onDownloadTrack(item) },
                                     onToggleFavorite = { onToggleFavorite(item) },
                                     onDelete = { onRemoveTrackFromCollection(currentInspecting.id, item.id) },
@@ -501,7 +582,17 @@ fun PlaylistBottomSheet(
                         }
                     }
                 } else {
-                    // Danh sách tất cả các bộ sưu tập đã lưu
+                    // Danh sách tất cả các bộ sưu tập đã lưu (Có thanh tìm kiếm riêng cho tên bộ sưu tập)
+                    val filteredPlaylists = remember(playlists, searchCollectionsQuery) {
+                        if (searchCollectionsQuery.isBlank()) playlists
+                        else {
+                            val q = removeDiacritics(searchCollectionsQuery)
+                            playlists.filter {
+                                removeDiacritics(it.name).contains(q)
+                            }
+                        }
+                    }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -510,7 +601,8 @@ fun PlaylistBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${playlists.size} bộ sưu tập đã lưu",
+                            text = if (searchCollectionsQuery.isBlank()) "${playlists.size} bộ sưu tập đã lưu"
+                                   else "Kết quả (${filteredPlaylists.size}/${playlists.size} bộ sưu tập)",
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = 12.sp
                         )
@@ -542,6 +634,14 @@ fun PlaylistBottomSheet(
                         }
                     }
 
+                    if (playlists.isNotEmpty()) {
+                        PlaylistSearchBar(
+                            query = searchCollectionsQuery,
+                            onQueryChange = { searchCollectionsQuery = it },
+                            placeholder = "Tìm bộ sưu tập..."
+                        )
+                    }
+
                     if (playlists.isEmpty()) {
                         Box(
                             modifier = Modifier
@@ -556,20 +656,37 @@ fun PlaylistBottomSheet(
                                 textAlign = TextAlign.Center
                             )
                         }
+                    } else if (filteredPlaylists.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Không tìm thấy bộ sưu tập nào phù hợp với \"$searchCollectionsQuery\"",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
                         ) {
-                            itemsIndexed(playlists, key = { index, item -> "user_pl_${item.id}_$index" }) { index, p ->
+                            itemsIndexed(filteredPlaylists, key = { index, item -> "user_pl_${item.id}_$index" }) { index, p ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 12.dp, vertical = 4.dp)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(Color.White.copy(alpha = 0.05f))
-                                        .clickable { inspectingCollectionId = p.id }
+                                        .clickable {
+                                            searchCollectionTracksQuery = ""
+                                            inspectingCollectionId = p.id
+                                        }
                                         .padding(horizontal = 14.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -647,6 +764,17 @@ fun PlaylistBottomSheet(
             }
             // ================= TAB 2: SAVED (ĐÃ TẢI OFFLINE) =================
             else if (selectedTab == 2) {
+                val filteredSaved = remember(savedTracks, searchSavedQuery) {
+                    if (searchSavedQuery.isBlank()) savedTracks
+                    else {
+                        val q = removeDiacritics(searchSavedQuery)
+                        savedTracks.filter {
+                            removeDiacritics(it.title).contains(q) ||
+                            removeDiacritics(it.displayArtist).contains(q)
+                        }
+                    }
+                }
+
                 if (savedTracks.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -656,7 +784,8 @@ fun PlaylistBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${savedTracks.size} bài hát đã tải về máy",
+                            text = if (searchSavedQuery.isBlank()) "${savedTracks.size} bài hát đã tải về máy"
+                                   else "Kết quả (${filteredSaved.size}/${savedTracks.size} bài)",
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = 12.sp
                         )
@@ -684,6 +813,12 @@ fun PlaylistBottomSheet(
                             )
                         }
                     }
+
+                    PlaylistSearchBar(
+                        query = searchSavedQuery,
+                        onQueryChange = { searchSavedQuery = it },
+                        placeholder = "Tìm bài hát đã tải..."
+                    )
                 }
 
                 if (savedTracks.isEmpty()) {
@@ -719,25 +854,40 @@ fun PlaylistBottomSheet(
                             )
                         }
                     }
+                } else if (filteredSaved.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Không tìm thấy bài hát nào phù hợp với \"$searchSavedQuery\"",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
-                        itemsIndexed(savedTracks, key = { index, item -> "saved_${item.id}_$index" }) { index, item ->
+                        itemsIndexed(filteredSaved, key = { index, item -> "saved_${item.id}_$index" }) { index, item ->
                             val isPlayingThis = item.id.equals(currentTrackId, ignoreCase = true)
                             val isFav = favorites.any { it.id.equals(item.id, ignoreCase = true) }
+                            val originalIndex = savedTracks.indexOfFirst { it.id == item.id }.takeIf { it >= 0 } ?: index
 
                             TrackRow(
                                 item = item,
-                                index = index + 1,
+                                index = originalIndex + 1,
                                 isPlaying = isPlayingThis,
                                 isSaved = true,
                                 isFavorite = isFav,
                                 isDownloading = false,
                                 currentDurationMs = currentDurationMs,
-                                onClick = { onSavedTrackSelected(item, index) },
+                                onClick = { onSavedTrackSelected(item, originalIndex) },
                                 onAddToPlaylist = {
                                     onAddToPlaylist(item)
                                 },
@@ -753,6 +903,17 @@ fun PlaylistBottomSheet(
             }
             // ================= TAB 3: HISTORY =================
             else if (selectedTab == 3) {
+                val filteredHistory = remember(history, searchHistoryQuery) {
+                    if (searchHistoryQuery.isBlank()) history
+                    else {
+                        val q = removeDiacritics(searchHistoryQuery)
+                        history.filter {
+                            removeDiacritics(it.title).contains(q) ||
+                            removeDiacritics(it.displayArtist).contains(q)
+                        }
+                    }
+                }
+
                 if (history.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -762,7 +923,8 @@ fun PlaylistBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Lịch sử đã nghe gần đây",
+                            text = if (searchHistoryQuery.isBlank()) "Lịch sử đã nghe gần đây"
+                                   else "Kết quả (${filteredHistory.size}/${history.size} bài)",
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = 12.sp
                         )
@@ -789,6 +951,12 @@ fun PlaylistBottomSheet(
                             )
                         }
                     }
+
+                    PlaylistSearchBar(
+                        query = searchHistoryQuery,
+                        onQueryChange = { searchHistoryQuery = it },
+                        placeholder = "Tìm trong lịch sử nghe..."
+                    )
                 }
 
                 if (history.isEmpty()) {
@@ -804,27 +972,42 @@ fun PlaylistBottomSheet(
                             fontSize = 13.sp
                         )
                     }
+                } else if (filteredHistory.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Không tìm thấy bài hát nào phù hợp với \"$searchHistoryQuery\"",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
-                        itemsIndexed(history, key = { index, item -> "hist_${item.id}_$index" }) { index, item ->
+                        itemsIndexed(filteredHistory, key = { index, item -> "hist_${item.id}_$index" }) { index, item ->
                             val isPlayingThis = item.id.equals(currentTrackId, ignoreCase = true)
                             val isSaved = savedTracks.any { it.id.equals(item.id, ignoreCase = true) }
                             val isFav = favorites.any { it.id.equals(item.id, ignoreCase = true) }
                             val isDownloading = downloadingTrackIds.contains(item.id)
+                            val originalIndex = history.indexOfFirst { it.id == item.id }.takeIf { it >= 0 } ?: index
 
                             TrackRow(
                                 item = item,
-                                index = index + 1,
+                                index = originalIndex + 1,
                                 isPlaying = isPlayingThis,
                                 isSaved = isSaved,
                                 isFavorite = isFav,
                                 isDownloading = isDownloading,
                                 currentDurationMs = currentDurationMs,
-                                onClick = { onHistoryTrackSelected(item, index) },
+                                onClick = { onHistoryTrackSelected(item, originalIndex) },
                                 onAddToPlaylist = {
                                     onAddToPlaylist(item)
                                 },
@@ -841,6 +1024,17 @@ fun PlaylistBottomSheet(
             }
             // ================= TAB 4: FAVORITES (YÊU THÍCH) =================
             else {
+                val filteredFavorites = remember(favorites, searchFavoritesQuery) {
+                    if (searchFavoritesQuery.isBlank()) favorites
+                    else {
+                        val q = removeDiacritics(searchFavoritesQuery)
+                        favorites.filter {
+                            removeDiacritics(it.title).contains(q) ||
+                            removeDiacritics(it.displayArtist).contains(q)
+                        }
+                    }
+                }
+
                 if (favorites.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -850,7 +1044,8 @@ fun PlaylistBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${favorites.size} bài hát đã thích",
+                            text = if (searchFavoritesQuery.isBlank()) "${favorites.size} bài hát đã thích"
+                                   else "Kết quả (${filteredFavorites.size}/${favorites.size} bài)",
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = 12.sp
                         )
@@ -878,6 +1073,12 @@ fun PlaylistBottomSheet(
                             )
                         }
                     }
+
+                    PlaylistSearchBar(
+                        query = searchFavoritesQuery,
+                        onQueryChange = { searchFavoritesQuery = it },
+                        placeholder = "Tìm trong bài hát yêu thích..."
+                    )
                 }
 
                 if (favorites.isEmpty()) {
@@ -913,26 +1114,41 @@ fun PlaylistBottomSheet(
                             )
                         }
                     }
+                } else if (filteredFavorites.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Không tìm thấy bài hát nào phù hợp với \"$searchFavoritesQuery\"",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
-                        itemsIndexed(favorites, key = { index, item -> "fav_${item.id}_$index" }) { index, item ->
+                        itemsIndexed(filteredFavorites, key = { index, item -> "fav_${item.id}_$index" }) { index, item ->
                             val isPlayingThis = item.id.equals(currentTrackId, ignoreCase = true)
                             val isSaved = savedTracks.any { it.id.equals(item.id, ignoreCase = true) }
                             val isDownloading = downloadingTrackIds.contains(item.id)
+                            val originalIndex = favorites.indexOfFirst { it.id == item.id }.takeIf { it >= 0 } ?: index
 
                             TrackRow(
                                 item = item,
-                                index = index + 1,
+                                index = originalIndex + 1,
                                 isPlaying = isPlayingThis,
                                 isSaved = isSaved,
                                 isFavorite = true,
                                 isDownloading = isDownloading,
                                 currentDurationMs = currentDurationMs,
-                                onClick = { onFavoriteTrackSelected(item, index) },
+                                onClick = { onFavoriteTrackSelected(item, originalIndex) },
                                 onAddToPlaylist = {
                                     onAddToPlaylist(item)
                                 },
@@ -1093,6 +1309,68 @@ fun PlaylistBottomSheet(
     }
 }
 
+@Composable
+private fun PlaylistSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Tìm kiếm",
+                tint = Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(modifier = Modifier.weight(1f)) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 13.sp
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Normal
+                    ),
+                    cursorBrush = SolidColor(NeonPink),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (query.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Xóa tìm kiếm",
+                    tint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clickable { onQueryChange("") }
+                )
+            }
+        }
+    }
+}
+
 private val CapsuleShape = RoundedCornerShape(percent = 50)
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1176,7 +1454,29 @@ private fun TrackRow(
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val artistText = item.displayArtist
+                if (artistText.isNotBlank()) {
+                    Text(
+                        text = artistText,
+                        color = Color.White.copy(alpha = 0.65f),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "•",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+
                 val durText = if (isPlaying && currentDurationMs > 0) {
                     val sec = (currentDurationMs / 1000).toInt()
                     val m = sec / 60
