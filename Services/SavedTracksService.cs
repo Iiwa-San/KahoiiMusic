@@ -111,6 +111,43 @@ namespace KahoiiMusic.Services
             }
         }
 
+        public bool IsInSavedList(string videoId)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return false;
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                return _savedTracks.Exists(t => string.Equals(t.Id, videoId, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        public void MergeSavedTracks(List<PlaylistItem> cloudTracks)
+        {
+            if (cloudTracks == null || cloudTracks.Count == 0) return;
+            bool changed = false;
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                foreach (var track in cloudTracks)
+                {
+                    if (string.IsNullOrWhiteSpace(track.Id)) continue;
+                    if (!_savedTracks.Exists(t => string.Equals(t.Id, track.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        _savedTracks.Add(track);
+                        changed = true;
+                    }
+                }
+                if (changed)
+                {
+                    SaveToFile();
+                }
+            }
+            if (changed)
+            {
+                SavedTracksChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
         public string FindSavedAudioFile(string videoId)
         {
             if (string.IsNullOrWhiteSpace(videoId)) return null;

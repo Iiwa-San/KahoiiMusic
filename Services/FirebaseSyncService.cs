@@ -40,7 +40,7 @@ namespace KahoiiMusic.Services
         private System.Threading.Timer _autoUploadTimer;
         private volatile bool _hasPendingAutoUpload = false;
         private readonly object _syncLock = new object();
-        private volatile bool _isApplyingCloudPayload = false;
+        private volatile bool _isApplyingCloudPayload = true;
         private volatile bool _isAutoSyncInitialized = false;
 
         private FirebaseSyncService()
@@ -147,39 +147,42 @@ namespace KahoiiMusic.Services
 
         public async Task TriggerAutoFetchAsync(Action<int> onDownloadingMissingTracks = null)
         {
-            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
+            if (!FirebaseAuthService.Instance.IsLoggedIn)
+            {
+                _isApplyingCloudPayload = false;
+                return;
+            }
+            CancelPendingAutoUpload();
+            _isApplyingCloudPayload = true;
             try
             {
                 var payload = await SyncFetchAsync();
                 if (payload != null)
                 {
-                    _isApplyingCloudPayload = true;
-                    try
-                    {
-                        ApplyCloudPayload(payload, onDownloadingMissingTracks);
-                    }
-                    finally
-                    {
-                        _isApplyingCloudPayload = false;
-                    }
-                }
-                else
-                {
-                    // Tài khoản mới chưa có tài liệu đám mây: tự động tạo bản lưu khởi tạo đầu tiên
-                    var localPayload = GetCurrentLocalPayload();
-                    await SyncUploadAsync(localPayload);
+                    ApplyCloudPayload(payload, onDownloadingMissingTracks);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                SyncStatusMessage = "Lỗi kết nối đám mây: " + ex.Message;
+            }
+            finally
+            {
+                await Task.Delay(800);
+                _isApplyingCloudPayload = false;
+                CancelPendingAutoUpload();
+            }
         }
 
         public async Task TriggerManualSyncAsync(Action<int> onDownloadingMissingTracks = null)
         {
             if (!FirebaseAuthService.Instance.IsLoggedIn) return;
             CancelPendingAutoUpload();
-            var localPayload = GetCurrentLocalPayload();
-            await SyncUploadAsync(localPayload);
+            // 1. Luôn PULL dữ liệu mới nhất từ đám mây về trước
             await TriggerAutoFetchAsync(onDownloadingMissingTracks);
+            // 2. Chỉ đẩy lên bản đã gộp đầy đủ sau khi đã đồng bộ
+            var mergedPayload = GetCurrentLocalPayload();
+            await SyncUploadAsync(mergedPayload);
         }
 
         public async Task<CloudMusicPayload> SyncFetchAsync()
@@ -380,13 +383,15 @@ namespace KahoiiMusic.Services
                 }
             }
 
-            // 3. Auto re-download saved tracks if missing locally
+            // 3. Gộp danh sách bài đã lưu từ đám mây vào metadata trước
             if (payload.savedTracks != null && payload.savedTracks.Count > 0)
             {
+                SavedTracksService.Instance.MergeSavedTracks(payload.savedTracks);
+
                 var missing = new List<PlaylistItem>();
                 foreach (var track in payload.savedTracks)
                 {
-                    if (!SavedTracksService.Instance.IsTrackSaved(track.Id))
+                    if (SavedTracksService.Instance.FindSavedAudioFile(track.Id) == null)
                     {
                         missing.Add(track);
                     }
