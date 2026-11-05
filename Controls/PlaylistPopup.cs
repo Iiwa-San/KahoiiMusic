@@ -1222,7 +1222,7 @@ namespace KahoiiMusic.Controls
             itemRemove.Click += (s, e) =>
             {
                 PlaylistCollectionService.Instance.RemoveTrackFromPlaylist(playlist.Id, item.Id);
-                if (AudioPlayer != null && AudioPlayer.CurrentPlaylistTitle == playlist.Name)
+                if (AudioPlayer != null && (string.Equals(AudioPlayer.CurrentPlaylistId, playlist.Id, StringComparison.OrdinalIgnoreCase) || string.Equals(AudioPlayer.CurrentPlaylistTitle, playlist.Name, StringComparison.OrdinalIgnoreCase)))
                 {
                     AudioPlayer.RemoveTrackById(item.Id);
                 }
@@ -1519,7 +1519,7 @@ namespace KahoiiMusic.Controls
             {
                 AudioPlayer.IsPlayingFromHistory = false;
                 AudioPlayer.CurrentPlaylistTitle = playlist.Name;
-                AudioPlayer.SetPlaylist(playlist.Items, startIndex);
+                                AudioPlayer.SetPlaylist(playlist.Items, startIndex, playlist.Name, playlist.Id);
                 AudioPlayer.PlayTrackAtIndex(startIndex);
                 AudioPlayer.RaiseStatus("Đang phát bộ sưu tập: " + playlist.Name);
             }

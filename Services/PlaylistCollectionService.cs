@@ -138,6 +138,42 @@ namespace KahoiiMusic.Services
             return false;
         }
 
+        public void AddOrMergeCollection(UserPlaylist col)
+        {
+            if (col == null) return;
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                var existing = _playlists.Find(p =>
+                    (!string.IsNullOrEmpty(col.Id) && string.Equals(p.Id, col.Id, StringComparison.OrdinalIgnoreCase)) ||
+                    string.Equals(p.Name, col.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (existing == null)
+                {
+                    _playlists.Insert(0, col);
+                    SaveToFile();
+                }
+                else
+                {
+                    if (existing.Items == null) existing.Items = new List<PlaylistItem>();
+                    if (col.Items != null)
+                    {
+                        bool changed = false;
+                        foreach (var item in col.Items)
+                        {
+                            if (!existing.Items.Exists(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                existing.Items.Add(item);
+                                changed = true;
+                            }
+                        }
+                        if (changed) SaveToFile();
+                    }
+                }
+            }
+            PlaylistsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         public bool RemoveTrackFromPlaylist(string playlistId, string videoId)
         {
             if (string.IsNullOrWhiteSpace(playlistId) || string.IsNullOrWhiteSpace(videoId)) return false;
@@ -226,7 +262,7 @@ namespace KahoiiMusic.Services
                         // Extract id, name, created from this playlist block
                         var mId = Regex.Match(plBlock, @"""id""\s*:\s*""([^""]*)""");
                         var mName = Regex.Match(plBlock, @"""name""\s*:\s*""((?:\\.|[^""])*)""");
-                        var mCreated = Regex.Match(plBlock, @"""created""\s*:\s*""([^""]*)""");
+                        var mCreated = Regex.Match(plBlock, @"""created""\s*:\s*""?([^"",}\s]+)""?");
 
                         string id = mId.Success ? mId.Groups[1].Value : Guid.NewGuid().ToString("N");
                         string name = mName.Success ? UnescapeJson(mName.Groups[1].Value) : "Playlist";
@@ -278,13 +314,20 @@ namespace KahoiiMusic.Services
                                 }
 
                                 string itemsBlock = plBlock.Substring(bStart, bEnd - bStart);
-                                var itemMatches = itemRegex.Matches(itemsBlock);
-                                foreach (Match im in itemMatches)
+                                var objRegex = new Regex(@"\{([^{}]+)\}");
+                                var objMatches = objRegex.Matches(itemsBlock);
+                                foreach (Match om in objMatches)
                                 {
-                                    string songId = im.Groups["id"].Value;
-                                    string title = UnescapeJson(im.Groups["title"].Value);
+                                    string block = om.Groups[1].Value;
+                                    var mSongId = Regex.Match(block, @"""id""\s*:\s*""([^""]*)""");
+                                    var mSongTitle = Regex.Match(block, @"""title""\s*:\s*""((?:\\.|[^""])*)""");
+                                    var mSongDur = Regex.Match(block, @"""duration""\s*:\s*(\d+)");
+
+                                    string songId = mSongId.Success ? mSongId.Groups[1].Value : null;
+                                    if (string.IsNullOrEmpty(songId)) continue;
+                                    string title = mSongTitle.Success ? UnescapeJson(mSongTitle.Groups[1].Value) : "Bài hát";
                                     int dur = 0;
-                                    int.TryParse(im.Groups["dur"].Value, out dur);
+                                    if (mSongDur.Success) int.TryParse(mSongDur.Groups[1].Value, out dur);
 
                                     pl.Items.Add(new PlaylistItem
                                     {

@@ -187,36 +187,32 @@ namespace KahoiiMusic.Services
 
         }
 
-        public LoopMode LoopMode
-
+                public LoopMode LoopMode
         {
-
             get => _loopMode;
-
             set
-
             {
-
                 _loopMode = value;
-
                 _isLooping = (value != LoopMode.Off);
-
-                lock (_lock)
-
+                if (value == LoopMode.Shuffle)
                 {
-
-                    if (_managedStream != null)
-
+                    lock (_shufflePlayedIndices)
                     {
-
-                        _managedStream.IsLooping = (value == LoopMode.One);
-
+                        _shufflePlayedIndices.Clear();
+                        if (_currentPlaylistIndex >= 0 && _playlist != null && _currentPlaylistIndex < _playlist.Count)
+                        {
+                            _shufflePlayedIndices.Add(_currentPlaylistIndex);
+                        }
                     }
-
                 }
-
+                lock (_lock)
+                {
+                    if (_managedStream != null)
+                    {
+                        _managedStream.IsLooping = (value == LoopMode.One);
+                    }
+                }
             }
-
         }
 
         public bool IsLooping
@@ -872,6 +868,7 @@ namespace KahoiiMusic.Services
 
             {
 
+                if (float.IsNaN(value) || float.IsInfinity(value)) value = 1.0f;
                 _volume = Math.Max(0.0f, Math.Min(1.0f, value));
 
                 lock (_lock)
@@ -1028,24 +1025,16 @@ namespace KahoiiMusic.Services
 
         }
 
-        public float Progress
-
+                public float Progress
         {
-
             get
-
             {
-
                 TimeSpan total = TotalDuration;
-
                 if (total <= TimeSpan.Zero) return 0f;
-
                 float p = (float)(Position.TotalSeconds / total.TotalSeconds);
-
+                if (float.IsNaN(p) || float.IsInfinity(p)) return 0f;
                 return Math.Max(0f, Math.Min(1f, p));
-
             }
-
         }
 
         public void Play()
@@ -1170,24 +1159,16 @@ namespace KahoiiMusic.Services
 
         }
 
-        public void SeekNormalized(float progress)
-
+                public void SeekNormalized(float progress)
         {
-
             TimeSpan total = TotalDuration;
-
             if (total > TimeSpan.Zero)
-
             {
-
+                if (float.IsNaN(progress) || float.IsInfinity(progress)) progress = 0f;
                 float clamped = Math.Max(0f, Math.Min(1f, progress));
-
                 TimeSpan target = TimeSpan.FromSeconds(total.TotalSeconds * clamped);
-
                 Position = target;
-
             }
-
         }
 
         public void PlayNext()
@@ -1425,27 +1406,18 @@ namespace KahoiiMusic.Services
             PlayTrackAtIndex(_currentPlaylistIndex);
         }
 
-        public void SetPlaylist(List<PlaylistItem> items, int initialIndex = 0)
-
+                public void SetPlaylist(List<PlaylistItem> items, int initialIndex = 0, string playlistTitle = null, string playlistId = null)
         {
             _isPlayingFromHistory = false;
-
             if (items == null || items.Count == 0)
-
             {
-
                 ClearPlaylist();
-
                 return;
-
             }
 
             _playlist = new List<PlaylistItem>(items);
-
-            _currentPlaylistId = null;
-
-            CurrentPlaylistTitle = null;
-
+            _currentPlaylistId = playlistId;
+            CurrentPlaylistTitle = playlistTitle;
             _currentPlaylistIndex = Math.Max(0, Math.Min(initialIndex, _playlist.Count - 1));
 
             ThreadPool.QueueUserWorkItem(_ => CleanUnusedTempAudio());
@@ -1522,34 +1494,34 @@ namespace KahoiiMusic.Services
 
         }
 
-        public void RemoveFromPlaylist(int index)
-
+                public void RemoveFromPlaylist(int index)
         {
-
             lock (_lock)
-
             {
-
                 if (_playlist == null || index < 0 || index >= _playlist.Count) return;
 
                 _playlist.RemoveAt(index);
 
+                lock (_shufflePlayedIndices)
+                {
+                    _shufflePlayedIndices.Remove(index);
+                    for (int i = 0; i < _shufflePlayedIndices.Count; i++)
+                    {
+                        if (_shufflePlayedIndices[i] > index)
+                        {
+                            _shufflePlayedIndices[i]--;
+                        }
+                    }
+                }
+
                 if (_currentPlaylistIndex == index)
-
                 {
-
-                    _currentPlaylistIndex = -1;
-
+                    _currentPlaylistIndex = Math.Max(-1, index - 1);
                 }
-
                 else if (_currentPlaylistIndex > index)
-
                 {
-
                     _currentPlaylistIndex--;
-
                 }
-
             }
 
             _syncContext.Post(delegate
@@ -2842,6 +2814,15 @@ namespace KahoiiMusic.Services
                         if (_loopMode == LoopMode.All || CanPlayNext)
                         {
                             PlayNext();
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        if (_loopMode == LoopMode.All || _loopMode == LoopMode.Shuffle)
+                        {
+                            Position = TimeSpan.Zero;
+                            Play();
                             return;
                         }
                     }

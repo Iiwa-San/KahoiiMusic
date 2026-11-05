@@ -40,6 +40,7 @@ namespace KahoiiMusic.Controls
             get { return _value; }
             set
             {
+                if (float.IsNaN(value) || float.IsInfinity(value)) value = 0.0f;
                 float clamped = Math.Max(0.0f, Math.Min(1.0f, value));
                 if (Math.Abs(_value - clamped) > 0.0001f)
                 {

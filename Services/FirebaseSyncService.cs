@@ -388,21 +388,9 @@ namespace KahoiiMusic.Services
             // 2. Merge Collections
             if (payload.collections != null)
             {
-                var localCollections = PlaylistCollectionService.Instance.GetPlaylists();
                 foreach (var col in payload.collections)
                 {
-                    var existing = localCollections.Find(x => string.Equals(x.Name, col.Name, StringComparison.OrdinalIgnoreCase));
-                    if (existing == null)
-                    {
-                        PlaylistCollectionService.Instance.SavePlaylist(col.Name, col.Items ?? new List<PlaylistItem>());
-                    }
-                    else if (col.Items != null)
-                    {
-                        foreach (var track in col.Items)
-                        {
-                            PlaylistCollectionService.Instance.AddTrackToPlaylist(existing.Id, track);
-                        }
-                    }
+                    PlaylistCollectionService.Instance.AddOrMergeCollection(col);
                 }
             }
 

@@ -597,6 +597,7 @@ namespace KahoiiMusic
 
         private void AudioPlayer_StatusMessageChanged(object sender, string status)
         {
+            if (_audioPlayer == null) return;
             if (string.IsNullOrEmpty(status))
             {
                 if (!string.IsNullOrEmpty(_audioPlayer.CurrentTitle))
@@ -612,7 +613,14 @@ namespace KahoiiMusic
                 }
                 else
                 {
-                    marqueeTitle.Text = !string.IsNullOrEmpty(_audioPlayer.CurrentTitle) ? _audioPlayer.CurrentTitle : status;
+                    if (!string.IsNullOrEmpty(_audioPlayer.CurrentTitle))
+                    {
+                        marqueeTitle.Text = _audioPlayer.CurrentTitle;
+                    }
+                    else if (!_audioPlayer.IsPlaying)
+                    {
+                        marqueeTitle.Text = status;
+                    }
                 }
             }
         }
@@ -624,16 +632,20 @@ namespace KahoiiMusic
 
         private void AudioPlayer_PlaybackStateChanged(object sender, EventArgs e)
         {
+            if (_audioPlayer == null) return;
             btnPlayPause.IsPlaying = _audioPlayer.IsPlaying;
             playbackTimer.Enabled = _audioPlayer.IsPlaying;
             artworkBox.IsSpinning = _audioPlayer.IsPlaying;
             if (_audioPlayer.HasTrack)
             {
                 artworkBox.TimeText = FormatTimeSpan(_audioPlayer.Position, _audioPlayer.TotalDuration);
-                if (!string.IsNullOrEmpty(_audioPlayer.CurrentTitle) && marqueeTitle.Text != _audioPlayer.CurrentTitle)
+                string titleToDisplay = !string.IsNullOrWhiteSpace(_audioPlayer.CurrentTitle)
+                    ? _audioPlayer.CurrentTitle
+                    : (!string.IsNullOrWhiteSpace(_audioPlayer.CurrentVideoId) ? "YouTube: " + _audioPlayer.CurrentVideoId : "Đang phát nhạc");
+                if (marqueeTitle.Text != titleToDisplay)
                 {
-                    marqueeTitle.Text = _audioPlayer.CurrentTitle;
-                    UpdateTrayTooltip(_audioPlayer.CurrentTitle);
+                    marqueeTitle.Text = titleToDisplay;
+                    UpdateTrayTooltip(titleToDisplay);
                 }
             }
         }
@@ -690,6 +702,7 @@ namespace KahoiiMusic
 
         private void PlaybackTimer_Tick(object sender, EventArgs e)
         {
+            if (_audioPlayer == null) return;
             // Only update trackbar position when audio is actually loaded and playing
             if (_audioPlayer.HasTrack)
             {
