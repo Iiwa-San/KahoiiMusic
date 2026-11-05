@@ -140,6 +140,7 @@ namespace KahoiiMusic.Controls
                     _collectionRightScroll = 0;
                     UpdateSearchBoxesVisibility();
                     ClampScroll();
+                    ClampCollectionScroll();
                     Invalidate();
                 }
             }
@@ -195,8 +196,8 @@ namespace KahoiiMusic.Controls
             Controls.Add(_searchTracksBox);
 
             _searchCollectionsBox = new PlaylistSearchBox("Tìm danh sách...");
-            _searchCollectionsBox.Location = new Point(8, HeaderHeight + 28);
-            _searchCollectionsBox.Size = new Size(LeftColWidth - 4, 22);
+            _searchCollectionsBox.Location = new Point(8, HeaderHeight + 29);
+            _searchCollectionsBox.Size = new Size(LeftColWidth, 22);
             _searchCollectionsBox.SearchTextChanged += (s, q) =>
             {
                 _searchCollectionsQuery = q;
@@ -210,7 +211,7 @@ namespace KahoiiMusic.Controls
             int rightColX = 8 + LeftColWidth + 8;
             int rightColW = Width - rightColX - 8;
             _searchCollectionTracksBox = new PlaylistSearchBox("Tìm bài hát...");
-            _searchCollectionTracksBox.Location = new Point(rightColX, HeaderHeight + 28);
+            _searchCollectionTracksBox.Location = new Point(rightColX, HeaderHeight + 29);
             _searchCollectionTracksBox.Size = new Size(rightColW, 22);
             _searchCollectionTracksBox.SearchTextChanged += (s, q) =>
             {
@@ -295,9 +296,33 @@ namespace KahoiiMusic.Controls
                 private void UpdateSearchBoxesVisibility()
         {
             bool isCol = (_activeTab == MenuTab.Collection);
-            if (_searchTracksBox != null) _searchTracksBox.Visible = !isCol;
-            if (_searchCollectionsBox != null) _searchCollectionsBox.Visible = isCol;
-            if (_searchCollectionTracksBox != null) _searchCollectionTracksBox.Visible = isCol;
+            if (_searchTracksBox != null)
+            {
+                _searchTracksBox.Visible = !isCol;
+                if (isCol)
+                {
+                    _searchTracksBox.Clear();
+                    _searchTracksQuery = string.Empty;
+                }
+            }
+            if (_searchCollectionsBox != null)
+            {
+                _searchCollectionsBox.Visible = isCol;
+                if (!isCol)
+                {
+                    _searchCollectionsBox.Clear();
+                    _searchCollectionsQuery = string.Empty;
+                }
+            }
+            if (_searchCollectionTracksBox != null)
+            {
+                _searchCollectionTracksBox.Visible = isCol;
+                if (!isCol)
+                {
+                    _searchCollectionTracksBox.Clear();
+                    _searchCollectionTracksQuery = string.Empty;
+                }
+            }
         }
 
 
@@ -342,6 +367,7 @@ namespace KahoiiMusic.Controls
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            UpdateSearchBoxesVisibility();
             RefreshHistory();
             RefreshSaved();
             RefreshPlaylists();
@@ -378,17 +404,18 @@ namespace KahoiiMusic.Controls
             int rightColW = Width - rightColX - 8;
             if (_searchCollectionsBox != null)
             {
-                _searchCollectionsBox.Size = new Size(leftColW - 4, 22);
+                _searchCollectionsBox.Location = new Point(8, HeaderHeight + 29);
+                _searchCollectionsBox.Size = new Size(leftColW, 22);
             }
             if (_searchCollectionTracksBox != null)
             {
-                _searchCollectionTracksBox.Location = new Point(rightColX, HeaderHeight + 28);
+                _searchCollectionTracksBox.Location = new Point(rightColX, HeaderHeight + 29);
                 _searchCollectionTracksBox.Size = new Size(rightColW, 22);
             }
-            if (IsHandleCreated)
-            {
-                UpdateRegion();
-            }
+            UpdateRegion();
+            ClampScroll();
+            ClampCollectionScroll();
+            Invalidate();
         }
 
         protected override void OnDeactivate(EventArgs e)
@@ -477,6 +504,7 @@ namespace KahoiiMusic.Controls
             base.OnVisibleChanged(e);
             if (Visible)
             {
+                UpdateSearchBoxesVisibility();
                 RefreshHistory();
                 RefreshSaved();
                 RefreshPlaylists();
@@ -628,7 +656,7 @@ namespace KahoiiMusic.Controls
 
         private void ClampCollectionScroll()
         {
-            int leftListTop = HeaderHeight + 54;
+            int leftListTop = HeaderHeight + 55;
             int listH = Height - leftListTop - 6;
 
             // Clamp left scroll
@@ -809,7 +837,7 @@ namespace KahoiiMusic.Controls
                 _isHoveringDownloadAllBtn = GetDownloadAllBtnRect().Contains(pt);
 
                 // Left column playlist items hover
-                int colListTop = HeaderHeight + 54;
+                int colListTop = HeaderHeight + 55;
                 int listBottom = Height - 6;
                 int leftColRight = 8 + LeftColWidth;
 
@@ -932,20 +960,22 @@ namespace KahoiiMusic.Controls
                 // Right click in Collection tab
                 if (_activeTab == MenuTab.Collection)
                 {
-                    int listTop = HeaderHeight + 28;
+                    int colListTop = HeaderHeight + 55;
                     int listBottom = Height - 6;
                     int leftColRight = 8 + LeftColWidth;
 
                     // Right click on Left Column playlist item
-                    if (e.X >= 8 && e.X <= leftColRight && e.Y >= listTop && e.Y <= listBottom)
+                    if (e.X >= 8 && e.X <= leftColRight && e.Y >= colListTop && e.Y <= listBottom)
                     {
-                        int relY = e.Y - listTop + _collectionLeftScroll;
+                        int relY = e.Y - colListTop + _collectionLeftScroll;
                         int idx = relY / CollectionRowHeight;
-                        if (idx >= 0 && idx < _collectionPlaylists.Count)
+                        var filteredPlaylists = FilteredCollectionPlaylists;
+                        if (idx >= 0 && idx < filteredPlaylists.Count)
                         {
-                            _selectedPlaylistIndex = idx;
+                            UserPlaylist clickedPl = filteredPlaylists[idx];
+                            _selectedPlaylistIndex = _collectionPlaylists.FindIndex(p => p.Id == clickedPl.Id);
                             Invalidate();
-                            ShowUserPlaylistContextMenu(_collectionPlaylists[idx], PointToScreen(e.Location));
+                            ShowUserPlaylistContextMenu(clickedPl, PointToScreen(e.Location));
                             return;
                         }
                     }
@@ -955,13 +985,16 @@ namespace KahoiiMusic.Controls
                     if (curP != null && curP.Items != null)
                     {
                         int rightColLeft = leftColRight + 8;
-                        if (e.X >= rightColLeft && e.X <= Width - 8 && e.Y >= listTop && e.Y <= listBottom)
+                        if (e.X >= rightColLeft && e.X <= Width - 8 && e.Y >= colListTop && e.Y <= listBottom)
                         {
-                            int relY = e.Y - listTop + _collectionRightScroll;
+                            int relY = e.Y - colListTop + _collectionRightScroll;
                             int idx = relY / CollectionTrackRowHeight;
-                            if (idx >= 0 && idx < curP.Items.Count)
+                            var filteredTracks = GetFilteredCollectionTracks(curP);
+                            if (idx >= 0 && idx < filteredTracks.Count)
                             {
-                                ShowCollectionTrackContextMenu(curP, idx, PointToScreen(e.Location));
+                                PlaylistItem clickedTrack = filteredTracks[idx];
+                                int realTrackIdx = curP.Items.FindIndex(t => string.Equals(t.Id, clickedTrack.Id, StringComparison.OrdinalIgnoreCase));
+                                ShowCollectionTrackContextMenu(curP, realTrackIdx >= 0 ? realTrackIdx : 0, PointToScreen(e.Location));
                                 return;
                             }
                         }
@@ -995,10 +1028,7 @@ namespace KahoiiMusic.Controls
             {
                 if (_activeTab != MenuTab.Playlist)
                 {
-                    _activeTab = MenuTab.Playlist;
-                    _scrollOffset = 0;
-                    ClampScroll();
-                    Invalidate();
+                    ActiveTab = MenuTab.Playlist;
                 }
                 return;
             }
@@ -1008,12 +1038,8 @@ namespace KahoiiMusic.Controls
             {
                 if (_activeTab != MenuTab.Collection)
                 {
-                    _activeTab = MenuTab.Collection;
-                    _collectionLeftScroll = 0;
-                    _collectionRightScroll = 0;
+                    ActiveTab = MenuTab.Collection;
                     RefreshPlaylists();
-                    ClampCollectionScroll();
-                    Invalidate();
                 }
                 return;
             }
@@ -1023,11 +1049,8 @@ namespace KahoiiMusic.Controls
             {
                 if (_activeTab != MenuTab.History)
                 {
-                    _activeTab = MenuTab.History;
-                    _scrollOffset = 0;
+                    ActiveTab = MenuTab.History;
                     RefreshHistory();
-                    ClampScroll();
-                    Invalidate();
                 }
                 return;
             }
@@ -1037,11 +1060,8 @@ namespace KahoiiMusic.Controls
             {
                 if (_activeTab != MenuTab.Saved)
                 {
-                    _activeTab = MenuTab.Saved;
-                    _scrollOffset = 0;
+                    ActiveTab = MenuTab.Saved;
                     RefreshSaved();
-                    ClampScroll();
-                    Invalidate();
                 }
                 return;
             }
@@ -1072,18 +1092,20 @@ namespace KahoiiMusic.Controls
                     return;
                 }
 
-                int listTop = HeaderHeight + 28;
+                int colListTop = HeaderHeight + 55;
                 int listBottom = Height - 6;
                 int leftColRight = 8 + LeftColWidth;
 
                 // Left column playlist clicked
-                if (e.X >= 8 && e.X <= leftColRight && e.Y >= listTop && e.Y <= listBottom)
+                if (e.X >= 8 && e.X <= leftColRight && e.Y >= colListTop && e.Y <= listBottom)
                 {
-                    int relY = e.Y - listTop + _collectionLeftScroll;
+                    int relY = e.Y - colListTop + _collectionLeftScroll;
                     int idx = relY / CollectionRowHeight;
-                    if (idx >= 0 && idx < _collectionPlaylists.Count)
+                    var filteredPlaylists = FilteredCollectionPlaylists;
+                    if (idx >= 0 && idx < filteredPlaylists.Count)
                     {
-                        _selectedPlaylistIndex = idx;
+                        UserPlaylist clickedPl = filteredPlaylists[idx];
+                        _selectedPlaylistIndex = _collectionPlaylists.FindIndex(p => p.Id == clickedPl.Id);
                         _collectionRightScroll = 0;
                         ClampCollectionScroll();
                         Invalidate();
@@ -1095,13 +1117,16 @@ namespace KahoiiMusic.Controls
                 if (curP != null && curP.Items != null)
                 {
                     int rightColLeft = leftColRight + 8;
-                    if (e.X >= rightColLeft && e.X <= Width - 8 && e.Y >= listTop && e.Y <= listBottom)
+                    if (e.X >= rightColLeft && e.X <= Width - 8 && e.Y >= colListTop && e.Y <= listBottom)
                     {
-                        int relY = e.Y - listTop + _collectionRightScroll;
+                        int relY = e.Y - colListTop + _collectionRightScroll;
                         int idx = relY / CollectionTrackRowHeight;
-                        if (idx >= 0 && idx < curP.Items.Count)
+                        var filteredTracks = GetFilteredCollectionTracks(curP);
+                        if (idx >= 0 && idx < filteredTracks.Count)
                         {
-                            PlayUserPlaylist(curP, idx);
+                            PlaylistItem clickedTrack = filteredTracks[idx];
+                            int realTrackIdx = curP.Items.FindIndex(t => string.Equals(t.Id, clickedTrack.Id, StringComparison.OrdinalIgnoreCase));
+                            PlayUserPlaylist(curP, realTrackIdx >= 0 ? realTrackIdx : 0);
                         }
                     }
                 }
@@ -2025,7 +2050,7 @@ namespace KahoiiMusic.Controls
 
         private void DrawCollectionTab(Graphics g, int w, int h)
         {
-            int listTop = HeaderHeight + 54;
+            int listTop = HeaderHeight + 55;
             int listBottom = h - 6;
             int listH = listBottom - listTop;
 

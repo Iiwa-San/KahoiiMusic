@@ -48,10 +48,11 @@ namespace KahoiiMusic.Controls
                 BorderStyle = BorderStyle.None,
                 BackColor = Color.FromArgb(28, 25, 42),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
-                Location = new Point(22, 3),
-                Height = 16
+                Font = new Font("Segoe UI", 8.25F, FontStyle.Regular),
+                Location = new Point(20, 3),
+                Height = 15
             };
+            _textBox.HandleCreated += (s, e) => UpdateCueBanner();
 
             _lblClear = new Label
             {
@@ -84,6 +85,7 @@ namespace KahoiiMusic.Controls
             _textBox.TextChanged += (s, e) =>
             {
                 _lblClear.Visible = !string.IsNullOrEmpty(_textBox.Text);
+                LayoutControls();
                 SearchTextChanged?.Invoke(this, _textBox.Text.Trim());
             };
 
@@ -116,10 +118,16 @@ namespace KahoiiMusic.Controls
 
         private void LayoutControls()
         {
-            int clearW = _lblClear.Visible ? 18 : 6;
-            _textBox.Width = Math.Max(20, this.Width - 26 - clearW);
-            _lblClear.Location = new Point(this.Width - 19, (this.Height - 16) / 2);
-            _textBox.Location = new Point(22, (this.Height - _textBox.PreferredHeight) / 2);
+            int clearW = (_lblClear != null && _lblClear.Visible) ? 18 : 6;
+            if (_textBox != null)
+            {
+                _textBox.Width = Math.Max(20, this.Width - 22 - clearW);
+                _textBox.Location = new Point(20, Math.Max(2, (this.Height - _textBox.PreferredHeight) / 2));
+            }
+            if (_lblClear != null)
+            {
+                _lblClear.Location = new Point(this.Width - 18, Math.Max(2, (this.Height - 16) / 2));
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -136,11 +144,15 @@ namespace KahoiiMusic.Controls
                 g.DrawPath(pen, path);
             }
 
-            // Draw search icon 🔍
-            using (Font iconFont = new Font("Segoe UI", 7.5F))
-            using (SolidBrush iconBrush = new SolidBrush(Color.FromArgb(150, 150, 165)))
+            // Draw crisp vector magnifying glass icon (never missing glyph / tofu)
+            using (Pen iconPen = new Pen(_isFocused ? Color.FromArgb(216, 180, 254) : Color.FromArgb(150, 150, 165), 1.5f))
             {
-                g.DrawString("🔍", iconFont, iconBrush, 4, (Height - 14) / 2);
+                float cy = Height / 2f;
+                float r = 3.5f;
+                float cx = 9.5f;
+                float cyCircle = cy - 1.5f;
+                g.DrawEllipse(iconPen, cx - r, cyCircle - r, r * 2f, r * 2f);
+                g.DrawLine(iconPen, cx + 2.5f, cyCircle + 2.5f, cx + 5.5f, cyCircle + 5.5f);
             }
         }
 
@@ -148,21 +160,13 @@ namespace KahoiiMusic.Controls
         {
             GraphicsPath path = new GraphicsPath();
             if (r.Width <= 0 || r.Height <= 0) return path;
-            int maxRadius = Math.Min(r.Width, r.Height) / 2;
-            radius = Math.Max(1, Math.Min(radius, maxRadius));
+
             int d = radius * 2;
-            if (d > 0 && r.Width >= d && r.Height >= d)
-            {
-                path.AddArc(r.X, r.Y, d, d, 180, 90);
-                path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-                path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-                path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-                path.CloseFigure();
-            }
-            else
-            {
-                path.AddRectangle(r);
-            }
+            path.AddArc(r.X, r.Y, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
             return path;
         }
     }
