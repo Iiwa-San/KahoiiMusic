@@ -92,7 +92,11 @@ class SafeUserPlaylistDeserializer : JsonDeserializer<UserPlaylist> {
         val id = (obj.get("id") ?: obj.get("Id"))?.let { if (it.isJsonPrimitive) it.asString else UUID.randomUUID().toString() } ?: UUID.randomUUID().toString()
         val name = (obj.get("name") ?: obj.get("Name"))?.let { if (it.isJsonPrimitive) it.asString else "" } ?: ""
         val createdAt = (obj.get("createdAt") ?: obj.get("CreatedAt"))?.let {
-            if (it.isJsonPrimitive && it.asJsonPrimitive.isNumber) it.asLong else System.currentTimeMillis()
+            try {
+                context?.deserialize<Long>(it, Long::class.java) ?: System.currentTimeMillis()
+            } catch (_: Exception) {
+                System.currentTimeMillis()
+            }
         } ?: System.currentTimeMillis()
         val itemsElement = obj.get("items") ?: obj.get("Items")
         val items = if (itemsElement != null && itemsElement.isJsonArray) {
@@ -124,4 +128,3 @@ object GsonUtils {
         .registerTypeAdapter(UserPlaylist::class.java, SafeUserPlaylistDeserializer())
         .create()
 }
-

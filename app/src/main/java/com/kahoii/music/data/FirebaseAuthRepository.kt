@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -37,7 +38,10 @@ class FirebaseAuthRepository(private val context: Context) {
         if (!json.isNullOrBlank()) {
             try {
                 val user = gson.fromJson(json, FirebaseUser::class.java)
-                _currentUser.value = user
+                val fixedUser = if (user != null && user.expiryTimestamp == 0L) {
+                    user.copy(expiryTimestamp = (System.currentTimeMillis() / 1000) + user.expiresIn - 120)
+                } else user
+                _currentUser.value = fixedUser
             } catch (_: Exception) {}
         }
     }
@@ -49,6 +53,57 @@ class FirebaseAuthRepository(private val context: Context) {
         } else {
             prefs.edit().remove("user_json").apply()
         }
+    }
+
+    suspend fun getValidToken(): String? = withContext(Dispatchers.IO) {
+        val user = _currentUser.value ?: return@withContext null
+        val now = System.currentTimeMillis() / 1000
+        if (now >= user.expiryTimestamp && user.refreshToken.isNotBlank()) {
+            val refreshed = refreshToken()
+            if (!refreshed && user.idToken.isBlank()) {
+                return@withContext null
+            }
+        }
+        return@withContext _currentUser.value?.idToken
+    }
+
+    suspend fun refreshToken(): Boolean = withContext(Dispatchers.IO) {
+        val user = _currentUser.value ?: return@withContext false
+        if (user.refreshToken.isBlank()) return@withContext false
+
+        try {
+            val formBody = FormBody.Builder()
+                .add("grant_type", "refresh_token")
+                .add("refresh_token", user.refreshToken)
+                .build()
+
+            val request = Request.Builder()
+                .url(FirebaseConfig.TOKEN_REFRESH_URL)
+                .post(formBody)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string().orEmpty()
+                    val json = gson.fromJson(body, JsonObject::class.java)
+                    val newIdToken = json.get("id_token")?.asString
+                    val newRefreshToken = json.get("refresh_token")?.asString ?: user.refreshToken
+                    val expiresIn = json.get("expires_in")?.asLong ?: 3600L
+
+                    if (!newIdToken.isNullOrBlank()) {
+                        val updatedUser = user.copy(
+                            idToken = newIdToken,
+                            refreshToken = newRefreshToken,
+                            expiresIn = expiresIn,
+                            expiryTimestamp = (System.currentTimeMillis() / 1000) + expiresIn - 120
+                        )
+                        saveUser(updatedUser)
+                        return@withContext true
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return@withContext false
     }
 
     suspend fun signUp(email: String, password: String): Result<FirebaseUser> = withContext(Dispatchers.IO) {
@@ -78,12 +133,14 @@ class FirebaseAuthRepository(private val context: Context) {
                 val body = response.body?.string().orEmpty()
                 if (response.isSuccessful) {
                     val json = gson.fromJson(body, JsonObject::class.java)
+                    val expiresIn = json.get("expiresIn")?.asLong ?: 3600L
                     val user = FirebaseUser(
                         localId = json.get("localId").asString,
                         email = json.get("email").asString,
                         idToken = json.get("idToken").asString,
                         refreshToken = json.get("refreshToken").asString,
-                        expiresIn = json.get("expiresIn")?.asLong ?: 3600L
+                        expiresIn = expiresIn,
+                        expiryTimestamp = (System.currentTimeMillis() / 1000) + expiresIn - 120
                     )
                     saveUser(user)
                     Result.success(user)
@@ -123,12 +180,14 @@ class FirebaseAuthRepository(private val context: Context) {
                 val body = response.body?.string().orEmpty()
                 if (response.isSuccessful) {
                     val json = gson.fromJson(body, JsonObject::class.java)
+                    val expiresIn = json.get("expiresIn")?.asLong ?: 3600L
                     val user = FirebaseUser(
                         localId = json.get("localId").asString,
                         email = json.get("email").asString,
                         idToken = json.get("idToken").asString,
                         refreshToken = json.get("refreshToken").asString,
-                        expiresIn = json.get("expiresIn")?.asLong ?: 3600L
+                        expiresIn = expiresIn,
+                        expiryTimestamp = (System.currentTimeMillis() / 1000) + expiresIn - 120
                     )
                     saveUser(user)
                     Result.success(user)

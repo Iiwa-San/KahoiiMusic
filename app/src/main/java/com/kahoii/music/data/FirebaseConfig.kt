@@ -22,6 +22,7 @@ object FirebaseConfig {
     const val AUTH_SIGN_UP_URL = "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$API_KEY"
     const val AUTH_LOOKUP_URL = "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=$API_KEY"
     const val AUTH_PASSWORD_RESET_URL = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$API_KEY"
+    const val TOKEN_REFRESH_URL = "https://securetoken.googleapis.com/v1/token?key=$API_KEY"
 
     fun getFirestoreDocumentUrl(userId: String): String {
         return "https://firestore.googleapis.com/v1/projects/$PROJECT_ID/databases/(default)/documents/users/$userId"
@@ -33,7 +34,8 @@ data class FirebaseUser(
     val email: String,
     val idToken: String,
     val refreshToken: String,
-    val expiresIn: Long = 3600
+    val expiresIn: Long = 3600,
+    val expiryTimestamp: Long = (System.currentTimeMillis() / 1000) + 3600 - 120
 )
 
 data class CloudMusicPayload(

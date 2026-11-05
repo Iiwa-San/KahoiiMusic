@@ -49,7 +49,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val savedTracksRepository = SavedTracksRepository(application)
     private val playlistCollectionRepository = PlaylistCollectionRepository(application)
     private val authRepository = FirebaseAuthRepository(application)
-    private val syncRepository = FirebaseSyncRepository()
+    private val syncRepository = FirebaseSyncRepository(authRepository)
     private var syncJob: Job? = null
     private var isApplyingCloudPayload = true
 
@@ -839,12 +839,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+    private var lastObservedUserId: String? = null
+
     private fun observeAuth() {
         viewModelScope.launch {
             authRepository.currentUser.collect { user ->
+                val prevId = lastObservedUserId
+                val newId = user?.localId
+                lastObservedUserId = newId
                 _uiState.update { it.copy(currentUser = user) }
                 if (user != null) {
-                    syncCloudData(user)
+                    if (prevId != newId) {
+                        syncCloudData(user)
+                    }
                 } else {
                     isApplyingCloudPayload = false
                 }
