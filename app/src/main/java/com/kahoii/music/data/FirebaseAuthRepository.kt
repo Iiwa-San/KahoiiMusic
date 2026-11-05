@@ -38,10 +38,7 @@ class FirebaseAuthRepository(private val context: Context) {
         if (!json.isNullOrBlank()) {
             try {
                 val user = gson.fromJson(json, FirebaseUser::class.java)
-                val fixedUser = if (user != null && user.expiryTimestamp == 0L) {
-                    user.copy(expiryTimestamp = (System.currentTimeMillis() / 1000) + user.expiresIn - 120)
-                } else user
-                _currentUser.value = fixedUser
+                _currentUser.value = user
             } catch (_: Exception) {}
         }
     }
@@ -55,13 +52,15 @@ class FirebaseAuthRepository(private val context: Context) {
         }
     }
 
-    suspend fun getValidToken(): String? = withContext(Dispatchers.IO) {
+    suspend fun getValidToken(forceRefresh: Boolean = false): String? = withContext(Dispatchers.IO) {
         val user = _currentUser.value ?: return@withContext null
         val now = System.currentTimeMillis() / 1000
-        if (now >= user.expiryTimestamp && user.refreshToken.isNotBlank()) {
-            val refreshed = refreshToken()
-            if (!refreshed && user.idToken.isBlank()) {
-                return@withContext null
+        if (forceRefresh || now >= user.expiryTimestamp || user.idToken.isBlank()) {
+            if (user.refreshToken.isNotBlank()) {
+                val refreshed = refreshToken()
+                if (refreshed) {
+                    return@withContext _currentUser.value?.idToken
+                }
             }
         }
         return@withContext _currentUser.value?.idToken
@@ -83,8 +82,8 @@ class FirebaseAuthRepository(private val context: Context) {
                 .build()
 
             client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
                 if (response.isSuccessful) {
-                    val body = response.body?.string().orEmpty()
                     val json = gson.fromJson(body, JsonObject::class.java)
                     val newIdToken = json.get("id_token")?.asString
                     val newRefreshToken = json.get("refresh_token")?.asString ?: user.refreshToken
@@ -100,6 +99,9 @@ class FirebaseAuthRepository(private val context: Context) {
                         saveUser(updatedUser)
                         return@withContext true
                     }
+                } else if (response.code == 400 && (body.contains("TOKEN_EXPIRED") || body.contains("USER_DISABLED") || body.contains("INVALID_REFRESH_TOKEN"))) {
+                    // Phiên đăng nhập trên máy chủ đã bị hủy
+                    saveUser(null)
                 }
             }
         } catch (_: Exception) {}

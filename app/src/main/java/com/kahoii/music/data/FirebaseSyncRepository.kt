@@ -22,7 +22,7 @@ class FirebaseSyncRepository(private val authRepository: FirebaseAuthRepository?
 
     suspend fun uploadMusicData(user: FirebaseUser, payload: CloudMusicPayload): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val token = authRepository?.getValidToken() ?: user.idToken
+            var token = authRepository?.getValidToken() ?: user.idToken
             val musicDataJson = gson.toJson(payload)
             val docUrl = "${FirebaseConfig.getFirestoreDocumentUrl(user.localId)}?updateMask.fieldPaths=musicDataJson&updateMask.fieldPaths=updatedAt"
 
@@ -38,14 +38,13 @@ class FirebaseSyncRepository(private val authRepository: FirebaseAuthRepository?
                 add("fields", fields)
             }
 
-            val request = Request.Builder()
+            fun createRequest(authToken: String) = Request.Builder()
                 .url(docUrl)
                 .patch(requestBody.toString().toRequestBody(jsonMediaType))
-                .header("Authorization", "Bearer $token")
+                .header("Authorization", "Bearer $authToken")
                 .build()
 
-            var response = client.newCall(request).execute()
-            var body = response.body?.string().orEmpty()
+            var response = client.newCall(createRequest(token)).execute()
 
             if (response.code == 401 && authRepository != null) {
                 response.close()
@@ -53,24 +52,25 @@ class FirebaseSyncRepository(private val authRepository: FirebaseAuthRepository?
                 if (refreshed) {
                     val newToken = authRepository.getValidToken() ?: authRepository.currentUser.value?.idToken
                     if (!newToken.isNullOrBlank()) {
-                        val retryRequest = Request.Builder()
-                            .url(docUrl)
-                            .patch(requestBody.toString().toRequestBody(jsonMediaType))
-                            .header("Authorization", "Bearer $newToken")
-                            .build()
-                        response = client.newCall(retryRequest).execute()
-                        body = response.body?.string().orEmpty()
+                        response = client.newCall(createRequest(newToken)).execute()
+                    } else {
+                        return@withContext Result.failure(Exception("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."))
                     }
+                } else {
+                    return@withContext Result.failure(Exception("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."))
                 }
             }
 
-            response.use {
-                if (it.isSuccessful) {
+            response.use { resp ->
+                if (resp.isSuccessful) {
                     Result.success(Unit)
-                } else if (it.code == 404) {
+                } else if (resp.code == 404) {
                     Result.failure(Exception("Cơ sở dữ liệu Firestore chưa được tạo trên Firebase Console (Vui lòng vào Build -> Firestore Database -> Create Database)."))
+                } else if (resp.code == 401) {
+                    Result.failure(Exception("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."))
                 } else {
-                    Result.failure(Exception("Lỗi đồng bộ đám mây (${it.code}): $body"))
+                    val body = resp.body?.string().orEmpty()
+                    Result.failure(Exception("Lỗi đồng bộ đám mây (${resp.code}): $body"))
                 }
             }
         } catch (e: Exception) {
@@ -80,38 +80,38 @@ class FirebaseSyncRepository(private val authRepository: FirebaseAuthRepository?
 
     suspend fun downloadMusicData(user: FirebaseUser): Result<CloudMusicPayload?> = withContext(Dispatchers.IO) {
         try {
-            val token = authRepository?.getValidToken() ?: user.idToken
+            var token = authRepository?.getValidToken() ?: user.idToken
             val docUrl = FirebaseConfig.getFirestoreDocumentUrl(user.localId)
-            val request = Request.Builder()
+
+            fun createRequest(authToken: String) = Request.Builder()
                 .url(docUrl)
                 .get()
-                .header("Authorization", "Bearer $token")
+                .header("Authorization", "Bearer $authToken")
                 .build()
 
-            var response = client.newCall(request).execute()
+            var response = client.newCall(createRequest(token)).execute()
             if (response.code == 401 && authRepository != null) {
                 response.close()
                 val refreshed = authRepository.refreshToken()
                 if (refreshed) {
                     val newToken = authRepository.getValidToken() ?: authRepository.currentUser.value?.idToken
                     if (!newToken.isNullOrBlank()) {
-                        val retryRequest = Request.Builder()
-                            .url(docUrl)
-                            .get()
-                            .header("Authorization", "Bearer $newToken")
-                            .build()
-                        response = client.newCall(retryRequest).execute()
+                        response = client.newCall(createRequest(newToken)).execute()
+                    } else {
+                        return@withContext Result.failure(Exception("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."))
                     }
+                } else {
+                    return@withContext Result.failure(Exception("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."))
                 }
             }
 
-            response.use {
-                if (it.code == 404) {
+            response.use { resp ->
+                if (resp.code == 404) {
                     return@withContext Result.success(null)
                 }
 
-                val body = it.body?.string().orEmpty()
-                if (it.isSuccessful) {
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string().orEmpty()
                     val root = gson.fromJson(body, JsonObject::class.java)
                     val fields = root.getAsJsonObject("fields")
                     val rawJson = fields?.getAsJsonObject("musicDataJson")?.get("stringValue")?.asString
@@ -121,8 +121,11 @@ class FirebaseSyncRepository(private val authRepository: FirebaseAuthRepository?
                     } else {
                         Result.success(null)
                     }
+                } else if (resp.code == 401) {
+                    Result.failure(Exception("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."))
                 } else {
-                    Result.failure(Exception("Lỗi tải dữ liệu (${it.code}): $body"))
+                    val body = resp.body?.string().orEmpty()
+                    Result.failure(Exception("Lỗi tải dữ liệu (${resp.code}): $body"))
                 }
             }
         } catch (e: Exception) {
