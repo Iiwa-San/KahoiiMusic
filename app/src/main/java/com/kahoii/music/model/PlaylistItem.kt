@@ -12,7 +12,7 @@ data class PlaylistItem(
     @SerializedName("title", alternate = ["Title"])
     val title: String = "",
 
-    @SerializedName("artist", alternate = ["Artist"])
+    @SerializedName("artist", alternate = ["Artist", "author", "Author"])
     val artist: String = "",
 
     @SerializedName("durationSeconds", alternate = ["DurationSeconds"])
