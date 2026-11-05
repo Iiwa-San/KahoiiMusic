@@ -44,7 +44,7 @@ namespace KahoiiMusic
         
         // Profile View (Logged in)
         private Panel pnlProfile;
-        private Label lblUserAvatar;
+        private UserAvatarBox picUserAvatar;
         private Label lblUserEmail;
         private Label lblUserId;
         private Label lblStats;
@@ -87,6 +87,14 @@ namespace KahoiiMusic
                 }
             };
 
+            EventHandler onAvatarChanged = (s, e) =>
+            {
+                if (IsHandleCreated && !IsDisposed)
+                {
+                    try { BeginInvoke(new Action(() => picUserAvatar?.Invalidate())); } catch { }
+                }
+            };
+            FirebaseAuthService.Instance.AvatarChanged += onAvatarChanged;
             FirebaseSyncService.Instance.SyncStatusChanged += onSyncStatus;
             SavedTracksService.Instance.SavedTracksChanged += onDataChanged;
             HistoryService.HistoryChanged += onDataChanged;
@@ -451,6 +459,50 @@ namespace KahoiiMusic
             }
         }
 
+        private async void ChangeAvatar()
+        {
+            _isShowingChildDialog = true;
+            try
+            {
+                using (OpenFileDialog ofd = new OpenFileDialog())
+                {
+                    ofd.Title = "Chọn ảnh đại diện";
+                    ofd.Filter = "Tệp hình ảnh (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png";
+                    ofd.Multiselect = false;
+                    if (ofd.ShowDialog(this) == DialogResult.OK)
+                    {
+                        try
+                        {
+                            Image rawImg = null;
+                            byte[] imgBytes = System.IO.File.ReadAllBytes(ofd.FileName);
+                            using (var ms = new System.IO.MemoryStream(imgBytes))
+                            {
+                                rawImg = new Bitmap(Image.FromStream(ms));
+                            }
+
+                            using (rawImg)
+                            using (var cropDialog = new Controls.ImageCropDialog(rawImg, "Cắt Ảnh Đại Diện"))
+                            {
+                                if (cropDialog.ShowDialog(this) == DialogResult.OK && cropDialog.CroppedImage != null)
+                                {
+                                    await FirebaseAuthService.Instance.SaveAndUploadAvatarAsync(cropDialog.CroppedImage);
+                                    picUserAvatar?.Invalidate();
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ShowMessageBox("Không thể tải ảnh: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                _isShowingChildDialog = false;
+            }
+        }
+
         private void SetupProfileUI()
         {
             pnlProfile = new Panel
@@ -459,22 +511,19 @@ namespace KahoiiMusic
                 Visible = false
             };
 
-            lblUserAvatar = new Label
+            picUserAvatar = new UserAvatarBox
             {
-                Text = "👤",
-                Font = new Font("Segoe UI", 30F),
-                ForeColor = AccentPink,
-                Location = new Point(0, 10),
-                Size = new Size(340, 50),
-                TextAlign = ContentAlignment.MiddleCenter
+                Location = new Point(132, 6),
+                Size = new Size(76, 76)
             };
+            picUserAvatar.Click += (s, e) => ChangeAvatar();
 
             lblUserEmail = new Label
             {
-                Font = new Font("Segoe UI", 11.5F, FontStyle.Bold),
+                Font = new Font("Segoe UI", 11F, FontStyle.Bold),
                 ForeColor = Color.White,
-                Location = new Point(0, 64),
-                Size = new Size(340, 24),
+                Location = new Point(0, 86),
+                Size = new Size(340, 22),
                 TextAlign = ContentAlignment.MiddleCenter
             };
 
@@ -482,8 +531,8 @@ namespace KahoiiMusic
             {
                 Font = new Font("Consolas", 8F),
                 ForeColor = Color.FromArgb(135, 130, 155),
-                Location = new Point(0, 88),
-                Size = new Size(340, 18),
+                Location = new Point(0, 108),
+                Size = new Size(340, 16),
                 TextAlign = ContentAlignment.MiddleCenter
             };
 
@@ -491,8 +540,8 @@ namespace KahoiiMusic
             {
                 Font = new Font("Segoe UI", 9F),
                 ForeColor = Color.FromArgb(200, 195, 220),
-                Location = new Point(20, 114),
-                Size = new Size(300, 44),
+                Location = new Point(20, 128),
+                Size = new Size(300, 42),
                 BackColor = CardBg,
                 TextAlign = ContentAlignment.MiddleCenter
             };
@@ -510,7 +559,7 @@ namespace KahoiiMusic
             {
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
                 ForeColor = AccentPink,
-                Location = new Point(20, 164),
+                Location = new Point(20, 174),
                 Size = new Size(300, 20),
                 TextAlign = ContentAlignment.MiddleCenter
             };
@@ -518,7 +567,7 @@ namespace KahoiiMusic
             btnSyncNow = new RoundedButton
             {
                 Text = "⟳  Đồng Bộ Ngay (Tự Động Bật)",
-                Location = new Point(20, 190),
+                Location = new Point(20, 198),
                 Size = new Size(300, 36),
                 ButtonColor = AccentPink,
                 TextColor = Color.White,
@@ -545,7 +594,7 @@ namespace KahoiiMusic
             btnSignOut = new RoundedButton
             {
                 Text = "Đăng Xuất",
-                Location = new Point(20, 236),
+                Location = new Point(20, 242),
                 Size = new Size(300, 34),
                 ButtonColor = Color.FromArgb(38, 20, 28),
                 TextColor = Color.FromArgb(255, 120, 130),
@@ -564,7 +613,7 @@ namespace KahoiiMusic
                 }
             };
 
-            pnlProfile.Controls.Add(lblUserAvatar);
+            pnlProfile.Controls.Add(picUserAvatar);
             pnlProfile.Controls.Add(lblUserEmail);
             pnlProfile.Controls.Add(lblUserId);
             pnlProfile.Controls.Add(lblStats);
@@ -589,7 +638,7 @@ namespace KahoiiMusic
                 lblError.Visible = false;
                 
                 pnlProfile.Visible = true;
-                this.Height = 330;
+                this.Height = 336;
                 pnlContent.Height = this.Height - 40;
 
                 var user = FirebaseAuthService.Instance.CurrentUser;
@@ -768,6 +817,118 @@ namespace KahoiiMusic
         }
 
         // ================= HELPER CONTROLS =================
+
+        // 1b. Custom User Avatar Box with Pencil Edit Badge
+        private class UserAvatarBox : Control
+        {
+            private bool _isHovered = false;
+            private readonly ToolTip _tip = new ToolTip();
+
+            public UserAvatarBox()
+            {
+                SetStyle(ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.UserPaint |
+                         ControlStyles.OptimizedDoubleBuffer |
+                         ControlStyles.SupportsTransparentBackColor, true);
+                BackColor = Color.Transparent;
+                Size = new Size(76, 76);
+                Cursor = Cursors.Hand;
+                _tip.SetToolTip(this, "Nhấp để đổi ảnh đại diện");
+            }
+
+            protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _isHovered = true; Invalidate(); }
+            protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _isHovered = false; Invalidate(); }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                Graphics g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+
+                int d = 66;
+                Rectangle rCircle = new Rectangle(2, 2, d, d);
+
+                // 1. Tỏa sáng gradient viền ngoài
+                int glowAlpha = _isHovered ? 150 : 75;
+                using (Pen glowPen = new Pen(Color.FromArgb(glowAlpha, 255, 45, 120), 2.5f))
+                {
+                    g.DrawEllipse(glowPen, 1, 1, d + 2, d + 2);
+                }
+
+                // 2. Nội dung Avatar tròn
+                Rectangle rInner = new Rectangle(3, 3, d - 2, d - 2);
+                Image avatar = FirebaseAuthService.Instance.UserAvatar;
+                if (avatar != null)
+                {
+                    using (GraphicsPath clip = new GraphicsPath())
+                    {
+                        clip.AddEllipse(rInner);
+                        g.SetClip(clip);
+                        g.DrawImage(avatar, rInner);
+                        g.ResetClip();
+                    }
+                }
+                else
+                {
+                    using (LinearGradientBrush bgBrush = new LinearGradientBrush(rInner,
+                        Color.FromArgb(48, 22, 38), Color.FromArgb(28, 16, 36), 45f))
+                    {
+                        g.FillEllipse(bgBrush, rInner);
+                    }
+                    int cx = rInner.X + rInner.Width / 2;
+                    int cy = rInner.Y + rInner.Height / 2;
+                    using (SolidBrush iconBrush = new SolidBrush(Color.FromArgb(255, 45, 120)))
+                    using (Pen iconPen = new Pen(Color.FromArgb(255, 45, 120), 2.2f))
+                    {
+                        iconPen.StartCap = LineCap.Round;
+                        iconPen.EndCap = LineCap.Round;
+                        g.FillEllipse(iconBrush, cx - 9, cy - 12, 18, 18);
+                        g.DrawArc(iconPen, cx - 16, cy + 2, 32, 24, 195, 150);
+                    }
+                }
+
+                // 3. Viền gradient sắc nét
+                using (LinearGradientBrush lgb = new LinearGradientBrush(rCircle,
+                    Color.FromArgb(255, 45, 120), Color.FromArgb(168, 85, 247), 45f))
+                using (Pen gradPen = new Pen(lgb, 2.2f))
+                {
+                    g.DrawEllipse(gradPen, rCircle);
+                }
+
+                // 4. Pencil Edit Badge ở góc dưới bên phải
+                int badgeX = 46;
+                int badgeY = 46;
+                int badgeD = 24;
+                Rectangle rBadge = new Rectangle(badgeX, badgeY, badgeD, badgeD);
+
+                // Viền tối ngăn cách badge với ảnh avatar
+                using (Pen sepPen = new Pen(Color.FromArgb(24, 21, 32), 2.5f))
+                {
+                    g.DrawEllipse(sepPen, rBadge);
+                }
+
+                Color badgeBg = _isHovered ? Color.FromArgb(255, 75, 140) : Color.FromArgb(255, 45, 120);
+                using (SolidBrush badgeBrush = new SolidBrush(badgeBg))
+                {
+                    g.FillEllipse(badgeBrush, rBadge);
+                }
+
+                // Vẽ icon bút chì sắc nét bên trong badge
+                using (Pen pPen = new Pen(Color.White, 2f))
+                {
+                    pPen.StartCap = LineCap.Round;
+                    pPen.EndCap = LineCap.Round;
+                    g.DrawLine(pPen, badgeX + 7, badgeY + 16, badgeX + 15, badgeY + 8);
+                    g.FillPolygon(Brushes.White, new PointF[] {
+                        new PointF(badgeX + 6, badgeY + 17),
+                        new PointF(badgeX + 9, badgeY + 17),
+                        new PointF(badgeX + 7, badgeY + 14)
+                    });
+                }
+            }
+        }
+
 
         // 1. Custom Rounded Button
         private class RoundedButton : Control

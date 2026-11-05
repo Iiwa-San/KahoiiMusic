@@ -113,6 +113,9 @@
     <Compile Include="Controls\InputDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Controls\ImageCropDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -1,3 +1,4 @@
+using System.Drawing;
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,6 +17,7 @@ namespace KahoiiMusic.Services
         public string refreshToken { get; set; }
         public long expiryTimestamp { get; set; }
         public bool rememberMe { get; set; } = true;
+        public string avatarBase64 { get; set; }
     }
 
     public class FirebaseAuthService
@@ -32,7 +34,10 @@ namespace KahoiiMusic.Services
         public FirebaseUserInfo CurrentUser { get; private set; }
         public bool IsLoggedIn => CurrentUser != null && !string.IsNullOrWhiteSpace(CurrentUser.idToken);
 
+        public Image UserAvatar { get; private set; }
         public event EventHandler AuthStateChanged;
+        public event EventHandler AvatarChanged;
+        public static string AvatarFilePath => Path.Combine(AppPaths.SavedDir, "avatar.png");
 
         private FirebaseAuthService()
         {
@@ -54,6 +59,37 @@ namespace KahoiiMusic.Services
                 }
             }
             catch { }
+            LoadAvatarFromStorage();
+        }
+
+        private void LoadAvatarFromStorage()
+        {
+            try
+            {
+                if (File.Exists(AvatarFilePath))
+                {
+                    byte[] bytes = File.ReadAllBytes(AvatarFilePath);
+                    using (var ms = new MemoryStream(bytes))
+                    {
+                        UserAvatar?.Dispose();
+                        UserAvatar = new Bitmap(Image.FromStream(ms));
+                    }
+                }
+                else if (!string.IsNullOrEmpty(CurrentUser?.avatarBase64))
+                {
+                    byte[] bytes = Convert.FromBase64String(CurrentUser.avatarBase64);
+                    File.WriteAllBytes(AvatarFilePath, bytes);
+                    using (var ms = new MemoryStream(bytes))
+                    {
+                        UserAvatar?.Dispose();
+                        UserAvatar = new Bitmap(Image.FromStream(ms));
+                    }
+                }
+            }
+            catch
+            {
+                UserAvatar = null;
+            }
         }
 
         private void SaveSession(FirebaseUserInfo user)
@@ -316,10 +352,122 @@ namespace KahoiiMusic.Services
             catch { }
         }
 
+        public async Task<bool> SaveAndUploadAvatarAsync(Image avatar)
+        {
+            if (avatar == null) return false;
+            try
+            {
+                byte[] bytes;
+                using (var ms = new MemoryStream())
+                {
+                    avatar.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    bytes = ms.ToArray();
+                }
+
+                AppPaths.EnsureDirectoriesExist();
+                File.WriteAllBytes(AvatarFilePath, bytes);
+
+                using (var ms = new MemoryStream(bytes))
+                {
+                    UserAvatar?.Dispose();
+                    UserAvatar = new Bitmap(Image.FromStream(ms));
+                }
+
+                string b64 = Convert.ToBase64String(bytes);
+                if (CurrentUser != null)
+                {
+                    CurrentUser.avatarBase64 = b64;
+                    SaveSession(CurrentUser);
+                }
+
+                AvatarChanged?.Invoke(this, EventArgs.Empty);
+
+                if (!string.IsNullOrEmpty(CurrentUser?.idToken))
+                {
+                    try
+                    {
+                        await UploadAvatarBase64Async(b64).ConfigureAwait(false);
+                    }
+                    catch { }
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public void SaveAvatarFromBase64(string b64)
+        {
+            if (string.IsNullOrWhiteSpace(b64)) return;
+            try
+            {
+                byte[] bytes = Convert.FromBase64String(b64);
+                AppPaths.EnsureDirectoriesExist();
+                File.WriteAllBytes(AvatarFilePath, bytes);
+                using (var ms = new MemoryStream(bytes))
+                {
+                    UserAvatar?.Dispose();
+                    UserAvatar = new Bitmap(Image.FromStream(ms));
+                }
+                if (CurrentUser != null)
+                {
+                    CurrentUser.avatarBase64 = b64;
+                    SaveSession(CurrentUser);
+                }
+                AvatarChanged?.Invoke(this, EventArgs.Empty);
+            }
+            catch { }
+        }
+
+        public async Task<bool> UploadAvatarBase64Async(string base64)
+        {
+            var user = CurrentUser;
+            if (user == null || string.IsNullOrWhiteSpace(user.localId)) return false;
+            string token = await GetValidTokenAsync().ConfigureAwait(false);
+            if (string.IsNullOrEmpty(token)) return false;
+
+            string url = string.Format("https://firestore.googleapis.com/v1/projects/{0}/databases/(default)/documents/users/{1}?updateMask.fieldPaths=avatarBase64&key={2}",
+                "kahoiimusic", user.localId, ApiKey);
+
+            var body = new Dictionary<string, object>
+            {
+                {
+                    "fields", new Dictionary<string, object>
+                    {
+                        {
+                            "avatarBase64", new Dictionary<string, object>
+                            {
+                                { "stringValue", base64 }
+                            }
+                        }
+                    }
+                }
+            };
+
+            string reqJson = _serializer.Serialize(body);
+            var req = new HttpRequestMessage(new HttpMethod("PATCH"), url);
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            req.Content = new StringContent(reqJson, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.SendAsync(req).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+
         public void SignOut(string exceptVideoId = null)
         {
             ClearUserDataExceptPlayingTrack(exceptVideoId);
+            UserAvatar?.Dispose();
+            UserAvatar = null;
+            try
+            {
+                if (File.Exists(AvatarFilePath)) File.Delete(AvatarFilePath);
+            }
+            catch { }
             SaveSession(null);
+            AvatarChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 }

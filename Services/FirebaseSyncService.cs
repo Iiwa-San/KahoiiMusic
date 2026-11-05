@@ -246,6 +246,15 @@ namespace KahoiiMusic.Services
 
                 if (doc.ContainsKey("fields") && doc["fields"] is Dictionary<string, object> fields)
                 {
+                    if (fields.ContainsKey("avatarBase64") && fields["avatarBase64"] is Dictionary<string, object> avField)
+                    {
+                        string avStr = avField.ContainsKey("stringValue") ? avField["stringValue"]?.ToString() : null;
+                        if (!string.IsNullOrWhiteSpace(avStr))
+                        {
+                            FirebaseAuthService.Instance.SaveAvatarFromBase64(avStr);
+                        }
+                    }
+
                     if (fields.ContainsKey("musicDataJson") && fields["musicDataJson"] is Dictionary<string, object> jsonField)
                     {
                         string stringValue = jsonField.ContainsKey("stringValue") ? jsonField["stringValue"]?.ToString() : null;

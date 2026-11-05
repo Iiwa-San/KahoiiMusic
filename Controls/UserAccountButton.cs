@@ -14,7 +14,8 @@ namespace KahoiiMusic.Controls
 
         private readonly Color _defaultColor = Color.FromArgb(190, 190, 205);
         private readonly Color _hoverColor = Color.White;
-        private readonly Color _activeColor = Color.FromArgb(255, 45, 120); // Neon Pink
+        private readonly Color _accentPink = Color.FromArgb(255, 45, 120); // Neon Pink
+        private readonly Color _accentPurple = Color.FromArgb(168, 85, 247); // Neon Purple
 
         public UserAccountButton()
         {
@@ -25,17 +26,20 @@ namespace KahoiiMusic.Controls
                      ControlStyles.SupportsTransparentBackColor, true);
 
             BackColor = Color.Transparent;
-            Size = new Size(28, 24);
+            Size = new Size(26, 26);
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
 
-            FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
+            EventHandler refreshHandler = (s, e) =>
             {
-                if (IsHandleCreated)
+                if (IsHandleCreated && !IsDisposed)
                 {
-                    try { Invoke(new Action(Invalidate)); } catch { }
+                    try { BeginInvoke(new Action(Invalidate)); } catch { }
                 }
             };
+
+            FirebaseAuthService.Instance.AuthStateChanged += refreshHandler;
+            FirebaseAuthService.Instance.AvatarChanged += refreshHandler;
         }
 
         protected override void OnMouseEnter(EventArgs e)
@@ -75,75 +79,114 @@ namespace KahoiiMusic.Controls
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.HighQuality;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
             bool isLoggedIn = FirebaseAuthService.Instance.IsLoggedIn;
+            Image avatar = FirebaseAuthService.Instance.UserAvatar;
 
-            // Hover pill background
-            if (_isHovered)
-            {
-                Color bg = _isPressed
-                    ? Color.FromArgb(50, 255, 255, 255)
-                    : (isLoggedIn ? Color.FromArgb(40, 255, 45, 120) : Color.FromArgb(25, 255, 255, 255));
-                using (SolidBrush b = new SolidBrush(bg))
-                using (GraphicsPath p = GetRoundedRect(new Rectangle(1, 1, Width - 2, Height - 2), 6))
-                {
-                    g.FillPath(b, p);
-                }
-            }
-
-            Color iconColor = isLoggedIn ? _activeColor : (_isHovered ? _hoverColor : _defaultColor);
-
-            // Draw crisp avatar icon: head circle + shoulder curve
+            int size = Math.Min(Width, Height);
             int cx = Width / 2;
             int cy = Height / 2;
 
-            using (Pen pen = new Pen(iconColor, 1.8f))
-            using (SolidBrush brush = new SolidBrush(iconColor))
+            if (isLoggedIn)
             {
-                pen.StartCap = LineCap.Round;
-                pen.EndCap = LineCap.Round;
+                // Diameter of circular avatar
+                int d = size - 4;
+                int x = cx - d / 2;
+                int y = cy - d / 2;
+                Rectangle rCircle = new Rectangle(x, y, d, d);
 
-                // Head
-                int headR = 3;
-                int headY = cy - 4;
-                if (isLoggedIn)
+                // 1. Viền ngoài tỏa sáng gradient (Glowing Aura)
+                int glowAlpha = _isHovered ? 140 : 65;
+                using (Pen glowPen = new Pen(Color.FromArgb(glowAlpha, _accentPink), 2.5f))
                 {
-                    g.FillEllipse(brush, cx - headR, headY - headR, headR * 2, headR * 2);
+                    g.DrawEllipse(glowPen, x - 1, y - 1, d + 2, d + 2);
+                }
+
+                // 2. Nội dung Avatar tròn
+                Rectangle rInner = new Rectangle(x + 1, y + 1, d - 2, d - 2);
+                if (avatar != null)
+                {
+                    using (GraphicsPath clip = new GraphicsPath())
+                    {
+                        clip.AddEllipse(rInner);
+                        g.SetClip(clip);
+                        g.DrawImage(avatar, rInner);
+                        g.ResetClip();
+                    }
                 }
                 else
                 {
-                    g.DrawEllipse(pen, cx - headR, headY - headR, headR * 2, headR * 2);
+                    // Gradient nền mặc định khi chưa upload ảnh
+                    using (LinearGradientBrush bgBrush = new LinearGradientBrush(rInner,
+                        Color.FromArgb(48, 22, 38), Color.FromArgb(28, 16, 36), 45f))
+                    {
+                        g.FillEllipse(bgBrush, rInner);
+                    }
+
+                    // Silhouette icon
+                    using (SolidBrush headBrush = new SolidBrush(_accentPink))
+                    using (Pen bodyPen = new Pen(_accentPink, 1.6f))
+                    {
+                        bodyPen.StartCap = LineCap.Round;
+                        bodyPen.EndCap = LineCap.Round;
+                        int headR = 3;
+                        g.FillEllipse(headBrush, cx - headR, cy - 4 - headR, headR * 2, headR * 2);
+                        g.DrawArc(bodyPen, cx - 6, cy + 1, 12, 10, 195, 150);
+                    }
                 }
 
-                // Shoulders arc
-                int bodyW = 12;
-                int bodyH = 7;
-                int bodyX = cx - bodyW / 2;
-                int bodyY = cy + 1;
-                g.DrawArc(pen, bodyX, bodyY, bodyW, bodyH * 2, 195, 150);
-
-                // If logged in, draw a tiny active status dot at top right
-                if (isLoggedIn)
+                // 3. Viền gradient sắc nét (Sharp Gradient Ring)
+                using (LinearGradientBrush gradBrush = new LinearGradientBrush(rCircle,
+                    _accentPink, _accentPurple, 45f))
+                using (Pen gradPen = new Pen(gradBrush, 1.8f))
                 {
-                    using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(52, 211, 153))) // Mint green online dot
+                    g.DrawEllipse(gradPen, rCircle);
+                }
+
+                // 4. Chấm online xanh mint nhỏ ở góc trên phải
+                using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(52, 211, 153)))
+                using (Pen dotBorder = new Pen(Color.FromArgb(24, 21, 32), 1f))
+                {
+                    int dotX = Width - 6;
+                    int dotY = 1;
+                    g.FillEllipse(dotBrush, dotX, dotY, 5, 5);
+                    g.DrawEllipse(dotBorder, dotX, dotY, 5, 5);
+                }
+            }
+            else
+            {
+                // Not logged in: Default subtle pill / circle
+                if (_isHovered)
+                {
+                    Color bg = _isPressed
+                        ? Color.FromArgb(50, 255, 255, 255)
+                        : Color.FromArgb(25, 255, 255, 255);
+                    using (SolidBrush b = new SolidBrush(bg))
                     {
-                        g.FillEllipse(dotBrush, cx + 5, cy - 7, 4, 4);
+                        g.FillEllipse(b, 2, 2, Width - 5, Height - 5);
                     }
+                }
+
+                Color iconColor = _isHovered ? _hoverColor : _defaultColor;
+                using (Pen pen = new Pen(iconColor, 1.8f))
+                {
+                    pen.StartCap = LineCap.Round;
+                    pen.EndCap = LineCap.Round;
+
+                    // Head
+                    int headR = 3;
+                    int headY = cy - 4;
+                    g.DrawEllipse(pen, cx - headR, headY - headR, headR * 2, headR * 2);
+
+                    // Shoulders arc
+                    int bodyW = 12;
+                    int bodyH = 7;
+                    int bodyX = cx - bodyW / 2;
+                    int bodyY = cy + 1;
+                    g.DrawArc(pen, bodyX, bodyY, bodyW, bodyH * 2, 195, 150);
                 }
             }
         }
-
-        private GraphicsPath GetRoundedRect(Rectangle r, int radius)
-        {
-            GraphicsPath path = new GraphicsPath();
-            int d = radius * 2;
-            path.AddArc(r.X, r.Y, d, d, 180, 90);
-            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
     }
 }
-
