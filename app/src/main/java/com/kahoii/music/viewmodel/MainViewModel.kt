@@ -660,11 +660,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
 
         val p = controller ?: return
-        when (nextMode) {
-            LoopMode.OFF -> p.repeatMode = Player.REPEAT_MODE_OFF
-            LoopMode.ONE -> p.repeatMode = Player.REPEAT_MODE_ONE
-            LoopMode.ALL, LoopMode.SHUFFLE -> p.repeatMode = Player.REPEAT_MODE_ALL
-        }
+        p.repeatMode = Player.REPEAT_MODE_OFF
     }
 
     fun setVolume(volume: Float) {
@@ -1261,6 +1257,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun removeTrackFromCollection(playlistId: String, trackId: String) {
         viewModelScope.launch {
             playlistCollectionRepository.removeTrackFromPlaylist(playlistId, trackId)
+            if (_uiState.value.activeQueueSource == ActiveQueueSource.PLAYLIST) {
+                val updated = _uiState.value.playlist.filter { it.id != trackId }
+                _uiState.update { it.copy(playlist = updated) }
+                com.kahoii.music.service.MusicQueueManager.activeQueue = updated
+            }
         }
     }
 

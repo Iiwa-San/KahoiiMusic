@@ -207,18 +207,21 @@ object MusicQueueManager {
 
         val nextIdx = if (loopMode == LoopMode.SHUFFLE || isShuffled) {
             synchronized(shufflePlayedIndices) {
+                shufflePlayedIndices.removeAll { it !in queue.indices }
+
                 if (currIdx >= 0 && !shufflePlayedIndices.contains(currIdx)) {
                     shufflePlayedIndices.add(currIdx)
                 }
-                val unplayed = queue.indices.filter { !shufflePlayedIndices.contains(it) }
+                var unplayed = queue.indices.filter { !shufflePlayedIndices.contains(it) }
                 if (unplayed.isEmpty()) {
                     // Loop lại list sau khi hết tất cả các bài!
                     shufflePlayedIndices.clear()
-                    val reloop = queue.indices.filter { it != currIdx }
-                    if (reloop.isNotEmpty()) reloop.random() else 0
-                } else {
-                    unplayed.random()
+                    unplayed = queue.indices.filter { it != currIdx }
+                    if (unplayed.isEmpty()) {
+                        unplayed = listOf(0)
+                    }
                 }
+                unplayed.random()
             }
         } else {
             if (currIdx >= 0) (currIdx + 1) % queue.size else 0
