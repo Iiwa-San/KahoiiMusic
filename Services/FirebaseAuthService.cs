@@ -1,5 +1,5 @@
 using System.Drawing;
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -34,10 +34,36 @@ namespace KahoiiMusic.Services
         public FirebaseUserInfo CurrentUser { get; private set; }
         public bool IsLoggedIn => CurrentUser != null && !string.IsNullOrWhiteSpace(CurrentUser.idToken);
 
+        private static readonly object _avatarLock = new object();
         public Image UserAvatar { get; private set; }
         public event EventHandler AuthStateChanged;
         public event EventHandler AvatarChanged;
         public static string AvatarFilePath => Path.Combine(AppPaths.SavedDir, "avatar.png");
+
+        public static Bitmap SafeLoadBitmapFromBytes(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length == 0) return null;
+            try
+            {
+                using (var ms = new MemoryStream(bytes))
+                using (var raw = Image.FromStream(ms))
+                {
+                    Bitmap copy = new Bitmap(raw.Width, raw.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (Graphics g = Graphics.FromImage(copy))
+                    {
+                        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                        g.DrawImage(raw, 0, 0, raw.Width, raw.Height);
+                    }
+                    return copy;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         private FirebaseAuthService()
         {
@@ -66,29 +92,39 @@ namespace KahoiiMusic.Services
         {
             try
             {
+                byte[] bytes = null;
                 if (File.Exists(AvatarFilePath))
                 {
-                    byte[] bytes = File.ReadAllBytes(AvatarFilePath);
-                    using (var ms = new MemoryStream(bytes))
-                    {
-                        UserAvatar?.Dispose();
-                        UserAvatar = new Bitmap(Image.FromStream(ms));
-                    }
+                    bytes = File.ReadAllBytes(AvatarFilePath);
                 }
                 else if (!string.IsNullOrEmpty(CurrentUser?.avatarBase64))
                 {
-                    byte[] bytes = Convert.FromBase64String(CurrentUser.avatarBase64);
-                    File.WriteAllBytes(AvatarFilePath, bytes);
-                    using (var ms = new MemoryStream(bytes))
+                    try
                     {
-                        UserAvatar?.Dispose();
-                        UserAvatar = new Bitmap(Image.FromStream(ms));
+                        bytes = Convert.FromBase64String(CurrentUser.avatarBase64);
+                        File.WriteAllBytes(AvatarFilePath, bytes);
+                    }
+                    catch { }
+                }
+
+                if (bytes != null && bytes.Length > 0)
+                {
+                    var newBmp = SafeLoadBitmapFromBytes(bytes);
+                    if (newBmp != null)
+                    {
+                        lock (_avatarLock)
+                        {
+                            UserAvatar = newBmp;
+                        }
                     }
                 }
             }
             catch
             {
-                UserAvatar = null;
+                lock (_avatarLock)
+                {
+                    UserAvatar = null;
+                }
             }
         }
 
@@ -367,10 +403,10 @@ namespace KahoiiMusic.Services
                 AppPaths.EnsureDirectoriesExist();
                 File.WriteAllBytes(AvatarFilePath, bytes);
 
-                using (var ms = new MemoryStream(bytes))
+                var newBmp = SafeLoadBitmapFromBytes(bytes);
+                lock (_avatarLock)
                 {
-                    UserAvatar?.Dispose();
-                    UserAvatar = new Bitmap(Image.FromStream(ms));
+                    UserAvatar = newBmp;
                 }
 
                 string b64 = Convert.ToBase64String(bytes);
@@ -407,10 +443,10 @@ namespace KahoiiMusic.Services
                 byte[] bytes = Convert.FromBase64String(b64);
                 AppPaths.EnsureDirectoriesExist();
                 File.WriteAllBytes(AvatarFilePath, bytes);
-                using (var ms = new MemoryStream(bytes))
+                var newBmp = SafeLoadBitmapFromBytes(bytes);
+                lock (_avatarLock)
                 {
-                    UserAvatar?.Dispose();
-                    UserAvatar = new Bitmap(Image.FromStream(ms));
+                    UserAvatar = newBmp;
                 }
                 if (CurrentUser != null)
                 {

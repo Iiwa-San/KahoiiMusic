@@ -694,12 +694,22 @@ namespace KahoiiMusic
         private static GraphicsPath GetRoundedRect(Rectangle r, int radius)
         {
             GraphicsPath path = new GraphicsPath();
+            if (r.Width <= 0 || r.Height <= 0) return path;
+            int maxRadius = Math.Min(r.Width, r.Height) / 2;
+            radius = Math.Max(1, Math.Min(radius, maxRadius));
             int d = radius * 2;
-            path.AddArc(r.X, r.Y, d, d, 180, 90);
-            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
+            if (d > 0 && r.Width >= d && r.Height >= d)
+            {
+                path.AddArc(r.X, r.Y, d, d, 180, 90);
+                path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+                path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+                path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+                path.CloseFigure();
+            }
+            else
+            {
+                path.AddRectangle(r);
+            }
             return path;
         }
 
@@ -841,91 +851,105 @@ namespace KahoiiMusic
 
             protected override void OnPaint(PaintEventArgs e)
             {
-                Graphics g = e.Graphics;
-                g.SmoothingMode = SmoothingMode.HighQuality;
-                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-
-                int d = 66;
-                Rectangle rCircle = new Rectangle(2, 2, d, d);
-
-                // 1. Tỏa sáng gradient viền ngoài
-                int glowAlpha = _isHovered ? 150 : 75;
-                using (Pen glowPen = new Pen(Color.FromArgb(glowAlpha, 255, 45, 120), 2.5f))
+                try
                 {
-                    g.DrawEllipse(glowPen, 1, 1, d + 2, d + 2);
-                }
+                    if (Width <= 4 || Height <= 4) return;
 
-                // 2. Nội dung Avatar tròn
-                Rectangle rInner = new Rectangle(3, 3, d - 2, d - 2);
-                Image avatar = FirebaseAuthService.Instance.UserAvatar;
-                if (avatar != null)
-                {
-                    using (GraphicsPath clip = new GraphicsPath())
+                    Graphics g = e.Graphics;
+                    g.SmoothingMode = SmoothingMode.HighQuality;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+
+                    int d = Math.Min(66, Math.Min(Width - 4, Height - 4));
+                    if (d < 4) return;
+                    Rectangle rCircle = new Rectangle(2, 2, d, d);
+
+                    // 1. Tỏa sáng gradient viền ngoài
+                    int glowAlpha = _isHovered ? 150 : 75;
+                    using (Pen glowPen = new Pen(Color.FromArgb(glowAlpha, 255, 45, 120), 2.5f))
                     {
-                        clip.AddEllipse(rInner);
-                        g.SetClip(clip);
-                        g.DrawImage(avatar, rInner);
-                        g.ResetClip();
+                        g.DrawEllipse(glowPen, 1, 1, d + 2, d + 2);
+                    }
+
+                    // 2. Nội dung Avatar tròn
+                    Rectangle rInner = new Rectangle(3, 3, d - 2, d - 2);
+                    Image avatar = FirebaseAuthService.Instance.UserAvatar;
+                    bool drewAvatar = false;
+                    if (avatar != null)
+                    {
+                        try
+                        {
+                            using (GraphicsPath clip = new GraphicsPath())
+                            {
+                                clip.AddEllipse(rInner);
+                                g.SetClip(clip);
+                                g.DrawImage(avatar, rInner);
+                                g.ResetClip();
+                            }
+                            drewAvatar = true;
+                        }
+                        catch { }
+                    }
+
+                    if (!drewAvatar)
+                    {
+                        using (LinearGradientBrush bgBrush = new LinearGradientBrush(rInner,
+                            Color.FromArgb(48, 22, 38), Color.FromArgb(28, 16, 36), 45f))
+                        {
+                            g.FillEllipse(bgBrush, rInner);
+                        }
+                        int cx = rInner.X + rInner.Width / 2;
+                        int cy = rInner.Y + rInner.Height / 2;
+                        using (SolidBrush iconBrush = new SolidBrush(Color.FromArgb(255, 45, 120)))
+                        using (Pen iconPen = new Pen(Color.FromArgb(255, 45, 120), 2.2f))
+                        {
+                            iconPen.StartCap = LineCap.Round;
+                            iconPen.EndCap = LineCap.Round;
+                            g.FillEllipse(iconBrush, cx - 9, cy - 12, 18, 18);
+                            g.DrawArc(iconPen, cx - 16, cy + 2, 32, 24, 195, 150);
+                        }
+                    }
+
+                    // 3. Viền gradient sắc nét
+                    using (LinearGradientBrush lgb = new LinearGradientBrush(rCircle,
+                        Color.FromArgb(255, 45, 120), Color.FromArgb(168, 85, 247), 45f))
+                    using (Pen gradPen = new Pen(lgb, 2.2f))
+                    {
+                        g.DrawEllipse(gradPen, rCircle);
+                    }
+
+                    // 4. Pencil Edit Badge ở góc dưới bên phải
+                    int badgeX = Math.Max(2, d - 20);
+                    int badgeY = Math.Max(2, d - 20);
+                    int badgeD = 24;
+                    Rectangle rBadge = new Rectangle(badgeX, badgeY, badgeD, badgeD);
+
+                    // Viền tối ngăn cách badge với ảnh avatar
+                    using (Pen sepPen = new Pen(Color.FromArgb(24, 21, 32), 2.5f))
+                    {
+                        g.DrawEllipse(sepPen, rBadge);
+                    }
+
+                    Color badgeBg = _isHovered ? Color.FromArgb(255, 75, 140) : Color.FromArgb(255, 45, 120);
+                    using (SolidBrush badgeBrush = new SolidBrush(badgeBg))
+                    {
+                        g.FillEllipse(badgeBrush, rBadge);
+                    }
+
+                    // Vẽ icon bút chì sắc nét bên trong badge
+                    using (Pen pPen = new Pen(Color.White, 2f))
+                    {
+                        pPen.StartCap = LineCap.Round;
+                        pPen.EndCap = LineCap.Round;
+                        g.DrawLine(pPen, badgeX + 7, badgeY + 16, badgeX + 15, badgeY + 8);
+                        g.FillPolygon(Brushes.White, new PointF[] {
+                            new PointF(badgeX + 6, badgeY + 17),
+                            new PointF(badgeX + 9, badgeY + 17),
+                            new PointF(badgeX + 7, badgeY + 14)
+                        });
                     }
                 }
-                else
-                {
-                    using (LinearGradientBrush bgBrush = new LinearGradientBrush(rInner,
-                        Color.FromArgb(48, 22, 38), Color.FromArgb(28, 16, 36), 45f))
-                    {
-                        g.FillEllipse(bgBrush, rInner);
-                    }
-                    int cx = rInner.X + rInner.Width / 2;
-                    int cy = rInner.Y + rInner.Height / 2;
-                    using (SolidBrush iconBrush = new SolidBrush(Color.FromArgb(255, 45, 120)))
-                    using (Pen iconPen = new Pen(Color.FromArgb(255, 45, 120), 2.2f))
-                    {
-                        iconPen.StartCap = LineCap.Round;
-                        iconPen.EndCap = LineCap.Round;
-                        g.FillEllipse(iconBrush, cx - 9, cy - 12, 18, 18);
-                        g.DrawArc(iconPen, cx - 16, cy + 2, 32, 24, 195, 150);
-                    }
-                }
-
-                // 3. Viền gradient sắc nét
-                using (LinearGradientBrush lgb = new LinearGradientBrush(rCircle,
-                    Color.FromArgb(255, 45, 120), Color.FromArgb(168, 85, 247), 45f))
-                using (Pen gradPen = new Pen(lgb, 2.2f))
-                {
-                    g.DrawEllipse(gradPen, rCircle);
-                }
-
-                // 4. Pencil Edit Badge ở góc dưới bên phải
-                int badgeX = 46;
-                int badgeY = 46;
-                int badgeD = 24;
-                Rectangle rBadge = new Rectangle(badgeX, badgeY, badgeD, badgeD);
-
-                // Viền tối ngăn cách badge với ảnh avatar
-                using (Pen sepPen = new Pen(Color.FromArgb(24, 21, 32), 2.5f))
-                {
-                    g.DrawEllipse(sepPen, rBadge);
-                }
-
-                Color badgeBg = _isHovered ? Color.FromArgb(255, 75, 140) : Color.FromArgb(255, 45, 120);
-                using (SolidBrush badgeBrush = new SolidBrush(badgeBg))
-                {
-                    g.FillEllipse(badgeBrush, rBadge);
-                }
-
-                // Vẽ icon bút chì sắc nét bên trong badge
-                using (Pen pPen = new Pen(Color.White, 2f))
-                {
-                    pPen.StartCap = LineCap.Round;
-                    pPen.EndCap = LineCap.Round;
-                    g.DrawLine(pPen, badgeX + 7, badgeY + 16, badgeX + 15, badgeY + 8);
-                    g.FillPolygon(Brushes.White, new PointF[] {
-                        new PointF(badgeX + 6, badgeY + 17),
-                        new PointF(badgeX + 9, badgeY + 17),
-                        new PointF(badgeX + 7, badgeY + 14)
-                    });
-                }
+                catch { }
             }
         }
 
@@ -1262,12 +1286,22 @@ namespace KahoiiMusic
             private GraphicsPath GetRoundedRect(Rectangle r, int radius)
             {
                 GraphicsPath path = new GraphicsPath();
+                if (r.Width <= 0 || r.Height <= 0) return path;
+                int maxRadius = Math.Min(r.Width, r.Height) / 2;
+                radius = Math.Max(1, Math.Min(radius, maxRadius));
                 int d = radius * 2;
-                path.AddArc(r.X, r.Y, d, d, 180, 90);
-                path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-                path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-                path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-                path.CloseFigure();
+                if (d > 0 && r.Width >= d && r.Height >= d)
+                {
+                    path.AddArc(r.X, r.Y, d, d, 180, 90);
+                    path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+                    path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+                    path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+                    path.CloseFigure();
+                }
+                else
+                {
+                    path.AddRectangle(r);
+                }
                 return path;
             }
         }

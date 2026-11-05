@@ -116,6 +116,9 @@ namespace KahoiiMusic
                 {
                     try
                     {
+                        string logPath = Path.Combine(KahoiiMusic.Services.AppPaths.BaseDirectory, "crash.log");
+                        File.AppendAllText(logPath, string.Format("[{0}] ThreadException: {1}\r\nStack: {2}\r\n\r\n",
+                            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), exArgs.Exception?.Message, exArgs.Exception?.StackTrace));
                         MessageBox.Show("Đã xảy ra sự cố: " + (exArgs.Exception != null ? exArgs.Exception.Message : "Lỗi không xác định"),
                             "Kahoii Music", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
@@ -126,6 +129,9 @@ namespace KahoiiMusic
                     try
                     {
                         var ex = unhandledArgs.ExceptionObject as Exception;
+                        string logPath = Path.Combine(KahoiiMusic.Services.AppPaths.BaseDirectory, "crash.log");
+                        File.AppendAllText(logPath, string.Format("[{0}] UnhandledException: {1}\r\nStack: {2}\r\n\r\n",
+                            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), ex?.Message, ex?.StackTrace));
                         MessageBox.Show("Đã xảy ra sự cố nghiêm trọng: " + (ex != null ? ex.Message : "Lỗi không xác định"),
                             "Kahoii Music", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }

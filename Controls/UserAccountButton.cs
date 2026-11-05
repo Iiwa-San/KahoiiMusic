@@ -76,117 +76,130 @@ namespace KahoiiMusic.Controls
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.HighQuality;
-            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-
-            bool isLoggedIn = FirebaseAuthService.Instance.IsLoggedIn;
-            Image avatar = FirebaseAuthService.Instance.UserAvatar;
-
-            int size = Math.Min(Width, Height);
-            int cx = Width / 2;
-            int cy = Height / 2;
-
-            if (isLoggedIn)
+            try
             {
-                // Diameter of circular avatar
-                int d = size - 4;
-                int x = cx - d / 2;
-                int y = cy - d / 2;
-                Rectangle rCircle = new Rectangle(x, y, d, d);
+                if (Width <= 4 || Height <= 4) return;
 
-                // 1. Viền ngoài tỏa sáng gradient (Glowing Aura)
-                int glowAlpha = _isHovered ? 140 : 65;
-                using (Pen glowPen = new Pen(Color.FromArgb(glowAlpha, _accentPink), 2.5f))
-                {
-                    g.DrawEllipse(glowPen, x - 1, y - 1, d + 2, d + 2);
-                }
+                Graphics g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
-                // 2. Nội dung Avatar tròn
-                Rectangle rInner = new Rectangle(x + 1, y + 1, d - 2, d - 2);
-                if (avatar != null)
+                bool isLoggedIn = FirebaseAuthService.Instance.IsLoggedIn;
+                Image avatar = FirebaseAuthService.Instance.UserAvatar;
+
+                int size = Math.Min(Width, Height);
+                int cx = Width / 2;
+                int cy = Height / 2;
+
+                if (isLoggedIn)
                 {
-                    using (GraphicsPath clip = new GraphicsPath())
+                    int d = Math.Max(4, size - 4);
+                    int x = cx - d / 2;
+                    int y = cy - d / 2;
+                    Rectangle rCircle = new Rectangle(x, y, d, d);
+
+                    // 1. Viền ngoài tỏa sáng gradient (Glowing Aura)
+                    int glowAlpha = _isHovered ? 140 : 65;
+                    using (Pen glowPen = new Pen(Color.FromArgb(glowAlpha, _accentPink), 2.5f))
                     {
-                        clip.AddEllipse(rInner);
-                        g.SetClip(clip);
-                        g.DrawImage(avatar, rInner);
-                        g.ResetClip();
+                        g.DrawEllipse(glowPen, x - 1, y - 1, d + 2, d + 2);
+                    }
+
+                    // 2. Nội dung Avatar tròn
+                    int innerD = Math.Max(2, d - 2);
+                    Rectangle rInner = new Rectangle(x + 1, y + 1, innerD, innerD);
+                    bool drewAvatar = false;
+                    if (avatar != null)
+                    {
+                        try
+                        {
+                            using (GraphicsPath clip = new GraphicsPath())
+                            {
+                                clip.AddEllipse(rInner);
+                                g.SetClip(clip);
+                                g.DrawImage(avatar, rInner);
+                                g.ResetClip();
+                            }
+                            drewAvatar = true;
+                        }
+                        catch { }
+                    }
+
+                    if (!drewAvatar)
+                    {
+                        // Gradient nền mặc định khi chưa upload ảnh hoặc lỗi ảnh
+                        using (LinearGradientBrush bgBrush = new LinearGradientBrush(rInner,
+                            Color.FromArgb(48, 22, 38), Color.FromArgb(28, 16, 36), 45f))
+                        {
+                            g.FillEllipse(bgBrush, rInner);
+                        }
+
+                        // Silhouette icon
+                        using (SolidBrush headBrush = new SolidBrush(_accentPink))
+                        using (Pen bodyPen = new Pen(_accentPink, 1.6f))
+                        {
+                            bodyPen.StartCap = LineCap.Round;
+                            bodyPen.EndCap = LineCap.Round;
+                            int headR = 3;
+                            g.FillEllipse(headBrush, cx - headR, cy - 4 - headR, headR * 2, headR * 2);
+                            g.DrawArc(bodyPen, cx - 6, cy + 1, 12, 10, 195, 150);
+                        }
+                    }
+
+                    // 3. Viền gradient sắc nét (Sharp Gradient Ring)
+                    using (LinearGradientBrush gradBrush = new LinearGradientBrush(rCircle,
+                        _accentPink, _accentPurple, 45f))
+                    using (Pen gradPen = new Pen(gradBrush, 1.8f))
+                    {
+                        g.DrawEllipse(gradPen, rCircle);
+                    }
+
+                    // 4. Chấm online xanh mint nhỏ ở góc trên phải
+                    using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(52, 211, 153)))
+                    using (Pen dotBorder = new Pen(Color.FromArgb(24, 21, 32), 1f))
+                    {
+                        int dotX = Width - 6;
+                        int dotY = 1;
+                        g.FillEllipse(dotBrush, dotX, dotY, 5, 5);
+                        g.DrawEllipse(dotBorder, dotX, dotY, 5, 5);
                     }
                 }
                 else
                 {
-                    // Gradient nền mặc định khi chưa upload ảnh
-                    using (LinearGradientBrush bgBrush = new LinearGradientBrush(rInner,
-                        Color.FromArgb(48, 22, 38), Color.FromArgb(28, 16, 36), 45f))
+                    // Not logged in: Default subtle pill / circle
+                    if (_isHovered)
                     {
-                        g.FillEllipse(bgBrush, rInner);
+                        Color bg = _isPressed
+                            ? Color.FromArgb(50, 255, 255, 255)
+                            : Color.FromArgb(25, 255, 255, 255);
+                        using (SolidBrush b = new SolidBrush(bg))
+                        {
+                            g.FillEllipse(b, 2, 2, Math.Max(2, Width - 5), Math.Max(2, Height - 5));
+                        }
                     }
 
-                    // Silhouette icon
-                    using (SolidBrush headBrush = new SolidBrush(_accentPink))
-                    using (Pen bodyPen = new Pen(_accentPink, 1.6f))
+                    Color iconColor = _isHovered ? _hoverColor : _defaultColor;
+                    using (Pen pen = new Pen(iconColor, 1.8f))
                     {
-                        bodyPen.StartCap = LineCap.Round;
-                        bodyPen.EndCap = LineCap.Round;
+                        pen.StartCap = LineCap.Round;
+                        pen.EndCap = LineCap.Round;
+
+                        // Head
                         int headR = 3;
-                        g.FillEllipse(headBrush, cx - headR, cy - 4 - headR, headR * 2, headR * 2);
-                        g.DrawArc(bodyPen, cx - 6, cy + 1, 12, 10, 195, 150);
+                        int headY = cy - 4;
+                        g.DrawEllipse(pen, cx - headR, headY - headR, headR * 2, headR * 2);
+
+                        // Shoulders arc
+                        int bodyW = 12;
+                        int bodyH = 7;
+                        int bodyX = cx - bodyW / 2;
+                        int bodyY = cy + 1;
+                        g.DrawArc(pen, bodyX, bodyY, bodyW, bodyH * 2, 195, 150);
                     }
                 }
-
-                // 3. Viền gradient sắc nét (Sharp Gradient Ring)
-                using (LinearGradientBrush gradBrush = new LinearGradientBrush(rCircle,
-                    _accentPink, _accentPurple, 45f))
-                using (Pen gradPen = new Pen(gradBrush, 1.8f))
-                {
-                    g.DrawEllipse(gradPen, rCircle);
-                }
-
-                // 4. Chấm online xanh mint nhỏ ở góc trên phải
-                using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(52, 211, 153)))
-                using (Pen dotBorder = new Pen(Color.FromArgb(24, 21, 32), 1f))
-                {
-                    int dotX = Width - 6;
-                    int dotY = 1;
-                    g.FillEllipse(dotBrush, dotX, dotY, 5, 5);
-                    g.DrawEllipse(dotBorder, dotX, dotY, 5, 5);
-                }
             }
-            else
-            {
-                // Not logged in: Default subtle pill / circle
-                if (_isHovered)
-                {
-                    Color bg = _isPressed
-                        ? Color.FromArgb(50, 255, 255, 255)
-                        : Color.FromArgb(25, 255, 255, 255);
-                    using (SolidBrush b = new SolidBrush(bg))
-                    {
-                        g.FillEllipse(b, 2, 2, Width - 5, Height - 5);
-                    }
-                }
-
-                Color iconColor = _isHovered ? _hoverColor : _defaultColor;
-                using (Pen pen = new Pen(iconColor, 1.8f))
-                {
-                    pen.StartCap = LineCap.Round;
-                    pen.EndCap = LineCap.Round;
-
-                    // Head
-                    int headR = 3;
-                    int headY = cy - 4;
-                    g.DrawEllipse(pen, cx - headR, headY - headR, headR * 2, headR * 2);
-
-                    // Shoulders arc
-                    int bodyW = 12;
-                    int bodyH = 7;
-                    int bodyX = cx - bodyW / 2;
-                    int bodyY = cy + 1;
-                    g.DrawArc(pen, bodyX, bodyY, bodyW, bodyH * 2, 195, 150);
-                }
-            }
+            catch { }
         }
     }
 }
