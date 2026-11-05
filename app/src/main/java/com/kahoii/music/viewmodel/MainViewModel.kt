@@ -511,12 +511,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             title = existingTitle ?: "Đang tải...",
             durationSeconds = 0
         )
-        _uiState.update {
-            it.copy(
-                playlist = listOf(tempItem),
-                currentPlaylistIndex = 0,
-                activeQueueSource = ActiveQueueSource.PLAYLIST
-            )
+        // If user already had a session playlist loaded in Tab 0, DO NOT wipe it out!
+        if (_uiState.value.playlist.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    playlist = listOf(tempItem),
+                    currentPlaylistIndex = 0,
+                    activeQueueSource = ActiveQueueSource.PLAYLIST
+                )
+            }
         }
         playTrack(tempItem)
     }

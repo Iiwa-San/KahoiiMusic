@@ -40,6 +40,15 @@ object MusicQueueManager {
     // State
     @Volatile
     var activeQueue: List<PlaylistItem> = emptyList()
+        set(value) {
+            field = value
+            synchronized(shufflePlayedIndices) {
+                shufflePlayedIndices.clear()
+                val cur = currentTrack?.id
+                val idx = if (!cur.isNullOrBlank()) value.indexOfFirst { it.id.equals(cur, ignoreCase = true) } else currentIndex
+                if (idx >= 0) shufflePlayedIndices.add(idx)
+            }
+        }
 
     @Volatile
     var currentTrack: PlaylistItem? = null
