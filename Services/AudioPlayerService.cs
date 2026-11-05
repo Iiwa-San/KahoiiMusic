@@ -72,6 +72,53 @@ namespace KahoiiMusic.Services
         public string CurrentAuthor => _currentAuthor;
         public event EventHandler<string> AuthorChanged;
 
+        public static string CleanDisplayTitle(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+            try
+            {
+                // 1. Unicode Compatibility Normalization (FormKC)
+                // Converts mathematical styled alphanumeric letters (e.g. 𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 -> Playlist, ① -> 1, fullwidth -> ASCII)
+                string s = title.Normalize(System.Text.NormalizationForm.FormKC);
+
+                // 2. Filter out surrogate pairs (> 0xFFFF like emojis) that GDI+ cannot render
+                // This eliminates ugly rectangular missing glyph boxes (tofu [])
+                var sb = new System.Text.StringBuilder(s.Length);
+                for (int i = 0; i < s.Length; i++)
+                {
+                    char c = s[i];
+                    if (char.IsHighSurrogate(c))
+                    {
+                        if (i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                        {
+                            i++; // Skip emoji / surrogate pair
+                            continue;
+                        }
+                    }
+                    else if (char.IsLowSurrogate(c))
+                    {
+                        continue;
+                    }
+                    else if (c >= '\uFE00' && c <= '\uFE0F') // Variation selectors
+                    {
+                        continue;
+                    }
+                    else if (c == '\u200D' || c == '\u200B' || c == '\uFEFF') // Zero-width joiners
+                    {
+                        continue;
+                    }
+                    sb.Append(c);
+                }
+
+                string result = Regex.Replace(sb.ToString(), @"\s+", " ").Trim();
+                return !string.IsNullOrEmpty(result) ? result : title.Trim();
+            }
+            catch
+            {
+                return title.Trim();
+            }
+        }
+
         public static string CleanAuthor(string author)
         {
             if (string.IsNullOrWhiteSpace(author)) return string.Empty;
@@ -83,52 +130,7 @@ namespace KahoiiMusic.Services
 
         public static string ExtractAuthorFromTitle(string title)
         {
-            if (string.IsNullOrWhiteSpace(title)) return string.Empty;
-            string clean = title.Trim();
-
-            // 1. Pattern: "Title / Artist" or "Title / Artist[...]"
-            Match mSlash = Regex.Match(clean, @"/\s*([^/【\[\(\-]+)");
-            if (mSlash.Success)
-            {
-                string candidate = mSlash.Groups[1].Value.Trim();
-                if (candidate.Length >= 2 && candidate.Length <= 40 &&
-                    !Regex.IsMatch(candidate, @"(?i)cover|lyrics|vietsub|kara|official|video|audio"))
-                {
-                    return CleanAuthor(candidate);
-                }
-            }
-
-            // Strip leading tags like 【MV】, [Official], etc.
-            string cleanNoTag = Regex.Replace(clean, @"^[【\[\(][^】\]\)]*[】\]\)]\s*", "");
-
-            // 2. Pattern: "Artist - Title" or "Artist – Title" or "Artist — Title" or "Artist | Title"
-            string[] separators = new string[] { " - ", " – ", " — ", " | " };
-            foreach (var sep in separators)
-            {
-                int idx = cleanNoTag.IndexOf(sep, StringComparison.Ordinal);
-                if (idx > 0)
-                {
-                    string candidate = cleanNoTag.Substring(0, idx).Trim();
-                    candidate = Regex.Replace(candidate, @"^[【\[\(][^】\]\)]*[】\]\)]\s*", "");
-                    if (candidate.Length >= 2 && candidate.Length <= 50 &&
-                        !Regex.IsMatch(candidate, @"(?i)mv|official|lyrics|vietsub|kara|ost|full"))
-                    {
-                        return CleanAuthor(candidate);
-                    }
-                }
-            }
-
-            // 3. Pattern: "feat. Artist" or "ft. Artist"
-            Match mFeat = Regex.Match(clean, @"(?i)(?:feat\.|ft\.)\s*([^】\]\)\-,]+)");
-            if (mFeat.Success)
-            {
-                string candidate = mFeat.Groups[1].Value.Trim();
-                if (candidate.Length >= 2 && candidate.Length <= 40)
-                {
-                    return CleanAuthor(candidate);
-                }
-            }
-
+            // Per user request, channel name is directly taken as author without inaccurate title heuristics
             return string.Empty;
         }
 
@@ -181,9 +183,9 @@ namespace KahoiiMusic.Services
 
         private const int PreloadBatchSize = 1; // Only preload 1 track ahead to optimize disk space
 
-        private const long MaxCacheSizeBytes = 3L * 1024 * 1024 * 1024; // 3 GB (supports multiple multi-hour tracks >200MB each)
+        private const long MaxCacheSizeBytes = 300L * 1024 * 1024; // 300 MB temp cache (only current + 1 preloaded track)
 
-        private const int MaxCacheFileCount = 100;
+        private const int MaxCacheFileCount = 10;
 
         private List<PlaylistItem> _playlist = new List<PlaylistItem>();
         private List<PlaylistItem> _sessionPlaylist = new List<PlaylistItem>();
@@ -252,9 +254,9 @@ namespace KahoiiMusic.Services
 
             get
             {
-                if (!HasPlaylist) return false;
+                if (!HasPlaylist || _playlist == null || _playlist.Count == 0) return false;
                 if (_loopMode == LoopMode.Shuffle || _loopMode == LoopMode.All) return true;
-                return _currentPlaylistIndex >= 0 && _currentPlaylistIndex + 1 < _playlist.Count;
+                return (_currentPlaylistIndex + 1 < _playlist.Count);
             }
 
         }
@@ -334,6 +336,9 @@ namespace KahoiiMusic.Services
 
         {
 
+            string clean = CleanDisplayTitle(title ?? string.Empty);
+            _currentTitle = clean;
+
             _syncContext.Post(delegate
 
             {
@@ -342,7 +347,7 @@ namespace KahoiiMusic.Services
 
                 {
 
-                    TitleChanged(this, title ?? string.Empty);
+                    TitleChanged(this, clean);
 
                 }
 
@@ -391,14 +396,13 @@ namespace KahoiiMusic.Services
             if (!string.IsNullOrEmpty(_preloadingVideoId)) set.Add(_preloadingVideoId);
             lock (_playlist)
             {
-                if (_playlist != null)
+                if (_playlist != null && _playlist.Count > 0)
                 {
-                    foreach (var item in _playlist)
+                    int nextIdx = (_currentPlaylistIndex >= 0) ? (_currentPlaylistIndex + 1) : 0;
+                    if (nextIdx >= 0 && nextIdx < _playlist.Count)
                     {
-                        if (item != null && !string.IsNullOrWhiteSpace(item.Id))
-                        {
-                            set.Add(item.Id);
-                        }
+                        string nextId = _playlist[nextIdx]?.Id;
+                        if (!string.IsNullOrEmpty(nextId)) set.Add(nextId);
                     }
                 }
             }
@@ -712,53 +716,45 @@ namespace KahoiiMusic.Services
 
                         {
 
-                            if (_playlist != null && _playlist.Count > 0 && _currentPlaylistIndex >= 0)
+                            if (_playlist != null && _playlist.Count > 0)
 
                             {
 
-                                int totalToQueue = Math.Min(PreloadBatchSize, _playlist.Count - 1);
+                                int targetIdx = (_currentPlaylistIndex >= 0) ? (_currentPlaylistIndex + 1) : 0;
 
-                                for (int i = 1; i <= totalToQueue; i++)
+                                if (targetIdx >= _playlist.Count)
 
                                 {
 
-                                    int targetIdx = (_currentPlaylistIndex + i);
-
-                                    if (targetIdx >= _playlist.Count)
+                                    if (_isLooping)
 
                                     {
 
-                                        if (_isLooping)
-
-                                        {
-
-                                            targetIdx = targetIdx % _playlist.Count;
-
-                                        }
-
-                                        else
-
-                                        {
-
-                                            break;
-
-                                        }
+                                        targetIdx = 0;
 
                                     }
 
-                                    if (targetIdx >= 0 && targetIdx < _playlist.Count)
+                                    else
 
                                     {
 
-                                        string id = _playlist[targetIdx].Id;
+                                        targetIdx = -1;
 
-                                        if (!string.IsNullOrEmpty(id) && !targetIds.Contains(id))
+                                    }
 
-                                        {
+                                }
 
-                                            targetIds.Add(id);
+                                if (targetIdx >= 0 && targetIdx < _playlist.Count)
 
-                                        }
+                                {
+
+                                    string id = _playlist[targetIdx].Id;
+
+                                    if (!string.IsNullOrEmpty(id) && !targetIds.Contains(id))
+
+                                    {
+
+                                        targetIds.Add(id);
 
                                     }
 
@@ -1745,6 +1741,78 @@ namespace KahoiiMusic.Services
 
         }
 
+        public void LoadPlaylistQueueOnly(string playlistUrl)
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    string listId = ExtractListId(playlistUrl);
+                    if (string.IsNullOrEmpty(listId)) return;
+                    LoadPlaylistAsync(playlistUrl, _currentVideoId, playFirstIfNoVideo: false);
+                }
+                catch { }
+            });
+        }
+
+        public void LoadSingleTrackQueueOnly(string videoId, string url)
+        {
+            if (string.IsNullOrEmpty(videoId)) return;
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    string title = "Đang tải tên bài hát...";
+                    string author = "";
+                    int dur = 0;
+
+                    try
+                    {
+                        using (var wc = new System.Net.WebClient())
+                        {
+                            wc.Encoding = System.Text.Encoding.UTF8;
+                            wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                            string json = wc.DownloadString("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + videoId + "&format=json");
+                            if (!string.IsNullOrEmpty(json))
+                            {
+                                var mTitle = System.Text.RegularExpressions.Regex.Match(json, @"""title""\s*:\s*""([^""]+)""");
+                                if (mTitle.Success) title = System.Text.RegularExpressions.Regex.Unescape(mTitle.Groups[1].Value);
+                                var mAuthor = System.Text.RegularExpressions.Regex.Match(json, @"""author_name""\s*:\s*""([^""]+)""");
+                                if (mAuthor.Success) author = System.Text.RegularExpressions.Regex.Unescape(mAuthor.Groups[1].Value);
+                            }
+                        }
+                    }
+                    catch { }
+
+                    title = CleanDisplayTitle(title);
+                    author = !string.IsNullOrWhiteSpace(author) ? CleanAuthor(author) : string.Empty;
+
+                    var item = new PlaylistItem
+                    {
+                        Id = videoId,
+                        Title = title,
+                        Author = author,
+                        DurationSeconds = dur
+                    };
+
+                    _sessionPlaylist = new List<PlaylistItem> { item };
+                    _playlist = _sessionPlaylist;
+                    _currentPlaylistId = null;
+                    CurrentPlaylistTitle = null;
+                    _currentPlaylistIndex = -1;
+
+                    _syncContext.Post(delegate
+                    {
+                        if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
+                        if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, -1);
+                    }, null);
+
+                    SchedulePreloadPlaylistAhead();
+                }
+                catch { }
+            });
+        }
+
         public void LoadPlaylistAsync(string playlistUrl, string currentVideoId = null, bool playFirstIfNoVideo = false)
 
         {
@@ -1787,7 +1855,7 @@ namespace KahoiiMusic.Services
 
                     psi.FileName = ytdlpPath;
 
-                    psi.Arguments = string.Format("--encoding utf-8 --flat-playlist --print \"%(playlist_title)s\t%(id)s\t%(title)s\t%(duration)s\t%(uploader)s\" \"{0}\"", targetUrl);
+                    psi.Arguments = string.Format("--encoding utf-8 --yes-playlist --flat-playlist --print \"%(playlist_title)s\t%(id)s\t%(title)s\t%(duration)s\t%(uploader)s\" \"{0}\"", targetUrl);
 
                     psi.CreateNoWindow = true;
 
@@ -1849,18 +1917,10 @@ namespace KahoiiMusic.Services
                                 if (parts.Length >= 3) int.TryParse(parts[2].Trim(), out dur);
                             }
 
-                            if (!string.IsNullOrWhiteSpace(author) && author != "NA" && author != "None")
-                            {
-                                author = CleanAuthor(author);
-                            }
-                            else if (!string.IsNullOrWhiteSpace(title))
-                            {
-                                author = ExtractAuthorFromTitle(title);
-                            }
-                            else
-                            {
-                                author = string.Empty;
-                            }
+                            title = CleanDisplayTitle(title);
+                            author = (!string.IsNullOrWhiteSpace(author) && author != "NA" && author != "None")
+                                ? CleanAuthor(author)
+                                : string.Empty;
 
                             if (!string.IsNullOrEmpty(plTitle) && plTitle != "NA" && plTitle != "None")
                             {
@@ -1905,6 +1965,32 @@ namespace KahoiiMusic.Services
 
                                         LoadAndPlay(item.Url);
 
+                                    }
+                                    else if (!playFirstIfNoVideo)
+                                    {
+                                        if (!hasStartedFirst && list.Count == 1)
+                                        {
+                                            hasStartedFirst = true;
+                                            _sessionPlaylist = new List<PlaylistItem>(list);
+                                            _playlist = _sessionPlaylist;
+                                            _currentPlaylistId = listId;
+                                            _currentPlaylistIndex = -1;
+                                            _syncContext.Post(delegate
+                                            {
+                                                if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
+                                                if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, -1);
+                                            }, null);
+                                            SchedulePreloadPlaylistAhead();
+                                        }
+                                        else if (list.Count % 5 == 0)
+                                        {
+                                            _sessionPlaylist = new List<PlaylistItem>(list);
+                                            _playlist = _sessionPlaylist;
+                                            _syncContext.Post(delegate
+                                            {
+                                                if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
+                                            }, null);
+                                        }
                                     }
 
                                 }
@@ -2141,7 +2227,9 @@ namespace KahoiiMusic.Services
 
                     {
 
-                        _playlist = new List<PlaylistItem>();
+                        _sessionPlaylist = new List<PlaylistItem>();
+
+                        _playlist = _sessionPlaylist;
 
                         _currentPlaylistId = null;
 
@@ -3119,13 +3207,9 @@ namespace KahoiiMusic.Services
 
                     {
 
-                        string fetchedTitle = m.Success ? Regex.Unescape(m.Groups[1].Value) : null;
+                        string fetchedTitle = m.Success ? CleanDisplayTitle(Regex.Unescape(m.Groups[1].Value)) : null;
                         string rawAuthor = mAuthor.Success ? Regex.Unescape(mAuthor.Groups[1].Value) : null;
                         string fetchedAuthor = CleanAuthor(rawAuthor);
-                        if (string.IsNullOrWhiteSpace(fetchedAuthor) && !string.IsNullOrWhiteSpace(fetchedTitle))
-                        {
-                            fetchedAuthor = ExtractAuthorFromTitle(fetchedTitle);
-                        }
                         if (!string.IsNullOrWhiteSpace(fetchedAuthor))
                         {
                             if (string.Equals(_currentVideoId, videoId, StringComparison.OrdinalIgnoreCase))

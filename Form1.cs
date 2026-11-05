@@ -213,22 +213,15 @@ namespace KahoiiMusic
             };
             _audioPlayer.TitleChanged += (s, title) =>
             {
-                marqueeTitle.Text = title;
-                UpdateTrayTooltip(title);
-                if (string.IsNullOrWhiteSpace(marqueeAuthor.Text))
-                {
-                    string fallbackAuthor = AudioPlayerService.ExtractAuthorFromTitle(title);
-                    if (!string.IsNullOrWhiteSpace(fallbackAuthor))
-                    {
-                        marqueeAuthor.Text = fallbackAuthor;
-                    }
-                }
+                string cleanTitle = AudioPlayerService.CleanDisplayTitle(title);
+                marqueeTitle.Text = cleanTitle;
+                UpdateTrayTooltip(cleanTitle);
                 if (btnQuickDownload != null && !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
                 {
                     btnQuickDownload.SetCurrentTrack(new PlaylistItem
                     {
                         Id = _audioPlayer.CurrentVideoId,
-                        Title = title,
+                        Title = cleanTitle,
                         Author = marqueeAuthor.Text,
                         DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
                     });
@@ -243,15 +236,12 @@ namespace KahoiiMusic
                 string curT = !string.IsNullOrEmpty(args.Title) ? args.Title : _audioPlayer.CurrentTitle;
                 if (!string.IsNullOrEmpty(curT))
                 {
-                    marqueeTitle.Text = curT;
-                    UpdateTrayTooltip(curT);
+                    string cleanT = AudioPlayerService.CleanDisplayTitle(curT);
+                    marqueeTitle.Text = cleanT;
+                    UpdateTrayTooltip(cleanT);
                 }
                 string curA = !string.IsNullOrEmpty(args.Author) ? args.Author : _audioPlayer.CurrentAuthor;
-                if (string.IsNullOrWhiteSpace(curA) && !string.IsNullOrEmpty(curT))
-                {
-                    curA = AudioPlayerService.ExtractAuthorFromTitle(curT);
-                }
-                marqueeAuthor.Text = curA ?? string.Empty;
+                marqueeAuthor.Text = AudioPlayerService.CleanAuthor(curA ?? string.Empty);
                 if (btnQuickDownload != null)
                 {
                     btnQuickDownload.SetCurrentTrack(new PlaylistItem
@@ -828,6 +818,48 @@ namespace KahoiiMusic
                 {
                     btnPlaylist.HasPlaylist = true;
                     playlistPopup.StartLoading();
+                }
+
+                // If currently playing audio, DO NOT interrupt the song being played!
+                // Clear old playlist from queue and load new playlist in background.
+                // The current song continues playing and is kept in history.
+                if (_audioPlayer.IsPlaying || !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                {
+                    if (!string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                    {
+                        HistoryService.AddTrack(new PlaylistItem
+                        {
+                            Id = _audioPlayer.CurrentVideoId,
+                            Title = _audioPlayer.CurrentTitle,
+                            Author = _audioPlayer.CurrentAuthor,
+                            DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
+                        });
+                    }
+
+                    _audioPlayer.LoadPlaylistQueueOnly(url);
+                    return;
+                }
+            }
+            else if (!string.IsNullOrEmpty(videoId))
+            {
+                if (_audioPlayer.IsPlaying || !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                {
+                    btnPlaylist.HasPlaylist = true;
+                    playlistPopup.StartLoading();
+
+                    if (!string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                    {
+                        HistoryService.AddTrack(new PlaylistItem
+                        {
+                            Id = _audioPlayer.CurrentVideoId,
+                            Title = _audioPlayer.CurrentTitle,
+                            Author = _audioPlayer.CurrentAuthor,
+                            DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
+                        });
+                    }
+
+                    _audioPlayer.LoadSingleTrackQueueOnly(videoId, url);
+                    return;
                 }
             }
             else

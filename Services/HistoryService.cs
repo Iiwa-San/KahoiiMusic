@@ -419,7 +419,7 @@ namespace KahoiiMusic.Services
                 }
             }
             catch { }
-            _autoCleanTempOnExit = false; // Default: OFF (preserve temp)
+            _autoCleanTempOnExit = true; // Default: ON (clean unused temp on exit)
         }
 
         private static void SaveSettings()

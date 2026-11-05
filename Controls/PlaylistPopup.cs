@@ -1996,7 +1996,7 @@ namespace KahoiiMusic.Controls
                     using (StringFormat sfTitle = new StringFormat() { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
                     {
                         string displayTitle = (!string.IsNullOrWhiteSpace(item.Title) && item.Title.Trim() != "None" && item.Title.Trim() != "NA")
-                            ? item.Title
+                            ? Services.AudioPlayerService.CleanDisplayTitle(item.Title)
                             : string.Format("Bài {0}", i + 1);
                         g.DrawString(displayTitle, titleFont, isActive ? activeText : normalText, titleRect, sfTitle);
                     }
@@ -2380,7 +2380,7 @@ namespace KahoiiMusic.Controls
                         using (StringFormat sfTitle = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
                         {
                             string displayTitle = (!string.IsNullOrWhiteSpace(item.Title) && item.Title.Trim() != "None" && item.Title.Trim() != "NA")
-                                ? item.Title
+                                ? Services.AudioPlayerService.CleanDisplayTitle(item.Title)
                                 : string.Format("Bài {0}", i + 1);
                             g.DrawString(displayTitle, trkTitleFont, isActive ? activeText : normalText, titleRect, sfTitle);
                         }

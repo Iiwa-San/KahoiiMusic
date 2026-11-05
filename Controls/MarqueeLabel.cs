@@ -46,7 +46,7 @@ namespace KahoiiMusic.Controls
             get { return _text; }
             set
             {
-                string newVal = value ?? string.Empty;
+                string newVal = Services.AudioPlayerService.CleanDisplayTitle(value ?? string.Empty);
                 if (_text != newVal)
                 {
                     _text = newVal;
@@ -112,7 +112,7 @@ namespace KahoiiMusic.Controls
             using (Bitmap bmp = new Bitmap(1, 1))
             using (Graphics g = Graphics.FromImage(bmp))
             {
-                SizeF size = g.MeasureString(_text, Font, PointF.Empty, StringFormat.GenericTypographic);
+                SizeF size = g.MeasureString(_text, Font);
                 _measuredTextWidth = size.Width;
             }
 
@@ -196,7 +196,7 @@ namespace KahoiiMusic.Controls
                     float y = (h - Font.GetHeight(g)) / 2f;
                     float cycle = _measuredTextWidth + SeparatorGap;
 
-                    using (StringFormat sfLeft = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap })
+                    using (StringFormat sfLeft = new StringFormat { FormatFlags = StringFormatFlags.NoWrap })
                     {
                         // Draw multiple copies across the view to loop seamlessly
                         for (float startX = -_scrollOffset; startX < w; startX += cycle)
