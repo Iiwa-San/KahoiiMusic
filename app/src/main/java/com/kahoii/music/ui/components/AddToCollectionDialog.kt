@@ -173,7 +173,7 @@ fun AddToCollectionDialog(
                                 .fillMaxWidth()
                                 .heightIn(max = 240.dp)
                         ) {
-                            items(collections, key = { it.id }) { col ->
+                            items(collections, key = { it.id.ifBlank { "col_${it.name}" } }) { col ->
                                 val containsTrack = col.items.any { it.id == track.id }
                                 Row(
                                     modifier = Modifier

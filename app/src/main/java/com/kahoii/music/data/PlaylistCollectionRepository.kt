@@ -115,7 +115,7 @@ class PlaylistCollectionRepository(private val context: Context) {
         ensureLoaded()
         val current = _playlists.value.toMutableList()
         for (cloudCol in cloudCollections) {
-            val existingIndex = current.indexOfFirst { it.name.equals(cloudCol.name, ignoreCase = true) }
+            val existingIndex = current.indexOfFirst { (cloudCol.id.isNotBlank() && it.id.equals(cloudCol.id, ignoreCase = true)) || it.name.equals(cloudCol.name, ignoreCase = true) }
             if (existingIndex < 0) {
                 current.add(cloudCol)
             } else {

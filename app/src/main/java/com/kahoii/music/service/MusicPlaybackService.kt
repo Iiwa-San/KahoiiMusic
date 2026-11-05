@@ -144,6 +144,11 @@ class MusicPlaybackService : MediaSessionService() {
         return mediaSession
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        return START_STICKY
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         // If music is actively playing, DO NOT terminate playback when swiped from Recents!
         // The user expects background music to continue playing via the Foreground Service notification.

@@ -100,10 +100,10 @@ class YouTubeRepository {
     fun fetchThumbnailBytes(url: String): ByteArray? {
         return try {
             val req = Request.Builder().url(url).build()
-            client.newCall(req).execute().use { resp ->
+            quickClient.newCall(req).execute().use { resp ->
                 if (resp.isSuccessful) resp.body?.bytes() else null
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

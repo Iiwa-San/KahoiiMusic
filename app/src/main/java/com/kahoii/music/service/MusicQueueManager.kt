@@ -49,6 +49,17 @@ object MusicQueueManager {
 
     @Volatile
     var loopMode: LoopMode = LoopMode.OFF
+        set(value) {
+            field = value
+            if (value == LoopMode.SHUFFLE) {
+                synchronized(shufflePlayedIndices) {
+                    shufflePlayedIndices.clear()
+                    val cur = currentTrack?.id
+                    val idx = if (!cur.isNullOrBlank()) activeQueue.indexOfFirst { it.id.equals(cur, ignoreCase = true) } else currentIndex
+                    if (idx >= 0) shufflePlayedIndices.add(idx)
+                }
+            }
+        }
 
     @Volatile
     var isShuffled: Boolean = false
@@ -193,7 +204,14 @@ object MusicQueueManager {
     fun playNext() {
         acquireWakeLock(60_000L)
         val queue = activeQueue
-        if (queue.isEmpty()) return
+        if (queue.isEmpty()) {
+            val cur = currentTrack
+            if (cur != null && (loopMode == LoopMode.ALL || loopMode == LoopMode.SHUFFLE)) {
+                player?.seekTo(0L)
+                player?.play()
+            }
+            return
+        }
         if (queue.size == 1) {
             player?.seekTo(0L)
             player?.play()
@@ -249,10 +267,22 @@ object MusicQueueManager {
             queue.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
         } else 0
 
-        val prevIdx = if (loopMode == LoopMode.SHUFFLE && shufflePlayedIndices.size > 1) {
-            synchronized(shufflePlayedIndices) {
-                shufflePlayedIndices.removeAt(shufflePlayedIndices.size - 1)
-                shufflePlayedIndices.lastOrNull() ?: 0
+        val prevIdx = if (loopMode == LoopMode.SHUFFLE) {
+            val shuffPrev = synchronized(shufflePlayedIndices) {
+                if (shufflePlayedIndices.size > 1) {
+                    shufflePlayedIndices.removeAt(shufflePlayedIndices.size - 1)
+                    shufflePlayedIndices.lastOrNull()
+                } else null
+            }
+            if (shuffPrev != null) {
+                shuffPrev
+            } else {
+                if (currIdx <= 0 || queue.size == 1) {
+                    player?.seekTo(0L)
+                    if (player?.isPlaying == false) player?.play()
+                    return
+                }
+                currIdx - 1
             }
         } else {
             if (currIdx <= 0 || queue.size == 1) {
@@ -380,8 +410,7 @@ object MusicQueueManager {
             .setMediaMetadata(mediaMetadata)
             .build()
 
-        p.stop()
-        p.setMediaItem(mediaItem)
+        p.setMediaItem(mediaItem, /* resetPosition = */ true)
         p.prepare()
         p.playWhenReady = true
         p.play()
