@@ -128,7 +128,7 @@ namespace KahoiiMusic.Services
             }
         }
 
-        private void SaveSession(FirebaseUserInfo user)
+        private void SaveSession(FirebaseUserInfo user, bool notifyAuthChanged = true)
         {
             CurrentUser = user;
             try
@@ -148,7 +148,10 @@ namespace KahoiiMusic.Services
                 }
             }
             catch { }
-            AuthStateChanged?.Invoke(this, EventArgs.Empty);
+            if (notifyAuthChanged)
+            {
+                AuthStateChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         public async Task<Tuple<bool, string>> SignUpAsync(string email, string password, bool rememberMe = true)
@@ -361,7 +364,7 @@ namespace KahoiiMusic.Services
                             expiresIn = exp;
                         }
                         CurrentUser.expiryTimestamp = (long)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds + expiresIn - 120;
-                        SaveSession(CurrentUser);
+                        SaveSession(CurrentUser, notifyAuthChanged: false);
                         return true;
                     }
                 }
@@ -413,7 +416,7 @@ namespace KahoiiMusic.Services
                 if (CurrentUser != null)
                 {
                     CurrentUser.avatarBase64 = b64;
-                    SaveSession(CurrentUser);
+                    SaveSession(CurrentUser, notifyAuthChanged: false);
                 }
 
                 AvatarChanged?.Invoke(this, EventArgs.Empty);
@@ -438,6 +441,11 @@ namespace KahoiiMusic.Services
         public void SaveAvatarFromBase64(string b64)
         {
             if (string.IsNullOrWhiteSpace(b64)) return;
+            if (CurrentUser != null && string.Equals(CurrentUser.avatarBase64, b64, StringComparison.Ordinal)
+                && File.Exists(AvatarFilePath) && UserAvatar != null)
+            {
+                return;
+            }
             try
             {
                 byte[] bytes = Convert.FromBase64String(b64);
@@ -451,7 +459,7 @@ namespace KahoiiMusic.Services
                 if (CurrentUser != null)
                 {
                     CurrentUser.avatarBase64 = b64;
-                    SaveSession(CurrentUser);
+                    SaveSession(CurrentUser, notifyAuthChanged: false);
                 }
                 AvatarChanged?.Invoke(this, EventArgs.Empty);
             }

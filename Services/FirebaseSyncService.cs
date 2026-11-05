@@ -42,6 +42,7 @@ namespace KahoiiMusic.Services
         private readonly object _syncLock = new object();
         private volatile bool _isApplyingCloudPayload = true;
         private volatile bool _isAutoSyncInitialized = false;
+        private string _lastSyncedUserId = null;
 
         private FirebaseSyncService()
         {
@@ -56,12 +57,19 @@ namespace KahoiiMusic.Services
 
             FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
             {
+                var user = FirebaseAuthService.Instance.CurrentUser;
+                string currentId = user?.localId;
                 if (FirebaseAuthService.Instance.IsLoggedIn)
                 {
-                    Task.Run(() => TriggerAutoFetchAsync());
+                    if (!string.Equals(_lastSyncedUserId, currentId, StringComparison.Ordinal))
+                    {
+                        _lastSyncedUserId = currentId;
+                        Task.Run(() => TriggerAutoFetchAsync());
+                    }
                 }
                 else
                 {
+                    _lastSyncedUserId = null;
                     CancelPendingAutoUpload();
                 }
             };
@@ -72,6 +80,7 @@ namespace KahoiiMusic.Services
 
             if (FirebaseAuthService.Instance.IsLoggedIn)
             {
+                _lastSyncedUserId = FirebaseAuthService.Instance.CurrentUser?.localId;
                 Task.Run(() => TriggerAutoFetchAsync());
             }
         }
@@ -147,7 +156,7 @@ namespace KahoiiMusic.Services
 
         public async Task TriggerAutoFetchAsync(Action<int> onDownloadingMissingTracks = null)
         {
-            if (!FirebaseAuthService.Instance.IsLoggedIn)
+            if (!FirebaseAuthService.Instance.IsLoggedIn || IsSyncing)
             {
                 _isApplyingCloudPayload = false;
                 return;
