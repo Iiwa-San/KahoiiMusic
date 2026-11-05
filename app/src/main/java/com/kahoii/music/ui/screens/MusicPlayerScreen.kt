@@ -2,6 +2,11 @@ package com.kahoii.music.ui.screens
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -160,16 +165,68 @@ fun MusicPlayerScreen(
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         )
 
-                        IconButton(
-                            onClick = { showAccountSheet = true },
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (uiState.isLoggedIn) Icons.Default.AccountCircle else Icons.Outlined.AccountCircle,
-                                contentDescription = "Tài khoản",
-                                tint = if (uiState.isLoggedIn) NeonPink else Color.White.copy(alpha = 0.85f),
-                                modifier = Modifier.size(26.dp)
-                            )
+                        val userAvatarBitmap = remember(uiState.currentUser?.avatarBase64) {
+                            com.kahoii.music.util.ImageUtils.base64ToBitmap(uiState.currentUser?.avatarBase64)?.asImageBitmap()
+                        }
+
+                        if (uiState.isLoggedIn) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clickable { showAccountSheet = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .background(
+                                            brush = Brush.linearGradient(
+                                                colors = listOf(Color(0xFFFF2A85), Color(0xFF8A2BE2), Color(0xFF00E5FF))
+                                            ),
+                                            shape = CircleShape
+                                        )
+                                        .padding(1.5.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF140F24)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (userAvatarBitmap != null) {
+                                        Image(
+                                            bitmap = userAvatarBitmap,
+                                            contentDescription = "Tài khoản",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.AccountCircle,
+                                            contentDescription = "Tài khoản",
+                                            tint = NeonPink,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .align(Alignment.TopEnd)
+                                        .background(Color(0xFF00E676), CircleShape)
+                                        .border(1.dp, Color(0xFF140F24), CircleShape)
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = { showAccountSheet = true },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AccountCircle,
+                                    contentDescription = "Tài khoản",
+                                    tint = Color.White.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -467,6 +524,9 @@ fun MusicPlayerScreen(
                 },
                 onForgotPassword = { email ->
                     viewModel.forgotPassword(email)
+                },
+                onUpdateAvatar = { bitmap ->
+                    viewModel.updateAvatar(bitmap)
                 },
                 onDismissRequest = { showAccountSheet = false }
             )

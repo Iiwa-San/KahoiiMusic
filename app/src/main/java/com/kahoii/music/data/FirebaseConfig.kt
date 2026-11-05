@@ -35,7 +35,8 @@ data class FirebaseUser(
     val idToken: String,
     val refreshToken: String,
     val expiresIn: Long = 3600,
-    val expiryTimestamp: Long = (System.currentTimeMillis() / 1000) + 3600 - 120
+    val expiryTimestamp: Long = (System.currentTimeMillis() / 1000) + 3600 - 120,
+    val avatarBase64: String? = null
 )
 
 data class CloudMusicPayload(

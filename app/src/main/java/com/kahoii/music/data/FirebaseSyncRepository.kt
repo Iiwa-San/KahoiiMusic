@@ -114,6 +114,10 @@ class FirebaseSyncRepository(private val authRepository: FirebaseAuthRepository?
                     val body = resp.body?.string().orEmpty()
                     val root = gson.fromJson(body, JsonObject::class.java)
                     val fields = root.getAsJsonObject("fields")
+                    val avatarStr = fields?.getAsJsonObject("avatarBase64")?.get("stringValue")?.asString
+                    if (!avatarStr.isNullOrBlank()) {
+                        authRepository?.updateAvatar(avatarStr)
+                    }
                     val rawJson = fields?.getAsJsonObject("musicDataJson")?.get("stringValue")?.asString
                     if (!rawJson.isNullOrBlank()) {
                         val payload = gson.fromJson(rawJson, CloudMusicPayload::class.java)

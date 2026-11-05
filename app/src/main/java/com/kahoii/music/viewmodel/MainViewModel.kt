@@ -946,6 +946,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Toast.makeText(getApplication(), "Đã đăng xuất", Toast.LENGTH_SHORT).show()
     }
 
+    fun updateAvatar(bitmap: android.graphics.Bitmap) {
+        viewModelScope.launch {
+            try {
+                val b64 = com.kahoii.music.util.ImageUtils.bitmapToBase64(bitmap, maxSize = 200)
+                authRepository.updateAvatar(b64)
+                _uiState.update { it.copy(currentUser = authRepository.currentUser.value) }
+
+                val res = authRepository.uploadAvatar(b64)
+                res.onSuccess {
+                    Toast.makeText(getApplication(), "Đã cập nhật ảnh đại diện!", Toast.LENGTH_SHORT).show()
+                }.onFailure { err ->
+                    Toast.makeText(getApplication(), "Lỗi lưu đám mây: ${err.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(getApplication(), "Không thể xử lý ảnh: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     fun syncNow() {
         val user = _uiState.value.currentUser ?: return
         viewModelScope.launch {

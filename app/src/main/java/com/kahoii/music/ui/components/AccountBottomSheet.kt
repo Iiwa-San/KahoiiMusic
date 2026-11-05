@@ -28,6 +28,15 @@ import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -81,6 +90,7 @@ fun AccountBottomSheet(
     onSignOut: () -> Unit,
     onSyncNow: () -> Unit,
     onForgotPassword: (String) -> Unit = {},
+    onUpdateAvatar: (android.graphics.Bitmap) -> Unit = {},
     onDismissRequest: () -> Unit
 ) {
     val context = LocalContext.current
@@ -94,6 +104,41 @@ fun AccountBottomSheet(
     var showConfirmPassword by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
+    var bitmapToCrop by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var showCropDialog by remember { mutableStateOf(false) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val raw = BitmapFactory.decodeStream(stream)
+                    if (raw != null) {
+                        bitmapToCrop = raw
+                        showCropDialog = true
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Không thể đọc ảnh: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    if (showCropDialog && bitmapToCrop != null) {
+        ImageCropDialog(
+            sourceBitmap = bitmapToCrop!!,
+            onDismissRequest = {
+                showCropDialog = false
+                bitmapToCrop = null
+            },
+            onCropConfirmed = { cropped ->
+                showCropDialog = false
+                bitmapToCrop = null
+                onUpdateAvatar(cropped)
+            }
+        )
+    }
 
     if (showSignOutConfirm) {
         androidx.compose.material3.AlertDialog(
@@ -165,17 +210,69 @@ fun AccountBottomSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    val avatarBitmap = remember(currentUser.avatarBase64) {
+                        com.kahoii.music.util.ImageUtils.base64ToBitmap(currentUser.avatarBase64)?.asImageBitmap()
+                    }
+
                     Box(
                         modifier = Modifier
-                            .size(60.dp)
-                            .clip(CircleShape)
-                            .background(NeonPink.copy(alpha = 0.2f)),
+                            .size(76.dp)
+                            .clickable {
+                                imagePickerLauncher.launch("image/*")
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "👤",
-                            fontSize = 28.sp
-                        )
+                        // Glowing gradient outer ring
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(Color(0xFFFF2A85), Color(0xFF8A2BE2), Color(0xFF00E5FF))
+                                    ),
+                                    shape = CircleShape
+                                )
+                                .padding(2.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF140F24)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (avatarBitmap != null) {
+                                Image(
+                                    bitmap = avatarBitmap,
+                                    contentDescription = "Avatar",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                )
+                            } else {
+                                Text(
+                                    text = "👤",
+                                    fontSize = 32.sp
+                                )
+                            }
+                        }
+
+                        // Pencil edit badge in bottom-right corner
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .align(Alignment.BottomEnd)
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(Color(0xFFFF2A85), Color(0xFF8A2BE2))
+                                    ),
+                                    shape = CircleShape
+                                )
+                                .border(2.dp, Color(0xFF140F24), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Sửa ảnh đại diện",
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))

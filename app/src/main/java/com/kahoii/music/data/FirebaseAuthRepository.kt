@@ -236,6 +236,57 @@ class FirebaseAuthRepository(private val context: Context) {
         saveUser(null)
     }
 
+    fun updateAvatar(avatarBase64: String?) {
+        val user = _currentUser.value ?: return
+        val updatedUser = user.copy(avatarBase64 = avatarBase64)
+        saveUser(updatedUser)
+    }
+
+    suspend fun uploadAvatar(avatarBase64: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val user = _currentUser.value ?: return@withContext Result.failure(Exception("Chưa đăng nhập"))
+        try {
+            var token = getValidToken() ?: user.idToken
+            val docUrl = "${FirebaseConfig.getFirestoreDocumentUrl(user.localId)}?updateMask.fieldPaths=avatarBase64&key=${FirebaseConfig.API_KEY}"
+            val fields = JsonObject().apply {
+                add("avatarBase64", JsonObject().apply {
+                    addProperty("stringValue", avatarBase64)
+                })
+            }
+            val requestBody = JsonObject().apply {
+                add("fields", fields)
+            }
+
+            fun createRequest(authToken: String) = Request.Builder()
+                .url(docUrl)
+                .patch(requestBody.toString().toRequestBody(jsonMediaType))
+                .header("Authorization", "Bearer $authToken")
+                .build()
+
+            var response = client.newCall(createRequest(token)).execute()
+            if (response.code == 401) {
+                response.close()
+                val refreshed = refreshToken()
+                if (refreshed) {
+                    val newToken = getValidToken() ?: _currentUser.value?.idToken
+                    if (!newToken.isNullOrBlank()) {
+                        response = client.newCall(createRequest(newToken)).execute()
+                    }
+                }
+            }
+            response.use { resp ->
+                if (resp.isSuccessful) {
+                    updateAvatar(avatarBase64)
+                    Result.success(Unit)
+                } else {
+                    val body = resp.body?.string().orEmpty()
+                    Result.failure(Exception("Lỗi lưu ảnh đại diện: $body"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi kết nối máy chủ Firebase: ${e.localizedMessage ?: e.message}"))
+        }
+    }
+
     private fun parseAuthError(body: String): String {
         return try {
             val obj = gson.fromJson(body, JsonObject::class.java)
