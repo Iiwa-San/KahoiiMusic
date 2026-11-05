@@ -785,6 +785,8 @@ namespace KahoiiMusic
 
             protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _isHovered = true; Invalidate(); }
             protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _isHovered = false; Invalidate(); }
+            protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Invalidate(); }
+            protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
 
             protected override void OnPaint(PaintEventArgs e)
             {

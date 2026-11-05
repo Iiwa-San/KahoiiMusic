@@ -604,20 +604,21 @@ namespace KahoiiMusic
             }
             else
             {
-                if (!_audioPlayer.HasTrack)
-                {
-                    marqueeTitle.Text = status;
-                }
-                else
+                // Khi dang phat hoac da co track, khong ghi de thong bao loading len tieu de bai hat
+                if (_audioPlayer.HasTrack || _audioPlayer.IsPlaying)
                 {
                     if (!string.IsNullOrEmpty(_audioPlayer.CurrentTitle))
                     {
                         marqueeTitle.Text = _audioPlayer.CurrentTitle;
                     }
-                    else if (!_audioPlayer.IsPlaying)
+                    else if (!string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
                     {
-                        marqueeTitle.Text = status;
+                        marqueeTitle.Text = "YouTube: " + _audioPlayer.CurrentVideoId;
                     }
+                }
+                else
+                {
+                    marqueeTitle.Text = status;
                 }
             }
         }
