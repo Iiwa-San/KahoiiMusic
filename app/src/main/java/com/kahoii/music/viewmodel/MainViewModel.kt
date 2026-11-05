@@ -51,7 +51,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = FirebaseAuthRepository(application)
     private val syncRepository = FirebaseSyncRepository()
     private var syncJob: Job? = null
-    private var isApplyingCloudPayload = false
+    private var isApplyingCloudPayload = true
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -845,6 +845,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { it.copy(currentUser = user) }
                 if (user != null) {
                     syncCloudData(user)
+                } else {
+                    isApplyingCloudPayload = false
                 }
             }
         }
@@ -927,7 +929,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun syncNow() {
         val user = _uiState.value.currentUser ?: return
-        syncCloudData(user)
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang đồng bộ...") }
+            isApplyingCloudPayload = true
+            syncJob?.cancel()
+            val res = syncRepository.downloadMusicData(user)
+            res.onSuccess { cloudPayload ->
+                if (cloudPayload != null) {
+                    try {
+                        applyCloudPayload(cloudPayload)
+                    } finally {
+                        delay(500)
+                    }
+                }
+                // Upload merged state
+                val mergedPayload = CloudMusicPayload(
+                    playlist = _uiState.value.playlist,
+                    favorites = _uiState.value.favorites,
+                    history = _uiState.value.history,
+                    savedTracks = _uiState.value.savedTracks,
+                    collections = _uiState.value.playlists
+                )
+                syncRepository.uploadMusicData(user, mergedPayload)
+                isApplyingCloudPayload = false
+                syncJob?.cancel()
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đã đồng bộ đám mây lúc ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}") }
+            }.onFailure { err ->
+                isApplyingCloudPayload = false
+                _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Lỗi đồng bộ: ${err.message}") }
+            }
+        }
     }
 
     private var backgroundDownloadJob: kotlinx.coroutines.Job? = null
@@ -963,15 +994,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun syncCloudData(user: FirebaseUser) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSyncing = true, syncStatusMessage = "Đang đồng bộ...") }
+            isApplyingCloudPayload = true
+            syncJob?.cancel()
             val res = syncRepository.downloadMusicData(user)
             res.onSuccess { cloudPayload ->
                 if (cloudPayload != null) {
-                    isApplyingCloudPayload = true
                     try {
                         applyCloudPayload(cloudPayload)
                     } finally {
-                        delay(600)
+                        delay(800)
                         isApplyingCloudPayload = false
+                        syncJob?.cancel()
                     }
                     _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Đồng bộ đám mây đã hoàn tất") }
 
@@ -985,9 +1018,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 } else {
-                    uploadCurrentDataToCloud(user)
+                    isApplyingCloudPayload = false
+                    _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Dữ liệu đám mây rỗng") }
                 }
             }.onFailure { err ->
+                isApplyingCloudPayload = false
                 _uiState.update { it.copy(isSyncing = false, syncStatusMessage = "Lỗi đồng bộ: ${err.message}") }
             }
         }
@@ -999,6 +1034,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         historyRepository.mergeFavorites(payload.favorites)
         historyRepository.mergeHistory(payload.history)
+        savedTracksRepository.mergeSavedTracks(payload.savedTracks)
         playlistCollectionRepository.mergeCollections(payload.collections)
     }
 

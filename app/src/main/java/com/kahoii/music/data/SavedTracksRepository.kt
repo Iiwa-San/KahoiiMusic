@@ -81,19 +81,16 @@ class SavedTracksRepository(private val context: Context) {
                 val listType = object : TypeToken<List<PlaylistItem>>() {}.type
                 val loadedList: List<PlaylistItem>? = gson.fromJson(json, listType)
                 if (loadedList != null) {
-                    val validList = loadedList.mapNotNull { item ->
+                    val validList = loadedList.map { item ->
                         val localPath = item.localAudioPath
                         val file = if (!localPath.isNullOrBlank()) File(localPath) else getSavedAudioFile(item.safeId)
                         if (file != null && file.exists() && file.length() > 50000 && !file.name.endsWith(".mp4", ignoreCase = true)) {
                             item.copy(localAudioPath = file.absolutePath)
                         } else {
-                            null
+                            item.copy(localAudioPath = null)
                         }
                     }
                     _savedTracks.value = validList
-                    if (validList.size != loadedList.size) {
-                        saveMetadata(validList)
-                    }
                     return
                 }
             }
@@ -101,6 +98,33 @@ class SavedTracksRepository(private val context: Context) {
             e.printStackTrace()
         }
         _savedTracks.value = emptyList()
+    }
+
+    suspend fun mergeSavedTracks(cloudTracks: List<PlaylistItem>) = withContext(Dispatchers.IO) {
+        if (cloudTracks.isEmpty()) return@withContext
+        val current = _savedTracks.value.toMutableList()
+        var changed = false
+        for (track in cloudTracks) {
+            if (track.safeId.isBlank()) continue
+            val existingIndex = current.indexOfFirst { it.id.equals(track.id, ignoreCase = true) }
+            if (existingIndex == -1) {
+                val localFile = getSavedAudioFile(track.safeId)
+                val path = if (localFile != null && localFile.exists() && localFile.length() > 50000 && !localFile.name.endsWith(".mp4", ignoreCase = true)) {
+                    localFile.absolutePath
+                } else null
+                current.add(track.copy(localAudioPath = path))
+                changed = true
+            }
+        }
+        if (changed) {
+            _savedTracks.value = current
+            saveMetadata(current)
+        }
+    }
+
+    fun isInSavedList(id: String): Boolean {
+        if (id.isNullOrBlank()) return false
+        return _savedTracks.value.any { it.id.equals(id, ignoreCase = true) }
     }
 
     @Synchronized
