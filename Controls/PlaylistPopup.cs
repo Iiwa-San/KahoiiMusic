@@ -1222,6 +1222,10 @@ namespace KahoiiMusic.Controls
             itemRemove.Click += (s, e) =>
             {
                 PlaylistCollectionService.Instance.RemoveTrackFromPlaylist(playlist.Id, item.Id);
+                if (AudioPlayer != null && AudioPlayer.CurrentPlaylistTitle == playlist.Name)
+                {
+                    AudioPlayer.RemoveTrackById(item.Id);
+                }
                 RefreshPlaylists();
             };
 

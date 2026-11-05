@@ -1243,9 +1243,12 @@ namespace KahoiiMusic.Services
 
             lock (_shufflePlayedIndices)
             {
-                if (!_shufflePlayedIndices.Contains(_currentPlaylistIndex) && _currentPlaylistIndex >= 0)
+                _shufflePlayedIndices.RemoveAll(i => i < 0 || i >= _playlist.Count);
+
+                int curr = _currentPlaylistIndex;
+                if (curr >= 0 && curr < _playlist.Count && !_shufflePlayedIndices.Contains(curr))
                 {
-                    _shufflePlayedIndices.Add(_currentPlaylistIndex);
+                    _shufflePlayedIndices.Add(curr);
                 }
 
                 var unplayed = new List<int>();
@@ -1262,16 +1265,34 @@ namespace KahoiiMusic.Services
                     _shufflePlayedIndices.Clear();
                     for (int i = 0; i < _playlist.Count; i++)
                     {
-                        if (i != _currentPlaylistIndex)
+                        if (i != curr)
                         {
                             unplayed.Add(i);
                         }
                     }
+                    if (unplayed.Count == 0)
+                    {
+                        unplayed.Add((curr + 1) % _playlist.Count);
+                    }
                 }
 
-                int nextIndex = unplayed.Count > 0 ? unplayed[_random.Next(unplayed.Count)] : 0;
+                int nextIndex = unplayed[_random.Next(unplayed.Count)];
                 _shufflePlayedIndices.Add(nextIndex);
                 PlayTrackAtIndex(nextIndex);
+            }
+        }
+
+        public void RemoveTrackById(string trackId)
+        {
+            if (string.IsNullOrEmpty(trackId) || _playlist == null) return;
+            int idx = _playlist.FindIndex(x => string.Equals(x.Id, trackId, StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0)
+            {
+                RemoveFromPlaylist(idx);
+                lock (_shufflePlayedIndices)
+                {
+                    _shufflePlayedIndices.Clear();
+                }
             }
         }
 
@@ -3321,7 +3342,7 @@ namespace KahoiiMusic.Services
 
             _clusters = clusters;
 
-            _isLooping = service.IsLooping;
+            _isLooping = (service.LoopMode == LoopMode.One);
 
             _volume = service.Volume;
 
