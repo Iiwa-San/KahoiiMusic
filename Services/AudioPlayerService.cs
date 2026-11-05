@@ -72,22 +72,63 @@ namespace KahoiiMusic.Services
         public string CurrentAuthor => _currentAuthor;
         public event EventHandler<string> AuthorChanged;
 
+        public static string CleanAuthor(string author)
+        {
+            if (string.IsNullOrWhiteSpace(author)) return string.Empty;
+            string s = author.Trim();
+            s = Regex.Replace(s, @"\s*-\s*Topic$", "", RegexOptions.IgnoreCase);
+            s = Regex.Replace(s, @"\s*VEVO$", "", RegexOptions.IgnoreCase);
+            return s.Trim();
+        }
+
         public static string ExtractAuthorFromTitle(string title)
         {
             if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+            string clean = title.Trim();
+
+            // 1. Pattern: "Title / Artist" or "Title / Artist[...]"
+            Match mSlash = Regex.Match(clean, @"/\s*([^/【\[\(\-]+)");
+            if (mSlash.Success)
+            {
+                string candidate = mSlash.Groups[1].Value.Trim();
+                if (candidate.Length >= 2 && candidate.Length <= 40 &&
+                    !Regex.IsMatch(candidate, @"(?i)cover|lyrics|vietsub|kara|official|video|audio"))
+                {
+                    return CleanAuthor(candidate);
+                }
+            }
+
+            // Strip leading tags like 【MV】, [Official], etc.
+            string cleanNoTag = Regex.Replace(clean, @"^[【\[\(][^】\]\)]*[】\]\)]\s*", "");
+
+            // 2. Pattern: "Artist - Title" or "Artist – Title" or "Artist — Title" or "Artist | Title"
             string[] separators = new string[] { " - ", " – ", " — ", " | " };
             foreach (var sep in separators)
             {
-                int idx = title.IndexOf(sep, StringComparison.Ordinal);
+                int idx = cleanNoTag.IndexOf(sep, StringComparison.Ordinal);
                 if (idx > 0)
                 {
-                    string candidate = title.Substring(0, idx).Trim();
-                    if (candidate.Length >= 2 && candidate.Length <= 60 && !candidate.StartsWith("[") && !candidate.StartsWith("("))
+                    string candidate = cleanNoTag.Substring(0, idx).Trim();
+                    candidate = Regex.Replace(candidate, @"^[【\[\(][^】\]\)]*[】\]\)]\s*", "");
+                    if (candidate.Length >= 2 && candidate.Length <= 50 &&
+                        !Regex.IsMatch(candidate, @"(?i)mv|official|lyrics|vietsub|kara|ost|full"))
                     {
-                        return candidate;
+                        return CleanAuthor(candidate);
                     }
                 }
             }
+
+            // 3. Pattern: "feat. Artist" or "ft. Artist"
+            Match mFeat = Regex.Match(clean, @"(?i)(?:feat\.|ft\.)\s*([^】\]\)\-,]+)");
+            if (mFeat.Success)
+            {
+                string candidate = mFeat.Groups[1].Value.Trim();
+                if (candidate.Length >= 2 && candidate.Length <= 40)
+                {
+                    return CleanAuthor(candidate);
+                }
+            }
+
             return string.Empty;
         }
 
@@ -1670,29 +1711,34 @@ namespace KahoiiMusic.Services
             PlaylistItem item = pl[index];
 
             if (!string.IsNullOrEmpty(item.Title))
-
             {
-
                 _currentTitle = item.Title;
-
                 RaiseTitleChanged(_currentTitle);
-
             }
 
+            // Immediately resolve Author from item, services, or title
+            string author = item.Author;
+            if (string.IsNullOrWhiteSpace(author)) author = SavedTracksService.Instance.GetTrackAuthor(item.Id);
+            if (string.IsNullOrWhiteSpace(author)) author = HistoryService.GetTrackAuthor(item.Id);
+            if (string.IsNullOrWhiteSpace(author) && !string.IsNullOrWhiteSpace(item.Title)) author = ExtractAuthorFromTitle(item.Title);
+
+            _currentAuthor = author ?? string.Empty;
+            RaiseAuthorChanged(_currentAuthor);
+
             if (!string.IsNullOrEmpty(item.Id))
-
             {
-
                 string localThumb = SavedTracksService.Instance.FindSavedThumbFile(item.Id);
-
                 string thumb = !string.IsNullOrEmpty(localThumb)
-
                     ? localThumb
-
                     : string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", item.Id);
-
                 RaiseThumbnail(thumb);
 
+                // If author is still missing, queue background resolve
+                if (string.IsNullOrWhiteSpace(_currentAuthor))
+                {
+                    string vid = item.Id;
+                    ThreadPool.QueueUserWorkItem(delegate { FetchVideoTitle(vid); });
+                }
             }
 
             LoadAndPlay(item.Url, preserveQueueSource: true);
@@ -2348,14 +2394,10 @@ namespace KahoiiMusic.Services
 
                         RaiseThumbnail(thumb);
 
-                        // If title is not yet known or placeholder, fetch asynchronously via oEmbed
-
-                        if (string.IsNullOrWhiteSpace(_currentTitle) || _currentTitle == "None" || _currentTitle == "NA")
-
+                        // If title or author is not yet known or placeholder, fetch asynchronously via oEmbed
+                        if (string.IsNullOrWhiteSpace(_currentTitle) || _currentTitle == "None" || _currentTitle == "NA" || string.IsNullOrWhiteSpace(_currentAuthor))
                         {
-
                             ThreadPool.QueueUserWorkItem(delegate { FetchVideoTitle(videoId); });
-
                         }
 
                     }
@@ -3069,15 +3111,19 @@ namespace KahoiiMusic.Services
                     {
 
                         string fetchedTitle = m.Success ? Regex.Unescape(m.Groups[1].Value) : null;
-                        string fetchedAuthor = mAuthor.Success ? Regex.Unescape(mAuthor.Groups[1].Value) : null;
+                        string rawAuthor = mAuthor.Success ? Regex.Unescape(mAuthor.Groups[1].Value) : null;
+                        string fetchedAuthor = CleanAuthor(rawAuthor);
                         if (string.IsNullOrWhiteSpace(fetchedAuthor) && !string.IsNullOrWhiteSpace(fetchedTitle))
                         {
                             fetchedAuthor = ExtractAuthorFromTitle(fetchedTitle);
                         }
                         if (!string.IsNullOrWhiteSpace(fetchedAuthor))
                         {
-                            _currentAuthor = fetchedAuthor;
-                            RaiseAuthorChanged(_currentAuthor);
+                            if (string.Equals(_currentVideoId, videoId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                _currentAuthor = fetchedAuthor;
+                                RaiseAuthorChanged(_currentAuthor);
+                            }
                         }
                         try { HistoryService.UpdateTitleAndAuthor(videoId, fetchedTitle, fetchedAuthor); } catch { }
                         try { SavedTracksService.Instance.UpdateTitleAndAuthor(videoId, fetchedTitle, fetchedAuthor); } catch { }

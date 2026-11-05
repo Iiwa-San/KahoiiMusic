@@ -215,12 +215,21 @@ namespace KahoiiMusic
             {
                 marqueeTitle.Text = title;
                 UpdateTrayTooltip(title);
+                if (string.IsNullOrWhiteSpace(marqueeAuthor.Text))
+                {
+                    string fallbackAuthor = AudioPlayerService.ExtractAuthorFromTitle(title);
+                    if (!string.IsNullOrWhiteSpace(fallbackAuthor))
+                    {
+                        marqueeAuthor.Text = fallbackAuthor;
+                    }
+                }
                 if (btnQuickDownload != null && !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
                 {
                     btnQuickDownload.SetCurrentTrack(new PlaylistItem
                     {
                         Id = _audioPlayer.CurrentVideoId,
                         Title = title,
+                        Author = marqueeAuthor.Text,
                         DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
                     });
                 }
@@ -238,6 +247,10 @@ namespace KahoiiMusic
                     UpdateTrayTooltip(curT);
                 }
                 string curA = !string.IsNullOrEmpty(args.Author) ? args.Author : _audioPlayer.CurrentAuthor;
+                if (string.IsNullOrWhiteSpace(curA) && !string.IsNullOrEmpty(curT))
+                {
+                    curA = AudioPlayerService.ExtractAuthorFromTitle(curT);
+                }
                 marqueeAuthor.Text = curA ?? string.Empty;
                 if (btnQuickDownload != null)
                 {
@@ -245,6 +258,7 @@ namespace KahoiiMusic
                     {
                         Id = args.VideoId,
                         Title = args.Title,
+                        Author = marqueeAuthor.Text,
                         DurationSeconds = (int)args.Duration.TotalSeconds
                     });
                 }

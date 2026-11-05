@@ -440,30 +440,37 @@ namespace KahoiiMusic.Services
                 if (File.Exists(HistoryFile))
                 {
                     string json = File.ReadAllText(HistoryFile, Encoding.UTF8);
-                    MatchCollection matches = Regex.Matches(json, "\\{\\s*\"id\"\\s*:\\s*\"([^\"]*)\"\\s*,\\s*\"title\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"\\s*,\\s*\"duration\"\\s*:\\s*(\\d+)\\s*\\}");
-                    foreach (Match m in matches)
+                    var objMatches = Regex.Matches(json, @"\{([^{}]+)\}");
+                    foreach (Match om in objMatches)
                     {
-                        if (m.Success && m.Groups.Count >= 4)
-                        {
-                            string id = m.Groups[1].Value;
-                            string rawTitle = m.Groups[2].Value;
-                            string title = Regex.Unescape(rawTitle);
-                            int duration = 0;
-                            int.TryParse(m.Groups[3].Value, out duration);
+                        string block = om.Groups[1].Value;
+                        var mId = Regex.Match(block, @"""id""\s*:\s*""([^""]*)""");
+                        if (!mId.Success || string.IsNullOrEmpty(mId.Groups[1].Value)) continue;
 
-                            if (!string.IsNullOrEmpty(id))
-                            {
-                                _history.Add(new PlaylistItem
-                                {
-                                    Id = id,
-                                    Title = title,
-                                    DurationSeconds = duration
-                                });
-                            }
+                        var mTitle = Regex.Match(block, @"""title""\s*:\s*""((?:\\.|[^""])*)""");
+                        var mDur = Regex.Match(block, @"""duration""\s*:\s*(\d+)");
+                        var mAuthor = Regex.Match(block, @"""(?:author|artist)""\s*:\s*""((?:\\.|[^""])*)""");
+
+                        string id = mId.Groups[1].Value;
+                        string title = mTitle.Success ? Regex.Unescape(mTitle.Groups[1].Value) : "Bài hát";
+                        int duration = 0;
+                        if (mDur.Success) int.TryParse(mDur.Groups[1].Value, out duration);
+                        string author = mAuthor.Success ? Regex.Unescape(mAuthor.Groups[1].Value) : null;
+                        if (string.IsNullOrWhiteSpace(author))
+                        {
+                            author = AudioPlayerService.ExtractAuthorFromTitle(title);
                         }
+
+                        _history.Add(new PlaylistItem
+                        {
+                            Id = id,
+                            Title = title,
+                            Author = author ?? string.Empty,
+                            DurationSeconds = duration
+                        });
                     }
-                }
             }
+                }
             catch { }
         }
 
@@ -478,7 +485,8 @@ namespace KahoiiMusic.Services
                     PlaylistItem item = _history[i];
                     string escId = EscapeJson(item.Id);
                     string escTitle = EscapeJson(item.Title ?? "");
-                    sb.AppendFormat("  {{\"id\": \"{0}\", \"title\": \"{1}\", \"duration\": {2}}}", escId, escTitle, item.DurationSeconds);
+                    string escAuthor = EscapeJson(item.Author ?? "");
+                    sb.AppendFormat("  {{\"id\": \"{0}\", \"title\": \"{1}\", \"duration\": {2}, \"author\": \"{3}\"}}", escId, escTitle, item.DurationSeconds, escAuthor);
                     if (i < _history.Count - 1) sb.Append(",");
                     sb.AppendLine();
                 }

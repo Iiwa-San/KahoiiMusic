@@ -90,7 +90,7 @@ namespace KahoiiMusic
             this.panelPlayerCard.Controls.Add(this.panelBottomControls);
             this.panelPlayerCard.Location = new System.Drawing.Point(2, 24);
             this.panelPlayerCard.Name = "panelPlayerCard";
-            this.panelPlayerCard.Size = new System.Drawing.Size(476, 322);
+            this.panelPlayerCard.Size = new System.Drawing.Size(476, 336);
             this.panelPlayerCard.TabIndex = 3;
             // 
             // panelTopBar
@@ -131,7 +131,7 @@ namespace KahoiiMusic
             this.gradientPanel.Controls.Add(this.marqueeAuthor);
             this.gradientPanel.Location = new System.Drawing.Point(0, 30);
             this.gradientPanel.Name = "gradientPanel";
-            this.gradientPanel.Size = new System.Drawing.Size(476, 192);
+            this.gradientPanel.Size = new System.Drawing.Size(476, 206);
             this.gradientPanel.TabIndex = 1;
             this.gradientPanel.TopColor = System.Drawing.Color.FromArgb(((int)(((byte)(43)))), ((int)(((byte)(16)))), ((int)(((byte)(127)))));
             // 
@@ -160,7 +160,7 @@ namespace KahoiiMusic
             // 
             this.marqueeTitle.BackColor = System.Drawing.Color.Transparent;
             this.marqueeTitle.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.marqueeTitle.Location = new System.Drawing.Point(23, 163);
+            this.marqueeTitle.Location = new System.Drawing.Point(23, 162);
             this.marqueeTitle.Name = "marqueeTitle";
             this.marqueeTitle.Size = new System.Drawing.Size(430, 20);
             this.marqueeTitle.TabIndex = 2;
@@ -171,7 +171,7 @@ namespace KahoiiMusic
             // 
             this.marqueeAuthor.BackColor = System.Drawing.Color.Transparent;
             this.marqueeAuthor.Font = new System.Drawing.Font("Segoe UI", 8.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.marqueeAuthor.Location = new System.Drawing.Point(23, 185);
+            this.marqueeAuthor.Location = new System.Drawing.Point(23, 184);
             this.marqueeAuthor.Name = "marqueeAuthor";
             this.marqueeAuthor.Size = new System.Drawing.Size(430, 18);
             this.marqueeAuthor.TabIndex = 3;
@@ -190,7 +190,7 @@ namespace KahoiiMusic
             this.panelBottomControls.Controls.Add(this.btnTimer);
             this.panelBottomControls.Controls.Add(this.musicTrackBar);
             this.panelBottomControls.Controls.Add(this.lblCopyright);
-            this.panelBottomControls.Location = new System.Drawing.Point(0, 222);
+            this.panelBottomControls.Location = new System.Drawing.Point(0, 236);
             this.panelBottomControls.Name = "panelBottomControls";
             this.panelBottomControls.Size = new System.Drawing.Size(476, 100);
             this.panelBottomControls.TabIndex = 2;
@@ -339,7 +339,7 @@ namespace KahoiiMusic
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
-            this.ClientSize = new System.Drawing.Size(480, 348);
+            this.ClientSize = new System.Drawing.Size(480, 362);
             this.Controls.Add(this.btnMinimize);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.panelPlayerCard);

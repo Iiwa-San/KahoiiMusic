@@ -322,17 +322,24 @@ namespace KahoiiMusic.Services
                                     var mSongId = Regex.Match(block, @"""id""\s*:\s*""([^""]*)""");
                                     var mSongTitle = Regex.Match(block, @"""title""\s*:\s*""((?:\\.|[^""])*)""");
                                     var mSongDur = Regex.Match(block, @"""duration""\s*:\s*(\d+)");
+                                    var mSongAuthor = Regex.Match(block, @"""(?:author|artist)""\s*:\s*""((?:\\.|[^""])*)""");
 
                                     string songId = mSongId.Success ? mSongId.Groups[1].Value : null;
                                     if (string.IsNullOrEmpty(songId)) continue;
                                     string title = mSongTitle.Success ? UnescapeJson(mSongTitle.Groups[1].Value) : "Bài hát";
                                     int dur = 0;
                                     if (mSongDur.Success) int.TryParse(mSongDur.Groups[1].Value, out dur);
+                                    string author = mSongAuthor.Success ? UnescapeJson(mSongAuthor.Groups[1].Value) : null;
+                                    if (string.IsNullOrWhiteSpace(author))
+                                    {
+                                        author = AudioPlayerService.ExtractAuthorFromTitle(title);
+                                    }
 
                                     pl.Items.Add(new PlaylistItem
                                     {
                                         Id = songId,
                                         Title = title,
+                                        Author = author ?? string.Empty,
                                         DurationSeconds = dur
                                     });
                                 }
@@ -370,9 +377,10 @@ namespace KahoiiMusic.Services
                     {
                         var it = items[j];
                         string escapedTitle = EscapeJson(it.Title ?? "");
+                        string escapedAuthor = EscapeJson(it.Author ?? "");
                         string itComma = (j < items.Count - 1) ? "," : "";
-                        sb.AppendLine(string.Format("      {{ \"id\": \"{0}\", \"title\": \"{1}\", \"duration\": {2} }}{3}",
-                            it.Id, escapedTitle, it.DurationSeconds, itComma));
+                        sb.AppendLine(string.Format("      {{ \"id\": \"{0}\", \"title\": \"{1}\", \"duration\": {2}, \"author\": \"{3}\" }}{4}",
+                            it.Id, escapedTitle, it.DurationSeconds, escapedAuthor, itComma));
                     }
 
                     sb.AppendLine("    ]");

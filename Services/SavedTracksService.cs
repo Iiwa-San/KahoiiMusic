@@ -467,18 +467,32 @@ namespace KahoiiMusic.Services
                 try
                 {
                     string json = File.ReadAllText(AppPaths.SavedJsonFile, Encoding.UTF8);
-                    MatchCollection matches = Regex.Matches(json, "\\{\\s*\"id\"\\s*:\\s*\"([^\"]*)\"\\s*,\\s*\"title\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"\\s*,\\s*\"duration\"\\s*:\\s*(\\d+)\\s*\\}");
-                    foreach (Match m in matches)
+                    var objMatches = Regex.Matches(json, @"\{([^{}]+)\}");
+                    foreach (Match om in objMatches)
                     {
-                        string id = m.Groups[1].Value;
-                        string title = m.Groups[2].Value.Replace("\\\"", "\"").Replace("\\\\", "\\");
+                        string block = om.Groups[1].Value;
+                        var mId = Regex.Match(block, @"""id""\s*:\s*""([^""]*)""");
+                        if (!mId.Success || string.IsNullOrEmpty(mId.Groups[1].Value)) continue;
+
+                        var mTitle = Regex.Match(block, @"""title""\s*:\s*""((?:\\.|[^""])*)""");
+                        var mDur = Regex.Match(block, @"""duration""\s*:\s*(\d+)");
+                        var mAuthor = Regex.Match(block, @"""(?:author|artist)""\s*:\s*""((?:\\.|[^""])*)""");
+
+                        string id = mId.Groups[1].Value;
+                        string title = mTitle.Success ? mTitle.Groups[1].Value.Replace("\\\"", "\"").Replace("\\\\", "\\") : "Bài hát";
                         int duration = 0;
-                        int.TryParse(m.Groups[3].Value, out duration);
+                        if (mDur.Success) int.TryParse(mDur.Groups[1].Value, out duration);
+                        string author = mAuthor.Success ? mAuthor.Groups[1].Value.Replace("\\\"", "\"").Replace("\\\\", "\\") : null;
+                        if (string.IsNullOrWhiteSpace(author))
+                        {
+                            author = AudioPlayerService.ExtractAuthorFromTitle(title);
+                        }
 
                         var item = new PlaylistItem
                         {
                             Id = id,
                             Title = title,
+                            Author = author ?? string.Empty,
                             DurationSeconds = duration
                         };
                         _savedTracks.Add(item);
@@ -516,9 +530,10 @@ namespace KahoiiMusic.Services
                 {
                     PlaylistItem item = _savedTracks[i];
                     string escapedTitle = (item.Title ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    string escapedAuthor = (item.Author ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
                     string comma = (i < _savedTracks.Count - 1) ? "," : "";
-                    sb.AppendLine(string.Format("  {{ \"id\": \"{0}\", \"title\": \"{1}\", \"duration\": {2} }}{3}",
-                        item.Id, escapedTitle, item.DurationSeconds, comma));
+                    sb.AppendLine(string.Format("  {{ \"id\": \"{0}\", \"title\": \"{1}\", \"duration\": {2}, \"author\": \"{3}\" }}{4}",
+                        item.Id, escapedTitle, item.DurationSeconds, escapedAuthor, comma));
                 }
                 sb.AppendLine("]");
                 File.WriteAllText(AppPaths.SavedJsonFile, sb.ToString(), Encoding.UTF8);
