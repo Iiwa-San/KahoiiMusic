@@ -112,6 +112,9 @@ namespace KahoiiMusic.Services
         private const int MaxCacheFileCount = 100;
 
         private List<PlaylistItem> _playlist = new List<PlaylistItem>();
+        private List<PlaylistItem> _sessionPlaylist = new List<PlaylistItem>();
+        public List<PlaylistItem> SessionPlaylist => _sessionPlaylist;
+        public bool HasSessionPlaylist => _sessionPlaylist != null && _sessionPlaylist.Count > 0;
 
         private int _currentPlaylistIndex = -1;
 
@@ -1334,15 +1337,23 @@ namespace KahoiiMusic.Services
 
         public void ClearPlaylist()
         {
-            _playlist = new List<PlaylistItem>();
-            _currentPlaylistId = null;
-            CurrentPlaylistTitle = null;
-            _currentPlaylistIndex = -1;
+            if (_sessionPlaylist != null) _sessionPlaylist.Clear();
+            if (_currentQueueSource == ActiveQueueSource.Playlist)
+            {
+                _playlist = new List<PlaylistItem>();
+                _currentPlaylistId = null;
+                CurrentPlaylistTitle = null;
+                _currentPlaylistIndex = -1;
+            }
+            lock (_shufflePlayedIndices)
+            {
+                _shufflePlayedIndices.Clear();
+            }
             _syncContext.Post(delegate
             {
                 if (PlaylistLoaded != null)
                 {
-                    PlaylistLoaded(this, _playlist);
+                    PlaylistLoaded(this, _sessionPlaylist);
                 }
                 if (PlaylistIndexChanged != null)
                 {
@@ -1422,6 +1433,7 @@ namespace KahoiiMusic.Services
             lock (_shufflePlayedIndices)
             {
                 _shufflePlayedIndices.Clear();
+                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
 
             PlayTrackAtIndex(_currentPlaylistIndex);
@@ -1442,6 +1454,7 @@ namespace KahoiiMusic.Services
             lock (_shufflePlayedIndices)
             {
                 _shufflePlayedIndices.Clear();
+                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
 
             PlayTrackAtIndex(_currentPlaylistIndex);
@@ -1462,6 +1475,24 @@ namespace KahoiiMusic.Services
             lock (_shufflePlayedIndices)
             {
                 _shufflePlayedIndices.Clear();
+                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
+            }
+
+            PlayTrackAtIndex(_currentPlaylistIndex);
+        }
+
+        public void RestoreSessionPlaylist(int index = 0)
+        {
+            if (_sessionPlaylist == null || _sessionPlaylist.Count == 0) return;
+            _isPlayingFromHistory = false;
+            _currentQueueSource = ActiveQueueSource.Playlist;
+            _playlist = _sessionPlaylist;
+            _currentPlaylistIndex = Math.Max(0, Math.Min(index, _sessionPlaylist.Count - 1));
+
+            lock (_shufflePlayedIndices)
+            {
+                _shufflePlayedIndices.Clear();
+                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
 
             PlayTrackAtIndex(_currentPlaylistIndex);
@@ -1477,92 +1508,81 @@ namespace KahoiiMusic.Services
                 return;
             }
 
-            _playlist = new List<PlaylistItem>(items);
+            _sessionPlaylist = new List<PlaylistItem>(items);
+            _playlist = _sessionPlaylist;
             _currentPlaylistId = playlistId;
             CurrentPlaylistTitle = playlistTitle;
             _currentPlaylistIndex = Math.Max(0, Math.Min(initialIndex, _playlist.Count - 1));
 
+            lock (_shufflePlayedIndices)
+            {
+                _shufflePlayedIndices.Clear();
+                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
+            }
+
             ThreadPool.QueueUserWorkItem(_ => CleanUnusedTempAudio());
 
             _syncContext.Post(delegate
-
             {
-
                 if (PlaylistLoaded != null)
-
                 {
-
-                    PlaylistLoaded(this, _playlist);
-
+                    PlaylistLoaded(this, _sessionPlaylist);
                 }
 
                 if (PlaylistIndexChanged != null)
-
                 {
-
                     PlaylistIndexChanged(this, _currentPlaylistIndex);
-
                 }
-
             }, null);
 
+            SchedulePreloadPlaylistAhead();
         }
 
         public void AddToPlaylist(PlaylistItem item)
-
         {
-
             if (item == null || string.IsNullOrWhiteSpace(item.Id)) return;
 
             lock (_lock)
-
             {
-
-                if (_playlist == null) _playlist = new List<PlaylistItem>();
-
-                if (!_playlist.Exists(x => x.Id == item.Id))
-
+                if (_sessionPlaylist == null) _sessionPlaylist = new List<PlaylistItem>();
+                if (!_sessionPlaylist.Exists(x => x.Id == item.Id))
                 {
-
-                    _playlist.Add(new PlaylistItem
-
+                    _sessionPlaylist.Add(new PlaylistItem
                     {
-
                         Id = item.Id,
-
                         Title = item.Title,
-
                         DurationSeconds = item.DurationSeconds
-
                     });
-
                 }
-
+                if (_currentQueueSource == ActiveQueueSource.Playlist)
+                {
+                    _playlist = _sessionPlaylist;
+                }
             }
 
             _syncContext.Post(delegate
-
             {
-
                 if (PlaylistLoaded != null)
-
                 {
-
-                    PlaylistLoaded(this, _playlist);
-
+                    PlaylistLoaded(this, _sessionPlaylist);
                 }
-
             }, null);
-
         }
 
-                public void RemoveFromPlaylist(int index)
+        public void RemoveFromPlaylist(int index)
         {
             lock (_lock)
             {
-                if (_playlist == null || index < 0 || index >= _playlist.Count) return;
-
-                _playlist.RemoveAt(index);
+                if (_sessionPlaylist == null || index < 0 || index >= _sessionPlaylist.Count) return;
+                _sessionPlaylist.RemoveAt(index);
+                if (_currentQueueSource == ActiveQueueSource.Playlist)
+                {
+                    _playlist = _sessionPlaylist;
+                    if (_currentPlaylistIndex >= _playlist.Count)
+                    {
+                        _currentPlaylistIndex = _playlist.Count - 1;
+                    }
+                }
 
                 lock (_shufflePlayedIndices)
                 {
@@ -1575,39 +1595,19 @@ namespace KahoiiMusic.Services
                         }
                     }
                 }
-
-                if (_currentPlaylistIndex == index)
-                {
-                    _currentPlaylistIndex = Math.Max(-1, index - 1);
-                }
-                else if (_currentPlaylistIndex > index)
-                {
-                    _currentPlaylistIndex--;
-                }
             }
 
             _syncContext.Post(delegate
-
             {
-
                 if (PlaylistLoaded != null)
-
                 {
-
-                    PlaylistLoaded(this, _playlist);
-
+                    PlaylistLoaded(this, _sessionPlaylist);
                 }
-
                 if (PlaylistIndexChanged != null)
-
                 {
-
                     PlaylistIndexChanged(this, _currentPlaylistIndex);
-
                 }
-
             }, null);
-
         }
 
         public void PlayTrackAtIndex(int index)
@@ -1786,7 +1786,7 @@ namespace KahoiiMusic.Services
 
                                         hasStartedFirst = true;
 
-                                        _playlist = new List<PlaylistItem>(list);
+                                        _sessionPlaylist = new List<PlaylistItem>(list); _playlist = _sessionPlaylist;
 
                                         _currentPlaylistId = listId;
 
@@ -1800,7 +1800,7 @@ namespace KahoiiMusic.Services
 
                                         {
 
-                                            if (PlaylistLoaded != null) PlaylistLoaded(this, _playlist);
+                                            if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
 
                                             if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, 0);
 
@@ -1846,7 +1846,7 @@ namespace KahoiiMusic.Services
 
                     {
 
-                        _playlist = list;
+                        _sessionPlaylist = list; _playlist = _sessionPlaylist;
 
                         _currentPlaylistId = listId;
 
@@ -1920,7 +1920,7 @@ namespace KahoiiMusic.Services
 
                             {
 
-                                PlaylistLoaded(this, _playlist);
+                                PlaylistLoaded(this, _sessionPlaylist);
 
                             }
 
@@ -2010,7 +2010,7 @@ namespace KahoiiMusic.Services
 
                                         {
 
-                                            PlaylistLoaded(this, _playlist);
+                                            PlaylistLoaded(this, _sessionPlaylist);
 
                                         }
 
@@ -2060,7 +2060,7 @@ namespace KahoiiMusic.Services
 
                             {
 
-                                PlaylistLoaded(this, _playlist);
+                                PlaylistLoaded(this, _sessionPlaylist);
 
                             }
 
@@ -3025,7 +3025,7 @@ namespace KahoiiMusic.Services
 
                                         {
 
-                                            PlaylistLoaded(this, _playlist);
+                                            PlaylistLoaded(this, _sessionPlaylist);
 
                                         }
 

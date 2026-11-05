@@ -338,20 +338,17 @@ namespace KahoiiMusic
             {
                 if (item != null)
                 {
-                    if (_audioPlayer.CurrentQueueSource != ActiveQueueSource.Playlist || _audioPlayer.Playlist != playlistPopup.PlaylistItems)
+                    if (_audioPlayer.CurrentQueueSource != ActiveQueueSource.Playlist || _audioPlayer.Playlist != _audioPlayer.SessionPlaylist)
                     {
-                        if (playlistPopup.PlaylistItems != null && playlistPopup.PlaylistItems.Count > 0)
-                        {
-                            _audioPlayer.SetPlaylist(playlistPopup.PlaylistItems, playlistPopup.CurrentPlaylistIndex);
-                            _audioPlayer.PlayTrackAtIndex(playlistPopup.CurrentPlaylistIndex);
-                            return;
-                        }
+                        int idx = _audioPlayer.SessionPlaylist.FindIndex(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
+                        _audioPlayer.RestoreSessionPlaylist(idx >= 0 ? idx : playlistPopup.CurrentPlaylistIndex);
+                        return;
                     }
 
                     var pl = _audioPlayer.Playlist;
                     if (pl != null)
                     {
-                        int idx = pl.FindIndex(x => x.Id == item.Id);
+                        int idx = pl.FindIndex(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
                         if (idx >= 0 && idx < pl.Count)
                         {
                             _audioPlayer.PlayTrackAtIndex(idx);
@@ -802,12 +799,8 @@ namespace KahoiiMusic
             }
             else
             {
-                // Standalone track not in current playlist -> Clear previous playlist
-                _audioPlayer.ClearPlaylist();
-                btnPlaylist.HasPlaylist = false;
-                btnPlaylist.IsOpen = false;
-                playlistPopup.Visible = false;
-                playlistPopup.Clear();
+                // Standalone track -> DO NOT wipe out user's session playlist in Tab 0!
+                btnPlaylist.HasPlaylist = (_audioPlayer.HasSessionPlaylist || (playlistPopup.PlaylistItems != null && playlistPopup.PlaylistItems.Count > 0));
             }
 
             // Immediately load audio in background
