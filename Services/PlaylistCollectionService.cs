@@ -231,7 +231,18 @@ namespace KahoiiMusic.Services
                         string id = mId.Success ? mId.Groups[1].Value : Guid.NewGuid().ToString("N");
                         string name = mName.Success ? UnescapeJson(mName.Groups[1].Value) : "Playlist";
                         DateTime created = DateTime.Now;
-                        if (mCreated.Success) DateTime.TryParse(mCreated.Groups[1].Value, out created);
+                        if (mCreated.Success)
+                        {
+                            string cVal = mCreated.Groups[1].Value;
+                            if (long.TryParse(cVal, out long ms))
+                            {
+                                try { created = DateTimeOffset.FromUnixTimeMilliseconds(ms).LocalDateTime; } catch { }
+                            }
+                            else
+                            {
+                                DateTime.TryParse(cVal, out created);
+                            }
+                        }
 
                         var pl = new UserPlaylist
                         {
@@ -308,7 +319,7 @@ namespace KahoiiMusic.Services
                     sb.AppendLine("  {");
                     sb.AppendLine(string.Format("    \"id\": \"{0}\",", pl.Id));
                     sb.AppendLine(string.Format("    \"name\": \"{0}\",", escapedName));
-                    sb.AppendLine(string.Format("    \"created\": \"{0:O}\",", pl.CreatedAt));
+                    sb.AppendLine(string.Format("    \"created\": \"{0:O}\",", pl.CreatedAtDateTime));
                     sb.AppendLine("    \"items\": [");
 
                     var items = pl.Items ?? new List<PlaylistItem>();

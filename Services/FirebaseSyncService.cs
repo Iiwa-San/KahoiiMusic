@@ -213,6 +213,17 @@ namespace KahoiiMusic.Services
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
                 var response = await _httpClient.SendAsync(req).ConfigureAwait(false);
+                if ((int)response.StatusCode == 401)
+                {
+                    bool refreshed = await FirebaseAuthService.Instance.RefreshTokenAsync().ConfigureAwait(false);
+                    if (refreshed)
+                    {
+                        token = await FirebaseAuthService.Instance.GetValidTokenAsync().ConfigureAwait(false);
+                        req = new HttpRequestMessage(HttpMethod.Get, url);
+                        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                        response = await _httpClient.SendAsync(req).ConfigureAwait(false);
+                    }
+                }
                 if (!response.IsSuccessStatusCode)
                 {
                     if ((int)response.StatusCode == 404)
@@ -316,6 +327,18 @@ namespace KahoiiMusic.Services
                 req.Content = new StringContent(reqJson, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.SendAsync(req).ConfigureAwait(false);
+                if ((int)response.StatusCode == 401)
+                {
+                    bool refreshed = await FirebaseAuthService.Instance.RefreshTokenAsync().ConfigureAwait(false);
+                    if (refreshed)
+                    {
+                        token = await FirebaseAuthService.Instance.GetValidTokenAsync().ConfigureAwait(false);
+                        req = new HttpRequestMessage(new HttpMethod("PATCH"), url);
+                        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                        req.Content = new StringContent(reqJson, Encoding.UTF8, "application/json");
+                        response = await _httpClient.SendAsync(req).ConfigureAwait(false);
+                    }
+                }
                 if (response.IsSuccessStatusCode)
                 {
                     SyncStatusMessage = "Đã tự động lưu đám mây lúc " + DateTime.Now.ToString("HH:mm");
