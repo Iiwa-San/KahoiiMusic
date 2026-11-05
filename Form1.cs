@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -338,12 +338,12 @@ namespace KahoiiMusic
             {
                 if (item != null)
                 {
-                    if (_audioPlayer.IsPlayingFromHistory)
+                    if (_audioPlayer.CurrentQueueSource != ActiveQueueSource.Playlist || _audioPlayer.Playlist != playlistPopup.PlaylistItems)
                     {
-                        _audioPlayer.IsPlayingFromHistory = false;
                         if (playlistPopup.PlaylistItems != null && playlistPopup.PlaylistItems.Count > 0)
                         {
                             _audioPlayer.SetPlaylist(playlistPopup.PlaylistItems, playlistPopup.CurrentPlaylistIndex);
+                            _audioPlayer.PlayTrackAtIndex(playlistPopup.CurrentPlaylistIndex);
                             return;
                         }
                     }
@@ -753,6 +753,7 @@ namespace KahoiiMusic
         private void SearchPillBox_UrlSubmitted(object sender, string url)
         {
             _audioPlayer.IsPlayingFromHistory = false;
+            _audioPlayer.CurrentQueueSource = ActiveQueueSource.Playlist;
             if (string.IsNullOrWhiteSpace(url) || url == "link youtube..." || url == "linkYT")
             {
                 _audioPlayer.StopAndClear();

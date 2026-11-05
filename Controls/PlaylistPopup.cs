@@ -455,10 +455,17 @@ namespace KahoiiMusic.Controls
 
         private void EnsureCurrentVisible()
         {
-            if (_activeTab != MenuTab.Playlist) return;
-            if (_currentPlaylistIndex < 0 || _currentPlaylistIndex >= _playlistItems.Count) return;
+            if (_activeTab == MenuTab.Collection) return;
+            int idx = -1;
+            string curId = AudioPlayer?.CurrentVideoId;
+            var list = ActiveItems;
+            if (!string.IsNullOrEmpty(curId) && list != null && list.Count > 0)
+            {
+                idx = list.FindIndex(x => string.Equals(x.Id, curId, StringComparison.OrdinalIgnoreCase));
+            }
+            if (idx < 0) return;
             int viewHeight = Height - HeaderHeight - 8;
-            int itemTop = _currentPlaylistIndex * RowHeight;
+            int itemTop = idx * RowHeight;
             int itemBottom = itemTop + RowHeight;
 
             if (itemTop < _scrollOffset)
@@ -1019,6 +1026,14 @@ namespace KahoiiMusic.Controls
                         }
                         Invalidate();
                     }
+                    else if (_activeTab == MenuTab.Saved)
+                    {
+                        if (AudioPlayer != null)
+                        {
+                            AudioPlayer.PlaySavedTracks(_savedItems, _hoveredRowIndex);
+                        }
+                        Invalidate();
+                    }
                     else
                     {
                         if (AudioPlayer != null)
@@ -1303,7 +1318,8 @@ namespace KahoiiMusic.Controls
                 {
                     if (AudioPlayer != null)
                     {
-                        AudioPlayer.LoadAndPlay(item.Url);
+                        int sIdx = _savedItems.FindIndex(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
+                        AudioPlayer.PlaySavedTracks(_savedItems, sIdx >= 0 ? sIdx : 0);
                     }
                 };
 
@@ -1517,10 +1533,7 @@ namespace KahoiiMusic.Controls
             if (playlist == null || playlist.Items == null || playlist.Items.Count == 0) return;
             if (AudioPlayer != null)
             {
-                AudioPlayer.IsPlayingFromHistory = false;
-                AudioPlayer.CurrentPlaylistTitle = playlist.Name;
-                                AudioPlayer.SetPlaylist(playlist.Items, startIndex, playlist.Name, playlist.Id);
-                AudioPlayer.PlayTrackAtIndex(startIndex);
+                AudioPlayer.PlayCollection(playlist.Items, startIndex, playlist.Name, playlist.Id);
                 AudioPlayer.RaiseStatus("Đang phát bộ sưu tập: " + playlist.Name);
             }
         }
@@ -1697,15 +1710,7 @@ namespace KahoiiMusic.Controls
                     Rectangle rowRect = new Rectangle(8, rowY, w - 16, RowHeight - 2);
                     PlaylistItem item = currentList[i];
 
-                    bool isActive = false;
-                    if (_activeTab == MenuTab.Playlist)
-                    {
-                        isActive = (i == _currentPlaylistIndex);
-                    }
-                    else
-                    {
-                        isActive = (AudioPlayer != null && !string.IsNullOrEmpty(AudioPlayer.CurrentVideoId) && string.Equals(item.Id, AudioPlayer.CurrentVideoId, StringComparison.OrdinalIgnoreCase));
-                    }
+                    bool isActive = (AudioPlayer != null && !string.IsNullOrEmpty(AudioPlayer.CurrentVideoId) && string.Equals(item.Id, AudioPlayer.CurrentVideoId, StringComparison.OrdinalIgnoreCase));
 
                     bool isHover = (i == _hoveredRowIndex);
 

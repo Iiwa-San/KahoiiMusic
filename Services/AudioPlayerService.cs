@@ -26,6 +26,14 @@ namespace KahoiiMusic.Services
 
 {
 
+    public enum ActiveQueueSource
+    {
+        Playlist,
+        Collection,
+        Saved,
+        History
+    }
+
     public class TrackLoadedEventArgs : EventArgs
 
     {
@@ -1392,23 +1400,77 @@ namespace KahoiiMusic.Services
             set => _isPlayingFromHistory = value;
         }
 
+        private ActiveQueueSource _currentQueueSource = ActiveQueueSource.Playlist;
+        public ActiveQueueSource CurrentQueueSource
+        {
+            get => _currentQueueSource;
+            set => _currentQueueSource = value;
+        }
+
         public void PlayHistory(List<PlaylistItem> historyItems, int startIndex = 0)
         {
             if (historyItems == null || historyItems.Count == 0) return;
 
             _isPlayingFromHistory = true;
+            _currentQueueSource = ActiveQueueSource.History;
             _playlist = new List<PlaylistItem>(historyItems);
             _currentPlaylistId = null;
 
-            CurrentPlaylistTitle = null;
+            CurrentPlaylistTitle = "Lịch sử nghe";
             _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
+
+            lock (_shufflePlayedIndices)
+            {
+                _shufflePlayedIndices.Clear();
+            }
 
             PlayTrackAtIndex(_currentPlaylistIndex);
         }
 
-                public void SetPlaylist(List<PlaylistItem> items, int initialIndex = 0, string playlistTitle = null, string playlistId = null)
+        public void PlaySavedTracks(List<PlaylistItem> savedItems, int startIndex = 0)
+        {
+            if (savedItems == null || savedItems.Count == 0) return;
+
+            _isPlayingFromHistory = false;
+            _currentQueueSource = ActiveQueueSource.Saved;
+            _playlist = new List<PlaylistItem>(savedItems);
+            _currentPlaylistId = null;
+
+            CurrentPlaylistTitle = "Đã tải";
+            _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
+
+            lock (_shufflePlayedIndices)
+            {
+                _shufflePlayedIndices.Clear();
+            }
+
+            PlayTrackAtIndex(_currentPlaylistIndex);
+        }
+
+        public void PlayCollection(List<PlaylistItem> items, int startIndex, string playlistTitle, string playlistId)
+        {
+            if (items == null || items.Count == 0) return;
+
+            _isPlayingFromHistory = false;
+            _currentQueueSource = ActiveQueueSource.Collection;
+            _playlist = new List<PlaylistItem>(items);
+            _currentPlaylistId = playlistId;
+
+            CurrentPlaylistTitle = playlistTitle;
+            _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
+
+            lock (_shufflePlayedIndices)
+            {
+                _shufflePlayedIndices.Clear();
+            }
+
+            PlayTrackAtIndex(_currentPlaylistIndex);
+        }
+
+        public void SetPlaylist(List<PlaylistItem> items, int initialIndex = 0, string playlistTitle = null, string playlistId = null)
         {
             _isPlayingFromHistory = false;
+            _currentQueueSource = ActiveQueueSource.Playlist;
             if (items == null || items.Count == 0)
             {
                 ClearPlaylist();
@@ -1600,7 +1662,7 @@ namespace KahoiiMusic.Services
 
             }
 
-            LoadAndPlay(item.Url);
+            LoadAndPlay(item.Url, preserveQueueSource: true);
 
         }
 
@@ -2024,7 +2086,7 @@ namespace KahoiiMusic.Services
 
         }
 
-        public void LoadAndPlay(string input)
+        public void LoadAndPlay(string input, bool preserveQueueSource = false)
 
         {
 
@@ -2032,7 +2094,11 @@ namespace KahoiiMusic.Services
 
             input = input.Trim();
 
-            _isPlayingFromHistory = false;
+            if (!preserveQueueSource)
+            {
+                _isPlayingFromHistory = false;
+                _currentQueueSource = ActiveQueueSource.Playlist;
+            }
 
             _isLoading = true;
 
@@ -2556,7 +2622,7 @@ namespace KahoiiMusic.Services
 
                             {
 
-                                if (!_isPlayingFromHistory)
+                                if (!_isPlayingFromHistory && _currentQueueSource != ActiveQueueSource.History)
 
                                 {
 
