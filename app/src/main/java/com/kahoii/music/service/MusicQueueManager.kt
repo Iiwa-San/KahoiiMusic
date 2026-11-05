@@ -1,7 +1,8 @@
-﻿package com.kahoii.music.service
+package com.kahoii.music.service
 
 import android.content.Context
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.PowerManager
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -33,6 +34,8 @@ object MusicQueueManager {
     @Volatile
     var player: ExoPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+    private val shufflePlayedIndices = mutableListOf<Int>()
 
     // State
     @Volatile
@@ -85,6 +88,16 @@ object MusicQueueManager {
                 e.printStackTrace()
             }
         }
+        if (wifiLock == null) {
+            try {
+                val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                @Suppress("DEPRECATION")
+                wifiLock = wm?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "KahoiiMusic:WifiLock")
+                wifiLock?.setReferenceCounted(false)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     fun releaseService(exoPlayer: ExoPlayer) {
@@ -99,6 +112,9 @@ object MusicQueueManager {
             if (wakeLock?.isHeld == false) {
                 wakeLock?.acquire(timeoutMs)
             }
+            if (wifiLock?.isHeld == false) {
+                wifiLock?.acquire()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -108,6 +124,9 @@ object MusicQueueManager {
         try {
             if (wakeLock?.isHeld == true) {
                 wakeLock?.release()
+            }
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -142,7 +161,7 @@ object MusicQueueManager {
                 player?.play()
                 isTransitioning = false
             }
-            LoopMode.ALL -> {
+            LoopMode.ALL, LoopMode.SHUFFLE -> {
                 playNext()
                 serviceScope.launch {
                     delay(800)
@@ -186,11 +205,29 @@ object MusicQueueManager {
             queue.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
         } else -1
 
-        val nextIdx = if (isShuffled && queue.size > 1) {
-            val otherIndices = queue.indices.filter { it != currIdx }
-            if (otherIndices.isNotEmpty()) otherIndices.random() else 0
+        val nextIdx = if (loopMode == LoopMode.SHUFFLE || isShuffled) {
+            synchronized(shufflePlayedIndices) {
+                if (currIdx >= 0 && !shufflePlayedIndices.contains(currIdx)) {
+                    shufflePlayedIndices.add(currIdx)
+                }
+                val unplayed = queue.indices.filter { !shufflePlayedIndices.contains(it) }
+                if (unplayed.isEmpty()) {
+                    // Loop lại list sau khi hết tất cả các bài!
+                    shufflePlayedIndices.clear()
+                    val reloop = queue.indices.filter { it != currIdx }
+                    if (reloop.isNotEmpty()) reloop.random() else 0
+                } else {
+                    unplayed.random()
+                }
+            }
         } else {
             if (currIdx >= 0) (currIdx + 1) % queue.size else 0
+        }
+
+        synchronized(shufflePlayedIndices) {
+            if (!shufflePlayedIndices.contains(nextIdx)) {
+                shufflePlayedIndices.add(nextIdx)
+            }
         }
 
         currentIndex = nextIdx
@@ -209,13 +246,20 @@ object MusicQueueManager {
             queue.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
         } else 0
 
-        if (currIdx <= 0 || queue.size == 1) {
-            player?.seekTo(0L)
-            if (player?.isPlaying == false) player?.play()
-            return
+        val prevIdx = if (loopMode == LoopMode.SHUFFLE && shufflePlayedIndices.size > 1) {
+            synchronized(shufflePlayedIndices) {
+                shufflePlayedIndices.removeAt(shufflePlayedIndices.size - 1)
+                shufflePlayedIndices.lastOrNull() ?: 0
+            }
+        } else {
+            if (currIdx <= 0 || queue.size == 1) {
+                player?.seekTo(0L)
+                if (player?.isPlaying == false) player?.play()
+                return
+            }
+            currIdx - 1
         }
 
-        val prevIdx = currIdx - 1
         currentIndex = prevIdx
         val prevTrack = queue[prevIdx]
         onPlaylistIndexChanged?.invoke(prevIdx)
@@ -274,9 +318,15 @@ object MusicQueueManager {
                     return@launch
                 }
 
-                // 2. Resolve fresh stream
+                // 2. Resolve fresh stream with background auto-retry
                 onStatusMessage?.invoke("Đang nạp âm thanh...")
-                val result = youTubeRepository.resolveAudio(track.id)
+                var result = youTubeRepository.resolveAudio(track.id)
+                if (result.isFailure) {
+                    acquireWakeLock(60_000L)
+                    delay(1200L)
+                    result = youTubeRepository.resolveAudio(track.id)
+                }
+
                 result.onSuccess { stream ->
                     val curTitle = track.safeTitle
                     val curArtist = track.safeArtist
@@ -295,6 +345,12 @@ object MusicQueueManager {
                     onResolved?.invoke(resolvedTrack)
                 }.onFailure { err ->
                     onStatusMessage?.invoke("Lỗi kết nối: ${err.message}")
+                    serviceScope.launch {
+                        delay(2000L)
+                        if (player?.isPlaying == false && activeQueue.size > 1) {
+                            playNext()
+                        }
+                    }
                 }
             } finally {
                 // WakeLock released on STATE_READY
@@ -334,6 +390,7 @@ object MusicQueueManager {
         preloadJob?.cancel()
         preloadJob = serviceScope.launch(Dispatchers.IO) {
             try {
+                acquireWakeLock(25_000L)
                 val queue = activeQueue
                 if (queue.size <= 1) return@launch
                 val currIdx = queue.indexOfFirst { it.id.equals(currentTrackId, ignoreCase = true) }
@@ -342,6 +399,10 @@ object MusicQueueManager {
                 if (nextIdx == currIdx) return@launch
 
                 val nextTrack = queue[nextIdx]
+                if (savedTracksRepository?.isTrackSaved(nextTrack.id) == true) return@launch
+                val cachedTemp = savedTracksRepository?.getTempAudioFile(nextTrack.id)
+                if (cachedTemp != null && cachedTemp.exists() && cachedTemp.length() > 500_000L) return@launch
+
                 val result = youTubeRepository.resolveAudio(nextTrack.id)
                 result.onSuccess { stream ->
                     savedTracksRepository?.cacheTempAudio(nextTrack.id, stream.audioUrl, stream.contentLength)

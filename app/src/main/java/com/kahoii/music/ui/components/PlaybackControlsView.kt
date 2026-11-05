@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Timer
@@ -216,6 +217,12 @@ fun PlaybackControlsView(
                 LoopMode.ALL -> Icon(
                     imageVector = Icons.Default.Repeat,
                     contentDescription = "Lặp toàn bộ",
+                    tint = accentColor,
+                    modifier = Modifier.size(22.dp)
+                )
+                LoopMode.SHUFFLE -> Icon(
+                    imageVector = Icons.Default.Shuffle,
+                    contentDescription = "Phát ngẫu nhiên (Lặp khi hết)",
                     tint = accentColor,
                     modifier = Modifier.size(22.dp)
                 )

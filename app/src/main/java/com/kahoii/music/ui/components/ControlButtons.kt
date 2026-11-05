@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Timer
@@ -83,6 +84,12 @@ fun ControlButtons(
                     imageVector = Icons.Default.Repeat,
                     contentDescription = "Repeat All",
                     tint = GradientBottom,
+                    modifier = Modifier.size(26.dp)
+                )
+                LoopMode.SHUFFLE -> Icon(
+                    imageVector = Icons.Default.Shuffle,
+                    contentDescription = "Shuffle & Loop",
+                    tint = NeonPink,
                     modifier = Modifier.size(26.dp)
                 )
             }

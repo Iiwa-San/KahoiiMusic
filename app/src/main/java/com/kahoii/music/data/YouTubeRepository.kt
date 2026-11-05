@@ -30,6 +30,11 @@ class YouTubeRepository {
         .followRedirects(true)
         .build()
 
+    private val quickClient = client.newBuilder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        .build()
+
     companion object {
         private val VIDEO_ID_REGEX = Pattern.compile(
             "^.*(?:youtu.be\\/|v\\/|e\\/|u\\/\\w+\\/|embed\\/|v=)([^#&?]*).*"
@@ -168,7 +173,7 @@ class YouTubeRepository {
                 .header("Accept-Language", "en-US,en;q=0.9")
                 .build()
 
-            client.newCall(req).execute().use { response ->
+            quickClient.newCall(req).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val html = response.body?.string() ?: return null
                 val match = Regex("\"VISITOR_DATA\":\"([^\"]+)\"").find(html)

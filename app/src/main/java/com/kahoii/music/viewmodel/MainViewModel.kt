@@ -643,18 +643,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleLoopMode() {
         val nextMode = when (_uiState.value.loopMode) {
-            LoopMode.OFF -> LoopMode.ONE
-            LoopMode.ONE -> LoopMode.ALL
-            LoopMode.ALL -> LoopMode.OFF
+            LoopMode.OFF -> LoopMode.ALL
+            LoopMode.ALL -> LoopMode.ONE
+            LoopMode.ONE -> LoopMode.SHUFFLE
+            LoopMode.SHUFFLE -> LoopMode.OFF
         }
         _uiState.update { it.copy(loopMode = nextMode) }
         com.kahoii.music.service.MusicQueueManager.loopMode = nextMode
+
+        val msg = when (nextMode) {
+            LoopMode.OFF -> "Chế độ: Phát tuần tự"
+            LoopMode.ALL -> "Chế độ: Lặp lại danh sách"
+            LoopMode.ONE -> "Chế độ: Lặp lại 1 bài"
+            LoopMode.SHUFFLE -> "Chế độ: Phát ngẫu nhiên (Lặp khi hết)"
+        }
+        Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
 
         val p = controller ?: return
         when (nextMode) {
             LoopMode.OFF -> p.repeatMode = Player.REPEAT_MODE_OFF
             LoopMode.ONE -> p.repeatMode = Player.REPEAT_MODE_ONE
-            LoopMode.ALL -> p.repeatMode = Player.REPEAT_MODE_ALL
+            LoopMode.ALL, LoopMode.SHUFFLE -> p.repeatMode = Player.REPEAT_MODE_ALL
         }
     }
 
