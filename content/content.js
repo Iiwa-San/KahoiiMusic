@@ -6,18 +6,39 @@
   let lastUrl = null;
   let cachedSavedTracks = [];
   let cachedCollections = [];
+  let currentSession = null;
 
   function syncCloudData() {
     try {
-      chrome.runtime.sendMessage({ action: "GET_CLOUD_DATA" }, (res) => {
-        if (res && res.payload) {
-          cachedSavedTracks = res.payload.savedTracks || [];
-          cachedCollections = res.payload.collections || [];
-          updateButtonStatus();
-        }
+      chrome.runtime.sendMessage({ action: "GET_SESSION" }, (sRes) => {
+        currentSession = sRes?.session || null;
+        chrome.runtime.sendMessage({ action: "GET_CLOUD_DATA" }, (res) => {
+          if (res && res.payload) {
+            cachedSavedTracks = res.payload.savedTracks || [];
+            cachedCollections = res.payload.collections || [];
+            updateButtonStatus();
+          }
+        });
       });
     } catch { }
   }
+
+  // Lắng nghe thay đổi Storage trong thời gian thực (đăng nhập / đăng xuất / đồng bộ trên popup)
+  if (chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && (changes.currentUser || changes.cachedCloudData)) {
+        syncCloudData();
+      }
+    });
+  }
+
+  // Lắng nghe thông điệp cập nhật tức thì từ background / popup
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg && (msg.action === "CLOUD_DATA_CHANGED" || msg.action === "STATE_UPDATED")) {
+      syncCloudData();
+      sendResponse({ received: true });
+    }
+  });
 
   function getQueryParam(key) {
     try {
@@ -65,6 +86,46 @@
       }
     }
     return 0;
+  }
+
+  function extractPlaylistItemsFromPage() {
+    const items = [];
+    const panelRenderers = document.querySelectorAll("ytd-playlist-panel-video-renderer");
+    if (panelRenderers && panelRenderers.length > 0) {
+      panelRenderers.forEach((el) => {
+        const link = el.querySelector("a#wc-endpoint") || el.querySelector("a");
+        const href = link ? link.getAttribute("href") || "" : "";
+        const match = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+        const vid = match ? match[1] : null;
+        const titleEl = el.querySelector("#video-title");
+        const title = titleEl ? titleEl.textContent.trim() : "";
+        const authorEl = el.querySelector("#byline") || el.querySelector("#channel-name");
+        const author = authorEl ? authorEl.textContent.trim() : "YouTube";
+        if (vid && title && !items.some(x => x.Id === vid)) {
+          items.push({ Id: vid, Title: title, Author: author, DurationSeconds: 0 });
+        }
+      });
+    }
+
+    if (items.length === 0) {
+      const listRenderers = document.querySelectorAll("ytd-playlist-video-renderer");
+      if (listRenderers && listRenderers.length > 0) {
+        listRenderers.forEach((el) => {
+          const link = el.querySelector("a#video-title") || el.querySelector("a#thumbnail");
+          const href = link ? link.getAttribute("href") || "" : "";
+          const match = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+          const vid = match ? match[1] : null;
+          const titleEl = el.querySelector("#video-title");
+          const title = titleEl ? titleEl.textContent.trim() : "";
+          const authorEl = el.querySelector("#byline-container a") || el.querySelector("#channel-name");
+          const author = authorEl ? authorEl.textContent.trim() : "YouTube";
+          if (vid && title && !items.some(x => x.Id === vid)) {
+            items.push({ Id: vid, Title: title, Author: author, DurationSeconds: 0 });
+          }
+        });
+      }
+    }
+    return items;
   }
 
   function getPlaylistTitle() {
@@ -243,7 +304,8 @@
       playText.textContent = isPlaylist ? "Đang nạp cả list..." : "Đang nạp...";
 
       const targetUrl = window.location.href;
-      triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(targetUrl)}`);
+      const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+      triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(targetUrl)}${userParam}`);
 
       if (isPlaylist) {
         showToast("Đang nạp danh sách!", "KahoiiMusic đang tải toàn bộ danh sách vào hàng đợi phát tạm...", "⚡", 4000);
@@ -299,18 +361,19 @@
         const dur = getVideoDuration();
         const thumb = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
 
-        // Gửi lệnh tải về máy qua URI Scheme
-        triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}`);
+        // Gửi lệnh tải về máy qua URI Scheme kèm token đăng nhập nhanh
+        const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+        const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+        triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}${userParam}${rtParam}`);
 
         // Đồng bộ lên đám mây Firestore savedTracks
         chrome.runtime.sendMessage({
           action: "SAVE_TO_OFFLINE",
           track: {
-            videoId: vId,
-            title: title,
-            author: author,
-            duration: dur,
-            thumbnail: thumb
+            Id: vId,
+            Title: title,
+            Author: author,
+            DurationSeconds: dur
           }
         }, (res) => {
           if (res && res.alreadyExists) {
@@ -335,7 +398,7 @@
       group.appendChild(btnDownload);
     }
 
-    // 2. NÚT LƯU PLAYLIST VÀO BỘ SƯU TẬP (Nếu đang ở trong playlist)
+    // 3. NÚT LƯU PLAYLIST VÀO BỘ SƯU TẬP (Nếu đang ở trong playlist)
     if (isPlaylist) {
       const btnSaveCol = document.createElement("button");
       btnSaveCol.id = "kahoii-save-col-btn";
@@ -364,25 +427,33 @@
 
         const targetUrl = window.location.href;
 
-        // 1. Gửi lệnh mở giao thức cho KahoiiMusic desktop
-        triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(playlistTitle)}`);
+        // 1. Gửi lệnh mở giao thức cho KahoiiMusic desktop kèm thông tin tài khoản đăng nhập nhanh
+        const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+        const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+        triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(playlistTitle)}${userParam}${rtParam}`);
+
+        // Trích xuất các bài hát có trên trang
+        const items = extractPlaylistItemsFromPage();
+        const vId = getVideoId();
+        const fallbackItems = items.length > 0 ? items : (vId ? [{ Id: vId, Title: getVideoTitle(), Author: getChannelName(), DurationSeconds: getVideoDuration() }] : []);
 
         // 2. Đồng thời lưu vào đám mây Firestore collections
         chrome.runtime.sendMessage({
           action: "SAVE_TO_COLLECTION",
           name: playlistTitle,
-          url: targetUrl
+          url: targetUrl,
+          items: fallbackItems
         }, (res) => {
           if (res && res.alreadyExists) {
             showToast("Đã có trong BST!", `Danh sách "${playlistTitle}" đã có sẵn trong Bộ sưu tập.`, "ℹ️", 3500);
           } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
             showToast("Đang lưu BST!", `KahoiiMusic đang lưu "${playlistTitle}" vào BST. (💡 Mở tiện ích đăng nhập để đồng bộ đám mây)`, "💾", 4500);
           } else {
-            showToast("Lưu vào Bộ sưu tập", `KahoiiMusic đang tải và lưu "${playlistTitle}" vào Bộ sưu tập...`, "💾", 4500);
+            showToast("Lưu vào Bộ sưu tập", `KahoiiMusic đang tải và lưu "${playlistTitle}" (${fallbackItems.length} bài) vào Bộ sưu tập...`, "💾", 4500);
           }
 
           if (!cachedCollections.some(c => (c.name || c.Name || "").toLowerCase().trim() === playlistTitle.toLowerCase().trim())) {
-            cachedCollections.unshift({ Name: playlistTitle, Items: [] });
+            cachedCollections.unshift({ Name: playlistTitle, Items: fallbackItems });
           }
 
           setTimeout(() => {

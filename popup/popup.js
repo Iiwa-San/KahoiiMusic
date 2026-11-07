@@ -263,6 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
           inputPassword.value = "";
           inputConfirmPassword.value = "";
           showDashboard(res.user);
+          notifyContentTabs();
         });
       } else {
         // LOGIN
@@ -278,6 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           inputPassword.value = "";
           showDashboard(res.user);
+          notifyContentTabs();
         });
       }
     });
@@ -287,6 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (confirm("Bạn có chắc chắn muốn đăng xuất?")) {
       chrome.runtime.sendMessage({ action: "LOGOUT" }, () => {
         showLoginView();
+        notifyContentTabs();
       });
     }
   });
@@ -667,10 +670,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     clearStatus();
 
-    // 1. Gửi lệnh qua giao thức để KahoiiMusic tải trực tiếp (kèm user để kiểm tra tài khoản)
+    // 1. Gửi lệnh qua giao thức để KahoiiMusic tải trực tiếp (kèm user và token đăng nhập nhanh)
     const durParam = currentDurationSeconds > 0 ? `&dur=${currentDurationSeconds}` : "";
     const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
-    triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(currentVideoId)}&title=${encodeURIComponent(currentTitle)}&author=${encodeURIComponent(currentAuthor)}${durParam}${userParam}`);
+    const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+    triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(currentVideoId)}&title=${encodeURIComponent(currentTitle)}&author=${encodeURIComponent(currentAuthor)}${durParam}${userParam}${rtParam}`);
 
     // 2. Đồng thời lưu vào đám mây Firestore mục savedTracks của tài khoản đang đăng nhập trên extension
     chrome.runtime.sendMessage(
@@ -695,6 +699,7 @@ document.addEventListener("DOMContentLoaded", () => {
           cachedSavedTracks.unshift({ Id: currentVideoId, Title: currentTitle, Author: currentAuthor, DurationSeconds: currentDurationSeconds });
         }
         updateDuplicateBadges();
+        notifyContentTabs();
       }
     );
   });
@@ -706,9 +711,10 @@ document.addEventListener("DOMContentLoaded", () => {
     clearStatus();
     const finalTitle = currentPlaylistTitle || "Playlist YouTube";
 
-    // Gửi lệnh qua giao thức kèm tài khoản để KahoiiMusic đối chiếu
+    // Gửi lệnh qua giao thức kèm tài khoản và token đăng nhập nhanh
     const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
-    triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(currentTargetUrl)}&title=${encodeURIComponent(finalTitle)}${userParam}`);
+    const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+    triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(currentTargetUrl)}&title=${encodeURIComponent(finalTitle)}${userParam}${rtParam}`);
 
     // Chuẩn bị danh sách bài hát đầy đủ để lưu vào Firestore (tránh lưu rỗng [])
     let itemsToSave = currentPlaylistItems;
@@ -741,16 +747,33 @@ document.addEventListener("DOMContentLoaded", () => {
           cachedCollections.unshift({ Name: finalTitle, Items: itemsToSave });
         }
         updateDuplicateBadges();
+        notifyContentTabs();
       }
     );
   });
 
-  // ================= ACTION: OPEN APP ================= //
+  // ================= ACTION: OPEN APP (KÈM AUTO LOGIN NHANH) ================= //
   if (btnOpenApp) {
     btnOpenApp.addEventListener("click", (e) => {
       e.preventDefault();
-      triggerProtocol("kahoiimusic://open");
+      const userParam = currentSession && currentSession.email ? `?user=${encodeURIComponent(currentSession.email)}` : "";
+      const rtParam = currentSession && currentSession.refreshToken ? `${userParam ? '&' : '?'}auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+      triggerProtocol(`kahoiimusic://open${userParam}${rtParam}`);
     });
+  }
+
+  function notifyContentTabs() {
+    try {
+      chrome.tabs.query({}, (tabs) => {
+        for (const t of tabs || []) {
+          if (t.id) {
+            chrome.tabs.sendMessage(t.id, { action: "CLOUD_DATA_CHANGED" }, () => {
+              if (chrome.runtime.lastError) {}
+            });
+          }
+        }
+      });
+    } catch { }
   }
 
   // ================= MODAL: DOWNLOAD APPS ================= //

@@ -563,6 +563,39 @@ async function fetchOEmbed(videoId) {
   };
 }
 
+function notifyAllTabs() {
+  try {
+    chrome.tabs.query({}, (tabs) => {
+      for (const t of tabs || []) {
+        if (t.id) {
+          chrome.tabs.sendMessage(t.id, { action: "CLOUD_DATA_CHANGED" }, () => {
+            if (chrome.runtime.lastError) {}
+          });
+        }
+      }
+    });
+  } catch { }
+}
+
+let lastCloudUpdatedAt = null;
+async function pollCloudUpdates() {
+  try {
+    const session = await getSession();
+    if (!session) return;
+    const res = await getUserCloudData();
+    if (res && res.success && res.payload) {
+      const updatedAt = res.payload.updatedAt || null;
+      if (updatedAt && updatedAt !== lastCloudUpdatedAt) {
+        lastCloudUpdatedAt = updatedAt;
+        notifyAllTabs();
+      }
+    }
+  } catch { }
+}
+
+// Kiểm tra đồng bộ từ App mỗi 25 giây khi trình duyệt hoạt động
+setInterval(pollCloudUpdates, 25000);
+
 // ================= MESSAGE LISTENER ================= //
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   (async () => {
@@ -572,24 +605,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, session });
       } else if (request.action === 'LOGIN') {
         const res = await login(request.email, request.password);
+        if (res.success) notifyAllTabs();
         sendResponse(res);
       } else if (request.action === 'REGISTER') {
         const res = await register(request.email, request.password);
+        if (res.success) notifyAllTabs();
         sendResponse(res);
       } else if (request.action === 'FORGOT_PASSWORD') {
         const res = await forgotPassword(request.email);
         sendResponse(res);
       } else if (request.action === 'LOGOUT') {
         await clearSession();
+        notifyAllTabs();
         sendResponse({ success: true });
       } else if (request.action === 'GET_CLOUD_DATA') {
         const res = await getUserCloudData();
         sendResponse(res);
       } else if (request.action === 'SAVE_TO_OFFLINE') {
         const res = await saveTrackToSavedTracks(request.track);
+        if (res.success) notifyAllTabs();
         sendResponse(res);
       } else if (request.action === 'SAVE_TO_COLLECTION') {
         const res = await saveCollectionToCloud(request.name, request.url, request.items);
+        if (res.success) notifyAllTabs();
         sendResponse(res);
       } else if (request.action === 'FETCH_OEMBED') {
         const res = await fetchOEmbed(request.videoId);

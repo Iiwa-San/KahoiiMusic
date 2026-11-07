@@ -1,21 +1,26 @@
 /* KahoiiMusic Content Script Styles */
 .kahoii-btn-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 8px;
-  vertical-align: middle;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-left: 6px !important;
+  margin-right: 2px !important;
+  vertical-align: middle !important;
+  flex-shrink: 0 !important;
+  max-width: 100% !important;
+  flex-wrap: nowrap !important;
 }
 
 .kahoii-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
   color: #ffffff !important;
   border: none;
   border-radius: 18px;
-  padding: 0 14px;
+  padding: 0 12px;
   height: 36px;
   font-size: 13px;
   font-weight: 600;
@@ -25,6 +30,8 @@
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
   user-select: none;
   white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .kahoii-btn:hover {
@@ -47,12 +54,12 @@
 }
 
 .kahoii-btn.download {
-  background: linear-gradient(135deg, #2563eb 0%, #0284c7 100%);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  background: linear-gradient(135deg, #ff2d75 0%, #ec4899 100%);
+  box-shadow: 0 2px 8px rgba(255, 45, 117, 0.35);
 }
 
 .kahoii-btn.download:hover {
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.55);
+  box-shadow: 0 4px 14px rgba(255, 45, 117, 0.55);
 }
 
 .kahoii-btn.already-saved {
@@ -65,6 +72,34 @@
 .kahoii-btn.already-saved:hover {
   background: rgba(16, 185, 129, 0.28) !important;
   box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* RESPONSIVE LAYOUT CHO MÀN HÌNH / CỬA SỔ THU NHỎ TRÊN YOUTUBE */
+@media (max-width: 1250px) {
+  .kahoii-btn {
+    padding: 0 9px;
+    font-size: 12px;
+  }
+}
+
+/* Khi cửa sổ YouTube thu nhỏ < 1050px: chuyển sang dạng Icon Pill tròn gọn gàng không bao giờ vỡ giao diện */
+@media (max-width: 1050px) {
+  .kahoii-btn {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    justify-content: center !important;
+  }
+
+  .kahoii-btn .kahoii-btn-text {
+    display: none !important;
+  }
+
+  .kahoii-btn-icon {
+    font-size: 16px !important;
+    margin: 0 !important;
+  }
 }
 
 .kahoii-btn.loading {
