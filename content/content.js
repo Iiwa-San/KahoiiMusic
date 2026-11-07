@@ -153,13 +153,20 @@
   }
 
   function triggerProtocol(protocolUrl) {
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = protocolUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => {
-      try { iframe.remove(); } catch { }
-    }, 1500);
+    try {
+      const a = document.createElement("a");
+      a.href = protocolUrl;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try { a.remove(); } catch { }
+      }, 500);
+    } catch {
+      try {
+        window.location.href = protocolUrl;
+      } catch { }
+    }
   }
 
   function showToast(title, message, icon = "🎵", duration = 3500) {
@@ -356,6 +363,11 @@
         e.preventDefault();
         e.stopPropagation();
 
+        if (!currentSession || !currentSession.email) {
+          showToast("Yêu cầu đăng nhập!", "Tính năng Tải về (Offline) chỉ có thể dùng khi đăng nhập tài khoản KahoiiMusic trên tiện ích mở rộng.", "🔒", 4500);
+          return;
+        }
+
         if (isProcessingDownload) return;
         isProcessingDownload = true;
 
@@ -438,6 +450,11 @@
       btnSaveCol.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
+
+        if (!currentSession || !currentSession.email) {
+          showToast("Yêu cầu đăng nhập!", "Tính năng Lưu vào Bộ sưu tập chỉ có thể dùng khi đăng nhập tài khoản KahoiiMusic trên tiện ích mở rộng.", "🔒", 4500);
+          return;
+        }
 
         if (isProcessingSave) return;
         isProcessingSave = true;

@@ -386,17 +386,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ================= PROTOCOL TRIGGER HELPER ================= //
   function triggerProtocol(protocolUrl) {
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = protocolUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => {
-      try { iframe.remove(); } catch { }
-    }, 1500);
-
     try {
-      window.location.href = protocolUrl;
-    } catch { }
+      const a = document.createElement("a");
+      a.href = protocolUrl;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try { a.remove(); } catch { }
+      }, 500);
+    } catch {
+      try {
+        window.location.href = protocolUrl;
+      } catch { }
+    }
   }
 
   // ================= VIDEO / PLAYLIST DETECTION ================= //
@@ -764,6 +767,19 @@ document.addEventListener("DOMContentLoaded", () => {
   btnDownloadTrack.addEventListener("click", () => {
     if (!currentVideoId) return;
 
+    if (!currentSession || !currentSession.email) {
+      showCyberAlert({
+        title: "Yêu cầu đăng nhập",
+        subtitle: "Đồng bộ KahoiiMusic",
+        message: "Tính năng Tải về (Offline) chỉ có thể sử dụng khi bạn đã đăng nhập tài khoản KahoiiMusic. Vui lòng đăng nhập để tiếp tục!",
+        icon: "🔒",
+        okText: "Đăng nhập ngay"
+      }).then(() => {
+        showLoginView();
+      });
+      return;
+    }
+
     clearStatus();
 
     // 1. Gửi lệnh qua giao thức để KahoiiMusic tải trực tiếp (kèm user và token đăng nhập nhanh)
@@ -803,6 +819,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // ================= ACTION 3: LƯU PLAYLIST VÀO BỘ SƯU TẬP ================= //
   btnSaveCollection.addEventListener("click", () => {
     if (!currentTargetUrl || !isCurrentPlaylist) return;
+
+    if (!currentSession || !currentSession.email) {
+      showCyberAlert({
+        title: "Yêu cầu đăng nhập",
+        subtitle: "Đồng bộ KahoiiMusic",
+        message: "Tính năng Lưu vào Bộ sưu tập chỉ có thể sử dụng khi bạn đã đăng nhập tài khoản KahoiiMusic. Vui lòng đăng nhập để tiếp tục!",
+        icon: "🔒",
+        okText: "Đăng nhập ngay"
+      }).then(() => {
+        showLoginView();
+      });
+      return;
+    }
 
     clearStatus();
     const finalTitle = currentPlaylistTitle || "Playlist YouTube";
