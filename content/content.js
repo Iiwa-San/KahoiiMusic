@@ -10,11 +10,10 @@
 
   // Trợ thủ: Đảm bảo có phiên đăng nhập ngay cả khi biến bộ nhớ chưa nạp kịp
   async function ensureSession() {
-    if (currentSession && currentSession.email) return currentSession;
     if (chrome.storage && chrome.storage.local) {
       try {
         const res = await new Promise((resolve) => {
-          chrome.storage.local.get(['currentUser', 'cachedMusicData'], resolve);
+          chrome.storage.local.get(['currentUser', 'cachedMusicData'], (items) => resolve(items));
         });
         if (res && res.currentUser && res.currentUser.email) {
           currentSession = res.currentUser;
@@ -23,10 +22,28 @@
             cachedCollections = res.cachedMusicData.collections || [];
           }
           return currentSession;
+        } else {
+          currentSession = null;
+          cachedSavedTracks = [];
+          cachedCollections = [];
         }
       } catch { }
     }
-    return null;
+
+    try {
+      const sRes = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: "GET_SESSION" }, (resp) => {
+          if (chrome.runtime.lastError || !resp) resolve(null);
+          else resolve(resp);
+        });
+      });
+      if (sRes && sRes.success && sRes.session && sRes.session.email) {
+        currentSession = sRes.session;
+        return currentSession;
+      }
+    } catch { }
+
+    return currentSession;
   }
 
   // 1. Đọc ngay từ cache cục bộ (chrome.storage.local) nếu có để hiển thị trạng thái nút 0ms không độ trễ
@@ -330,14 +347,20 @@
     const vId = getVideoId();
     const listId = getListId();
 
-    if (!currentSession && chrome.storage && chrome.storage.local) {
+    if (chrome.storage && chrome.storage.local) {
       chrome.storage.local.get(['currentUser', 'cachedMusicData'], (res) => {
+        if (chrome.runtime.lastError) return;
         if (res && res.currentUser && res.currentUser.email) {
           currentSession = res.currentUser;
-          if (res.cachedMusicData) {
-            cachedSavedTracks = res.cachedMusicData.savedTracks || [];
-            cachedCollections = res.cachedMusicData.collections || [];
-          }
+        } else {
+          currentSession = null;
+        }
+        if (res && res.cachedMusicData) {
+          cachedSavedTracks = res.cachedMusicData.savedTracks || [];
+          cachedCollections = res.cachedMusicData.collections || [];
+        } else {
+          cachedSavedTracks = [];
+          cachedCollections = [];
         }
         renderButtonStatusDOM(vId, listId);
       });
@@ -479,8 +502,15 @@
       if (playText) playText.textContent = isPlaylist ? "Đang nạp cả list..." : "Đang nạp...";
 
       const targetUrl = window.location.href;
+      const vId = getVideoId() || "";
+      const title = getVideoTitle() || "";
+      const author = getChannelName() || "";
+      const dur = getVideoDuration() || 0;
+      const listId = getListId() || "";
       const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
-      triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(targetUrl)}${userParam}`);
+      const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+      const metaParams = `&v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}${listId ? '&list=' + encodeURIComponent(listId) : ''}`;
+      triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(targetUrl)}${metaParams}${userParam}${rtParam}`);
 
       if (isPlaylist) {
         showToast("Đang nạp danh sách!", "KahoiiMusic đang tải toàn bộ danh sách vào hàng đợi phát tạm...", "⚡", 4000);

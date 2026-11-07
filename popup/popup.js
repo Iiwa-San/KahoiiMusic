@@ -300,7 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
           inputPassword.value = "";
           inputConfirmPassword.value = "";
           showDashboard(res.user);
-          notifyContentTabs();
+          notifyContentTabs({ action: "LOGIN_SUCCESS", session: res.user });
         });
       } else {
         // LOGIN
@@ -316,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           inputPassword.value = "";
           showDashboard(res.user);
-          notifyContentTabs();
+          notifyContentTabs({ action: "LOGIN_SUCCESS", session: res.user });
         });
       }
     });
@@ -791,7 +791,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     clearStatus();
     const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
-    triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(currentTargetUrl)}${userParam}`);
+    const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+    const durParam = currentDurationSeconds > 0 ? `&dur=${currentDurationSeconds}` : "";
+    const metaParams = `&v=${encodeURIComponent(currentVideoId || '')}&title=${encodeURIComponent(currentTitle || '')}&author=${encodeURIComponent(currentAuthor || '')}${durParam}`;
+    triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(currentTargetUrl)}${metaParams}${userParam}${rtParam}`);
 
     if (isCurrentPlaylist) {
       showStatus("🚀 Đã gửi toàn bộ danh sách sang KahoiiMusic để phát!", "success");
