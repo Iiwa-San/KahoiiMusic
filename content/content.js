@@ -8,6 +8,20 @@
   let cachedCollections = [];
   let currentSession = null;
 
+  // 1. Đọc ngay từ cache cục bộ (chrome.storage.local) nếu có để hiển thị trạng thái nút 0ms không độ trễ
+  if (chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(['currentUser', 'cachedMusicData'], (result) => {
+      if (result) {
+        currentSession = result.currentUser || null;
+        if (result.cachedMusicData) {
+          cachedSavedTracks = result.cachedMusicData.savedTracks || [];
+          cachedCollections = result.cachedMusicData.collections || [];
+        }
+        updateButtonStatus();
+      }
+    });
+  }
+
   function syncCloudData() {
     try {
       chrome.runtime.sendMessage({ action: "GET_SESSION" }, (sRes) => {
@@ -46,12 +60,24 @@
             return;
           }
         }
+        if (changes.cachedMusicData) {
+          if (changes.cachedMusicData.newValue) {
+            const data = changes.cachedMusicData.newValue;
+            cachedSavedTracks = data.savedTracks || [];
+            cachedCollections = data.collections || [];
+          } else {
+            cachedSavedTracks = [];
+            cachedCollections = [];
+          }
+          updateButtonStatus();
+          return;
+        }
         syncCloudData();
       }
     });
   }
 
-  // Lắng nghe thông điệp cập nhật tức thì từ background / popup
+  // Lắng nghe thông điệp cập nhật tức thì (0ms) từ background / popup
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg) {
       if (msg.action === "LOGOUT" || msg.isLogout) {
@@ -59,8 +85,35 @@
         cachedSavedTracks = [];
         cachedCollections = [];
         updateButtonStatus();
+      } else if (msg.action === "LOGIN_SUCCESS" && msg.session) {
+        currentSession = msg.session;
+        if (msg.payload) {
+          cachedSavedTracks = msg.payload.savedTracks || [];
+          cachedCollections = msg.payload.collections || [];
+        }
+        updateButtonStatus();
+      } else if (msg.action === "TRACK_SAVED" && msg.track) {
+        const t = msg.track;
+        const tid = (t.Id || t.id || t.videoId || "").toLowerCase();
+        if (tid && !cachedSavedTracks.some(x => (x.Id || x.id || x.videoId || "").toLowerCase() === tid)) {
+          cachedSavedTracks.unshift(t);
+        }
+        updateButtonStatus();
+      } else if (msg.action === "COLLECTION_SAVED" && msg.collection) {
+        const c = msg.collection;
+        const cname = (c.Name || c.name || "").toLowerCase().trim();
+        if (cname && !cachedCollections.some(x => (x.Name || x.name || "").toLowerCase().trim() === cname)) {
+          cachedCollections.unshift(c);
+        }
+        updateButtonStatus();
       } else if (msg.action === "CLOUD_DATA_CHANGED" || msg.action === "STATE_UPDATED") {
-        syncCloudData();
+        if (msg.payload) {
+          cachedSavedTracks = msg.payload.savedTracks || [];
+          cachedCollections = msg.payload.collections || [];
+          updateButtonStatus();
+        } else {
+          syncCloudData();
+        }
       }
       sendResponse({ received: true });
     }
@@ -422,6 +475,12 @@
         const author = getChannelName();
         const dur = getVideoDuration();
 
+        // Optimistic update
+        const newTrack = { Id: vId, Title: title, Author: author, DurationSeconds: dur };
+        if (!cachedSavedTracks.some(t => (t.Id || t.id || t.videoId || '').toLowerCase() === vId.toLowerCase())) {
+          cachedSavedTracks.unshift(newTrack);
+        }
+
         // Gửi lệnh tải về máy qua URI Scheme kèm token đăng nhập nhanh
         const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
         const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
@@ -518,6 +577,12 @@
         const items = extractPlaylistItemsFromPage();
         const vId = getVideoId();
         const fallbackItems = items.length > 0 ? items : (vId ? [{ Id: vId, Title: getVideoTitle(), Author: getChannelName(), DurationSeconds: getVideoDuration() }] : []);
+
+        // Optimistic update
+        const newCol = { Name: playlistTitle, Items: fallbackItems };
+        if (!cachedCollections.some(c => (c.name || c.Name || "").toLowerCase().trim() === playlistTitle.toLowerCase().trim())) {
+          cachedCollections.unshift(newCol);
+        }
 
         // Safety fallback timer: Tối đa 2.5s sẽ tự động phục hồi nút
         let safetyTimer = setTimeout(() => {

@@ -13,7 +13,7 @@ async function setSession(user) {
 }
 
 async function clearSession() {
-  await chrome.storage.local.remove(['currentUser']);
+  await chrome.storage.local.remove(['currentUser', 'cachedMusicData']);
 }
 
 async function login(email, password) {
@@ -74,6 +74,20 @@ async function login(email, password) {
     } catch { }
 
     await setSession(user);
+
+    // Warm up local cache with cloud data and broadcast login
+    try {
+      const cloudRes = await getUserCloudData();
+      if (cloudRes && cloudRes.success && cloudRes.payload) {
+        await chrome.storage.local.set({ cachedMusicData: cloudRes.payload });
+        notifyAllTabs({ action: "LOGIN_SUCCESS", session: user, payload: cloudRes.payload });
+      } else {
+        notifyAllTabs({ action: "LOGIN_SUCCESS", session: user });
+      }
+    } catch {
+      notifyAllTabs({ action: "LOGIN_SUCCESS", session: user });
+    }
+
     return { success: true, user };
   } catch (err) {
     return { success: false, error: "Lỗi kết nối máy chủ: " + err.message };
@@ -157,6 +171,20 @@ async function register(email, password) {
     } catch { }
 
     await setSession(user);
+
+    // Warm up local cache with cloud data and broadcast login
+    try {
+      const cloudRes = await getUserCloudData();
+      if (cloudRes && cloudRes.success && cloudRes.payload) {
+        await chrome.storage.local.set({ cachedMusicData: cloudRes.payload });
+        notifyAllTabs({ action: "LOGIN_SUCCESS", session: user, payload: cloudRes.payload });
+      } else {
+        notifyAllTabs({ action: "LOGIN_SUCCESS", session: user });
+      }
+    } catch {
+      notifyAllTabs({ action: "LOGIN_SUCCESS", session: user });
+    }
+
     return { success: true, user };
   } catch (err) {
     return { success: false, error: "Lỗi kết nối máy chủ: " + err.message };
@@ -291,18 +319,29 @@ async function getUserCloudData() {
     if (!Array.isArray(payload.savedTracks)) payload.savedTracks = [];
     if (!Array.isArray(payload.history)) payload.history = [];
 
+    // Cache locally for instant 0ms tab reads
+    try {
+      await chrome.storage.local.set({ cachedMusicData: payload });
+    } catch { }
+
     return { success: true, exists: true, payload, avatarBase64 };
   } catch (err) {
     return { success: false, error: "Lỗi kết nối Firestore: " + err.message };
   }
 }
 
-// Helper: Ensure accurate duration
+// Helper: Ensure accurate duration with strict 1.5s timeout so saving never hangs
 async function ensureTrackDuration(videoId, duration) {
   if (duration && duration > 0) return duration;
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+    });
+    clearTimeout(timeoutId);
     if (res.ok) {
       const html = await res.text();
       // 1. Try lengthSeconds
@@ -377,6 +416,12 @@ async function saveTrackToSavedTracks(track) {
 
   payload.savedTracks.unshift(newTrack);
   payload.updatedAt = new Date().toISOString();
+
+  // Optimistic local storage update & instant tab broadcast
+  try {
+    await chrome.storage.local.set({ cachedMusicData: payload });
+    notifyAllTabs({ action: "TRACK_SAVED", track: newTrack, payload });
+  } catch { }
 
   const patchUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?updateMask.fieldPaths=musicDataJson&updateMask.fieldPaths=updatedAt&key=${API_KEY}`;
 
@@ -487,6 +532,12 @@ async function saveCollectionToCloud(collectionName, playlistUrl, items) {
   payload.collections.unshift(newCol);
   payload.updatedAt = new Date().toISOString();
 
+  // Optimistic local storage update & instant tab broadcast
+  try {
+    await chrome.storage.local.set({ cachedMusicData: payload });
+    notifyAllTabs({ action: "COLLECTION_SAVED", collection: newCol, payload });
+  } catch { }
+
   const patchRes = await updateCloudPayloadDirect(session.localId, token, payload);
   if (!patchRes.success) {
     return patchRes;
@@ -587,14 +638,26 @@ async function pollCloudUpdates() {
       const updatedAt = res.payload.updatedAt || null;
       if (updatedAt && updatedAt !== lastCloudUpdatedAt) {
         lastCloudUpdatedAt = updatedAt;
-        notifyAllTabs();
+        await chrome.storage.local.set({ cachedMusicData: res.payload });
+        notifyAllTabs({ action: "CLOUD_DATA_CHANGED", payload: res.payload });
       }
     }
   } catch { }
 }
 
-// Kiểm tra đồng bộ từ App mỗi 25 giây khi trình duyệt hoạt động
-setInterval(pollCloudUpdates, 25000);
+// Kiểm tra đồng bộ từ App hoặc thiết bị khác mỗi 8 giây khi trình duyệt hoạt động
+setInterval(pollCloudUpdates, 8000);
+
+// Đồng thời kiểm tra ngay lập tức khi người dùng chuyển tab sang YouTube
+try {
+  chrome.tabs.onActivated.addListener((activeInfo) => {
+    chrome.tabs.get(activeInfo.tabId, (tab) => {
+      if (tab && tab.url && tab.url.includes("youtube.com")) {
+        pollCloudUpdates();
+      }
+    });
+  });
+} catch { }
 
 // ================= MESSAGE LISTENER ================= //
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

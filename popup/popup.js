@@ -106,6 +106,17 @@ document.addEventListener("DOMContentLoaded", () => {
       // Set Avatar if available
       renderAvatar(session.avatarBase64);
 
+      // Đọc ngay lập tức từ bộ nhớ cache cục bộ để hiển thị badge 0ms
+      if (chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['cachedMusicData'], (sRes) => {
+          if (sRes && sRes.cachedMusicData) {
+            cachedSavedTracks = sRes.cachedMusicData.savedTracks || [];
+            cachedCollections = sRes.cachedMusicData.collections || [];
+            updateDuplicateBadges();
+          }
+        });
+      }
+
       // Fetch cloud data to ensure avatar & duplicate tracks cache is up to date
       chrome.runtime.sendMessage({ action: "GET_CLOUD_DATA" }, (cloudRes) => {
         if (cloudRes && cloudRes.avatarBase64) {
@@ -129,6 +140,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     detectCurrentTab();
+  }
+
+  // Lắng nghe thay đổi Storage thời gian thực trong Popup (đăng nhập / đăng xuất / nhạc lưu)
+  if (chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local") {
+        if (changes.currentUser) {
+          const user = changes.currentUser.newValue || null;
+          if (!user) {
+            showLoginView();
+          } else if (!currentSession || currentSession.email !== user.email) {
+            showDashboard(user);
+          }
+        }
+        if (changes.cachedMusicData && changes.cachedMusicData.newValue) {
+          const data = changes.cachedMusicData.newValue;
+          cachedSavedTracks = data.savedTracks || [];
+          cachedCollections = data.collections || [];
+          updateDuplicateBadges();
+        }
+      }
+    });
   }
 
   if (btnSkipLogin) {
@@ -782,22 +815,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
     clearStatus();
 
-    // 1. Gửi lệnh qua giao thức để KahoiiMusic tải trực tiếp (kèm user và token đăng nhập nhanh)
-    const durParam = currentDurationSeconds > 0 ? `&dur=${currentDurationSeconds}` : "";
-    const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
-    const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
-    triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(currentVideoId)}&title=${encodeURIComponent(currentTitle)}&author=${encodeURIComponent(currentAuthor)}${durParam}${userParam}${rtParam}`);
+    const newTrack = {
+      Id: currentVideoId,
+      Title: currentTitle,
+      Author: currentAuthor,
+      DurationSeconds: currentDurationSeconds
+    };
 
-    // 2. Đồng thời lưu vào đám mây Firestore mục savedTracks của tài khoản đang đăng nhập trên extension
+    // 1. Cập nhật lạc quan (Optimistic update) vào bộ nhớ & UI popup ngay lập tức
+    if (!cachedSavedTracks.some(t => (t.Id || t.id || '').toLowerCase() === currentVideoId.toLowerCase())) {
+      cachedSavedTracks.unshift(newTrack);
+    }
+    updateDuplicateBadges();
+    showStatus(`📥 Đang bắt đầu tải "${currentTitle}" về mục Đã tải trong KahoiiMusic!`, "success");
+
+    // 2. Bắn ngay thông điệp TRACK_SAVED tới tất cả các tab YouTube (cập nhật nút trên YouTube trong 0ms)
+    notifyContentTabs({ action: "TRACK_SAVED", track: newTrack });
+
+    // 3. Gửi lệnh lưu đám mây Firestore nền
     chrome.runtime.sendMessage(
       {
         action: "SAVE_TO_OFFLINE",
-        track: {
-          Id: currentVideoId,
-          Title: currentTitle,
-          Author: currentAuthor,
-          DurationSeconds: currentDurationSeconds
-        }
+        track: newTrack
       },
       (res) => {
         if (res && res.alreadyExists) {
@@ -805,15 +844,22 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
           showStatus(`📥 Đã gửi lệnh tải "${currentTitle}" sang KahoiiMusic! (Đăng nhập để đồng bộ đám mây)`, "info");
         } else {
-          showStatus(`📥 Đang bắt đầu tải "${currentTitle}" về mục Đã tải trong KahoiiMusic!`, "success");
+          showStatus(`📥 Đã lưu "${currentTitle}" vào mục Đã tải!`, "success");
         }
-        if (!cachedSavedTracks.some(t => (t.Id || t.id || '') === currentVideoId)) {
-          cachedSavedTracks.unshift({ Id: currentVideoId, Title: currentTitle, Author: currentAuthor, DurationSeconds: currentDurationSeconds });
+        if (!cachedSavedTracks.some(t => (t.Id || t.id || '').toLowerCase() === currentVideoId.toLowerCase())) {
+          cachedSavedTracks.unshift(newTrack);
         }
         updateDuplicateBadges();
-        notifyContentTabs();
       }
     );
+
+    // 4. Kích hoạt giao thức mở App KahoiiMusic sau 60ms để thông điệp và cache chắc chắn được gửi đi trước khi popup có thể bị đóng
+    const durParam = currentDurationSeconds > 0 ? `&dur=${currentDurationSeconds}` : "";
+    const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+    const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+    setTimeout(() => {
+      triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(currentVideoId)}&title=${encodeURIComponent(currentTitle)}&author=${encodeURIComponent(currentAuthor)}${durParam}${userParam}${rtParam}`);
+    }, 60);
   });
 
   // ================= ACTION 3: LƯU PLAYLIST VÀO BỘ SƯU TẬP ================= //
@@ -836,11 +882,6 @@ document.addEventListener("DOMContentLoaded", () => {
     clearStatus();
     const finalTitle = currentPlaylistTitle || "Playlist YouTube";
 
-    // Gửi lệnh qua giao thức kèm tài khoản và token đăng nhập nhanh
-    const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
-    const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
-    triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(currentTargetUrl)}&title=${encodeURIComponent(finalTitle)}${userParam}${rtParam}`);
-
     // Chuẩn bị danh sách bài hát đầy đủ để lưu vào Firestore (tránh lưu rỗng [])
     let itemsToSave = currentPlaylistItems;
     if ((!itemsToSave || itemsToSave.length === 0) && currentVideoId) {
@@ -852,6 +893,24 @@ document.addEventListener("DOMContentLoaded", () => {
       }];
     }
 
+    const newCol = {
+      Id: "col_" + Date.now().toString(36),
+      Name: finalTitle,
+      CreatedAt: Date.now(),
+      Items: itemsToSave
+    };
+
+    // 1. Cập nhật lạc quan vào bộ nhớ & UI popup ngay lập tức
+    if (!cachedCollections.some(c => (c.name || c.Name || '').toLowerCase().trim() === finalTitle.toLowerCase().trim())) {
+      cachedCollections.unshift(newCol);
+    }
+    updateDuplicateBadges();
+    showStatus(`💾 Đang tải & lưu "${finalTitle}" vào Bộ sưu tập KahoiiMusic!`, "success");
+
+    // 2. Bắn ngay thông điệp COLLECTION_SAVED tới tất cả các tab YouTube (cập nhật nút trong 0ms)
+    notifyContentTabs({ action: "COLLECTION_SAVED", collection: newCol });
+
+    // 3. Gửi lệnh lưu đám mây Firestore nền
     chrome.runtime.sendMessage(
       {
         action: "SAVE_TO_COLLECTION",
@@ -865,16 +924,22 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
           showStatus(`💾 Đã gửi lưu "${finalTitle}" sang KahoiiMusic! (Đăng nhập để đồng bộ đám mây)`, "info");
         } else {
-          showStatus(`💾 Đang tải & lưu "${finalTitle}" vào Bộ sưu tập KahoiiMusic!`, "success");
+          showStatus(`💾 Đã lưu "${finalTitle}" vào Bộ sưu tập!`, "success");
         }
 
         if (!cachedCollections.some(c => (c.name || c.Name || '').toLowerCase().trim() === finalTitle.toLowerCase().trim())) {
-          cachedCollections.unshift({ Name: finalTitle, Items: itemsToSave });
+          cachedCollections.unshift(newCol);
         }
         updateDuplicateBadges();
-        notifyContentTabs();
       }
     );
+
+    // 4. Kích hoạt giao thức mở App KahoiiMusic sau 60ms
+    const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+    const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+    setTimeout(() => {
+      triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(currentTargetUrl)}&title=${encodeURIComponent(finalTitle)}${userParam}${rtParam}`);
+    }, 60);
   });
 
   // ================= ACTION: OPEN APP (KÈM AUTO LOGIN NHANH) ================= //
