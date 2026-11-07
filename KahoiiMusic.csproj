@@ -115,6 +115,9 @@
     <Compile Include="Controls\InputDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Controls\CyberConfirmDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Controls\ImageCropDialog.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -10,6 +10,7 @@ using System.Text;
 using System.Windows.Forms;
 using KahoiiMusic.Services;
 using KahoiiMusic.Models;
+using KahoiiMusic.Controls;
 
 namespace KahoiiMusic
 {
@@ -1372,13 +1373,14 @@ namespace KahoiiMusic
                 }
                 else if (!string.IsNullOrEmpty(commonUser) && !string.Equals(commonUser, appUserNow, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Ứng dụng đang đăng nhập tài khoản khác -> Hỏi xác nhận chuyển tài khoản nhanh
-                    var switchRes = MessageBox.Show(
+                    // Ứng dụng đang đăng nhập tài khoản khác -> Hỏi xác nhận chuyển tài khoản nhanh bằng Cyber Dialog
+                    bool switchOk = CyberConfirmDialog.ShowConfirm(
+                        "Chuyển đổi tài khoản từ Extension",
                         string.Format("Tiện ích mở rộng trên trình duyệt đang dùng tài khoản:\n👉 {0}\n\nỨng dụng KahoiiMusic đang đăng nhập:\n👉 {1}\n\nBạn có muốn tự động chuyển sang tài khoản '{0}' trên ứng dụng không?", commonUser, appUserNow),
-                        "Chuyển đổi tài khoản nhanh từ Extension",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
-                    if (switchRes == DialogResult.Yes)
+                        yesText: "Chuyển ngay",
+                        noText: "Để sau",
+                        owner: this);
+                    if (switchOk)
                     {
                         FirebaseAuthService.Instance.SignOut();
                         System.Threading.Tasks.Task.Run(async () =>
@@ -1445,11 +1447,11 @@ namespace KahoiiMusic
                 if (!string.IsNullOrEmpty(reqUser) && !string.IsNullOrEmpty(appUser) && !string.Equals(reqUser, appUser, StringComparison.OrdinalIgnoreCase))
                 {
                     _audioPlayer?.RaiseStatus(string.Format("⚠️ Extension dùng '{0}', khác tài khoản App ('{1}')!", reqUser, appUser));
-                    MessageBox.Show(
-                        string.Format("Tiện ích mở rộng trên trình duyệt đang dùng tài khoản:\n👉 {0}\n\nNhưng ứng dụng KahoiiMusic trên máy tính đang đăng nhập:\n👉 {1}\n\nVui lòng đăng nhập cùng một tài khoản trên cả 2 nơi để đồng bộ chính xác!", reqUser, appUser),
+                    CyberConfirmDialog.ShowAlert(
                         "Không khớp tài khoản KahoiiMusic",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                        string.Format("Tiện ích mở rộng trên trình duyệt đang dùng tài khoản:\n👉 {0}\n\nNhưng ứng dụng KahoiiMusic trên máy tính đang đăng nhập:\n👉 {1}\n\nVui lòng đăng nhập cùng một tài khoản trên cả 2 nơi để đồng bộ chính xác!", reqUser, appUser),
+                        okText: "Đã hiểu",
+                        owner: this);
                     return;
                 }
 
@@ -1497,11 +1499,11 @@ namespace KahoiiMusic
                 if (!string.IsNullOrEmpty(reqUser) && !string.IsNullOrEmpty(appUser) && !string.Equals(reqUser, appUser, StringComparison.OrdinalIgnoreCase))
                 {
                     _audioPlayer?.RaiseStatus(string.Format("⚠️ Extension dùng '{0}', khác tài khoản App ('{1}')!", reqUser, appUser));
-                    MessageBox.Show(
-                        string.Format("Tiện ích mở rộng trên trình duyệt đang dùng tài khoản:\n👉 {0}\n\nNhưng ứng dụng KahoiiMusic trên máy tính đang đăng nhập:\n👉 {1}\n\nVui lòng đăng nhập cùng một tài khoản trên cả 2 nơi để đồng bộ chính xác!", reqUser, appUser),
+                    CyberConfirmDialog.ShowAlert(
                         "Không khớp tài khoản KahoiiMusic",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                        string.Format("Tiện ích mở rộng trên trình duyệt đang dùng tài khoản:\n👉 {0}\n\nNhưng ứng dụng KahoiiMusic trên máy tính đang đăng nhập:\n👉 {1}\n\nVui lòng đăng nhập cùng một tài khoản trên cả 2 nơi để đồng bộ chính xác!", reqUser, appUser),
+                        okText: "Đã hiểu",
+                        owner: this);
                     return;
                 }
 
