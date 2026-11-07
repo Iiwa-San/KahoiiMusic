@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Elements - Auth (Login / Register / Forgot Password)
   const authTitle = document.getElementById("auth-title");
   const authDesc = document.getElementById("auth-desc");
+  const authTabsContainer = document.getElementById("auth-tabs-container");
   const tabLogin = document.getElementById("tab-login");
   const tabRegister = document.getElementById("tab-register");
   const formAuth = document.getElementById("form-auth");
@@ -206,14 +207,37 @@ document.addEventListener("DOMContentLoaded", () => {
     loginError.classList.remove("hidden");
   }
 
+  let stretchTimer = null;
   function switchAuthTab(mode) {
+    if (currentAuthMode === mode) return;
     currentAuthMode = mode;
     clearAuthAlert();
+
+    const tabsContainer = authTabsContainer || document.getElementById("auth-tabs-container");
+    if (tabsContainer) {
+      if (stretchTimer) clearTimeout(stretchTimer);
+      tabsContainer.classList.remove("stretching-right", "stretching-left");
+      // Kích hoạt biến dạng dẻo kéo dãn chất lỏng theo hướng chuyển tab
+      if (mode === "REGISTER") {
+        tabsContainer.classList.add("stretching-right");
+      } else {
+        tabsContainer.classList.add("stretching-left");
+      }
+      tabsContainer.setAttribute("data-active", mode);
+      stretchTimer = setTimeout(() => {
+        tabsContainer.classList.remove("stretching-right", "stretching-left");
+      }, 420);
+    }
 
     if (mode === "REGISTER") {
       tabRegister.classList.add("active");
       tabLogin.classList.remove("active");
-      groupConfirmPassword.classList.remove("hidden");
+      if (groupConfirmPassword) {
+        groupConfirmPassword.classList.remove("hidden");
+        // Force reflow để kích hoạt animation trượt tuôn chảy
+        void groupConfirmPassword.offsetWidth;
+        groupConfirmPassword.classList.add("expanded");
+      }
       inputConfirmPassword.setAttribute("required", "required");
       btnForgotPassword.classList.add("hidden");
       if (authTitle) authTitle.textContent = "Tạo tài khoản mới";
@@ -222,7 +246,14 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       tabLogin.classList.add("active");
       tabRegister.classList.remove("active");
-      groupConfirmPassword.classList.add("hidden");
+      if (groupConfirmPassword) {
+        groupConfirmPassword.classList.remove("expanded");
+        setTimeout(() => {
+          if (currentAuthMode === "LOGIN") {
+            groupConfirmPassword.classList.add("hidden");
+          }
+        }, 320);
+      }
       inputConfirmPassword.removeAttribute("required");
       btnForgotPassword.classList.remove("hidden");
       if (authTitle) authTitle.textContent = "Đăng nhập tài khoản";

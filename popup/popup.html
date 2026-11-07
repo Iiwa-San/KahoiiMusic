@@ -49,10 +49,33 @@
         <h2 id="auth-title" class="view-title">Tài khoản & Đồng bộ</h2>
         <p id="auth-desc" class="view-desc">Đăng nhập hoặc đăng ký để đồng bộ danh sách phát với app KahoiiMusic.</p>
 
-        <!-- Segmented Tabs: Đăng nhập / Đăng ký -->
-        <div class="auth-tabs">
-          <button type="button" id="tab-login" class="auth-tab active">Đăng nhập</button>
-          <button type="button" id="tab-register" class="auth-tab">Đăng ký mới</button>
+        <!-- SVG Filter cho hiệu ứng chất lỏng kết dính Gooey -->
+        <svg class="liquid-svg-filter" aria-hidden="true" focusable="false">
+          <defs>
+            <filter id="liquid-goo">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="5.5" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" values="
+                1 0 0 0 0  
+                0 1 0 0 0  
+                0 0 1 0 0  
+                0 0 0 24 -9" result="goo" />
+              <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+            </filter>
+          </defs>
+        </svg>
+
+        <!-- Segmented Tabs: Đăng nhập / Đăng ký với hiệu ứng chất lỏng kết dính -->
+        <div class="auth-tabs" id="auth-tabs-container" data-active="LOGIN">
+          <div class="liquid-track" aria-hidden="true">
+            <div class="liquid-blob-base"></div>
+            <div class="liquid-blob-runner"></div>
+          </div>
+          <button type="button" id="tab-login" class="auth-tab active">
+            <span class="tab-label">Đăng nhập</span>
+          </button>
+          <button type="button" id="tab-register" class="auth-tab">
+            <span class="tab-label">Đăng ký mới</span>
+          </button>
         </div>
 
         <form id="form-auth">
@@ -67,8 +90,8 @@
             </div>
             <input type="password" id="input-password" placeholder="••••••••" required autocomplete="current-password">
           </div>
-          <!-- Field: Xác nhận mật khẩu (chỉ hiện khi ở tab Đăng ký) -->
-          <div id="group-confirm-password" class="input-group hidden">
+          <!-- Field: Xác nhận mật khẩu (chuyển động tuôn chảy mượt mà khi đổi tab) -->
+          <div id="group-confirm-password" class="input-group auth-confirm-group hidden">
             <label for="input-confirm-password">XÁC NHẬN MẬT KHẨU</label>
             <input type="password" id="input-confirm-password" placeholder="Nhập lại mật khẩu để xác nhận" autocomplete="new-password">
           </div>

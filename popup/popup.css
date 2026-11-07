@@ -176,19 +176,104 @@ body {
   text-align: left;
 }
 
-/* Auth Tabs (Đăng nhập / Đăng ký) */
+/* SVG Filter ẩn dùng cho hiệu ứng Gooey */
+.liquid-svg-filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Auth Tabs (Đăng nhập / Đăng ký) với hiệu ứng chất lỏng kết dính */
 .auth-tabs {
+  position: relative;
   display: flex;
   width: 100%;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 3px;
   margin-bottom: 14px;
-  gap: 4px;
+  box-sizing: border-box;
+  overflow: visible;
+  isolation: isolate;
 }
 
+/* Lớp rãnh chạy chất lỏng có gắn filter SVG Gooey */
+.liquid-track {
+  position: absolute;
+  inset: 3px;
+  border-radius: 9px;
+  filter: url(#liquid-goo);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Viên chất lỏng: chuyển động đàn hồi dẻo với hiệu ứng neon */
+.liquid-blob-base,
+.liquid-blob-runner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255, 45, 117, 0.95) 0%, rgba(124, 58, 237, 0.98) 100%);
+  box-shadow: 0 0 16px rgba(255, 45, 117, 0.5), 0 0 26px rgba(124, 58, 237, 0.35);
+  box-sizing: border-box;
+  transform-origin: center center;
+}
+
+/* Base blob: chuyển động với độ nảy jelly khi cập bến */
+.liquid-blob-base {
+  transition: transform 0.42s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+/* Runner blob: giọt dẫn đường phóng trước để kéo dãn cầu chất lỏng */
+.liquid-blob-runner {
+  opacity: 0.95;
+  transform: scale(0.9);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Trạng thái 1: Đăng nhập (nằm bên trái) */
+.auth-tabs[data-active="LOGIN"] .liquid-blob-base {
+  transform: translateX(0%) scale(1);
+}
+.auth-tabs[data-active="LOGIN"] .liquid-blob-runner {
+  transform: translateX(0%) scale(0.88);
+}
+
+/* Trạng thái 2: Đăng ký mới (nằm bên phải) */
+.auth-tabs[data-active="REGISTER"] .liquid-blob-base {
+  transform: translateX(100%) scale(1);
+}
+.auth-tabs[data-active="REGISTER"] .liquid-blob-runner {
+  transform: translateX(100%) scale(0.88);
+}
+
+/* Lúc đang chuyển sang phải: runner bắn trước kéo giãn dải chất lỏng */
+.auth-tabs.stretching-right .liquid-blob-runner {
+  transform: translateX(105%) scaleX(1.3) scaleY(0.72);
+}
+.auth-tabs.stretching-right .liquid-blob-base {
+  transform: translateX(15%) scaleX(1.22) scaleY(0.85);
+}
+
+/* Lúc đang chuyển sang trái: runner bắn lùi trước kéo dãn dải chất lỏng */
+.auth-tabs.stretching-left .liquid-blob-runner {
+  transform: translateX(-5%) scaleX(1.3) scaleY(0.72);
+}
+.auth-tabs.stretching-left .liquid-blob-base {
+  transform: translateX(85%) scaleX(1.22) scaleY(0.85);
+}
+
+/* Nút tab text: nằm trên z-index: 2 để chữ sắc nét tuyệt đối */
 .auth-tab {
+  position: relative;
+  z-index: 2;
   flex: 1;
   padding: 8px 12px;
   background: transparent;
@@ -198,20 +283,52 @@ body {
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+  user-select: none;
+}
+
+.auth-tab .tab-label {
+  position: relative;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .auth-tab:hover:not(.active) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
 }
 
 .auth-tab.active {
-  background: linear-gradient(135deg, rgba(255, 45, 117, 0.22) 0%, rgba(124, 58, 237, 0.3) 100%);
-  border-color: rgba(255, 45, 117, 0.45);
   color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 2px 10px rgba(255, 45, 117, 0.25);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7), 0 0 12px rgba(255, 255, 255, 0.5);
+}
+
+.auth-tab.active .tab-label {
+  transform: scale(1.04);
+}
+
+/* Chuyển động tuôn chảy của ô Xác nhận mật khẩu */
+.auth-confirm-group {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-8px);
+  overflow: hidden;
+  margin: 0;
+  pointer-events: none;
+  transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.28s ease,
+              transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              margin 0.3s ease;
+}
+
+.auth-confirm-group.expanded {
+  max-height: 90px;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: 2px;
+  pointer-events: auto;
 }
 
 /* Label row with Forgot Password link */
