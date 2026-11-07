@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using KahoiiMusic.Controls;
 using KahoiiMusic.Models;
 using KahoiiMusic.Services;
 
@@ -719,7 +720,16 @@ namespace KahoiiMusic
             _isShowingChildDialog = true;
             try
             {
-                return MessageBox.Show(this, text, caption, buttons, icon);
+                if (buttons == MessageBoxButtons.YesNo || buttons == MessageBoxButtons.YesNoCancel)
+                {
+                    bool ok = CyberConfirmDialog.ShowConfirm(caption, text, "Đồng ý", "Để sau", this);
+                    return ok ? DialogResult.Yes : DialogResult.No;
+                }
+                else
+                {
+                    CyberConfirmDialog.ShowAlert(caption, text, "Đã hiểu", this);
+                    return DialogResult.OK;
+                }
             }
             finally
             {

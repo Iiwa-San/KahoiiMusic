@@ -1351,8 +1351,13 @@ namespace KahoiiMusic.Controls
             var itemDelete = new ToolStripMenuItem("🗑️ Xóa bộ sưu tập");
             itemDelete.Click += (s, e) =>
             {
-                var ans = MessageBox.Show(this, "Bạn có chắc chắn muốn xóa bộ sưu tập '" + playlist.Name + "'?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                if (ans == DialogResult.Yes)
+                bool ok = CyberConfirmDialog.ShowConfirm(
+                    "Xác nhận xóa bộ sưu tập",
+                    "Bạn có chắc chắn muốn xóa bộ sưu tập '" + playlist.Name + "' không?\n\n(Thao tác này sẽ xóa danh sách trên cả máy và đám mây)",
+                    "Xóa ngay",
+                    "Hủy",
+                    this.FindForm());
+                if (ok)
                 {
                     PlaylistCollectionService.Instance.DeletePlaylist(playlist.Id);
                     RefreshPlaylists();
