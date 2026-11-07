@@ -379,7 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (confirmed) {
       chrome.runtime.sendMessage({ action: "LOGOUT" }, () => {
         showLoginView();
-        notifyContentTabs();
+        notifyContentTabs({ action: "LOGOUT", isLogout: true });
       });
     }
   });
@@ -887,12 +887,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function notifyContentTabs() {
+  function notifyContentTabs(extraData = {}) {
     try {
       chrome.tabs.query({}, (tabs) => {
         for (const t of tabs || []) {
           if (t.id) {
-            chrome.tabs.sendMessage(t.id, { action: "CLOUD_DATA_CHANGED" }, () => {
+            chrome.tabs.sendMessage(t.id, { action: "CLOUD_DATA_CHANGED", ...extraData }, () => {
               if (chrome.runtime.lastError) {}
             });
           }

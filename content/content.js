@@ -12,12 +12,22 @@
     try {
       chrome.runtime.sendMessage({ action: "GET_SESSION" }, (sRes) => {
         currentSession = sRes?.session || null;
+        if (!currentSession || !currentSession.email) {
+          cachedSavedTracks = [];
+          cachedCollections = [];
+          updateButtonStatus();
+          return;
+        }
+
         chrome.runtime.sendMessage({ action: "GET_CLOUD_DATA" }, (res) => {
           if (res && res.payload) {
             cachedSavedTracks = res.payload.savedTracks || [];
             cachedCollections = res.payload.collections || [];
-            updateButtonStatus();
+          } else {
+            cachedSavedTracks = [];
+            cachedCollections = [];
           }
+          updateButtonStatus();
         });
       });
     } catch { }
@@ -26,7 +36,16 @@
   // Lắng nghe thay đổi Storage trong thời gian thực (đăng nhập / đăng xuất / đồng bộ trên popup)
   if (chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === "local" && (changes.currentUser || changes.cachedCloudData)) {
+      if (area === "local") {
+        if (changes.currentUser) {
+          currentSession = changes.currentUser.newValue || null;
+          if (!currentSession) {
+            cachedSavedTracks = [];
+            cachedCollections = [];
+            updateButtonStatus();
+            return;
+          }
+        }
         syncCloudData();
       }
     });
@@ -34,8 +53,15 @@
 
   // Lắng nghe thông điệp cập nhật tức thì từ background / popup
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg && (msg.action === "CLOUD_DATA_CHANGED" || msg.action === "STATE_UPDATED")) {
-      syncCloudData();
+    if (msg) {
+      if (msg.action === "LOGOUT" || msg.isLogout) {
+        currentSession = null;
+        cachedSavedTracks = [];
+        cachedCollections = [];
+        updateButtonStatus();
+      } else if (msg.action === "CLOUD_DATA_CHANGED" || msg.action === "STATE_UPDATED") {
+        syncCloudData();
+      }
       sendResponse({ received: true });
     }
   });
@@ -202,57 +228,70 @@
   function updateButtonStatus() {
     const vId = getVideoId();
     const listId = getListId();
+    const isLoggedIn = !!(currentSession && currentSession.email);
 
     // 1. Cập nhật nút Tải về
     const btnDownload = document.getElementById("kahoii-download-track-btn");
-    if (btnDownload && vId && Array.isArray(cachedSavedTracks)) {
-      const isSaved = cachedSavedTracks.some(t => {
-        const id = (t.Id || t.id || t.videoId || "").toLowerCase();
-        return id === vId.toLowerCase();
-      });
-
+    if (btnDownload) {
+      btnDownload.classList.remove("loading");
       const dlText = btnDownload.querySelector(".kahoii-btn-text");
       const dlIcon = btnDownload.querySelector(".kahoii-btn-icon");
 
-      if (isSaved) {
-        btnDownload.classList.remove("loading");
-        btnDownload.classList.add("already-saved");
-        if (dlIcon) dlIcon.textContent = "✓";
-        if (dlText) dlText.textContent = "Đã tải";
-        btnDownload.title = "Bài hát này đã có trong mục Đã tải (Offline)";
-      } else if (!isProcessingDownload) {
+      if (!isLoggedIn) {
         btnDownload.classList.remove("already-saved");
-        btnDownload.classList.remove("loading");
         if (dlIcon) dlIcon.textContent = "📥";
         if (dlText) dlText.textContent = "Tải về";
-        btnDownload.title = "Tải bài hát này về mục Đã tải trong KahoiiMusic (Nghe Offline)";
+        btnDownload.title = "Đăng nhập KahoiiMusic để tải bài hát này về máy (Offline)";
+      } else if (vId && Array.isArray(cachedSavedTracks)) {
+        const isSaved = cachedSavedTracks.some(t => {
+          const id = (t.Id || t.id || t.videoId || "").toLowerCase();
+          return id === vId.toLowerCase();
+        });
+
+        if (isSaved) {
+          btnDownload.classList.add("already-saved");
+          if (dlIcon) dlIcon.textContent = "✓";
+          if (dlText) dlText.textContent = "Đã tải";
+          btnDownload.title = "Bài hát này đã có trong mục Đã tải (Offline)";
+        } else if (!isProcessingDownload) {
+          btnDownload.classList.remove("already-saved");
+          if (dlIcon) dlIcon.textContent = "📥";
+          if (dlText) dlText.textContent = "Tải về";
+          btnDownload.title = "Tải bài hát này về mục Đã tải trong KahoiiMusic (Nghe Offline)";
+        }
       }
     }
 
     // 2. Cập nhật nút Lưu vào BST
     const btnSaveCol = document.getElementById("kahoii-save-col-btn");
-    if (btnSaveCol && listId && Array.isArray(cachedCollections)) {
-      const playlistTitle = getPlaylistTitle();
-      const isColSaved = cachedCollections.some(c => {
-        const name = (c.name || c.Name || "").toLowerCase().trim();
-        return name === playlistTitle.toLowerCase().trim();
-      });
-
+    if (btnSaveCol) {
+      btnSaveCol.classList.remove("loading");
       const colText = btnSaveCol.querySelector(".kahoii-btn-text");
       const colIcon = btnSaveCol.querySelector(".kahoii-btn-icon");
 
-      if (isColSaved) {
-        btnSaveCol.classList.remove("loading");
-        btnSaveCol.classList.add("already-saved");
-        if (colIcon) colIcon.textContent = "✓";
-        if (colText) colText.textContent = "Đã lưu vào BST";
-        btnSaveCol.title = `Danh sách "${playlistTitle}" đã có trong Bộ sưu tập KahoiiMusic!`;
-      } else if (!isProcessingSave) {
+      if (!isLoggedIn) {
         btnSaveCol.classList.remove("already-saved");
-        btnSaveCol.classList.remove("loading");
         if (colIcon) colIcon.textContent = "💾";
         if (colText) colText.textContent = "Lưu vào BST";
-        btnSaveCol.title = `Lưu nhanh toàn bộ danh sách "${playlistTitle}" vào Bộ sưu tập KahoiiMusic`;
+        btnSaveCol.title = "Đăng nhập KahoiiMusic để lưu danh sách vào Bộ sưu tập";
+      } else if (listId && Array.isArray(cachedCollections)) {
+        const playlistTitle = getPlaylistTitle();
+        const isColSaved = cachedCollections.some(c => {
+          const name = (c.name || c.Name || "").toLowerCase().trim();
+          return name === playlistTitle.toLowerCase().trim();
+        });
+
+        if (isColSaved) {
+          btnSaveCol.classList.add("already-saved");
+          if (colIcon) colIcon.textContent = "✓";
+          if (colText) colText.textContent = "Đã lưu vào BST";
+          btnSaveCol.title = `Danh sách "${playlistTitle}" đã có trong Bộ sưu tập KahoiiMusic!`;
+        } else if (!isProcessingSave) {
+          btnSaveCol.classList.remove("already-saved");
+          if (colIcon) colIcon.textContent = "💾";
+          if (colText) colText.textContent = "Lưu vào BST";
+          btnSaveCol.title = `Lưu nhanh toàn bộ danh sách "${playlistTitle}" vào Bộ sưu tập KahoiiMusic`;
+        }
       }
     }
   }

@@ -563,12 +563,12 @@ async function fetchOEmbed(videoId) {
   };
 }
 
-function notifyAllTabs() {
+function notifyAllTabs(extraData = {}) {
   try {
     chrome.tabs.query({}, (tabs) => {
       for (const t of tabs || []) {
         if (t.id) {
-          chrome.tabs.sendMessage(t.id, { action: "CLOUD_DATA_CHANGED" }, () => {
+          chrome.tabs.sendMessage(t.id, { action: "CLOUD_DATA_CHANGED", ...extraData }, () => {
             if (chrome.runtime.lastError) {}
           });
         }
@@ -616,7 +616,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse(res);
       } else if (request.action === 'LOGOUT') {
         await clearSession();
-        notifyAllTabs();
+        notifyAllTabs({ action: "LOGOUT", isLogout: true });
         sendResponse({ success: true });
       } else if (request.action === 'GET_CLOUD_DATA') {
         const res = await getUserCloudData();
