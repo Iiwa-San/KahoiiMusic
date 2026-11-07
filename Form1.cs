@@ -1345,6 +1345,7 @@ namespace KahoiiMusic
             {
                 string targetUrl = null;
                 string playlistName = null;
+                string reqUser = null;
                 try
                 {
                     int qIdx = trimmed.IndexOf('?');
@@ -1360,11 +1361,25 @@ namespace KahoiiMusic
                                 string v = Uri.UnescapeDataString(kv[1]);
                                 if (k.Equals("url", StringComparison.OrdinalIgnoreCase)) targetUrl = v;
                                 if (k.Equals("title", StringComparison.OrdinalIgnoreCase) || k.Equals("name", StringComparison.OrdinalIgnoreCase)) playlistName = v;
+                                if (k.Equals("user", StringComparison.OrdinalIgnoreCase)) reqUser = v;
                             }
                         }
                     }
                 }
                 catch { }
+
+                // Kiểm tra tài khoản khớp giữa Extension và App
+                string appUser = FirebaseAuthService.Instance.CurrentUser?.email;
+                if (!string.IsNullOrEmpty(reqUser) && !string.IsNullOrEmpty(appUser) && !string.Equals(reqUser, appUser, StringComparison.OrdinalIgnoreCase))
+                {
+                    _audioPlayer?.RaiseStatus(string.Format("⚠️ Extension dùng '{0}', khác tài khoản App ('{1}')!", reqUser, appUser));
+                    MessageBox.Show(
+                        string.Format("Tiện ích mở rộng trên trình duyệt đang dùng tài khoản:\n👉 {0}\n\nNhưng ứng dụng KahoiiMusic trên máy tính đang đăng nhập:\n👉 {1}\n\nVui lòng đăng nhập cùng một tài khoản trên cả 2 nơi để đồng bộ chính xác!", reqUser, appUser),
+                        "Không khớp tài khoản KahoiiMusic",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
 
                 if (!string.IsNullOrEmpty(targetUrl))
                 {
@@ -1380,6 +1395,7 @@ namespace KahoiiMusic
                 string vTitle = null;
                 string vAuthor = null;
                 int vDur = 0;
+                string reqUser = null;
                 try
                 {
                     int qIdx = trimmed.IndexOf('?');
@@ -1397,11 +1413,25 @@ namespace KahoiiMusic
                                 if (k.Equals("title", StringComparison.OrdinalIgnoreCase)) vTitle = v;
                                 if (k.Equals("author", StringComparison.OrdinalIgnoreCase)) vAuthor = v;
                                 if (k.Equals("dur", StringComparison.OrdinalIgnoreCase)) int.TryParse(v, out vDur);
+                                if (k.Equals("user", StringComparison.OrdinalIgnoreCase)) reqUser = v;
                             }
                         }
                     }
                 }
                 catch { }
+
+                // Kiểm tra tài khoản khớp giữa Extension và App
+                string appUser = FirebaseAuthService.Instance.CurrentUser?.email;
+                if (!string.IsNullOrEmpty(reqUser) && !string.IsNullOrEmpty(appUser) && !string.Equals(reqUser, appUser, StringComparison.OrdinalIgnoreCase))
+                {
+                    _audioPlayer?.RaiseStatus(string.Format("⚠️ Extension dùng '{0}', khác tài khoản App ('{1}')!", reqUser, appUser));
+                    MessageBox.Show(
+                        string.Format("Tiện ích mở rộng trên trình duyệt đang dùng tài khoản:\n👉 {0}\n\nNhưng ứng dụng KahoiiMusic trên máy tính đang đăng nhập:\n👉 {1}\n\nVui lòng đăng nhập cùng một tài khoản trên cả 2 nơi để đồng bộ chính xác!", reqUser, appUser),
+                        "Không khớp tài khoản KahoiiMusic",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
 
                 if (!string.IsNullOrEmpty(vId))
                 {
