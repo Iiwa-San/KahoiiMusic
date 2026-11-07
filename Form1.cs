@@ -846,25 +846,9 @@ namespace KahoiiMusic
             }
             else if (!string.IsNullOrEmpty(videoId))
             {
-                if (_audioPlayer.IsPlaying || !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
-                {
-                    btnPlaylist.HasPlaylist = true;
-                    playlistPopup.StartLoading();
-
-                    if (!string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
-                    {
-                        HistoryService.AddTrack(new PlaylistItem
-                        {
-                            Id = _audioPlayer.CurrentVideoId,
-                            Title = _audioPlayer.CurrentTitle,
-                            Author = _audioPlayer.CurrentAuthor,
-                            DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
-                        });
-                    }
-
-                    _audioPlayer.LoadSingleTrackQueueOnly(videoId, url);
-                    return;
-                }
+                btnPlaylist.HasPlaylist = true;
+                _audioPlayer.EnqueueAndPlayTrack(videoId, null, null, 0, url);
+                return;
             }
             else
             {
@@ -1550,6 +1534,12 @@ namespace KahoiiMusic
             }
 
             string targetUrlToPlay = trimmed;
+            string incomingV = null;
+            string incomingTitle = null;
+            string incomingAuthor = null;
+            int incomingDur = 0;
+            string incomingList = null;
+
             if (trimmed.StartsWith("kahoiimusic://", StringComparison.OrdinalIgnoreCase))
             {
                 try
@@ -1565,8 +1555,12 @@ namespace KahoiiMusic
                             {
                                 string k = Uri.UnescapeDataString(kv[0]);
                                 string v = Uri.UnescapeDataString(kv[1]);
-                                if (k.Equals("url", StringComparison.OrdinalIgnoreCase)) { targetUrlToPlay = v; break; }
-                                if (k.Equals("v", StringComparison.OrdinalIgnoreCase)) { targetUrlToPlay = "https://www.youtube.com/watch?v=" + v; break; }
+                                if (k.Equals("url", StringComparison.OrdinalIgnoreCase)) targetUrlToPlay = v;
+                                else if (k.Equals("v", StringComparison.OrdinalIgnoreCase) || k.Equals("id", StringComparison.OrdinalIgnoreCase)) incomingV = v;
+                                else if (k.Equals("title", StringComparison.OrdinalIgnoreCase)) incomingTitle = v;
+                                else if (k.Equals("author", StringComparison.OrdinalIgnoreCase)) incomingAuthor = v;
+                                else if (k.Equals("dur", StringComparison.OrdinalIgnoreCase)) int.TryParse(v, out incomingDur);
+                                else if (k.Equals("list", StringComparison.OrdinalIgnoreCase)) incomingList = v;
                             }
                         }
                     }
@@ -1581,7 +1575,31 @@ namespace KahoiiMusic
                 }
             }
 
+            if (string.IsNullOrEmpty(incomingV) && !string.IsNullOrEmpty(targetUrlToPlay))
+            {
+                incomingV = AudioPlayerService.ExtractVideoId(targetUrlToPlay);
+            }
+            if (string.IsNullOrEmpty(incomingList) && !string.IsNullOrEmpty(targetUrlToPlay))
+            {
+                incomingList = AudioPlayerService.ExtractListId(targetUrlToPlay);
+            }
+
             searchPillBox.Text = targetUrlToPlay;
+
+            if (!string.IsNullOrEmpty(incomingList))
+            {
+                btnPlaylist.HasPlaylist = true;
+                _audioPlayer.LoadPlaylistAsync(targetUrlToPlay, playFirstIfNoVideo: true);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(incomingV))
+            {
+                btnPlaylist.HasPlaylist = true;
+                _audioPlayer.EnqueueAndPlayTrack(incomingV, incomingTitle, incomingAuthor, incomingDur, targetUrlToPlay);
+                return;
+            }
+
             SearchPillBox_UrlSubmitted(this, targetUrlToPlay);
         }
 

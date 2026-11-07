@@ -1827,6 +1827,55 @@ namespace KahoiiMusic.Services
             });
         }
 
+        public void EnqueueAndPlayTrack(string videoId, string title = null, string author = null, int durationSeconds = 0, string customUrl = null)
+        {
+            if (string.IsNullOrEmpty(videoId)) return;
+
+            string cleanTitle = !string.IsNullOrWhiteSpace(title) ? CleanDisplayTitle(title) : "Đang tải tên bài hát...";
+            string cleanAuthor = !string.IsNullOrWhiteSpace(author) ? CleanAuthor(author) : string.Empty;
+
+            if (_sessionPlaylist == null)
+            {
+                _sessionPlaylist = new List<PlaylistItem>();
+            }
+
+            int existingIdx = _sessionPlaylist.FindIndex(x => string.Equals(x.Id, videoId, StringComparison.OrdinalIgnoreCase));
+            if (existingIdx >= 0)
+            {
+                var existingItem = _sessionPlaylist[existingIdx];
+                if (durationSeconds > 0) existingItem.DurationSeconds = durationSeconds;
+                if (!string.IsNullOrWhiteSpace(title) && cleanTitle != "Đang tải tên bài hát...") existingItem.Title = cleanTitle;
+                if (!string.IsNullOrWhiteSpace(author)) existingItem.Author = cleanAuthor;
+                _currentPlaylistIndex = existingIdx;
+            }
+            else
+            {
+                var item = new PlaylistItem
+                {
+                    Id = videoId,
+                    Title = cleanTitle,
+                    Author = cleanAuthor,
+                    DurationSeconds = durationSeconds
+                };
+                _sessionPlaylist.Add(item);
+                _currentPlaylistIndex = _sessionPlaylist.Count - 1;
+            }
+
+            _playlist = _sessionPlaylist;
+            _currentPlaylistId = null;
+            CurrentPlaylistTitle = null;
+
+            _syncContext.Post(delegate
+            {
+                if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
+                if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, _currentPlaylistIndex);
+            }, null);
+
+            // Bắt đầu phát bài này ngay lập tức
+            string targetUrl = !string.IsNullOrWhiteSpace(customUrl) ? customUrl : ("https://www.youtube.com/watch?v=" + videoId);
+            LoadAndPlay(targetUrl);
+        }
+
         public void LoadPlaylistAsync(string playlistUrl, string currentVideoId = null, bool playFirstIfNoVideo = false)
 
         {
@@ -2788,6 +2837,23 @@ namespace KahoiiMusic.Services
 
                                 _totalDuration = _audioReader.TotalTime;
 
+                                if (_totalDuration > TimeSpan.Zero)
+                                {
+                                    var currentPl = _playlist;
+                                    if (currentPl != null && !string.IsNullOrEmpty(_currentVideoId))
+                                    {
+                                        var plItem = currentPl.Find(x => string.Equals(x.Id, _currentVideoId, StringComparison.OrdinalIgnoreCase));
+                                        if (plItem != null && (plItem.DurationSeconds <= 0 || Math.Abs(plItem.DurationSeconds - (int)_totalDuration.TotalSeconds) > 1))
+                                        {
+                                            plItem.DurationSeconds = (int)_totalDuration.TotalSeconds;
+                                            _syncContext.Post(delegate
+                                            {
+                                                if (PlaylistLoaded != null) PlaylistLoaded(this, currentPl);
+                                            }, null);
+                                        }
+                                    }
+                                }
+
                                 var clusters = WebMClusterParser.ParseClusters(audioPath);
 
                                 _managedStream = new ManagedAudioStream(_audioReader, this, clusters);
@@ -3357,33 +3423,37 @@ namespace KahoiiMusic.Services
                             try { HistoryService.UpdateTitle(videoId, fetchedTitle); } catch { }
 
                             if (_playlist != null)
-
                             {
-
                                 var matchItem = _playlist.Find(x => x.Id == videoId);
-
-                                if (matchItem != null && matchItem.Title != fetchedTitle)
-
+                                if (matchItem != null)
                                 {
-
-                                    matchItem.Title = fetchedTitle;
-
-                                    _syncContext.Post(delegate
-
+                                    bool changed = false;
+                                    if (!string.IsNullOrWhiteSpace(fetchedTitle) && matchItem.Title != fetchedTitle)
                                     {
-
-                                        if (PlaylistLoaded != null)
-
+                                        matchItem.Title = fetchedTitle;
+                                        changed = true;
+                                    }
+                                    if (!string.IsNullOrWhiteSpace(fetchedAuthor) && matchItem.Author != fetchedAuthor)
+                                    {
+                                        matchItem.Author = fetchedAuthor;
+                                        changed = true;
+                                    }
+                                    if (matchItem.DurationSeconds <= 0 && _totalDuration > TimeSpan.Zero)
+                                    {
+                                        matchItem.DurationSeconds = (int)_totalDuration.TotalSeconds;
+                                        changed = true;
+                                    }
+                                    if (changed)
+                                    {
+                                        _syncContext.Post(delegate
                                         {
-
-                                            PlaylistLoaded(this, _sessionPlaylist);
-
-                                        }
-
-                                    }, null);
-
+                                            if (PlaylistLoaded != null)
+                                            {
+                                                PlaylistLoaded(this, _playlist);
+                                            }
+                                        }, null);
+                                    }
                                 }
-
                             }
 
                             if (string.Equals(_currentVideoId, videoId, StringComparison.OrdinalIgnoreCase))
