@@ -8,11 +8,34 @@
   let cachedCollections = [];
   let currentSession = null;
 
+  // Trợ thủ: Đảm bảo có phiên đăng nhập ngay cả khi biến bộ nhớ chưa nạp kịp
+  async function ensureSession() {
+    if (currentSession && currentSession.email) return currentSession;
+    if (chrome.storage && chrome.storage.local) {
+      try {
+        const res = await new Promise((resolve) => {
+          chrome.storage.local.get(['currentUser', 'cachedMusicData'], resolve);
+        });
+        if (res && res.currentUser && res.currentUser.email) {
+          currentSession = res.currentUser;
+          if (res.cachedMusicData) {
+            cachedSavedTracks = res.cachedMusicData.savedTracks || [];
+            cachedCollections = res.cachedMusicData.collections || [];
+          }
+          return currentSession;
+        }
+      } catch { }
+    }
+    return null;
+  }
+
   // 1. Đọc ngay từ cache cục bộ (chrome.storage.local) nếu có để hiển thị trạng thái nút 0ms không độ trễ
   if (chrome.storage && chrome.storage.local) {
     chrome.storage.local.get(['currentUser', 'cachedMusicData'], (result) => {
       if (result) {
-        currentSession = result.currentUser || null;
+        if (result.currentUser && result.currentUser.email) {
+          currentSession = result.currentUser;
+        }
         if (result.cachedMusicData) {
           cachedSavedTracks = result.cachedMusicData.savedTracks || [];
           cachedCollections = result.cachedMusicData.collections || [];
@@ -24,22 +47,49 @@
 
   function syncCloudData() {
     try {
+      // Đọc storage trước làm nền móng
+      if (chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['currentUser', 'cachedMusicData'], (localRes) => {
+          if (localRes) {
+            if (localRes.currentUser && localRes.currentUser.email) {
+              currentSession = localRes.currentUser;
+            }
+            if (localRes.cachedMusicData) {
+              cachedSavedTracks = localRes.cachedMusicData.savedTracks || [];
+              cachedCollections = localRes.cachedMusicData.collections || [];
+            }
+            updateButtonStatus();
+          }
+        });
+      }
+
       chrome.runtime.sendMessage({ action: "GET_SESSION" }, (sRes) => {
-        currentSession = sRes?.session || null;
-        if (!currentSession || !currentSession.email) {
-          cachedSavedTracks = [];
-          cachedCollections = [];
-          updateButtonStatus();
+        if (chrome.runtime.lastError || !sRes) {
+          // Tuyệt đối không hủy session khi có lỗi kết nối ngầm
           return;
         }
 
+        if (sRes.success) {
+          if (sRes.session && sRes.session.email) {
+            currentSession = sRes.session;
+          } else {
+            // Khi thực sự đăng xuất rõ ràng
+            currentSession = null;
+            cachedSavedTracks = [];
+            cachedCollections = [];
+            updateButtonStatus();
+            return;
+          }
+        }
+
         chrome.runtime.sendMessage({ action: "GET_CLOUD_DATA" }, (res) => {
+          if (chrome.runtime.lastError || !res) return;
           if (res && res.payload) {
             cachedSavedTracks = res.payload.savedTracks || [];
             cachedCollections = res.payload.collections || [];
-          } else {
-            cachedSavedTracks = [];
-            cachedCollections = [];
+            if (chrome.storage && chrome.storage.local) {
+              chrome.storage.local.set({ cachedMusicData: res.payload });
+            }
           }
           updateButtonStatus();
         });
@@ -69,10 +119,8 @@
             cachedSavedTracks = [];
             cachedCollections = [];
           }
-          updateButtonStatus();
-          return;
         }
-        syncCloudData();
+        updateButtonStatus();
       }
     });
   }
@@ -281,6 +329,25 @@
   function updateButtonStatus() {
     const vId = getVideoId();
     const listId = getListId();
+
+    if (!currentSession && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(['currentUser', 'cachedMusicData'], (res) => {
+        if (res && res.currentUser && res.currentUser.email) {
+          currentSession = res.currentUser;
+          if (res.cachedMusicData) {
+            cachedSavedTracks = res.cachedMusicData.savedTracks || [];
+            cachedCollections = res.cachedMusicData.collections || [];
+          }
+        }
+        renderButtonStatusDOM(vId, listId);
+      });
+      return;
+    }
+
+    renderButtonStatusDOM(vId, listId);
+  }
+
+  function renderButtonStatusDOM(vId, listId) {
     const isLoggedIn = !!(currentSession && currentSession.email);
 
     // 1. Cập nhật nút Tải về
@@ -362,7 +429,10 @@
       if (oldGroup) oldGroup.remove();
     }
 
-    if (document.getElementById("kahoii-btn-group")) return;
+    if (document.getElementById("kahoii-btn-group")) {
+      updateButtonStatus();
+      return;
+    }
 
     // Search for YouTube action buttons container
     const targets = [
@@ -392,9 +462,11 @@
       <span class="kahoii-btn-text">${isPlaylist ? "Nạp phát cả danh sách" : "Nạp phát trên Kahoii"}</span>
     `;
 
-    btnPlay.addEventListener("click", (e) => {
+    btnPlay.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
+
+      await ensureSession();
 
       if (isProcessingPlay) return;
       isProcessingPlay = true;
@@ -451,9 +523,11 @@
         <span class="kahoii-btn-text">Tải về</span>
       `;
 
-      btnDownload.addEventListener("click", (e) => {
+      btnDownload.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
+
+        await ensureSession();
 
         if (!currentSession || !currentSession.email) {
           showToast("Yêu cầu đăng nhập!", "Tính năng Tải về (Offline) chỉ có thể dùng khi đăng nhập tài khoản KahoiiMusic trên tiện ích mở rộng.", "🔒", 4500);
@@ -545,9 +619,11 @@
         <span class="kahoii-btn-text">Lưu vào BST</span>
       `;
 
-      btnSaveCol.addEventListener("click", (e) => {
+      btnSaveCol.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
+
+        await ensureSession();
 
         if (!currentSession || !currentSession.email) {
           showToast("Yêu cầu đăng nhập!", "Tính năng Lưu vào Bộ sưu tập chỉ có thể dùng khi đăng nhập tài khoản KahoiiMusic trên tiện ích mở rộng.", "🔒", 4500);

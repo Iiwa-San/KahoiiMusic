@@ -106,6 +106,9 @@ document.addEventListener("DOMContentLoaded", () => {
       // Set Avatar if available
       renderAvatar(session.avatarBase64);
 
+      // Bắn ngay thông điệp cập nhật phiên đăng nhập sang tất cả các tab
+      notifyContentTabs({ action: "LOGIN_SUCCESS", session: session });
+
       // Đọc ngay lập tức từ bộ nhớ cache cục bộ để hiển thị badge 0ms
       if (chrome.storage && chrome.storage.local) {
         chrome.storage.local.get(['cachedMusicData'], (sRes) => {
@@ -126,6 +129,7 @@ document.addEventListener("DOMContentLoaded", () => {
           cachedSavedTracks = cloudRes.payload.savedTracks || [];
           cachedCollections = cloudRes.payload.collections || [];
           updateDuplicateBadges();
+          notifyContentTabs({ action: "CLOUD_DATA_CHANGED", payload: cloudRes.payload });
         }
       });
     } else {
