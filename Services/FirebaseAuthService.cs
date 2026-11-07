@@ -1,5 +1,6 @@
 using System.Drawing;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -301,6 +302,97 @@ namespace KahoiiMusic.Services
             catch (Exception ex)
             {
                 return Tuple.Create(false, "Lỗi kết nối: " + ex.Message);
+            }
+            finally
+            {
+                MemoryOptimizer.TrimMemoryAsync(300, aggressive: true);
+            }
+        }
+
+        public async Task<Tuple<bool, string>> SignInWithRefreshTokenAsync(string refreshToken, string emailHint = null)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                return Tuple.Create(false, "Mã làm mới (refreshToken) không hợp lệ.");
+            }
+
+            try
+            {
+                string url = "https://securetoken.googleapis.com/v1/token?key=" + ApiKey;
+                var kv = new List<KeyValuePair<string, string>>
+                {
+                    new KeyValuePair<string, string>("grant_type", "refresh_token"),
+                    new KeyValuePair<string, string>("refresh_token", refreshToken.Trim())
+                };
+
+                var req = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new FormUrlEncodedContent(kv)
+                };
+
+                var resp = await _httpClient.SendAsync(req).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return Tuple.Create(false, "Không thể xác thực phiên từ Extension.");
+                }
+
+                string respJson = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var dict = _serializer.Deserialize<Dictionary<string, object>>(respJson);
+                if (dict == null || !dict.ContainsKey("id_token"))
+                {
+                    return Tuple.Create(false, "Phản hồi token không hợp lệ.");
+                }
+
+                string newIdToken = dict["id_token"]?.ToString();
+                string newRefreshToken = dict.ContainsKey("refresh_token") ? dict["refresh_token"]?.ToString() : refreshToken;
+                string userId = dict.ContainsKey("user_id") ? dict["user_id"]?.ToString() : "";
+
+                long expiresIn = 3600;
+                if (dict.ContainsKey("expires_in") && long.TryParse(dict["expires_in"]?.ToString(), out long exp))
+                {
+                    expiresIn = exp;
+                }
+                long expiryTimestamp = (long)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds + expiresIn - 120;
+
+                string userEmail = emailHint;
+                try
+                {
+                    string lookupUrl = "https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=" + ApiKey;
+                    var lookupContent = new StringContent(_serializer.Serialize(new Dictionary<string, object> { { "idToken", newIdToken } }), Encoding.UTF8, "application/json");
+                    var lookupResp = await _httpClient.PostAsync(lookupUrl, lookupContent).ConfigureAwait(false);
+                    if (lookupResp.IsSuccessStatusCode)
+                    {
+                        string lookupJson = await lookupResp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        var lookupDict = _serializer.Deserialize<Dictionary<string, object>>(lookupJson);
+                        if (lookupDict.ContainsKey("users") && lookupDict["users"] is ArrayList usersList && usersList.Count > 0)
+                        {
+                            if (usersList[0] is Dictionary<string, object> firstUser)
+                            {
+                                if (firstUser.ContainsKey("email")) userEmail = firstUser["email"]?.ToString();
+                                if (firstUser.ContainsKey("localId")) userId = firstUser["localId"]?.ToString();
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                var userInfo = new FirebaseUserInfo
+                {
+                    localId = userId,
+                    email = userEmail ?? "user@kahoiimusic.app",
+                    idToken = newIdToken,
+                    refreshToken = newRefreshToken,
+                    expiryTimestamp = expiryTimestamp,
+                    rememberMe = true
+                };
+
+                SaveSession(userInfo);
+                LoadAvatarFromStorage();
+                return Tuple.Create(true, "Đăng nhập nhanh thành công.");
+            }
+            catch (Exception ex)
+            {
+                return Tuple.Create(false, "Lỗi đăng nhập nhanh: " + ex.Message);
             }
             finally
             {

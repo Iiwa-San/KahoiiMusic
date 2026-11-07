@@ -1325,9 +1325,81 @@ namespace KahoiiMusic
             Activate();
 
             string trimmed = url.Trim().Trim('"');
-            if (trimmed.Equals("__ACTIVATE__", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.Equals("kahoiimusic://", StringComparison.OrdinalIgnoreCase) ||
+            if (trimmed.Equals("__ACTIVATE__", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            // Trích xuất các tham số đăng nhập nhanh (auth_rt, user) nếu có
+            string commonRt = null;
+            string commonUser = null;
+            int qIdxCommon = trimmed.IndexOf('?');
+            if (qIdxCommon >= 0)
+            {
+                string qStr = trimmed.Substring(qIdxCommon + 1);
+                foreach (var part in qStr.Split('&'))
+                {
+                    var kv = part.Split('=');
+                    if (kv.Length == 2)
+                    {
+                        string k = Uri.UnescapeDataString(kv[0]);
+                        string v = Uri.UnescapeDataString(kv[1]);
+                        if (k.Equals("auth_rt", StringComparison.OrdinalIgnoreCase) || k.Equals("refreshToken", StringComparison.OrdinalIgnoreCase)) commonRt = v;
+                        if (k.Equals("user", StringComparison.OrdinalIgnoreCase)) commonUser = v;
+                    }
+                }
+            }
+
+            // Hỗ trợ Đăng Nhập Nhanh (Quick Login) từ Extension:
+            if (!string.IsNullOrEmpty(commonRt))
+            {
+                string appUserNow = FirebaseAuthService.Instance.CurrentUser?.email;
+                if (!FirebaseAuthService.Instance.IsLoggedIn)
+                {
+                    // Ứng dụng chưa đăng nhập -> Tự động đăng nhập ngay lập tức không cần gõ mật khẩu!
+                    System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        var res = await FirebaseAuthService.Instance.SignInWithRefreshTokenAsync(commonRt, commonUser);
+                        if (res.Item1)
+                        {
+                            BeginInvoke(new Action(() =>
+                            {
+                                _audioPlayer?.RaiseStatus(string.Format("✓ Đã đăng nhập nhanh từ Extension: {0}", FirebaseAuthService.Instance.CurrentUser?.email));
+                                _ = FirebaseSyncService.Instance.TriggerAutoFetchAsync();
+                            }));
+                        }
+                    });
+                }
+                else if (!string.IsNullOrEmpty(commonUser) && !string.Equals(commonUser, appUserNow, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Ứng dụng đang đăng nhập tài khoản khác -> Hỏi xác nhận chuyển tài khoản nhanh
+                    var switchRes = MessageBox.Show(
+                        string.Format("Tiện ích mở rộng trên trình duyệt đang dùng tài khoản:\n👉 {0}\n\nỨng dụng KahoiiMusic đang đăng nhập:\n👉 {1}\n\nBạn có muốn tự động chuyển sang tài khoản '{0}' trên ứng dụng không?", commonUser, appUserNow),
+                        "Chuyển đổi tài khoản nhanh từ Extension",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+                    if (switchRes == DialogResult.Yes)
+                    {
+                        FirebaseAuthService.Instance.SignOut();
+                        System.Threading.Tasks.Task.Run(async () =>
+                        {
+                            var res = await FirebaseAuthService.Instance.SignInWithRefreshTokenAsync(commonRt, commonUser);
+                            if (res.Item1)
+                            {
+                                BeginInvoke(new Action(() =>
+                                {
+                                    _audioPlayer?.RaiseStatus(string.Format("✓ Đã chuyển sang tài khoản: {0}", FirebaseAuthService.Instance.CurrentUser?.email));
+                                    _ = FirebaseSyncService.Instance.TriggerAutoFetchAsync();
+                                }));
+                            }
+                        });
+                    }
+                }
+            }
+
+            if (trimmed.Equals("kahoiimusic://", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.Equals("kahoiimusic://open", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("kahoiimusic://open?", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.Equals("kahoiimusic://open/", StringComparison.OrdinalIgnoreCase))
             {
                 return;
