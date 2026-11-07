@@ -1318,6 +1318,7 @@ namespace KahoiiMusic
             // Trích xuất các tham số đăng nhập nhanh (auth_rt, user) nếu có
             string commonRt = null;
             string commonUser = null;
+            string incomingItems = null;
             int qIdxCommon = trimmed.IndexOf('?');
             if (qIdxCommon >= 0)
             {
@@ -1331,6 +1332,7 @@ namespace KahoiiMusic
                         string v = Uri.UnescapeDataString(kv[1]);
                         if (k.Equals("auth_rt", StringComparison.OrdinalIgnoreCase) || k.Equals("refreshToken", StringComparison.OrdinalIgnoreCase)) commonRt = v;
                         if (k.Equals("user", StringComparison.OrdinalIgnoreCase)) commonUser = v;
+                        if (k.Equals("items", StringComparison.OrdinalIgnoreCase)) incomingItems = v;
                     }
                 }
             }
@@ -1408,6 +1410,7 @@ namespace KahoiiMusic
                                 if (k.Equals("url", StringComparison.OrdinalIgnoreCase)) targetUrl = v;
                                 if (k.Equals("title", StringComparison.OrdinalIgnoreCase) || k.Equals("name", StringComparison.OrdinalIgnoreCase)) playlistName = v;
                                 if (k.Equals("user", StringComparison.OrdinalIgnoreCase)) reqUser = v;
+                                if (k.Equals("items", StringComparison.OrdinalIgnoreCase)) incomingItems = v;
                             }
                         }
                     }
@@ -1440,9 +1443,9 @@ namespace KahoiiMusic
                     return;
                 }
 
-                if (!string.IsNullOrEmpty(targetUrl))
+                if (!string.IsNullOrEmpty(targetUrl) || !string.IsNullOrEmpty(incomingItems))
                 {
-                    SavePlaylistUrlToCollectionAsync(targetUrl, playlistName);
+                    SavePlaylistUrlToCollectionAsync(targetUrl, playlistName, incomingItems);
                     return;
                 }
             }
@@ -1561,6 +1564,7 @@ namespace KahoiiMusic
                                 else if (k.Equals("author", StringComparison.OrdinalIgnoreCase)) incomingAuthor = v;
                                 else if (k.Equals("dur", StringComparison.OrdinalIgnoreCase)) int.TryParse(v, out incomingDur);
                                 else if (k.Equals("list", StringComparison.OrdinalIgnoreCase)) incomingList = v;
+                                else if (k.Equals("items", StringComparison.OrdinalIgnoreCase)) incomingItems = v;
                             }
                         }
                     }
@@ -1586,6 +1590,18 @@ namespace KahoiiMusic
 
             searchPillBox.Text = targetUrlToPlay;
 
+            // Nếu nhận được danh sách bài hát cụ thể từ YouTube Mix/Radio (khớp 100% giao diện YouTube)
+            if (!string.IsNullOrEmpty(incomingItems))
+            {
+                string[] vids = incomingItems.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (vids.Length > 0)
+                {
+                    btnPlaylist.HasPlaylist = true;
+                    _audioPlayer.EnqueueTrackList(vids, incomingV, incomingTitle);
+                    return;
+                }
+            }
+
             if (!string.IsNullOrEmpty(incomingList))
             {
                 btnPlaylist.HasPlaylist = true;
@@ -1603,12 +1619,76 @@ namespace KahoiiMusic
             SearchPillBox_UrlSubmitted(this, targetUrlToPlay);
         }
 
-        private void SavePlaylistUrlToCollectionAsync(string playlistUrl, string customName)
+        private void SavePlaylistUrlToCollectionAsync(string playlistUrl, string customName, string incomingItems = null)
         {
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
                 try
                 {
+                    string detectedTitle = !string.IsNullOrWhiteSpace(customName) ? customName : "Danh sách kết hợp YouTube";
+
+                    // Nếu có danh sách cụ thể từ YouTube Mix
+                    if (!string.IsNullOrEmpty(incomingItems))
+                    {
+                        string[] vids = incomingItems.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (vids.Length > 0)
+                        {
+                            _audioPlayer?.RaiseStatus(string.Format("Đang lưu '{0}' ({1} bài) vào Bộ sưu tập...", detectedTitle, vids.Length));
+                            List<PlaylistItem> exactItems = new List<PlaylistItem>();
+                            foreach (var vid in vids)
+                            {
+                                string v = vid.Trim();
+                                if (!string.IsNullOrEmpty(v))
+                                {
+                                    exactItems.Add(new PlaylistItem
+                                    {
+                                        Id = v,
+                                        Title = "Đang tải tên bài hát...",
+                                        Author = "",
+                                        DurationSeconds = 0
+                                    });
+                                }
+                            }
+
+                            var newCol = new UserPlaylist
+                            {
+                                Name = detectedTitle,
+                                Items = exactItems
+                            };
+
+                            PlaylistCollectionService.Instance.SavePlaylist(detectedTitle, exactItems);
+                            _audioPlayer?.RaiseStatus(string.Format("✓ Đã lưu '{0}' vào Bộ sưu tập!", detectedTitle));
+
+                            // Nạp ngầm tiêu đề qua oEmbed và sync Firebase
+                            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+                            {
+                                foreach (var it in exactItems)
+                                {
+                                    try
+                                    {
+                                        using (var wc = new System.Net.WebClient())
+                                        {
+                                            wc.Encoding = Encoding.UTF8;
+                                            wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                                            string json = wc.DownloadString("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + it.Id + "&format=json");
+                                            if (!string.IsNullOrEmpty(json))
+                                            {
+                                                var mTitle = System.Text.RegularExpressions.Regex.Match(json, @"""title""\s*:\s*""([^""]+)""");
+                                                if (mTitle.Success) it.Title = AudioPlayerService.CleanDisplayTitle(System.Text.RegularExpressions.Regex.Unescape(mTitle.Groups[1].Value));
+                                                var mAuthor = System.Text.RegularExpressions.Regex.Match(json, @"""author_name""\s*:\s*""([^""]+)""");
+                                                if (mAuthor.Success) it.Author = AudioPlayerService.CleanAuthor(System.Text.RegularExpressions.Regex.Unescape(mAuthor.Groups[1].Value));
+                                            }
+                                        }
+                                    }
+                                    catch { }
+                                }
+                                PlaylistCollectionService.Instance.SavePlaylist(detectedTitle, exactItems);
+                                FirebaseSyncService.Instance.RequestAutoUpload();
+                            });
+                            return;
+                        }
+                    }
+
                     _audioPlayer?.RaiseStatus("Đang tải danh sách phát để lưu vào Bộ sưu tập...");
 
                     string ytdlpPath = AudioPlayerService.FindYtDlp();
@@ -1634,7 +1714,7 @@ namespace KahoiiMusic
                     psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
 
                     List<PlaylistItem> items = new List<PlaylistItem>();
-                    string detectedTitle = customName;
+                    if (string.IsNullOrEmpty(detectedTitle)) detectedTitle = customName;
 
                     using (Process proc = Process.Start(psi))
                     {

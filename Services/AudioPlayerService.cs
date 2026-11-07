@@ -1876,6 +1876,88 @@ namespace KahoiiMusic.Services
             LoadAndPlay(targetUrl);
         }
 
+        public void EnqueueTrackList(string[] videoIds, string currentVideoId = null, string playlistTitle = null)
+        {
+            if (videoIds == null || videoIds.Length == 0) return;
+
+            List<PlaylistItem> list = new List<PlaylistItem>();
+            int startIdx = 0;
+            for (int i = 0; i < videoIds.Length; i++)
+            {
+                string vid = videoIds[i].Trim();
+                if (string.IsNullOrEmpty(vid)) continue;
+                if (!string.IsNullOrEmpty(currentVideoId) && string.Equals(vid, currentVideoId, StringComparison.OrdinalIgnoreCase))
+                {
+                    startIdx = list.Count;
+                }
+                list.Add(new PlaylistItem
+                {
+                    Id = vid,
+                    Title = "Đang nạp bài hát...",
+                    Author = "",
+                    DurationSeconds = 0
+                });
+            }
+
+            if (list.Count == 0) return;
+
+            _sessionPlaylist = list;
+            _playlist = _sessionPlaylist;
+            _currentPlaylistIndex = startIdx;
+            _currentPlaylistId = null;
+            CurrentPlaylistTitle = !string.IsNullOrWhiteSpace(playlistTitle) ? playlistTitle : "Danh sách kết hợp YouTube";
+
+            _syncContext.Post(delegate
+            {
+                if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
+                if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, _currentPlaylistIndex);
+            }, null);
+
+            // Bắt đầu phát bài hiện tại
+            string playVid = list[startIdx].Id;
+            LoadAndPlay("https://www.youtube.com/watch?v=" + playVid);
+
+            // Nạp ngầm tiêu đề cho các bài trong danh sách
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    bool anyUpdated = false;
+                    foreach (var item in list)
+                    {
+                        if (item.Title != "Đang nạp bài hát..." && !string.IsNullOrEmpty(item.Title)) continue;
+                        try
+                        {
+                            using (var wc = new System.Net.WebClient())
+                            {
+                                wc.Encoding = System.Text.Encoding.UTF8;
+                                wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                                string json = wc.DownloadString("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + item.Id + "&format=json");
+                                if (!string.IsNullOrEmpty(json))
+                                {
+                                    var mTitle = System.Text.RegularExpressions.Regex.Match(json, @"""title""\s*:\s*""([^""]+)""");
+                                    if (mTitle.Success) item.Title = CleanDisplayTitle(System.Text.RegularExpressions.Regex.Unescape(mTitle.Groups[1].Value));
+                                    var mAuthor = System.Text.RegularExpressions.Regex.Match(json, @"""author_name""\s*:\s*""([^""]+)""");
+                                    if (mAuthor.Success) item.Author = CleanAuthor(System.Text.RegularExpressions.Regex.Unescape(mAuthor.Groups[1].Value));
+                                    anyUpdated = true;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (anyUpdated)
+                    {
+                        _syncContext.Post(delegate
+                        {
+                            if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
+                        }, null);
+                    }
+                }
+                catch { }
+            });
+        }
+
         public void LoadPlaylistAsync(string playlistUrl, string currentVideoId = null, bool playFirstIfNoVideo = false)
 
         {
