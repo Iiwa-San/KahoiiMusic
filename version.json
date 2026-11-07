@@ -1,0 +1,8 @@
+{
+  "versionCode": 21,
+  "versionName": "1.3.8",
+  "changelog": "• Đồng bộ hóa danh sách phát với tiện ích KahoiiMusic Extension\n• Tự động nhận diện và cập nhật ứng dụng trực tiếp trong app\n• Cải thiện giao diện phát nhạc và tối ưu hiệu năng",
+  "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
+  "forceUpdate": false
+}
+

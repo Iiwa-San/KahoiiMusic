@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermission()
         checkBatteryOptimization()
         handleIntent(intent)
+        viewModel.checkAppUpdate(isManual = false)
 
         setContent {
             KahoiiMusicTheme {

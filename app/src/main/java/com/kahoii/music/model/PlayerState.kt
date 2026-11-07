@@ -17,6 +17,21 @@ enum class ActiveQueueSource(val label: String) {
     HISTORY("Lịch sử")
 }
 
+data class AppUpdateInfo(
+    val versionCode: Int,
+    val versionName: String,
+    val changelog: String,
+    val apkUrl: String,
+    val forceUpdate: Boolean = false
+)
+
+sealed class UpdateDownloadState {
+    object Idle : UpdateDownloadState()
+    data class Downloading(val progress: Float, val downloadedBytes: Long, val totalBytes: Long) : UpdateDownloadState()
+    data class Completed(val apkFile: java.io.File) : UpdateDownloadState()
+    data class Error(val message: String) : UpdateDownloadState()
+}
+
 data class PlayerUiState(
     val currentTrack: PlaylistItem? = null,
     val status: PlaybackStatus = PlaybackStatus.IDLE,
@@ -48,7 +63,10 @@ data class PlayerUiState(
     val isSyncing: Boolean = false,
     val syncStatusMessage: String? = null,
     val pendingCellularDownloadTrack: PlaylistItem? = null,
-    val pendingCellularDownloadTracks: List<PlaylistItem> = emptyList()
+    val pendingCellularDownloadTracks: List<PlaylistItem> = emptyList(),
+    val updateInfo: AppUpdateInfo? = null,
+    val updateDownloadState: UpdateDownloadState = UpdateDownloadState.Idle,
+    val isCheckingUpdate: Boolean = false
 ) {
     val isLoggedIn: Boolean
         get() = currentUser != null

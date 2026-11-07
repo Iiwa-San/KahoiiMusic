@@ -510,6 +510,10 @@ fun MusicPlayerScreen(
                 savedTracksCount = uiState.savedTracks.size,
                 collectionsCount = uiState.playlists.size,
                 historyCount = uiState.history.size,
+                isCheckingUpdate = uiState.isCheckingUpdate,
+                onCheckUpdate = {
+                    viewModel.checkAppUpdate(isManual = true)
+                },
                 onSignIn = { email, pass ->
                     viewModel.signIn(email, pass)
                 },
@@ -544,6 +548,23 @@ fun MusicPlayerScreen(
                 },
                 onDismiss = {
                     viewModel.cancelCellularDownload()
+                }
+            )
+        }
+
+        // 5. In-App Auto Update Dialog
+        uiState.updateInfo?.let { updateInfo ->
+            com.kahoii.music.ui.components.UpdateDialog(
+                updateInfo = updateInfo,
+                downloadState = uiState.updateDownloadState,
+                onStartDownload = {
+                    viewModel.startDownloadUpdate(context)
+                },
+                onInstall = { apkFile ->
+                    viewModel.installDownloadedUpdate(context, apkFile)
+                },
+                onDismiss = {
+                    viewModel.dismissUpdateDialog()
                 }
             )
         }

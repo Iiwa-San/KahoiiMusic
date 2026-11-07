@@ -1,4 +1,4 @@
-﻿package com.kahoii.music.viewmodel
+package com.kahoii.music.viewmodel
 
 import android.app.Application
 import android.content.ComponentName
@@ -13,6 +13,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import com.kahoii.music.BuildConfig
 import com.kahoii.music.data.CloudMusicPayload
 import com.kahoii.music.data.FirebaseAuthRepository
 import com.kahoii.music.data.FirebaseSyncRepository
@@ -21,13 +22,16 @@ import com.kahoii.music.data.HistoryRepository
 import com.kahoii.music.data.PlaylistCollectionRepository
 import com.kahoii.music.data.SavedTracksRepository
 import com.kahoii.music.data.YouTubeRepository
+import com.kahoii.music.util.AppUpdateManager
 import com.kahoii.music.util.NetworkUtils
 import com.kahoii.music.model.ActiveQueueSource
+import com.kahoii.music.model.AppUpdateInfo
 import com.kahoii.music.model.LoopMode
 import com.kahoii.music.model.PlaybackStatus
 import com.kahoii.music.model.PlayerUiState
 import com.kahoii.music.model.PlaylistItem
 import com.kahoii.music.model.SleepTimerOption
+import com.kahoii.music.model.UpdateDownloadState
 import com.kahoii.music.model.UserPlaylist
 import com.kahoii.music.service.MusicPlaybackService
 import kotlinx.coroutines.Dispatchers
@@ -1423,6 +1427,86 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var updateDownloadJob: Job? = null
+
+    fun checkAppUpdate(isManual: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isCheckingUpdate = true) }
+            val remoteInfo = AppUpdateManager.fetchRemoteVersion()
+            val currentCode = BuildConfig.VERSION_CODE
+            val isNewer = remoteInfo != null && remoteInfo.versionCode > currentCode
+
+            withContext(Dispatchers.Main) {
+                if (isNewer) {
+                    _uiState.update {
+                        it.copy(
+                            updateInfo = remoteInfo,
+                            updateDownloadState = UpdateDownloadState.Idle,
+                            isCheckingUpdate = false
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(isCheckingUpdate = false) }
+                    if (isManual) {
+                        val message = if (remoteInfo != null) {
+                            "Bạn đang sử dụng phiên bản mới nhất (${BuildConfig.VERSION_NAME})"
+                        } else {
+                            "Không thể kiểm tra bản cập nhật lúc này. Vui lòng thử lại sau."
+                        }
+                        Toast.makeText(getApplication(), message, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    fun startDownloadUpdate(context: android.content.Context) {
+        val info = _uiState.value.updateInfo ?: return
+        updateDownloadJob?.cancel()
+        _uiState.update {
+            it.copy(updateDownloadState = UpdateDownloadState.Downloading(0f, 0L, 0L))
+        }
+
+        updateDownloadJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = AppUpdateManager.downloadApk(context, info.apkUrl) { progress, downloaded, total ->
+                _uiState.update {
+                    it.copy(updateDownloadState = UpdateDownloadState.Downloading(progress, downloaded, total))
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                result.fold(
+                    onSuccess = { apkFile ->
+                        _uiState.update {
+                            it.copy(updateDownloadState = UpdateDownloadState.Completed(apkFile))
+                        }
+                        // Automatically trigger installer
+                        AppUpdateManager.installApk(context, apkFile)
+                    },
+                    onFailure = { error ->
+                        _uiState.update {
+                            it.copy(updateDownloadState = UpdateDownloadState.Error(error.message ?: "Tải bản cập nhật thất bại"))
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    fun installDownloadedUpdate(context: android.content.Context, apkFile: File) {
+        AppUpdateManager.installApk(context, apkFile)
+    }
+
+    fun dismissUpdateDialog() {
+        val info = _uiState.value.updateInfo
+        if (info?.forceUpdate != true) {
+            updateDownloadJob?.cancel()
+            _uiState.update {
+                it.copy(updateInfo = null, updateDownloadState = UpdateDownloadState.Idle)
+            }
+        }
+    }
+
     override fun onCleared() {
         com.kahoii.music.service.MusicQueueManager.onTrackChanged = null
         com.kahoii.music.service.MusicQueueManager.onPlaylistIndexChanged = null
@@ -1431,6 +1515,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         sleepTimerJob?.cancel()
         preloadingJob?.cancel()
         playTrackJob?.cancel()
+        updateDownloadJob?.cancel()
         if (controller?.isPlaying != true) {
             controller?.release()
             controllerFuture?.let { MediaController.releaseFuture(it) }

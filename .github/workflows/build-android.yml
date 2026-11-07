@@ -86,6 +86,7 @@ jobs:
           files: |
             KahoiiMusic.apk
             KahoiiMusic-Appetize.zip
+            version.json
 
       - name: Summary
         run: |

@@ -1,4 +1,4 @@
-﻿package com.kahoii.music.ui.components
+package com.kahoii.music.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -86,6 +86,8 @@ fun AccountBottomSheet(
     savedTracksCount: Int = 0,
     collectionsCount: Int = 0,
     historyCount: Int = 0,
+    isCheckingUpdate: Boolean = false,
+    onCheckUpdate: () -> Unit = {},
     onSignIn: (String, String) -> Unit,
     onSignUp: (String, String) -> Unit,
     onSignOut: () -> Unit,
@@ -617,6 +619,65 @@ fun AccountBottomSheet(
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // App Version & Update Card
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.04f))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "KahoiiMusic Android",
+                            color = Color.White,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Phiên bản v${com.kahoii.music.BuildConfig.VERSION_NAME} (Build ${com.kahoii.music.BuildConfig.VERSION_CODE})",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 11.5.sp
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onCheckUpdate,
+                        enabled = !isCheckingUpdate,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = NeonPink
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.5f))
+                    ) {
+                        if (isCheckingUpdate) {
+                            CircularProgressIndicator(
+                                color = NeonPink,
+                                strokeWidth = 1.5.dp,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        } else {
+                            Text(
+                                text = "⟳ Cập nhật",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = NeonPink
+                            )
+                        }
                     }
                 }
             }
