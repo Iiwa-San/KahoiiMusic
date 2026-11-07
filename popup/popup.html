@@ -49,29 +49,9 @@
         <h2 id="auth-title" class="view-title">Tài khoản & Đồng bộ</h2>
         <p id="auth-desc" class="view-desc">Đăng nhập hoặc đăng ký để đồng bộ danh sách phát với app KahoiiMusic.</p>
 
-        <!-- SVG Filter cho hiệu ứng chất lỏng kết dính Gooey (tinh chỉnh bán kính thon gọn) -->
-        <svg class="liquid-svg-filter" aria-hidden="true" focusable="false">
-          <defs>
-            <filter id="liquid-goo">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="3.6" result="blur" />
-              <feColorMatrix in="blur" mode="matrix" values="
-                1 0 0 0 0  
-                0 1 0 0 0  
-                0 0 1 0 0  
-                0 0 0 20 -8" result="goo" />
-              <feComposite in="SourceGraphic" in2="goo" operator="atop" />
-            </filter>
-          </defs>
-        </svg>
-
-        <!-- Segmented Tabs: Đăng nhập / Đăng ký với hiệu ứng giọt chất lỏng tách dính tự nhiên -->
+        <!-- Segmented Tabs: Đăng nhập / Đăng ký với hiệu ứng lướt chất lỏng Jelly mượt mà -->
         <div class="auth-tabs" id="auth-tabs-container" data-active="LOGIN">
-          <div class="liquid-track" aria-hidden="true">
-            <div class="liquid-pill"></div>
-            <div class="liquid-droplet-wrap">
-              <div class="liquid-droplet"></div>
-            </div>
-          </div>
+          <div class="liquid-pill" aria-hidden="true"></div>
           <button type="button" id="tab-login" class="auth-tab active">
             <span class="tab-label">Đăng nhập</span>
           </button>

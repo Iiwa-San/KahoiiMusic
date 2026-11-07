@@ -207,7 +207,6 @@ document.addEventListener("DOMContentLoaded", () => {
     loginError.classList.remove("hidden");
   }
 
-  let stretchTimer = null;
   function switchAuthTab(mode) {
     if (currentAuthMode === mode) return;
     currentAuthMode = mode;
@@ -215,18 +214,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const tabsContainer = authTabsContainer || document.getElementById("auth-tabs-container");
     if (tabsContainer) {
-      if (stretchTimer) clearTimeout(stretchTimer);
-      tabsContainer.classList.remove("stretching-right", "stretching-left");
-      // Kích hoạt biến dạng dẻo kéo dãn chất lỏng theo hướng chuyển tab
-      if (mode === "REGISTER") {
-        tabsContainer.classList.add("stretching-right");
-      } else {
-        tabsContainer.classList.add("stretching-left");
-      }
+      // Chuyển 1 phát dứt khoát mượt mà qua luôn
       tabsContainer.setAttribute("data-active", mode);
-      stretchTimer = setTimeout(() => {
-        tabsContainer.classList.remove("stretching-right", "stretching-left");
-      }, 420);
     }
 
     if (mode === "REGISTER") {
