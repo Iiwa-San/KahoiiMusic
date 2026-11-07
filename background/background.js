@@ -80,6 +80,124 @@ async function login(email, password) {
   }
 }
 
+async function register(email, password) {
+  email = (email || '').trim();
+  password = (password || '').trim();
+  if (!email || !password) {
+    return { success: false, error: "Vui lòng nhập đầy đủ Email và Mật khẩu." };
+  }
+  if (password.length < 6) {
+    return { success: false, error: "Mật khẩu phải có ít nhất 6 ký tự." };
+  }
+
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password,
+        returnSecureToken: true
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = data?.error?.message || "Đăng ký thất bại";
+      if (msg.includes("EMAIL_EXISTS")) {
+        return { success: false, error: "Email này đã được sử dụng. Vui lòng đăng nhập hoặc dùng email khác." };
+      }
+      if (msg.includes("WEAK_PASSWORD")) {
+        return { success: false, error: "Mật khẩu quá yếu (phải từ 6 ký tự trở lên)." };
+      }
+      if (msg.includes("INVALID_EMAIL")) {
+        return { success: false, error: "Địa chỉ email không hợp lệ." };
+      }
+      return { success: false, error: "Lỗi đăng ký: " + msg };
+    }
+
+    const expiresIn = parseInt(data.expiresIn || '3600', 10);
+    const expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn - 120;
+
+    const user = {
+      localId: data.localId,
+      email: data.email,
+      idToken: data.idToken,
+      refreshToken: data.refreshToken,
+      expiryTimestamp: expiryTimestamp,
+      avatarBase64: null
+    };
+
+    // Khởi tạo tài liệu người dùng trên Firestore
+    try {
+      const initialDoc = {
+        fields: {
+          email: { stringValue: user.email },
+          createdAt: { stringValue: new Date().toISOString() },
+          musicDataJson: {
+            stringValue: JSON.stringify({
+              savedTracks: [],
+              collections: [],
+              history: [],
+              updatedAt: new Date().toISOString()
+            })
+          }
+        }
+      };
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${user.localId}?key=${API_KEY}`;
+      await fetch(docUrl, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${user.idToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(initialDoc)
+      });
+    } catch { }
+
+    await setSession(user);
+    return { success: true, user };
+  } catch (err) {
+    return { success: false, error: "Lỗi kết nối máy chủ: " + err.message };
+  }
+}
+
+async function forgotPassword(email) {
+  email = (email || '').trim();
+  if (!email || !email.includes('@')) {
+    return { success: false, error: "Vui lòng nhập địa chỉ email hợp lệ." };
+  }
+
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${API_KEY}`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requestType: "PASSWORD_RESET",
+        email
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = data?.error?.message || "Đặt lại mật khẩu thất bại";
+      if (msg.includes("EMAIL_NOT_FOUND")) {
+        return { success: false, error: "Không tìm thấy tài khoản tương ứng với email này." };
+      }
+      if (msg.includes("INVALID_EMAIL")) {
+        return { success: false, error: "Địa chỉ email không hợp lệ." };
+      }
+      return { success: false, error: "Lỗi: " + msg };
+    }
+
+    return { success: true, message: "Đã gửi liên kết đặt lại mật khẩu! Vui lòng kiểm tra hộp thư (cả hòm thư Spam) để tạo mật khẩu mới." };
+  } catch (err) {
+    return { success: false, error: "Lỗi kết nối máy chủ: " + err.message };
+  }
+}
+
 async function getValidToken() {
   let session = await getSession();
   if (!session || !session.idToken) return null;
@@ -421,6 +539,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, session });
       } else if (request.action === 'LOGIN') {
         const res = await login(request.email, request.password);
+        sendResponse(res);
+      } else if (request.action === 'REGISTER') {
+        const res = await register(request.email, request.password);
+        sendResponse(res);
+      } else if (request.action === 'FORGOT_PASSWORD') {
+        const res = await forgotPassword(request.email);
         sendResponse(res);
       } else if (request.action === 'LOGOUT') {
         await clearSession();

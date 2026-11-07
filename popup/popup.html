@@ -37,29 +37,45 @@
       </div>
     </header>
 
-    <!-- VIEW 1: LOGIN -->
+    <!-- VIEW 1: LOGIN & REGISTER -->
     <div id="view-login" class="view">
       <div class="auth-card">
         <div class="auth-icon-wrap">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ff2d75" stroke-width="2">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
         </div>
-        <h2 class="view-title">Đăng nhập tài khoản</h2>
-        <p class="view-desc">Đăng nhập bằng tài khoản KahoiiMusic để đồng bộ với ứng dụng.</p>
+        <h2 id="auth-title" class="view-title">Tài khoản & Đồng bộ</h2>
+        <p id="auth-desc" class="view-desc">Đăng nhập hoặc đăng ký để đồng bộ danh sách phát với app KahoiiMusic.</p>
 
-        <form id="form-login">
+        <!-- Segmented Tabs: Đăng nhập / Đăng ký -->
+        <div class="auth-tabs">
+          <button type="button" id="tab-login" class="auth-tab active">Đăng nhập</button>
+          <button type="button" id="tab-register" class="auth-tab">Đăng ký mới</button>
+        </div>
+
+        <form id="form-auth">
           <div class="input-group">
-            <label for="input-email">Email</label>
+            <label for="input-email">EMAIL</label>
             <input type="email" id="input-email" placeholder="example@email.com" required autocomplete="email">
           </div>
           <div class="input-group">
-            <label for="input-password">Mật khẩu</label>
+            <div class="label-row">
+              <label for="input-password">MẬT KHẨU</label>
+              <button type="button" id="btn-forgot-password" class="forgot-link">Quên mật khẩu?</button>
+            </div>
             <input type="password" id="input-password" placeholder="••••••••" required autocomplete="current-password">
           </div>
+          <!-- Field: Xác nhận mật khẩu (chỉ hiện khi ở tab Đăng ký) -->
+          <div id="group-confirm-password" class="input-group hidden">
+            <label for="input-confirm-password">XÁC NHẬN MẬT KHẨU</label>
+            <input type="password" id="input-confirm-password" placeholder="Nhập lại mật khẩu để xác nhận" autocomplete="new-password">
+          </div>
+
           <div id="login-error" class="alert-box error hidden"></div>
-          <button type="submit" id="btn-login-submit" class="primary-btn">
+
+          <button type="submit" id="btn-auth-submit" class="cyber-btn">
             <span class="btn-text">Đăng nhập</span>
             <div class="spinner hidden"></div>
           </button>

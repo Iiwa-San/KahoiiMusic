@@ -12,12 +12,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const userAvatarPlaceholder = document.getElementById("user-avatar-placeholder");
   const btnSkipLogin = document.getElementById("btn-skip-login");
 
-  // Elements - Login Form
-  const formLogin = document.getElementById("form-login");
+  // Elements - Auth (Login / Register / Forgot Password)
+  const authTitle = document.getElementById("auth-title");
+  const authDesc = document.getElementById("auth-desc");
+  const tabLogin = document.getElementById("tab-login");
+  const tabRegister = document.getElementById("tab-register");
+  const formAuth = document.getElementById("form-auth");
   const inputEmail = document.getElementById("input-email");
   const inputPassword = document.getElementById("input-password");
-  const btnLoginSubmit = document.getElementById("btn-login-submit");
+  const groupConfirmPassword = document.getElementById("group-confirm-password");
+  const inputConfirmPassword = document.getElementById("input-confirm-password");
+  const btnForgotPassword = document.getElementById("btn-forgot-password");
+  const btnAuthSubmit = document.getElementById("btn-auth-submit");
   const loginError = document.getElementById("login-error");
+
+  let currentAuthMode = "LOGIN"; // "LOGIN" or "REGISTER"
 
   // Elements - Video Detection
   const currentVideoBox = document.getElementById("current-video-box");
@@ -76,6 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
     viewLogin.classList.remove("hidden");
     viewDashboard.classList.add("hidden");
     userHeaderActions.classList.add("hidden");
+    clearAuthAlert();
   }
 
   function showDashboard(session) {
@@ -140,31 +150,134 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ================= AUTH HANDLERS ================= //
-  formLogin.addEventListener("submit", (e) => {
-    e.preventDefault();
-    loginError.classList.add("hidden");
+  // ================= AUTH TABS & HANDLERS ================= //
+  function clearAuthAlert() {
+    if (loginError) {
+      loginError.textContent = "";
+      loginError.className = "alert-box error hidden";
+    }
+  }
 
-    const email = inputEmail.value.trim();
-    const password = inputPassword.value.trim();
+  function showAuthAlert(msg, type = "error") {
+    if (!loginError) return;
+    loginError.textContent = msg;
+    loginError.className = `alert-box ${type}`;
+    loginError.classList.remove("hidden");
+  }
 
-    if (!email || !password) return;
+  function switchAuthTab(mode) {
+    currentAuthMode = mode;
+    clearAuthAlert();
 
-    setLoading(btnLoginSubmit, true, "Đang đăng nhập...");
+    if (mode === "REGISTER") {
+      tabRegister.classList.add("active");
+      tabLogin.classList.remove("active");
+      groupConfirmPassword.classList.remove("hidden");
+      inputConfirmPassword.setAttribute("required", "required");
+      btnForgotPassword.classList.add("hidden");
+      if (authTitle) authTitle.textContent = "Tạo tài khoản mới";
+      if (authDesc) authDesc.textContent = "Đăng ký để đồng bộ danh sách bài hát giữa PC, Mobile và Extension.";
+      btnAuthSubmit.querySelector(".btn-text").textContent = "Đăng ký ngay";
+    } else {
+      tabLogin.classList.add("active");
+      tabRegister.classList.remove("active");
+      groupConfirmPassword.classList.add("hidden");
+      inputConfirmPassword.removeAttribute("required");
+      btnForgotPassword.classList.remove("hidden");
+      if (authTitle) authTitle.textContent = "Đăng nhập tài khoản";
+      if (authDesc) authDesc.textContent = "Đăng nhập bằng tài khoản KahoiiMusic để đồng bộ với ứng dụng.";
+      btnAuthSubmit.querySelector(".btn-text").textContent = "Đăng nhập";
+    }
+  }
 
-    chrome.runtime.sendMessage({ action: "LOGIN", email, password }, (res) => {
-      setLoading(btnLoginSubmit, false, "Đăng nhập");
+  if (tabLogin) {
+    tabLogin.addEventListener("click", () => switchAuthTab("LOGIN"));
+  }
 
-      if (!res || !res.success) {
-        loginError.textContent = res?.error || "Đăng nhập thất bại. Vui lòng thử lại.";
-        loginError.classList.remove("hidden");
+  if (tabRegister) {
+    tabRegister.addEventListener("click", () => switchAuthTab("REGISTER"));
+  }
+
+  // Quên mật khẩu
+  if (btnForgotPassword) {
+    btnForgotPassword.addEventListener("click", () => {
+      clearAuthAlert();
+      const email = inputEmail.value.trim();
+      if (!email || !email.includes("@")) {
+        showAuthAlert("Vui lòng nhập địa chỉ Email vào ô phía trên rồi bấm 'Quên mật khẩu?'.", "error");
+        inputEmail.focus();
         return;
       }
 
-      inputPassword.value = "";
-      showDashboard(res.user);
+      setLoading(btnAuthSubmit, true, "Đang gửi liên kết...");
+      chrome.runtime.sendMessage({ action: "FORGOT_PASSWORD", email }, (res) => {
+        setLoading(btnAuthSubmit, false, currentAuthMode === "REGISTER" ? "Đăng ký ngay" : "Đăng nhập");
+        if (!res || !res.success) {
+          showAuthAlert(res?.error || "Gửi yêu cầu đặt lại mật khẩu thất bại.", "error");
+          return;
+        }
+        showAuthAlert(res.message || "Đã gửi email đặt lại mật khẩu! Vui lòng kiểm tra hộp thư của bạn.", "success");
+      });
     });
-  });
+  }
+
+  // Submit Form Auth (Login or Register)
+  if (formAuth) {
+    formAuth.addEventListener("submit", (e) => {
+      e.preventDefault();
+      clearAuthAlert();
+
+      const email = inputEmail.value.trim();
+      const password = inputPassword.value.trim();
+
+      if (!email || !password) {
+        showAuthAlert("Vui lòng điền đầy đủ Email và Mật khẩu.", "error");
+        return;
+      }
+
+      if (currentAuthMode === "REGISTER") {
+        const confirmPassword = inputConfirmPassword.value.trim();
+        if (password.length < 6) {
+          showAuthAlert("Mật khẩu phải có độ dài tối thiểu 6 ký tự.", "error");
+          return;
+        }
+        if (password !== confirmPassword) {
+          showAuthAlert("Mật khẩu xác nhận không trùng khớp. Vui lòng kiểm tra lại.", "error");
+          return;
+        }
+
+        setLoading(btnAuthSubmit, true, "Đang tạo tài khoản...");
+
+        chrome.runtime.sendMessage({ action: "REGISTER", email, password }, (res) => {
+          setLoading(btnAuthSubmit, false, "Đăng ký ngay");
+
+          if (!res || !res.success) {
+            showAuthAlert(res?.error || "Đăng ký thất bại. Vui lòng thử lại.", "error");
+            return;
+          }
+
+          inputPassword.value = "";
+          inputConfirmPassword.value = "";
+          showDashboard(res.user);
+        });
+      } else {
+        // LOGIN
+        setLoading(btnAuthSubmit, true, "Đang đăng nhập...");
+
+        chrome.runtime.sendMessage({ action: "LOGIN", email, password }, (res) => {
+          setLoading(btnAuthSubmit, false, "Đăng nhập");
+
+          if (!res || !res.success) {
+            showAuthAlert(res?.error || "Đăng nhập thất bại. Vui lòng thử lại.", "error");
+            return;
+          }
+
+          inputPassword.value = "";
+          showDashboard(res.user);
+        });
+      }
+    });
+  }
 
   btnLogout.addEventListener("click", () => {
     if (confirm("Bạn có chắc chắn muốn đăng xuất?")) {
