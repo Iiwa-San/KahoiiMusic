@@ -57,6 +57,22 @@ namespace KahoiiMusic.Services
             HistoryFile = Path.Combine(DataFolder, "history.json");
             SettingsFile = Path.Combine(DataFolder, "settings.json");
 
+            FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
+            {
+                lock (_lock)
+                {
+                    if (FirebaseAuthService.Instance.IsLoggedIn)
+                    {
+                        LoadHistory();
+                    }
+                    else
+                    {
+                        _history.Clear();
+                    }
+                }
+                HistoryChanged?.Invoke(null, EventArgs.Empty);
+            };
+
             Init();
         }
 
@@ -67,7 +83,14 @@ namespace KahoiiMusic.Services
             {
                 _initialized = true;
                 LoadSettings();
-                LoadHistory();
+                if (FirebaseAuthService.Instance.IsLoggedIn)
+                {
+                    LoadHistory();
+                }
+                else
+                {
+                    _history.Clear();
+                }
             }
         }
 
@@ -93,6 +116,10 @@ namespace KahoiiMusic.Services
 
         public static List<PlaylistItem> GetHistory()
         {
+            if (!FirebaseAuthService.Instance.IsLoggedIn)
+            {
+                return new List<PlaylistItem>();
+            }
             lock (_lock)
             {
                 return new List<PlaylistItem>(_history);
@@ -129,6 +156,7 @@ namespace KahoiiMusic.Services
 
         public static void AddTrack(PlaylistItem item)
         {
+            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
             if (item == null || string.IsNullOrWhiteSpace(item.Id)) return;
 
             bool changed = false;
@@ -476,6 +504,7 @@ namespace KahoiiMusic.Services
 
         private static void SaveHistory()
         {
+            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
             try
             {
                 StringBuilder sb = new StringBuilder();

@@ -44,9 +44,14 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "publish\KahoiiMusic.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "publish\yt-dlp.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "publish\app.ico"; DestDir: "{app}"; Flags: ignoreversion
-; Pre-create data and temp directories
-Source: "publish\Saved\*"; DestDir: "{app}\Saved"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "publish\KahoiiTemp\*"; DestDir: "{app}\KahoiiTemp"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Dirs]
+Name: "{app}\Saved"; Permissions: users-modify
+Name: "{app}\Saved\audio"; Permissions: users-modify
+Name: "{app}\Saved\thumb"; Permissions: users-modify
+Name: "{app}\KahoiiTemp"; Permissions: users-modify
+Name: "{app}\KahoiiTemp\audio"; Permissions: users-modify
+Name: "{app}\KahoiiTemp\thumb"; Permissions: users-modify
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"

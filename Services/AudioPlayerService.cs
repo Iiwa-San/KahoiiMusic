@@ -2159,35 +2159,41 @@ namespace KahoiiMusic.Services
                                         }
                                     }
 
-                                    // Fast-start: As soon as the first track is found, begin playing it immediately!
+                                    // Fast-start: As soon as the target track or first track is found, begin playing it immediately!
 
-                                    if (playFirstIfNoVideo && string.IsNullOrEmpty(currentVideoId) && !hasStartedFirst && list.Count == 1)
+                                    if (playFirstIfNoVideo && !hasStartedFirst)
 
                                     {
 
-                                        hasStartedFirst = true;
+                                        bool isTarget = (!string.IsNullOrEmpty(currentVideoId) && string.Equals(id, currentVideoId, StringComparison.OrdinalIgnoreCase))
+                                                     || (string.IsNullOrEmpty(currentVideoId) && list.Count == 1);
 
-                                        _sessionPlaylist = new List<PlaylistItem>(list); _playlist = _sessionPlaylist;
-
-                                        _currentPlaylistId = listId;
-
-                                        _currentPlaylistIndex = 0;
-
-                                        _currentTitle = title;
-
-                                        RaiseTitleChanged(_currentTitle);
-
-                                        _syncContext.Post(delegate
-
+                                        if (isTarget)
                                         {
+                                            hasStartedFirst = true;
 
-                                            if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
+                                            _sessionPlaylist = new List<PlaylistItem>(list); _playlist = _sessionPlaylist;
 
-                                            if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, 0);
+                                            _currentPlaylistId = listId;
 
-                                        }, null);
+                                            _currentPlaylistIndex = list.Count - 1;
 
-                                        LoadAndPlay(item.Url);
+                                            _currentTitle = title;
+
+                                            RaiseTitleChanged(_currentTitle);
+
+                                            _syncContext.Post(delegate
+
+                                            {
+
+                                                if (PlaylistLoaded != null) PlaylistLoaded(this, _sessionPlaylist);
+
+                                                if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, _currentPlaylistIndex);
+
+                                            }, null);
+
+                                            LoadAndPlay(item.Url);
+                                        }
 
                                     }
                                     else if (!playFirstIfNoVideo)
@@ -2274,13 +2280,21 @@ namespace KahoiiMusic.Services
 
                         _currentPlaylistIndex = foundIdx;
 
+                        if (!hasStartedFirst && playFirstIfNoVideo && list.Count > 0)
+                        {
+                            hasStartedFirst = true;
+                            int targetIdx = foundIdx >= 0 ? foundIdx : 0;
+                            _currentPlaylistIndex = targetIdx;
+                            PlayTrackAtIndex(targetIdx);
+                        }
+
                         if (foundIdx >= 0 && !string.IsNullOrWhiteSpace(list[foundIdx].Title))
 
                         {
 
                             string validTitle = list[foundIdx].Title;
 
-                            if (_currentVideoId == currentVideoId)
+                            if (string.Equals(_currentVideoId, list[foundIdx].Id, StringComparison.OrdinalIgnoreCase))
 
                             {
 
@@ -2290,7 +2304,7 @@ namespace KahoiiMusic.Services
 
                             }
 
-                            try { HistoryService.UpdateTitle(currentVideoId, validTitle); } catch { }
+                            try { HistoryService.UpdateTitle(list[foundIdx].Id, validTitle); } catch { }
 
                         }
 

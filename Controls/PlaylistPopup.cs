@@ -246,6 +246,27 @@ namespace KahoiiMusic.Controls
                 }
             };
 
+            FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
+            {
+                if (IsHandleCreated)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            _historyItems = HistoryService.GetHistory();
+                            if (_activeTab == MenuTab.History) ClampScroll();
+                            Invalidate();
+                        }));
+                    }
+                    catch { }
+                }
+                else
+                {
+                    _historyItems = HistoryService.GetHistory();
+                }
+            };
+
             SavedTracksService.Instance.SavedTracksChanged += (s, e) =>
             {
                 if (IsHandleCreated)
@@ -1795,7 +1816,7 @@ namespace KahoiiMusic.Controls
 
             DrawTab(g, tab0Rect, "Danh sách phát", _playlistItems.Count, _activeTab == MenuTab.Playlist, _hoveredTabIndex == 0);
             DrawTab(g, tab1Rect, "Bộ sưu tập", _collectionPlaylists.Count, _activeTab == MenuTab.Collection, _hoveredTabIndex == 1);
-            DrawTab(g, tab2Rect, "Lịch sử", _historyItems.Count, _activeTab == MenuTab.History, _hoveredTabIndex == 2);
+            DrawTab(g, tab2Rect, "Lịch sử", FirebaseAuthService.Instance.IsLoggedIn ? _historyItems.Count : 0, _activeTab == MenuTab.History, _hoveredTabIndex == 2);
             DrawTab(g, tab3Rect, "Đã tải", _savedItems.Count, _activeTab == MenuTab.Saved, _hoveredTabIndex == 3);
 
             // Close button "✕"
@@ -1858,8 +1879,16 @@ namespace KahoiiMusic.Controls
                     }
                     else if (_activeTab == MenuTab.History)
                     {
-                        g.DrawString("Chưa có lịch sử phát nhạc", emptyFont, b1, new RectangleF(0, listTop + 40, w, 24), sf);
-                        g.DrawString("Các bài hát đã nghe sẽ được lưu tự động tại đây", hintFont, b2, new RectangleF(0, listTop + 66, w, 20), sf);
+                        if (!FirebaseAuthService.Instance.IsLoggedIn)
+                        {
+                            g.DrawString("Yêu cầu đăng nhập tài khoản", emptyFont, b1, new RectangleF(0, listTop + 40, w, 24), sf);
+                            g.DrawString("Đăng nhập tài khoản Kahoii để xem và lưu lịch sử nghe nhạc", hintFont, b2, new RectangleF(0, listTop + 66, w, 20), sf);
+                        }
+                        else
+                        {
+                            g.DrawString("Chưa có lịch sử phát nhạc", emptyFont, b1, new RectangleF(0, listTop + 40, w, 24), sf);
+                            g.DrawString("Các bài hát đã nghe sẽ được lưu tự động tại đây", hintFont, b2, new RectangleF(0, listTop + 66, w, 20), sf);
+                        }
                     }
                     else
                     {

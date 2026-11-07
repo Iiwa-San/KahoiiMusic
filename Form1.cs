@@ -353,9 +353,13 @@ namespace KahoiiMusic
                 }
                 if (accountPopup != null && accountPopup.Visible)
                 {
+                    Screen scr = Screen.FromControl(this);
+                    Rectangle bounds = scr.WorkingArea;
                     int x = this.Location.X + (this.Width - accountPopup.Width) / 2;
                     int y = this.Location.Y + (this.Height - accountPopup.Height) / 2;
-                    accountPopup.Location = new Point(Math.Max(0, x), Math.Max(0, y));
+                    x = Math.Max(bounds.Left, Math.Min(x, bounds.Right - accountPopup.Width));
+                    y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - accountPopup.Height));
+                    accountPopup.Location = new Point(x, y);
                 }
             };
 
@@ -824,22 +828,17 @@ namespace KahoiiMusic
                     playlistPopup.StartLoading();
                 }
 
-                // If currently playing audio, DO NOT interrupt the song being played!
-                // Clear old playlist from queue and load new playlist in background.
-                // The current song continues playing and is kept in history.
+                if (!string.IsNullOrEmpty(videoId))
+                {
+                    // User submitted a link containing both a track and a playlist -> play track immediately and queue playlist
+                    _audioPlayer.EnqueueAndPlayTrack(videoId, null, null, 0, url);
+                    _audioPlayer.LoadPlaylistQueueOnly(url);
+                    return;
+                }
+
+                // If only a pure playlist URL was entered and something is currently playing, load queue in background
                 if (_audioPlayer.IsPlaying || !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
                 {
-                    if (!string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
-                    {
-                        HistoryService.AddTrack(new PlaylistItem
-                        {
-                            Id = _audioPlayer.CurrentVideoId,
-                            Title = _audioPlayer.CurrentTitle,
-                            Author = _audioPlayer.CurrentAuthor,
-                            DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
-                        });
-                    }
-
                     _audioPlayer.LoadPlaylistQueueOnly(url);
                     return;
                 }
@@ -1603,6 +1602,15 @@ namespace KahoiiMusic
                 }
             }
 
+            if (!string.IsNullOrEmpty(incomingV) && !string.IsNullOrEmpty(incomingList))
+            {
+                btnPlaylist.HasPlaylist = true;
+                playlistPopup.StartLoading();
+                _audioPlayer.EnqueueAndPlayTrack(incomingV, incomingTitle, incomingAuthor, incomingDur, targetUrlToPlay);
+                _audioPlayer.LoadPlaylistQueueOnly(targetUrlToPlay);
+                return;
+            }
+
             if (!string.IsNullOrEmpty(incomingList))
             {
                 btnPlaylist.HasPlaylist = true;
@@ -1931,9 +1939,13 @@ namespace KahoiiMusic
                 accountPopup = new AccountForm();
                 accountPopup.Owner = this;
             }
+            Screen scr = Screen.FromControl(this);
+            Rectangle bounds = scr.WorkingArea;
             int x = this.Location.X + (this.Width - accountPopup.Width) / 2;
             int y = this.Location.Y + (this.Height - accountPopup.Height) / 2;
-            accountPopup.Location = new Point(Math.Max(0, x), Math.Max(0, y));
+            x = Math.Max(bounds.Left, Math.Min(x, bounds.Right - accountPopup.Width));
+            y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - accountPopup.Height));
+            accountPopup.Location = new Point(x, y);
             accountPopup.Show(this);
         }
 
