@@ -3629,60 +3629,6 @@ namespace KahoiiMusic.Services
 
             if (File.Exists(pyPath)) return pyPath;
 
-            // 4. Extract from Embedded Resource
-
-            try
-
-            {
-
-                Assembly asm = Assembly.GetExecutingAssembly();
-
-                foreach (string resName in asm.GetManifestResourceNames())
-
-                {
-
-                    if (resName.EndsWith("yt-dlp.exe", StringComparison.OrdinalIgnoreCase))
-
-                    {
-
-                        if (!Directory.Exists(AppPaths.TempDir))
-
-                        {
-
-                            Directory.CreateDirectory(AppPaths.TempDir);
-
-                        }
-
-                        using (Stream stream = asm.GetManifestResourceStream(resName))
-
-                        using (FileStream fs = new FileStream(cachedYtDlp, FileMode.Create, FileAccess.Write, FileShare.None))
-
-                        {
-
-                            byte[] buffer = new byte[65536];
-
-                            int read;
-
-                            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
-
-                            {
-
-                                fs.Write(buffer, 0, read);
-
-                            }
-
-                        }
-
-                        return cachedYtDlp;
-
-                    }
-
-                }
-
-            }
-
-            catch { }
-
             return "yt-dlp";
 
         }

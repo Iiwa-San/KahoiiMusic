@@ -13,6 +13,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -168,6 +169,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="app.manifest" />
     <None Include="yt-dlp.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -185,9 +187,6 @@
     <EmbeddedResource Include="packages\NAudio.WinMM.2.2.1\lib\netstandard2.0\NAudio.WinMM.dll">
       <Link>Resources\NAudio.WinMM.dll</Link>
     </EmbeddedResource>
-    <EmbeddedResource Include="yt-dlp.exe">
-      <Link>Resources\yt-dlp.exe</Link>
-    </EmbeddedResource>
     <EmbeddedResource Include="Resources\logo_icon.png" />
   </ItemGroup>
   <ItemGroup>
@@ -203,6 +202,8 @@
   <Target Name="CopyToPublish" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <MakeDir Directories="$(ProjectDir)publish" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" ContinueOnError="true" />
+    <Copy SourceFiles="$(TargetDir)yt-dlp.exe" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" ContinueOnError="true" />
+    <Copy SourceFiles="$(ProjectDir)app.ico" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" ContinueOnError="true" />
     <MakeDir Directories="$(ProjectDir)publish\Saved\audio" />
     <MakeDir Directories="$(ProjectDir)publish\Saved\thumb" />
     <MakeDir Directories="$(ProjectDir)publish\KahoiiTemp\audio" />
