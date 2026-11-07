@@ -1,0 +1,162 @@
+/* KahoiiMusic Content Script Styles */
+.kahoii-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.kahoii-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  color: #ffffff !important;
+  border: none;
+  border-radius: 18px;
+  padding: 0 14px;
+  height: 36px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: "Roboto", "Segoe UI", sans-serif;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.kahoii-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.55);
+  filter: brightness(1.1);
+}
+
+.kahoii-btn:active {
+  transform: scale(0.96);
+}
+
+.kahoii-btn.secondary {
+  background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
+
+.kahoii-btn.secondary:hover {
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.55);
+}
+
+.kahoii-btn.download {
+  background: linear-gradient(135deg, #2563eb 0%, #0284c7 100%);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+.kahoii-btn.download:hover {
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.55);
+}
+
+.kahoii-btn.already-saved {
+  background: rgba(16, 185, 129, 0.18) !important;
+  border: 1px solid rgba(16, 185, 129, 0.6) !important;
+  color: #34d399 !important;
+  box-shadow: none !important;
+}
+
+.kahoii-btn.already-saved:hover {
+  background: rgba(16, 185, 129, 0.28) !important;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3) !important;
+}
+
+.kahoii-btn.loading {
+  opacity: 0.8;
+  cursor: wait;
+  background: #374151;
+  box-shadow: none;
+}
+
+.kahoii-btn.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+}
+
+.kahoii-btn.warn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+}
+
+.kahoii-btn-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Toast Notification */
+.kahoii-toast {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  min-width: 320px;
+  max-width: 440px;
+  background: rgba(22, 22, 28, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(124, 58, 237, 0.3);
+  z-index: 999999999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: kahoiiFadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.kahoii-toast-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.kahoii-toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.kahoii-toast-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #f3f4f6;
+}
+
+.kahoii-toast-msg {
+  font-size: 13px;
+  color: #9ca3af;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+@keyframes kahoiiFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes kahoiiFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+}

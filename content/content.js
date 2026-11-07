@@ -1,0 +1,421 @@
+// KahoiiMusic Extension - YouTube Content Script
+(function () {
+  let isProcessingPlay = false;
+  let isProcessingSave = false;
+  let isProcessingDownload = false;
+  let lastUrl = null;
+  let cachedSavedTracks = [];
+  let cachedCollections = [];
+
+  function syncCloudData() {
+    try {
+      chrome.runtime.sendMessage({ action: "GET_CLOUD_DATA" }, (res) => {
+        if (res && res.payload) {
+          cachedSavedTracks = res.payload.savedTracks || [];
+          cachedCollections = res.payload.collections || [];
+          updateButtonStatus();
+        }
+      });
+    } catch { }
+  }
+
+  function getQueryParam(key) {
+    try {
+      const url = new URL(window.location.href);
+      return url.searchParams.get(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function getVideoId() {
+    return getQueryParam("v");
+  }
+
+  function getListId() {
+    return getQueryParam("list");
+  }
+
+  function getVideoTitle() {
+    const titleEl = document.querySelector("h1.ytd-watch-metadata yt-formatted-string, #title h1 yt-formatted-string, h1.title");
+    if (titleEl && titleEl.textContent && titleEl.textContent.trim()) {
+      return titleEl.textContent.trim();
+    }
+    const docTitle = document.title || "";
+    return docTitle.replace(/ - YouTube$/, "").trim();
+  }
+
+  function getChannelName() {
+    const channelEl = document.querySelector("#channel-name #text a, ytd-channel-name yt-formatted-string a, #owner-name a, #upload-info #channel-name a");
+    if (channelEl && channelEl.textContent) {
+      return channelEl.textContent.trim();
+    }
+    return "YouTube";
+  }
+
+  function getVideoDuration() {
+    const durEl = document.querySelector(".ytp-time-duration");
+    if (durEl && durEl.textContent) {
+      const parts = durEl.textContent.trim().split(":").map(n => parseInt(n, 10));
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        return parts[0] * 60 + parts[1];
+      }
+      if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      }
+    }
+    return 0;
+  }
+
+  function getPlaylistTitle() {
+    const selectors = [
+      "ytd-playlist-panel-renderer #header-description a",
+      "ytd-playlist-panel-renderer #title",
+      "h1.ytd-playlist-header-renderer",
+      "#header-description a",
+      "yt-formatted-string.ytd-playlist-panel-renderer",
+      "#playlist-header-description h3",
+      "ytd-watch-metadata ytd-playlist-panel-renderer #title"
+    ];
+
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el && el.textContent && el.textContent.trim()) {
+        const text = el.textContent.trim();
+        if (text && text.length > 1 && !text.startsWith("http")) {
+          return text;
+        }
+      }
+    }
+
+    return "Danh sách YouTube";
+  }
+
+  function triggerProtocol(protocolUrl) {
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.src = protocolUrl;
+    document.body.appendChild(iframe);
+    setTimeout(() => {
+      try { iframe.remove(); } catch { }
+    }, 1500);
+  }
+
+  function showToast(title, message, icon = "🎵", duration = 3500) {
+    const existing = document.getElementById("kahoii-toast-container");
+    if (existing) existing.remove();
+
+    const toast = document.createElement("div");
+    toast.id = "kahoii-toast-container";
+    toast.className = "kahoii-toast";
+    toast.innerHTML = `
+      <div class="kahoii-toast-icon">${icon}</div>
+      <div class="kahoii-toast-body">
+        <div class="kahoii-toast-title">${title}</div>
+        <div class="kahoii-toast-msg">${message}</div>
+      </div>
+    `;
+
+    toast.onclick = () => {
+      toast.style.animation = "kahoiiFadeOut 0.2s forwards";
+      setTimeout(() => toast.remove(), 200);
+    };
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      if (toast.parentElement) {
+        toast.style.animation = "kahoiiFadeOut 0.25s forwards";
+        setTimeout(() => toast.remove(), 250);
+      }
+    }, duration);
+  }
+
+  function updateButtonStatus() {
+    const vId = getVideoId();
+    const listId = getListId();
+
+    // 1. Cập nhật nút Tải về
+    const btnDownload = document.getElementById("kahoii-download-track-btn");
+    if (btnDownload && vId && Array.isArray(cachedSavedTracks)) {
+      const isSaved = cachedSavedTracks.some(t => {
+        const id = (t.Id || t.id || t.videoId || "").toLowerCase();
+        return id === vId.toLowerCase();
+      });
+
+      const dlText = btnDownload.querySelector(".kahoii-btn-text");
+      const dlIcon = btnDownload.querySelector(".kahoii-btn-icon");
+
+      if (isSaved) {
+        btnDownload.classList.add("already-saved");
+        if (dlIcon) dlIcon.textContent = "✓";
+        if (dlText) dlText.textContent = "Đã tải";
+        btnDownload.title = "Bài hát này đã có trong mục Đã tải (Offline)";
+      } else if (!isProcessingDownload) {
+        btnDownload.classList.remove("already-saved");
+        if (dlIcon) dlIcon.textContent = "📥";
+        if (dlText) dlText.textContent = "Tải về";
+        btnDownload.title = "Tải bài hát này về mục Đã tải trong KahoiiMusic (Nghe Offline)";
+      }
+    }
+
+    // 2. Cập nhật nút Lưu vào BST
+    const btnSaveCol = document.getElementById("kahoii-save-col-btn");
+    if (btnSaveCol && listId && Array.isArray(cachedCollections)) {
+      const playlistTitle = getPlaylistTitle();
+      const isColSaved = cachedCollections.some(c => {
+        const name = (c.name || c.Name || "").toLowerCase().trim();
+        return name === playlistTitle.toLowerCase().trim();
+      });
+
+      const colText = btnSaveCol.querySelector(".kahoii-btn-text");
+      const colIcon = btnSaveCol.querySelector(".kahoii-btn-icon");
+
+      if (isColSaved) {
+        btnSaveCol.classList.add("already-saved");
+        if (colIcon) colIcon.textContent = "✓";
+        if (colText) colText.textContent = "Đã lưu vào BST";
+        btnSaveCol.title = `Danh sách "${playlistTitle}" đã có trong Bộ sưu tập KahoiiMusic!`;
+      } else if (!isProcessingSave) {
+        btnSaveCol.classList.remove("already-saved");
+        if (colIcon) colIcon.textContent = "💾";
+        if (colText) colText.textContent = "Lưu vào BST";
+        btnSaveCol.title = `Lưu nhanh toàn bộ danh sách "${playlistTitle}" vào Bộ sưu tập KahoiiMusic`;
+      }
+    }
+  }
+
+  function injectButtons() {
+    const videoId = getVideoId();
+    const listId = getListId();
+
+    if (!videoId && !listId) return;
+
+    const currentUrl = window.location.href;
+    if (currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      const oldGroup = document.getElementById("kahoii-btn-group");
+      if (oldGroup) oldGroup.remove();
+    }
+
+    if (document.getElementById("kahoii-btn-group")) return;
+
+    // Search for YouTube action buttons container
+    const targets = [
+      document.querySelector("#actions #top-level-buttons-computed"),
+      document.querySelector("#actions-inner #top-level-buttons-computed"),
+      document.querySelector("#actions-inner"),
+      document.querySelector("#actions #menu"),
+      document.querySelector("ytd-watch-metadata #actions")
+    ];
+
+    const container = targets.find(t => t !== null && t !== undefined);
+    if (!container) return;
+
+    const isPlaylist = !!listId;
+
+    const group = document.createElement("div");
+    group.id = "kahoii-btn-group";
+    group.className = "kahoii-btn-group";
+
+    // 1. NÚT NẠP PHÁT TẠM (Giống dán link)
+    const btnPlay = document.createElement("button");
+    btnPlay.id = "kahoii-play-queue-btn";
+    btnPlay.className = "kahoii-btn";
+    btnPlay.title = isPlaylist ? "Nạp toàn bộ danh sách phát vào hàng đợi KahoiiMusic (giống dán link)" : "Nạp phát bài hát trên KahoiiMusic";
+    btnPlay.innerHTML = `
+      <span class="kahoii-btn-icon">⚡</span>
+      <span class="kahoii-btn-text">${isPlaylist ? "Nạp phát cả danh sách" : "Nạp phát trên Kahoii"}</span>
+    `;
+
+    btnPlay.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (isProcessingPlay) return;
+      isProcessingPlay = true;
+
+      const playText = btnPlay.querySelector(".kahoii-btn-text");
+      const playIcon = btnPlay.querySelector(".kahoii-btn-icon");
+
+      btnPlay.className = "kahoii-btn loading";
+      playIcon.textContent = "⏳";
+      playText.textContent = isPlaylist ? "Đang nạp cả list..." : "Đang nạp...";
+
+      const targetUrl = window.location.href;
+      triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(targetUrl)}`);
+
+      if (isPlaylist) {
+        showToast("Đang nạp danh sách!", "KahoiiMusic đang tải toàn bộ danh sách vào hàng đợi phát tạm...", "⚡", 4000);
+      } else {
+        const title = getVideoTitle();
+        showToast("Đã gửi sang KahoiiMusic!", `Đang nạp "${title}" vào hàng đợi phát...`, "🎵");
+      }
+
+      setTimeout(() => {
+        btnPlay.className = "kahoii-btn success";
+        playIcon.textContent = "✅";
+        playText.textContent = isPlaylist ? "Đang phát cả list" : "Đã nạp";
+
+        setTimeout(() => {
+          isProcessingPlay = false;
+          btnPlay.className = "kahoii-btn";
+          playIcon.textContent = "⚡";
+          playText.textContent = isPlaylist ? "Nạp phát cả danh sách" : "Nạp phát trên Kahoii";
+        }, 3000);
+      }, 700);
+    });
+
+    group.appendChild(btnPlay);
+
+    // 2. NÚT TẢI BÀI HÁT NÀY VỀ MÁY (Nghe Offline - Dù đang phát trong list vẫn tải riêng bài này)
+    if (videoId) {
+      const btnDownload = document.createElement("button");
+      btnDownload.id = "kahoii-download-track-btn";
+      btnDownload.className = "kahoii-btn download";
+      btnDownload.title = "Tải bài hát này về mục Đã tải trong KahoiiMusic (Nghe Offline)";
+      btnDownload.innerHTML = `
+        <span class="kahoii-btn-icon">📥</span>
+        <span class="kahoii-btn-text">Tải về</span>
+      `;
+
+      btnDownload.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (isProcessingDownload) return;
+        isProcessingDownload = true;
+
+        const dlText = btnDownload.querySelector(".kahoii-btn-text");
+        const dlIcon = btnDownload.querySelector(".kahoii-btn-icon");
+
+        btnDownload.className = "kahoii-btn download loading";
+        dlIcon.textContent = "⏳";
+        dlText.textContent = "Đang gửi...";
+
+        const vId = getVideoId();
+        const title = getVideoTitle();
+        const author = getChannelName();
+        const dur = getVideoDuration();
+        const thumb = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
+
+        // Gửi lệnh tải về máy qua URI Scheme
+        triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}`);
+
+        // Đồng bộ lên đám mây Firestore savedTracks
+        chrome.runtime.sendMessage({
+          action: "SAVE_TO_OFFLINE",
+          track: {
+            videoId: vId,
+            title: title,
+            author: author,
+            duration: dur,
+            thumbnail: thumb
+          }
+        }, (res) => {
+          if (res && res.alreadyExists) {
+            showToast("Đã có trong Đã tải!", `Bài hát "${title}" đã có sẵn trong mục Đã tải (Offline).`, "ℹ️", 3500);
+          } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
+            showToast("Đang tải về máy!", `KahoiiMusic đang tải "${title}" về máy. (💡 Mở tiện ích đăng nhập để đồng bộ đám mây)`, "📥", 4500);
+          } else {
+            showToast("Đang tải về máy!", `KahoiiMusic đang tải "${title}" vào mục Đã tải (Offline)...`, "📥", 4000);
+          }
+
+          if (!cachedSavedTracks.some(t => (t.Id || t.id || t.videoId || '').toLowerCase() === vId.toLowerCase())) {
+            cachedSavedTracks.unshift({ Id: vId, Title: title, Author: author, DurationSeconds: dur });
+          }
+
+          setTimeout(() => {
+            isProcessingDownload = false;
+            updateButtonStatus();
+          }, 800);
+        });
+      });
+
+      group.appendChild(btnDownload);
+    }
+
+    // 2. NÚT LƯU PLAYLIST VÀO BỘ SƯU TẬP (Nếu đang ở trong playlist)
+    if (isPlaylist) {
+      const btnSaveCol = document.createElement("button");
+      btnSaveCol.id = "kahoii-save-col-btn";
+      btnSaveCol.className = "kahoii-btn secondary";
+      btnSaveCol.title = "Lưu nhanh toàn bộ danh sách này vào Bộ sưu tập KahoiiMusic với tên YouTube";
+      btnSaveCol.innerHTML = `
+        <span class="kahoii-btn-icon">💾</span>
+        <span class="kahoii-btn-text">Lưu vào BST</span>
+      `;
+
+      btnSaveCol.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (isProcessingSave) return;
+        isProcessingSave = true;
+
+        const colText = btnSaveCol.querySelector(".kahoii-btn-text");
+        const colIcon = btnSaveCol.querySelector(".kahoii-btn-icon");
+
+        const playlistTitle = getPlaylistTitle();
+
+        btnSaveCol.className = "kahoii-btn secondary loading";
+        colIcon.textContent = "⏳";
+        colText.textContent = "Đang lưu...";
+
+        const targetUrl = window.location.href;
+
+        // 1. Gửi lệnh mở giao thức cho KahoiiMusic desktop
+        triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(playlistTitle)}`);
+
+        // 2. Đồng thời lưu vào đám mây Firestore collections
+        chrome.runtime.sendMessage({
+          action: "SAVE_TO_COLLECTION",
+          name: playlistTitle,
+          url: targetUrl
+        }, (res) => {
+          if (res && res.alreadyExists) {
+            showToast("Đã có trong BST!", `Danh sách "${playlistTitle}" đã có sẵn trong Bộ sưu tập.`, "ℹ️", 3500);
+          } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
+            showToast("Đang lưu BST!", `KahoiiMusic đang lưu "${playlistTitle}" vào BST. (💡 Mở tiện ích đăng nhập để đồng bộ đám mây)`, "💾", 4500);
+          } else {
+            showToast("Lưu vào Bộ sưu tập", `KahoiiMusic đang tải và lưu "${playlistTitle}" vào Bộ sưu tập...`, "💾", 4500);
+          }
+
+          if (!cachedCollections.some(c => (c.name || c.Name || "").toLowerCase().trim() === playlistTitle.toLowerCase().trim())) {
+            cachedCollections.unshift({ Name: playlistTitle, Items: [] });
+          }
+
+          setTimeout(() => {
+            isProcessingSave = false;
+            updateButtonStatus();
+          }, 1200);
+        });
+      });
+
+      group.appendChild(btnSaveCol);
+    }
+
+    container.appendChild(group);
+    updateButtonStatus();
+  }
+
+  // Periodic check & YouTube SPA Navigation listeners
+  setInterval(injectButtons, 1200);
+
+  window.addEventListener("yt-navigate-finish", () => {
+    setTimeout(() => {
+      injectButtons();
+      syncCloudData();
+    }, 500);
+  });
+
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      injectButtons();
+      syncCloudData();
+    }, 800);
+  });
+
+  // Initial sync
+  syncCloudData();
+})();
