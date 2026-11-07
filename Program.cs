@@ -117,7 +117,7 @@ namespace KahoiiMusic
                 {
                     try
                     {
-                        string logPath = Path.Combine(KahoiiMusic.Services.AppPaths.BaseDirectory, "crash.log");
+                        string logPath = Path.Combine(KahoiiMusic.Services.AppPaths.DataRoot, "crash.log");
                         File.AppendAllText(logPath, string.Format("[{0}] ThreadException: {1}\r\nStack: {2}\r\n\r\n",
                             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), exArgs.Exception?.Message, exArgs.Exception?.StackTrace));
                         CyberConfirmDialog.ShowAlert("Sự cố Kahoii Music", "Đã xảy ra sự cố: " + (exArgs.Exception != null ? exArgs.Exception.Message : "Lỗi không xác định"), "Đã hiểu");
@@ -129,7 +129,7 @@ namespace KahoiiMusic
                     try
                     {
                         var ex = unhandledArgs.ExceptionObject as Exception;
-                        string logPath = Path.Combine(KahoiiMusic.Services.AppPaths.BaseDirectory, "crash.log");
+                        string logPath = Path.Combine(KahoiiMusic.Services.AppPaths.DataRoot, "crash.log");
                         File.AppendAllText(logPath, string.Format("[{0}] UnhandledException: {1}\r\nStack: {2}\r\n\r\n",
                             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), ex?.Message, ex?.StackTrace));
                         CyberConfirmDialog.ShowAlert("Sự cố nghiêm trọng", "Đã xảy ra sự cố nghiêm trọng: " + (ex != null ? ex.Message : "Lỗi không xác định"), "Đã hiểu");
