@@ -56,10 +56,12 @@ class MainActivity : ComponentActivity() {
         if (Intent.ACTION_VIEW == action && data != null) {
             val url = data.toString()
             viewModel.loadAndPlay(url)
-        } else if (Intent.ACTION_SEND == action && "text/plain" == intent.type) {
+        } else if (Intent.ACTION_SEND == action && intent.type?.startsWith("text/") == true) {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
             if (!sharedText.isNullOrBlank()) {
-                viewModel.loadAndPlay(sharedText)
+                val urlRegex = Regex("""https?://\S+""")
+                val extractedUrl = urlRegex.find(sharedText)?.value ?: sharedText
+                viewModel.loadAndPlay(extractedUrl)
             }
         }
     }

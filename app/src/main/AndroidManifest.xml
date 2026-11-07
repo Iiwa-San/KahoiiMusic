@@ -47,6 +47,13 @@
                 <data android:host="youtu.be" />
                 <data android:host="music.youtube.com" />
             </intent-filter>
+
+            <!-- Support sharing YouTube links/text directly into Kahoii Music from YouTube app -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <service

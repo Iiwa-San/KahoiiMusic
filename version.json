@@ -1,8 +1,7 @@
 {
-  "versionCode": 21,
-  "versionName": "1.3.8",
-  "changelog": "• Đồng bộ hóa danh sách phát với tiện ích KahoiiMusic Extension\n• Tự động nhận diện và cập nhật ứng dụng trực tiếp trong app\n• Cải thiện giao diện phát nhạc và tối ưu hiệu năng",
+  "versionCode": 22,
+  "versionName": "1.3.9",
+  "changelog": "• Hỗ trợ nút Chia sẻ (Share) trực tiếp từ app YouTube sang KahoiiMusic\n• Tự động trích xuất link chuẩn từ văn bản chia sẻ\n• Tối ưu hiệu năng và phát nhạc không gián đoạn",
   "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
   "forceUpdate": false
 }
-
