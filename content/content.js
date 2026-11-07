@@ -208,12 +208,14 @@
       const dlIcon = btnDownload.querySelector(".kahoii-btn-icon");
 
       if (isSaved) {
+        btnDownload.classList.remove("loading");
         btnDownload.classList.add("already-saved");
         if (dlIcon) dlIcon.textContent = "✓";
         if (dlText) dlText.textContent = "Đã tải";
         btnDownload.title = "Bài hát này đã có trong mục Đã tải (Offline)";
       } else if (!isProcessingDownload) {
         btnDownload.classList.remove("already-saved");
+        btnDownload.classList.remove("loading");
         if (dlIcon) dlIcon.textContent = "📥";
         if (dlText) dlText.textContent = "Tải về";
         btnDownload.title = "Tải bài hát này về mục Đã tải trong KahoiiMusic (Nghe Offline)";
@@ -233,12 +235,14 @@
       const colIcon = btnSaveCol.querySelector(".kahoii-btn-icon");
 
       if (isColSaved) {
+        btnSaveCol.classList.remove("loading");
         btnSaveCol.classList.add("already-saved");
         if (colIcon) colIcon.textContent = "✓";
         if (colText) colText.textContent = "Đã lưu vào BST";
         btnSaveCol.title = `Danh sách "${playlistTitle}" đã có trong Bộ sưu tập KahoiiMusic!`;
       } else if (!isProcessingSave) {
         btnSaveCol.classList.remove("already-saved");
+        btnSaveCol.classList.remove("loading");
         if (colIcon) colIcon.textContent = "💾";
         if (colText) colText.textContent = "Lưu vào BST";
         btnSaveCol.title = `Lưu nhanh toàn bộ danh sách "${playlistTitle}" vào Bộ sưu tập KahoiiMusic`;
@@ -300,8 +304,8 @@
       const playIcon = btnPlay.querySelector(".kahoii-btn-icon");
 
       btnPlay.className = "kahoii-btn loading";
-      playIcon.textContent = "⏳";
-      playText.textContent = isPlaylist ? "Đang nạp cả list..." : "Đang nạp...";
+      if (playIcon) playIcon.textContent = "⏳";
+      if (playText) playText.textContent = isPlaylist ? "Đang nạp cả list..." : "Đang nạp...";
 
       const targetUrl = window.location.href;
       const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
@@ -314,17 +318,24 @@
         showToast("Đã gửi sang KahoiiMusic!", `Đang nạp "${title}" vào hàng đợi phát...`, "🎵");
       }
 
+      const resetPlayBtn = () => {
+        isProcessingPlay = false;
+        btnPlay.className = "kahoii-btn";
+        if (playIcon) playIcon.textContent = "⚡";
+        if (playText) playText.textContent = isPlaylist ? "Nạp phát cả danh sách" : "Nạp phát trên Kahoii";
+      };
+
+      const safetyTimer = setTimeout(resetPlayBtn, 3000);
+
       setTimeout(() => {
         btnPlay.className = "kahoii-btn success";
-        playIcon.textContent = "✅";
-        playText.textContent = isPlaylist ? "Đang phát cả list" : "Đã nạp";
+        if (playIcon) playIcon.textContent = "✅";
+        if (playText) playText.textContent = isPlaylist ? "Đang phát cả list" : "Đã nạp";
 
         setTimeout(() => {
-          isProcessingPlay = false;
-          btnPlay.className = "kahoii-btn";
-          playIcon.textContent = "⚡";
-          playText.textContent = isPlaylist ? "Nạp phát cả danh sách" : "Nạp phát trên Kahoii";
-        }, 3000);
+          clearTimeout(safetyTimer);
+          resetPlayBtn();
+        }, 1500);
       }, 700);
     });
 
@@ -352,47 +363,62 @@
         const dlIcon = btnDownload.querySelector(".kahoii-btn-icon");
 
         btnDownload.className = "kahoii-btn download loading";
-        dlIcon.textContent = "⏳";
-        dlText.textContent = "Đang gửi...";
+        if (dlIcon) dlIcon.textContent = "⏳";
+        if (dlText) dlText.textContent = "Đang gửi...";
 
         const vId = getVideoId();
         const title = getVideoTitle();
         const author = getChannelName();
         const dur = getVideoDuration();
-        const thumb = `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
 
         // Gửi lệnh tải về máy qua URI Scheme kèm token đăng nhập nhanh
         const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
         const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
         triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}${userParam}${rtParam}`);
 
+        // Safety fallback timer: Đảm bảo nút KHÔNG BAO GIỜ bị treo nếu đóng app ngay hoặc chrome background không phản hồi
+        let safetyTimer = setTimeout(() => {
+          isProcessingDownload = false;
+          updateButtonStatus();
+        }, 2500);
+
         // Đồng bộ lên đám mây Firestore savedTracks
-        chrome.runtime.sendMessage({
-          action: "SAVE_TO_OFFLINE",
-          track: {
-            Id: vId,
-            Title: title,
-            Author: author,
-            DurationSeconds: dur
-          }
-        }, (res) => {
-          if (res && res.alreadyExists) {
-            showToast("Đã có trong Đã tải!", `Bài hát "${title}" đã có sẵn trong mục Đã tải (Offline).`, "ℹ️", 3500);
-          } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
-            showToast("Đang tải về máy!", `KahoiiMusic đang tải "${title}" về máy. (💡 Mở tiện ích đăng nhập để đồng bộ đám mây)`, "📥", 4500);
-          } else {
-            showToast("Đang tải về máy!", `KahoiiMusic đang tải "${title}" vào mục Đã tải (Offline)...`, "📥", 4000);
-          }
+        try {
+          chrome.runtime.sendMessage({
+            action: "SAVE_TO_OFFLINE",
+            track: {
+              Id: vId,
+              Title: title,
+              Author: author,
+              DurationSeconds: dur
+            }
+          }, (res) => {
+            clearTimeout(safetyTimer);
+            if (chrome.runtime.lastError) {
+              console.warn("[Kahoii] runtime error:", chrome.runtime.lastError.message);
+            }
+            if (res && res.alreadyExists) {
+              showToast("Đã có trong Đã tải!", `Bài hát "${title}" đã có sẵn trong mục Đã tải (Offline).`, "ℹ️", 3500);
+            } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
+              showToast("Đang tải về máy!", `KahoiiMusic đang tải "${title}" về máy. (💡 Mở tiện ích đăng nhập để đồng bộ đám mây)`, "📥", 4500);
+            } else {
+              showToast("Đang tải về máy!", `KahoiiMusic đang tải "${title}" vào mục Đã tải (Offline)...`, "📥", 4000);
+            }
 
-          if (!cachedSavedTracks.some(t => (t.Id || t.id || t.videoId || '').toLowerCase() === vId.toLowerCase())) {
-            cachedSavedTracks.unshift({ Id: vId, Title: title, Author: author, DurationSeconds: dur });
-          }
+            if (!cachedSavedTracks.some(t => (t.Id || t.id || t.videoId || '').toLowerCase() === vId.toLowerCase())) {
+              cachedSavedTracks.unshift({ Id: vId, Title: title, Author: author, DurationSeconds: dur });
+            }
 
-          setTimeout(() => {
-            isProcessingDownload = false;
-            updateButtonStatus();
-          }, 800);
-        });
+            setTimeout(() => {
+              isProcessingDownload = false;
+              updateButtonStatus();
+            }, 500);
+          });
+        } catch (err) {
+          clearTimeout(safetyTimer);
+          isProcessingDownload = false;
+          updateButtonStatus();
+        }
       });
 
       group.appendChild(btnDownload);
@@ -422,8 +448,8 @@
         const playlistTitle = getPlaylistTitle();
 
         btnSaveCol.className = "kahoii-btn secondary loading";
-        colIcon.textContent = "⏳";
-        colText.textContent = "Đang lưu...";
+        if (colIcon) colIcon.textContent = "⏳";
+        if (colText) colText.textContent = "Đang lưu...";
 
         const targetUrl = window.location.href;
 
@@ -437,30 +463,46 @@
         const vId = getVideoId();
         const fallbackItems = items.length > 0 ? items : (vId ? [{ Id: vId, Title: getVideoTitle(), Author: getChannelName(), DurationSeconds: getVideoDuration() }] : []);
 
+        // Safety fallback timer: Tối đa 2.5s sẽ tự động phục hồi nút
+        let safetyTimer = setTimeout(() => {
+          isProcessingSave = false;
+          updateButtonStatus();
+        }, 2500);
+
         // 2. Đồng thời lưu vào đám mây Firestore collections
-        chrome.runtime.sendMessage({
-          action: "SAVE_TO_COLLECTION",
-          name: playlistTitle,
-          url: targetUrl,
-          items: fallbackItems
-        }, (res) => {
-          if (res && res.alreadyExists) {
-            showToast("Đã có trong BST!", `Danh sách "${playlistTitle}" đã có sẵn trong Bộ sưu tập.`, "ℹ️", 3500);
-          } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
-            showToast("Đang lưu BST!", `KahoiiMusic đang lưu "${playlistTitle}" vào BST. (💡 Mở tiện ích đăng nhập để đồng bộ đám mây)`, "💾", 4500);
-          } else {
-            showToast("Lưu vào Bộ sưu tập", `KahoiiMusic đang tải và lưu "${playlistTitle}" (${fallbackItems.length} bài) vào Bộ sưu tập...`, "💾", 4500);
-          }
+        try {
+          chrome.runtime.sendMessage({
+            action: "SAVE_TO_COLLECTION",
+            name: playlistTitle,
+            url: targetUrl,
+            items: fallbackItems
+          }, (res) => {
+            clearTimeout(safetyTimer);
+            if (chrome.runtime.lastError) {
+              console.warn("[Kahoii] runtime error:", chrome.runtime.lastError.message);
+            }
+            if (res && res.alreadyExists) {
+              showToast("Đã có trong BST!", `Danh sách "${playlistTitle}" đã có sẵn trong Bộ sưu tập.`, "ℹ️", 3500);
+            } else if (res && !res.success && res.error && res.error.includes("Chưa đăng nhập")) {
+              showToast("Đang lưu BST!", `KahoiiMusic đang lưu "${playlistTitle}" vào BST. (💡 Mở tiện ích đăng nhập để đồng bộ đám mây)`, "💾", 4500);
+            } else {
+              showToast("Lưu vào Bộ sưu tập", `KahoiiMusic đang tải và lưu "${playlistTitle}" (${fallbackItems.length} bài) vào Bộ sưu tập...`, "💾", 4500);
+            }
 
-          if (!cachedCollections.some(c => (c.name || c.Name || "").toLowerCase().trim() === playlistTitle.toLowerCase().trim())) {
-            cachedCollections.unshift({ Name: playlistTitle, Items: fallbackItems });
-          }
+            if (!cachedCollections.some(c => (c.name || c.Name || "").toLowerCase().trim() === playlistTitle.toLowerCase().trim())) {
+              cachedCollections.unshift({ Name: playlistTitle, Items: fallbackItems });
+            }
 
-          setTimeout(() => {
-            isProcessingSave = false;
-            updateButtonStatus();
-          }, 1200);
-        });
+            setTimeout(() => {
+              isProcessingSave = false;
+              updateButtonStatus();
+            }, 600);
+          });
+        } catch (err) {
+          clearTimeout(safetyTimer);
+          isProcessingSave = false;
+          updateButtonStatus();
+        }
       });
 
       group.appendChild(btnSaveCol);
