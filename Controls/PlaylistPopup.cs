@@ -100,7 +100,7 @@ namespace KahoiiMusic.Controls
         private int _dragGrabOffsetY = 0;
 
         // Collection tab state (2 vertical columns)
-        private const int LeftColWidth = 152;
+        private const int LeftColWidth = 168;
         private const int CollectionRowHeight = 44;
         private const int CollectionTrackRowHeight = 34;
 
@@ -175,7 +175,7 @@ namespace KahoiiMusic.Controls
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.FromArgb(20, 18, 30);
-            Size = new Size(460, 340);
+            Size = new Size(530, 360);
             DoubleBuffered = true;
             KeyPreview = true;
 
@@ -687,10 +687,10 @@ namespace KahoiiMusic.Controls
         {
             switch (index)
             {
-                case 0: return new Rectangle(8, 7, 120, 28);   // Danh sách phát
-                case 1: return new Rectangle(132, 7, 98, 28);  // Bộ sưu tập
-                case 2: return new Rectangle(234, 7, 82, 28);  // Lịch sử
-                case 3: return new Rectangle(320, 7, 82, 28);  // Đã tải
+                case 0: return new Rectangle(8, 7, 134, 28);   // Danh sách phát
+                case 1: return new Rectangle(146, 7, 106, 28);  // Bộ sưu tập
+                case 2: return new Rectangle(256, 7, 94, 28);  // Lịch sử
+                case 3: return new Rectangle(354, 7, 90, 28);  // Đã tải
                 default: return Rectangle.Empty;
             }
         }
@@ -1881,7 +1881,7 @@ namespace KahoiiMusic.Controls
             using (SolidBrush activeText = new SolidBrush(Color.White))
             using (SolidBrush dimText = new SolidBrush(Color.FromArgb(140, 140, 150)))
             using (SolidBrush activeIndicatorBrush = new SolidBrush(Color.FromArgb(168, 85, 247)))
-            using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
+            using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
             {
                 int totalCount = currentList.Count;
                 int indexColW = (totalCount >= 1000) ? 34 : ((totalCount >= 100) ? 27 : 18);
@@ -2282,8 +2282,11 @@ namespace KahoiiMusic.Controls
                 using (SolidBrush activeText = new SolidBrush(Color.White))
                 using (SolidBrush dimText = new SolidBrush(Color.FromArgb(140, 140, 150)))
                 using (SolidBrush activeIndicatorBrush = new SolidBrush(Color.FromArgb(168, 85, 247)))
-                using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
+                using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                 {
+                    int totalTracks = filteredTracks.Count;
+                    int indexColW = (totalTracks >= 1000) ? 36 : ((totalTracks >= 100) ? 28 : 20);
+
                     for (int i = 0; i < filteredTracks.Count; i++)
                     {
                         int rowY = listTop + (i * CollectionTrackRowHeight) - _collectionRightScroll;
@@ -2315,7 +2318,7 @@ namespace KahoiiMusic.Controls
                         }
 
                         // Index or Play indicator
-                        Rectangle numRect = new Rectangle(rowRect.X + 2, rowRect.Y + 7, 20, 18);
+                        Rectangle numRect = new Rectangle(rowRect.X + 2, rowRect.Y + 7, indexColW, 18);
                         if (isActive)
                         {
                             Point[] playArrow = new Point[]

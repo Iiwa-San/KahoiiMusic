@@ -1551,6 +1551,7 @@ namespace KahoiiMusic.Services
             _isPlayingFromHistory = false;
             _currentQueueSource = ActiveQueueSource.Collection;
             _playlist = new List<PlaylistItem>(items);
+            _sessionPlaylist = _playlist;
             _currentPlaylistId = playlistId;
 
             CurrentPlaylistTitle = playlistTitle;
@@ -1561,6 +1562,12 @@ namespace KahoiiMusic.Services
                 _shufflePlayedIndices.Clear();
                 if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
+
+            _syncContext.Post(delegate
+            {
+                if (PlaylistLoaded != null) PlaylistLoaded(this, _playlist);
+                if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, _currentPlaylistIndex);
+            }, null);
 
             PlayTrackAtIndex(_currentPlaylistIndex);
         }
@@ -1913,9 +1920,8 @@ namespace KahoiiMusic.Services
                 if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, _currentPlaylistIndex);
             }, null);
 
-            // Bắt đầu phát bài hiện tại
-            string playVid = list[startIdx].Id;
-            LoadAndPlay("https://www.youtube.com/watch?v=" + playVid);
+            // Bắt đầu phát bài hiện tại qua PlayTrackAtIndex để bảo toàn thứ tự danh sách phát
+            PlayTrackAtIndex(startIdx);
 
             // Nạp ngầm tiêu đề cho các bài trong danh sách
             ThreadPool.QueueUserWorkItem(delegate
@@ -2181,11 +2187,16 @@ namespace KahoiiMusic.Services
                         int foundIdx = -1;
 
                         if (!string.IsNullOrEmpty(currentVideoId))
-
                         {
-
                             foundIdx = list.FindIndex(x => x.Id == currentVideoId);
-
+                        }
+                        else if (!string.IsNullOrEmpty(_currentVideoId))
+                        {
+                            foundIdx = list.FindIndex(x => x.Id == _currentVideoId);
+                        }
+                        if (foundIdx < 0 && playFirstIfNoVideo && list.Count > 0)
+                        {
+                            foundIdx = 0;
                         }
 
                         _currentPlaylistIndex = foundIdx;

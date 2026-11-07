@@ -1597,6 +1597,7 @@ namespace KahoiiMusic
                 if (vids.Length > 0)
                 {
                     btnPlaylist.HasPlaylist = true;
+                    playlistPopup.StartLoading();
                     _audioPlayer.EnqueueTrackList(vids, incomingV, incomingTitle);
                     return;
                 }
@@ -1605,6 +1606,7 @@ namespace KahoiiMusic
             if (!string.IsNullOrEmpty(incomingList))
             {
                 btnPlaylist.HasPlaylist = true;
+                playlistPopup.StartLoading();
                 _audioPlayer.LoadPlaylistAsync(targetUrlToPlay, playFirstIfNoVideo: true);
                 return;
             }
