@@ -1750,8 +1750,14 @@ namespace KahoiiMusic.Services
                     : string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", item.Id);
                 RaiseThumbnail(thumb);
 
-                // If author is still missing, queue background resolve
-                if (string.IsNullOrWhiteSpace(_currentAuthor))
+                // If title is placeholder or author is missing, queue background resolve
+                bool isTitlePlaceholder = string.IsNullOrWhiteSpace(item.Title) ||
+                                          item.Title == "None" ||
+                                          item.Title == "NA" ||
+                                          item.Title.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
+                                          item.Title.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
+
+                if (isTitlePlaceholder || string.IsNullOrWhiteSpace(_currentAuthor))
                 {
                     string vid = item.Id;
                     ThreadPool.QueueUserWorkItem(delegate { FetchVideoTitle(vid); });
@@ -1883,7 +1889,7 @@ namespace KahoiiMusic.Services
             LoadAndPlay(targetUrl);
         }
 
-        public void EnqueueTrackList(string[] videoIds, string currentVideoId = null, string playlistTitle = null)
+        public void EnqueueTrackList(string[] videoIds, string currentVideoId = null, string currentTrackTitle = null, string currentTrackAuthor = null, int currentTrackDur = 0, string playlistTitle = null)
         {
             if (videoIds == null || videoIds.Length == 0) return;
 
@@ -1893,16 +1899,35 @@ namespace KahoiiMusic.Services
             {
                 string vid = videoIds[i].Trim();
                 if (string.IsNullOrEmpty(vid)) continue;
-                if (!string.IsNullOrEmpty(currentVideoId) && string.Equals(vid, currentVideoId, StringComparison.OrdinalIgnoreCase))
+                bool isCurrent = !string.IsNullOrEmpty(currentVideoId) && string.Equals(vid, currentVideoId, StringComparison.OrdinalIgnoreCase);
+                if (isCurrent)
                 {
                     startIdx = list.Count;
                 }
+
+                string trackTitle = (isCurrent && !string.IsNullOrWhiteSpace(currentTrackTitle)) ? CleanDisplayTitle(currentTrackTitle) : "Đang nạp bài hát...";
+                string trackAuthor = (isCurrent && !string.IsNullOrWhiteSpace(currentTrackAuthor)) ? CleanAuthor(currentTrackAuthor) : "";
+                int trackDur = (isCurrent && currentTrackDur > 0) ? currentTrackDur : 0;
+
+                if (trackTitle == "Đang nạp bài hát...")
+                {
+                    string cached = HistoryService.GetTrackTitle(vid);
+                    if (string.IsNullOrWhiteSpace(cached)) cached = SavedTracksService.Instance.GetTrackTitle(vid);
+                    if (!string.IsNullOrWhiteSpace(cached) && cached != "None" && cached != "NA") trackTitle = cached;
+                }
+                if (string.IsNullOrWhiteSpace(trackAuthor))
+                {
+                    string cachedAuthor = HistoryService.GetTrackAuthor(vid);
+                    if (string.IsNullOrWhiteSpace(cachedAuthor)) cachedAuthor = SavedTracksService.Instance.GetTrackAuthor(vid);
+                    if (!string.IsNullOrWhiteSpace(cachedAuthor)) trackAuthor = cachedAuthor;
+                }
+
                 list.Add(new PlaylistItem
                 {
                     Id = vid,
-                    Title = "Đang nạp bài hát...",
-                    Author = "",
-                    DurationSeconds = 0
+                    Title = trackTitle,
+                    Author = trackAuthor,
+                    DurationSeconds = trackDur
                 });
             }
 
@@ -1931,7 +1956,7 @@ namespace KahoiiMusic.Services
                     bool anyUpdated = false;
                     foreach (var item in list)
                     {
-                        if (item.Title != "Đang nạp bài hát..." && !string.IsNullOrEmpty(item.Title)) continue;
+                        if (item.Title != "Đang nạp bài hát..." && !string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(item.Author)) continue;
                         try
                         {
                             using (var wc = new System.Net.WebClient())
@@ -1942,10 +1967,37 @@ namespace KahoiiMusic.Services
                                 if (!string.IsNullOrEmpty(json))
                                 {
                                     var mTitle = System.Text.RegularExpressions.Regex.Match(json, @"""title""\s*:\s*""([^""]+)""");
-                                    if (mTitle.Success) item.Title = CleanDisplayTitle(System.Text.RegularExpressions.Regex.Unescape(mTitle.Groups[1].Value));
+                                    string resolvedT = mTitle.Success ? CleanDisplayTitle(System.Text.RegularExpressions.Regex.Unescape(mTitle.Groups[1].Value)) : null;
                                     var mAuthor = System.Text.RegularExpressions.Regex.Match(json, @"""author_name""\s*:\s*""([^""]+)""");
-                                    if (mAuthor.Success) item.Author = CleanAuthor(System.Text.RegularExpressions.Regex.Unescape(mAuthor.Groups[1].Value));
-                                    anyUpdated = true;
+                                    string resolvedA = mAuthor.Success ? CleanAuthor(System.Text.RegularExpressions.Regex.Unescape(mAuthor.Groups[1].Value)) : null;
+
+                                    if (!string.IsNullOrWhiteSpace(resolvedT))
+                                    {
+                                        item.Title = resolvedT;
+                                        anyUpdated = true;
+                                    }
+                                    if (!string.IsNullOrWhiteSpace(resolvedA))
+                                    {
+                                        item.Author = resolvedA;
+                                        anyUpdated = true;
+                                    }
+
+                                    // CRITICAL: If this item is currently playing, immediately update Title and Author in UI!
+                                    if (string.Equals(item.Id, _currentVideoId, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        if (!string.IsNullOrWhiteSpace(resolvedT))
+                                        {
+                                            _currentTitle = resolvedT;
+                                            RaiseTitleChanged(_currentTitle);
+                                        }
+                                        if (!string.IsNullOrWhiteSpace(resolvedA))
+                                        {
+                                            _currentAuthor = resolvedA;
+                                            RaiseAuthorChanged(_currentAuthor);
+                                        }
+                                    }
+
+                                    try { HistoryService.UpdateTitleAndAuthor(item.Id, resolvedT, resolvedA); } catch { }
                                 }
                             }
                         }
@@ -2085,6 +2137,27 @@ namespace KahoiiMusic.Services
                                     var item = new PlaylistItem { Id = id, Title = title, DurationSeconds = dur, Author = author };
 
                                     list.Add(item);
+
+                                    // If this track is currently playing and its title in UI is still a placeholder, update it immediately!
+                                    if (!string.IsNullOrEmpty(_currentVideoId) && string.Equals(id, _currentVideoId, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        bool isCurTitlePlaceholder = string.IsNullOrWhiteSpace(_currentTitle) ||
+                                                                     _currentTitle == "None" ||
+                                                                     _currentTitle == "NA" ||
+                                                                     _currentTitle.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
+                                                                     _currentTitle.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
+
+                                        if (isCurTitlePlaceholder && !string.IsNullOrWhiteSpace(title))
+                                        {
+                                            _currentTitle = title;
+                                            RaiseTitleChanged(_currentTitle);
+                                        }
+                                        if (string.IsNullOrWhiteSpace(_currentAuthor) && !string.IsNullOrWhiteSpace(author))
+                                        {
+                                            _currentAuthor = author;
+                                            RaiseAuthorChanged(_currentAuthor);
+                                        }
+                                    }
 
                                     // Fast-start: As soon as the first track is found, begin playing it immediately!
 
@@ -2523,12 +2596,15 @@ namespace KahoiiMusic.Services
 
                                 _currentPlaylistIndex = matchIdx;
 
-                                if (!string.IsNullOrWhiteSpace(pl[matchIdx].Title) && pl[matchIdx].Title != "None" && pl[matchIdx].Title != "NA")
+                                bool isPlTitlePlaceholder = string.IsNullOrWhiteSpace(pl[matchIdx].Title) ||
+                                                            pl[matchIdx].Title == "None" ||
+                                                            pl[matchIdx].Title == "NA" ||
+                                                            pl[matchIdx].Title.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
+                                                            pl[matchIdx].Title.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
 
+                                if (!isPlTitlePlaceholder)
                                 {
-
                                     resolvedTitle = pl[matchIdx].Title;
-
                                 }
 
                                 _syncContext.Post(delegate
@@ -2653,8 +2729,14 @@ namespace KahoiiMusic.Services
 
                         RaiseThumbnail(thumb);
 
+                        bool isCurTitlePlaceholder = string.IsNullOrWhiteSpace(_currentTitle) ||
+                                                     _currentTitle == "None" ||
+                                                     _currentTitle == "NA" ||
+                                                     _currentTitle.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
+                                                     _currentTitle.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
+
                         // If title or author is not yet known or placeholder, fetch asynchronously via oEmbed
-                        if (string.IsNullOrWhiteSpace(_currentTitle) || _currentTitle == "None" || _currentTitle == "NA" || string.IsNullOrWhiteSpace(_currentAuthor))
+                        if (isCurTitlePlaceholder || string.IsNullOrWhiteSpace(_currentAuthor))
                         {
                             ThreadPool.QueueUserWorkItem(delegate { FetchVideoTitle(videoId); });
                         }
@@ -3483,6 +3565,7 @@ namespace KahoiiMusic.Services
                 {
 
                     wc.Encoding = System.Text.Encoding.UTF8;
+                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
                     string oembedUrl = string.Format("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={0}&format=json", videoId);
 
@@ -3575,7 +3658,52 @@ namespace KahoiiMusic.Services
 
             }
 
-            catch { }
+            catch
+            {
+                try
+                {
+                    string ytdlpPath = FindYtDlp();
+                    if (!string.IsNullOrEmpty(ytdlpPath))
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo
+                        {
+                            FileName = ytdlpPath,
+                            Arguments = string.Format("--encoding utf-8 --skip-download --print \"%(title)s\t%(uploader)s\" \"https://www.youtube.com/watch?v={0}\"", videoId),
+                            CreateNoWindow = true,
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = false,
+                            StandardOutputEncoding = System.Text.Encoding.UTF8
+                        };
+                        psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+                        using (Process proc = Process.Start(psi))
+                        {
+                            string outLine = proc?.StandardOutput.ReadLine();
+                            if (!string.IsNullOrWhiteSpace(outLine))
+                            {
+                                string[] parts = outLine.Split('\t');
+                                string fTitle = CleanDisplayTitle(parts[0]);
+                                string fAuthor = parts.Length > 1 ? CleanAuthor(parts[1]) : "";
+                                if (!string.IsNullOrWhiteSpace(fTitle))
+                                {
+                                    if (string.Equals(_currentVideoId, videoId, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        _currentTitle = fTitle;
+                                        RaiseTitleChanged(_currentTitle);
+                                    }
+                                    if (!string.IsNullOrWhiteSpace(fAuthor) && string.Equals(_currentVideoId, videoId, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        _currentAuthor = fAuthor;
+                                        RaiseAuthorChanged(_currentAuthor);
+                                    }
+                                    try { HistoryService.UpdateTitleAndAuthor(videoId, fTitle, fAuthor); } catch { }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
 
         }
 

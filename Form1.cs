@@ -1598,7 +1598,7 @@ namespace KahoiiMusic
                 {
                     btnPlaylist.HasPlaylist = true;
                     playlistPopup.StartLoading();
-                    _audioPlayer.EnqueueTrackList(vids, incomingV, incomingTitle);
+                    _audioPlayer.EnqueueTrackList(vids, incomingV, incomingTitle, incomingAuthor, incomingDur);
                     return;
                 }
             }
@@ -1607,7 +1607,7 @@ namespace KahoiiMusic
             {
                 btnPlaylist.HasPlaylist = true;
                 playlistPopup.StartLoading();
-                _audioPlayer.LoadPlaylistAsync(targetUrlToPlay, playFirstIfNoVideo: true);
+                _audioPlayer.LoadPlaylistAsync(targetUrlToPlay, incomingV, playFirstIfNoVideo: true);
                 return;
             }
 
