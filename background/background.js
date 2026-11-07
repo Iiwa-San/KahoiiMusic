@@ -416,7 +416,7 @@ async function saveTrackToSavedTracks(track) {
   }
 }
 
-async function saveCollectionToCloud(collectionName, playlistUrl) {
+async function saveCollectionToCloud(collectionName, playlistUrl, items) {
   const session = await getSession();
   if (!session) {
     return { success: false, error: "Chưa đăng nhập tài khoản KahoiiMusic." };
@@ -439,17 +439,41 @@ async function saveCollectionToCloud(collectionName, playlistUrl) {
   if (!Array.isArray(payload.savedTracks)) payload.savedTracks = [];
   if (!Array.isArray(payload.history)) payload.history = [];
 
+  // Chuẩn hóa danh sách bài hát (items)
+  let validItems = [];
+  if (Array.isArray(items) && items.length > 0) {
+    validItems = items.map(t => ({
+      Id: t.Id || t.id || "",
+      Title: t.Title || t.title || "Bài hát",
+      Author: t.Author || t.author || "",
+      DurationSeconds: parseInt(t.DurationSeconds || t.duration || 0, 10) || 0
+    })).filter(t => t.Id && t.Id.length > 0);
+  }
+
   // Kiểm tra trùng tên BST
   const existingIdx = payload.collections.findIndex(c =>
     (c.Name || c.name || "").toLowerCase().trim() === cleanName.toLowerCase()
   );
 
   if (existingIdx >= 0) {
+    const existingCol = payload.collections[existingIdx];
+    // Nếu BST đã có nhưng đang rỗng items và lần này có items mới -> cập nhật items vào
+    if ((!Array.isArray(existingCol.Items) || existingCol.Items.length === 0) && validItems.length > 0) {
+      existingCol.Items = validItems;
+      payload.updatedAt = new Date().toISOString();
+      await updateCloudPayloadDirect(session.localId, token, payload);
+      return {
+        success: true,
+        alreadyExists: true,
+        message: `Đã bổ sung ${validItems.length} bài hát vào "${cleanName}"!`,
+        collection: existingCol
+      };
+    }
     return {
       success: true,
       alreadyExists: true,
       message: `"${cleanName}" đã có trong Bộ sưu tập!`,
-      collection: payload.collections[existingIdx]
+      collection: existingCol
     };
   }
 
@@ -457,13 +481,27 @@ async function saveCollectionToCloud(collectionName, playlistUrl) {
     Id: "col_" + Date.now().toString(36),
     Name: cleanName,
     CreatedAt: Date.now(),
-    Items: []
+    Items: validItems
   };
 
   payload.collections.unshift(newCol);
   payload.updatedAt = new Date().toISOString();
 
-  const patchUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?updateMask.fieldPaths=musicDataJson&updateMask.fieldPaths=updatedAt&key=${API_KEY}`;
+  const patchRes = await updateCloudPayloadDirect(session.localId, token, payload);
+  if (!patchRes.success) {
+    return patchRes;
+  }
+
+  return {
+    success: true,
+    alreadyExists: false,
+    message: `Đã lưu "${cleanName}" (${validItems.length} bài) vào Bộ sưu tập!`,
+    collection: newCol
+  };
+}
+
+async function updateCloudPayloadDirect(localId, token, payload) {
+  const patchUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${localId}?updateMask.fieldPaths=musicDataJson&updateMask.fieldPaths=updatedAt&key=${API_KEY}`;
 
   const bodyData = {
     fields: {
@@ -490,12 +528,7 @@ async function saveCollectionToCloud(collectionName, playlistUrl) {
       return { success: false, error: `Lỗi lưu đám mây (${res.status})` };
     }
 
-    return {
-      success: true,
-      alreadyExists: false,
-      message: `Đã lưu "${cleanName}" vào Bộ sưu tập!`,
-      collection: newCol
-    };
+    return { success: true };
   } catch (err) {
     return { success: false, error: "Lỗi kết nối khi lưu: " + err.message };
   }
@@ -556,7 +589,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const res = await saveTrackToSavedTracks(request.track);
         sendResponse(res);
       } else if (request.action === 'SAVE_TO_COLLECTION') {
-        const res = await saveCollectionToCloud(request.name, request.url);
+        const res = await saveCollectionToCloud(request.name, request.url, request.items);
         sendResponse(res);
       } else if (request.action === 'FETCH_OEMBED') {
         const res = await fetchOEmbed(request.videoId);

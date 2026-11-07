@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const modalDownload = document.getElementById("modal-download");
   const btnCloseModal = document.getElementById("btn-close-modal");
 
+  let currentSession = null;
   let currentTargetUrl = null;
   let currentVideoId = null;
   let currentTitle = "YouTube Video";
@@ -65,6 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentDurationSeconds = 0;
   let currentPlaylistTitle = "Danh sách YouTube";
   let isCurrentPlaylist = false;
+  let currentPlaylistItems = [];
   let cachedSavedTracks = [];
   let cachedCollections = [];
 
@@ -82,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function showLoginView() {
+    currentSession = null;
     viewLogin.classList.remove("hidden");
     viewDashboard.classList.add("hidden");
     userHeaderActions.classList.add("hidden");
@@ -89,6 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function showDashboard(session) {
+    currentSession = session;
     viewLogin.classList.add("hidden");
     viewDashboard.classList.remove("hidden");
     userHeaderActions.classList.remove("hidden");
@@ -410,7 +414,63 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
               }
 
-              return { duration: dur, playlistTitle: plTitle };
+              // 3. Extract Playlist Items (Tracks)
+              const items = [];
+              // Case A: ytd-playlist-panel-video-renderer (Watch page with playlist panel)
+              const panelRenderers = document.querySelectorAll("ytd-playlist-panel-video-renderer");
+              if (panelRenderers && panelRenderers.length > 0) {
+                panelRenderers.forEach((el) => {
+                  const link = el.querySelector("a#wc-endpoint") || el.querySelector("a");
+                  const href = link ? link.getAttribute("href") || "" : "";
+                  const match = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+                  const vid = match ? match[1] : null;
+
+                  const titleEl = el.querySelector("#video-title");
+                  const title = titleEl ? titleEl.textContent.trim() : "";
+
+                  const authorEl = el.querySelector("#byline") || el.querySelector("#channel-name");
+                  const author = authorEl ? authorEl.textContent.trim() : "YouTube";
+
+                  if (vid && title && !items.some(x => x.Id === vid)) {
+                    items.push({
+                      Id: vid,
+                      Title: title,
+                      Author: author,
+                      DurationSeconds: 0
+                    });
+                  }
+                });
+              }
+
+              // Case B: ytd-playlist-video-renderer (Playlist page: /playlist?list=...)
+              if (items.length === 0) {
+                const listRenderers = document.querySelectorAll("ytd-playlist-video-renderer");
+                if (listRenderers && listRenderers.length > 0) {
+                  listRenderers.forEach((el) => {
+                    const link = el.querySelector("a#video-title") || el.querySelector("a#thumbnail");
+                    const href = link ? link.getAttribute("href") || "" : "";
+                    const match = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+                    const vid = match ? match[1] : null;
+
+                    const titleEl = el.querySelector("#video-title");
+                    const title = titleEl ? titleEl.textContent.trim() : "";
+
+                    const authorEl = el.querySelector("#byline-container a") || el.querySelector("#channel-name");
+                    const author = authorEl ? authorEl.textContent.trim() : "YouTube";
+
+                    if (vid && title && !items.some(x => x.Id === vid)) {
+                      items.push({
+                        Id: vid,
+                        Title: title,
+                        Author: author,
+                        DurationSeconds: 0
+                      });
+                    }
+                  });
+                }
+              }
+
+              return { duration: dur, playlistTitle: plTitle, playlistItems: items };
             }
           },
           (results) => {
@@ -424,6 +484,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 currentPlaylistTitle = data.playlistTitle;
                 playlistTagName.textContent = "Playlist: " + currentPlaylistTitle;
                 btnSaveColSub.textContent = `Lưu với tên: "${currentPlaylistTitle}"`;
+              }
+              if (Array.isArray(data.playlistItems) && data.playlistItems.length > 0) {
+                currentPlaylistItems = data.playlistItems;
+                btnSaveColSub.textContent = `Lưu với tên: "${currentPlaylistTitle}" (${currentPlaylistItems.length} bài)`;
               }
             }
           }
@@ -587,7 +651,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!currentTargetUrl) return;
 
     clearStatus();
-    triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(currentTargetUrl)}`);
+    const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+    triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(currentTargetUrl)}${userParam}`);
 
     if (isCurrentPlaylist) {
       showStatus("🚀 Đã gửi toàn bộ danh sách sang KahoiiMusic để phát!", "success");
@@ -602,11 +667,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     clearStatus();
 
-    // 1. Gửi lệnh qua giao thức để KahoiiMusic tải trực tiếp
+    // 1. Gửi lệnh qua giao thức để KahoiiMusic tải trực tiếp (kèm user để kiểm tra tài khoản)
     const durParam = currentDurationSeconds > 0 ? `&dur=${currentDurationSeconds}` : "";
-    triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(currentVideoId)}&title=${encodeURIComponent(currentTitle)}&author=${encodeURIComponent(currentAuthor)}${durParam}`);
+    const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+    triggerProtocol(`kahoiimusic://download?v=${encodeURIComponent(currentVideoId)}&title=${encodeURIComponent(currentTitle)}&author=${encodeURIComponent(currentAuthor)}${durParam}${userParam}`);
 
-    // 2. Đồng thời lưu vào đám mây Firestore mục savedTracks
+    // 2. Đồng thời lưu vào đám mây Firestore mục savedTracks của tài khoản đang đăng nhập trên extension
     chrome.runtime.sendMessage(
       {
         action: "SAVE_TO_OFFLINE",
@@ -640,13 +706,27 @@ document.addEventListener("DOMContentLoaded", () => {
     clearStatus();
     const finalTitle = currentPlaylistTitle || "Playlist YouTube";
 
-    triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(currentTargetUrl)}&title=${encodeURIComponent(finalTitle)}`);
+    // Gửi lệnh qua giao thức kèm tài khoản để KahoiiMusic đối chiếu
+    const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+    triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(currentTargetUrl)}&title=${encodeURIComponent(finalTitle)}${userParam}`);
+
+    // Chuẩn bị danh sách bài hát đầy đủ để lưu vào Firestore (tránh lưu rỗng [])
+    let itemsToSave = currentPlaylistItems;
+    if ((!itemsToSave || itemsToSave.length === 0) && currentVideoId) {
+      itemsToSave = [{
+        Id: currentVideoId,
+        Title: currentTitle,
+        Author: currentAuthor,
+        DurationSeconds: currentDurationSeconds
+      }];
+    }
 
     chrome.runtime.sendMessage(
       {
         action: "SAVE_TO_COLLECTION",
         name: finalTitle,
-        url: currentTargetUrl
+        url: currentTargetUrl,
+        items: itemsToSave
       },
       (res) => {
         if (res && res.alreadyExists) {
@@ -658,7 +738,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (!cachedCollections.some(c => (c.name || c.Name || '').toLowerCase().trim() === finalTitle.toLowerCase().trim())) {
-          cachedCollections.unshift({ Name: finalTitle, Items: [] });
+          cachedCollections.unshift({ Name: finalTitle, Items: itemsToSave });
         }
         updateDuplicateBadges();
       }
