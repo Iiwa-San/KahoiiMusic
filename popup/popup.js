@@ -285,8 +285,98 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  btnLogout.addEventListener("click", () => {
-    if (confirm("Bạn có chắc chắn muốn đăng xuất?")) {
+  // ================= CYBER CONFIRM / ALERT MODAL ================= //
+  const modalCyberDialog = document.getElementById("modal-cyber-dialog");
+  const cyberDialogIcon = document.getElementById("cyber-dialog-icon");
+  const cyberDialogTitle = document.getElementById("cyber-dialog-title");
+  const cyberDialogSubtitle = document.getElementById("cyber-dialog-subtitle");
+  const cyberDialogMessage = document.getElementById("cyber-dialog-message");
+  const cyberDialogCancel = document.getElementById("cyber-dialog-cancel");
+  const cyberDialogConfirm = document.getElementById("cyber-dialog-confirm");
+  const cyberDialogClose = document.getElementById("cyber-dialog-close");
+
+  let cyberDialogResolver = null;
+
+  function closeCyberDialog(result) {
+    if (modalCyberDialog) modalCyberDialog.classList.add("hidden");
+    if (cyberDialogResolver) {
+      cyberDialogResolver(result);
+      cyberDialogResolver = null;
+    }
+  }
+
+  if (cyberDialogClose) cyberDialogClose.addEventListener("click", () => closeCyberDialog(false));
+  if (cyberDialogCancel) cyberDialogCancel.addEventListener("click", () => closeCyberDialog(false));
+  if (cyberDialogConfirm) cyberDialogConfirm.addEventListener("click", () => closeCyberDialog(true));
+  if (modalCyberDialog) {
+    modalCyberDialog.addEventListener("click", (e) => {
+      if (e.target === modalCyberDialog) closeCyberDialog(false);
+    });
+  }
+
+  function showCyberConfirm({
+    title = "Xác nhận",
+    subtitle = "KahoiiMusic YouTube Sync",
+    message = "Bạn có chắc chắn muốn thực hiện thao tác này?",
+    icon = "⚡",
+    confirmText = "Xác nhận",
+    cancelText = "Hủy bỏ",
+    isDanger = false
+  } = {}) {
+    return new Promise((resolve) => {
+      cyberDialogResolver = resolve;
+      if (cyberDialogTitle) cyberDialogTitle.textContent = title;
+      if (cyberDialogSubtitle) cyberDialogSubtitle.textContent = subtitle;
+      if (cyberDialogMessage) cyberDialogMessage.textContent = message;
+      if (cyberDialogIcon) cyberDialogIcon.textContent = icon;
+      if (cyberDialogConfirm) {
+        cyberDialogConfirm.textContent = confirmText;
+        cyberDialogConfirm.className = isDanger ? "cyber-dialog-btn danger" : "cyber-dialog-btn primary";
+      }
+      if (cyberDialogCancel) {
+        cyberDialogCancel.style.display = "inline-flex";
+        cyberDialogCancel.textContent = cancelText;
+      }
+      if (modalCyberDialog) modalCyberDialog.classList.remove("hidden");
+    });
+  }
+
+  function showCyberAlert({
+    title = "Thông báo",
+    subtitle = "KahoiiMusic YouTube Sync",
+    message = "",
+    icon = "ℹ️",
+    okText = "Đã hiểu"
+  } = {}) {
+    return new Promise((resolve) => {
+      cyberDialogResolver = resolve;
+      if (cyberDialogTitle) cyberDialogTitle.textContent = title;
+      if (cyberDialogSubtitle) cyberDialogSubtitle.textContent = subtitle;
+      if (cyberDialogMessage) cyberDialogMessage.textContent = message;
+      if (cyberDialogIcon) cyberDialogIcon.textContent = icon;
+      if (cyberDialogConfirm) {
+        cyberDialogConfirm.textContent = okText;
+        cyberDialogConfirm.className = "cyber-dialog-btn primary";
+      }
+      if (cyberDialogCancel) {
+        cyberDialogCancel.style.display = "none";
+      }
+      if (modalCyberDialog) modalCyberDialog.classList.remove("hidden");
+    });
+  }
+
+  btnLogout.addEventListener("click", async () => {
+    const confirmed = await showCyberConfirm({
+      title: "Đăng xuất tài khoản",
+      subtitle: "KahoiiMusic Sync",
+      message: "Bạn có chắc chắn muốn đăng xuất khỏi tài khoản trên tiện ích mở rộng không?",
+      icon: "🚪",
+      confirmText: "Đăng xuất",
+      cancelText: "Hủy bỏ",
+      isDanger: true
+    });
+
+    if (confirmed) {
       chrome.runtime.sendMessage({ action: "LOGOUT" }, () => {
         showLoginView();
         notifyContentTabs();
@@ -618,7 +708,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const listId = extractYouTubeListId(rawUrl);
 
     if (!videoId && !listId) {
-      alert("Đường dẫn YouTube không hợp lệ! Vui lòng kiểm tra lại link.");
+      showCyberAlert({
+        title: "Link không hợp lệ",
+        subtitle: "Kiểm tra URL",
+        message: "Đường dẫn YouTube không hợp lệ! Vui lòng kiểm tra lại link bài hát hoặc danh sách phát.",
+        icon: "⚠️",
+        okText: "Đã hiểu"
+      });
       return;
     }
 
@@ -799,8 +895,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && modalDownload && !modalDownload.classList.contains("hidden")) {
-      closeDownloadModal();
+    if (e.key === "Escape") {
+      if (modalCyberDialog && !modalCyberDialog.classList.contains("hidden")) {
+        closeCyberDialog(false);
+      } else if (modalDownload && !modalDownload.classList.contains("hidden")) {
+        closeDownloadModal();
+      }
     }
   });
 

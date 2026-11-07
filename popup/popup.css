@@ -1045,3 +1045,99 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ================= CYBER CONFIRM & ALERT MODAL ================= */
+.cyber-dialog-card {
+  max-width: 324px;
+  background: #14101e;
+  border: 1px solid rgba(255, 45, 117, 0.45);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 25px rgba(124, 58, 237, 0.28);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.cyber-dialog-icon {
+  font-size: 19px;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 45, 117, 0.12);
+  border: 1px solid rgba(255, 45, 117, 0.3);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cyber-dialog-body {
+  padding: 16px 16px 12px 16px;
+}
+
+.cyber-dialog-message {
+  font-size: 12.5px;
+  color: #e2e8f0;
+  line-height: 1.55;
+  margin: 0;
+  word-break: break-word;
+}
+
+.cyber-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px 14px 16px;
+  background: rgba(10, 8, 16, 0.35);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cyber-dialog-btn {
+  height: 33px;
+  padding: 0 15px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.cyber-dialog-btn.secondary {
+  background: #251c34;
+  color: #a5a5b9;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cyber-dialog-btn.secondary:hover {
+  background: #332747;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.cyber-dialog-btn.primary {
+  background: linear-gradient(135deg, #ff2d75 0%, #7c3aed 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(255, 45, 117, 0.35);
+}
+
+.cyber-dialog-btn.primary:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255, 45, 117, 0.5);
+}
+
+.cyber-dialog-btn.danger {
+  background: linear-gradient(135deg, #ff2d75 0%, #dc2626 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(255, 45, 117, 0.35);
+}
+
+.cyber-dialog-btn.danger:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(255, 45, 117, 0.5);
+}
