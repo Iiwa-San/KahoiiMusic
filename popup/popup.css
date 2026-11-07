@@ -211,102 +211,96 @@ body {
   z-index: 1;
 }
 
-/* Viên pill chính: thon gọn bo góc, không bị phình to nguyên khối */
+/* Khối pill chính: hình viên thuốc bo góc, lướt êm với độ nảy nhẹ */
 .liquid-pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(50% - 2px);
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255, 45, 117, 0.95) 0%, rgba(124, 58, 237, 0.98) 100%);
+  box-shadow: 0 0 16px rgba(255, 45, 117, 0.45), 0 0 24px rgba(124, 58, 237, 0.3);
+  box-sizing: border-box;
+  transform-origin: center center;
+  transition: transform 0.4s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Khung bọc giọt nước chất lỏng: căn giữa chính xác 100% theo từng tab */
+.liquid-droplet-wrap {
   position: absolute;
   top: 0;
   left: 0;
   width: 50%;
   height: 100%;
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(255, 45, 117, 0.95) 0%, rgba(124, 58, 237, 0.98) 100%);
-  box-shadow: 0 0 14px rgba(255, 45, 117, 0.4), 0 0 22px rgba(124, 58, 237, 0.25);
-  box-sizing: border-box;
-  transform-origin: center center;
-  transition: transform 0.38s cubic-bezier(0.34, 1.35, 0.64, 1);
-}
-
-/* Sợi tơ chất lỏng kết nối ở giữa: SIÊU MẢNH (chỉ cao 6px), tạo eo thắt nhỏ gọn */
-.liquid-bridge {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 50%;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #ff2d75 0%, #7c3aed 100%);
-  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
-  transform-origin: center center;
-  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.18s ease;
+  transition: transform 0.36s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
-/* Giọt nước nhỏ dẫn đường: kích thước nhỏ gọn 13px */
-.liquid-lead-dot {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 13px;
-  height: 13px;
-  margin-top: -6.5px;
-  margin-left: calc(25% - 6.5px);
+/* Giọt nước chất lỏng hình tròn: tách & hút tự nhiên bằng lực căng bề mặt (KHÔNG CÓ ĐƯỜNG GẠCH NGANG) */
+.liquid-droplet {
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #ff2d75;
   opacity: 0;
-  pointer-events: none;
-  transform: scale(0.3);
-  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.18s ease;
+  transform: scale(0.2);
+  transition: transform 0.36s cubic-bezier(0.2, 0.9, 0.3, 1),
+              opacity 0.2s ease,
+              background 0.36s ease;
 }
 
-/* Trạng thái 1: Đăng nhập (nằm bên trái) */
+/* Trạng thái 1: Đăng nhập (bên trái) */
 .auth-tabs[data-active="LOGIN"] .liquid-pill {
   transform: translateX(0%);
 }
-.auth-tabs[data-active="LOGIN"] .liquid-bridge {
-  transform: translateX(0%) scaleX(0.15);
-  opacity: 0;
+.auth-tabs[data-active="LOGIN"] .liquid-droplet-wrap {
+  transform: translateX(0%);
 }
-.auth-tabs[data-active="LOGIN"] .liquid-lead-dot {
-  transform: translateX(0%) scale(0.2);
+.auth-tabs[data-active="LOGIN"] .liquid-droplet {
+  transform: scale(0.2);
   opacity: 0;
 }
 
-/* Trạng thái 2: Đăng ký mới (nằm bên phải) */
+/* Trạng thái 2: Đăng ký mới (bên phải) */
 .auth-tabs[data-active="REGISTER"] .liquid-pill {
+  transform: translateX(calc(100% + 4px));
+}
+.auth-tabs[data-active="REGISTER"] .liquid-droplet-wrap {
   transform: translateX(100%);
 }
-.auth-tabs[data-active="REGISTER"] .liquid-bridge {
-  transform: translateX(100%) scaleX(0.15);
-  opacity: 0;
-}
-.auth-tabs[data-active="REGISTER"] .liquid-lead-dot {
-  transform: translateX(100%) scale(0.2);
+.auth-tabs[data-active="REGISTER"] .liquid-droplet {
+  transform: scale(0.2);
   opacity: 0;
 }
 
-/* Lúc chuyển sang phải: Chỉ có sợi tơ mảnh 6px kéo dài tạo eo thắt nhỏ ở giữa */
-.auth-tabs.stretching-right .liquid-bridge {
-  opacity: 1;
-  transform: translateX(50%) scaleX(1.85) scaleY(0.7);
+/* Lúc chuyển sang phải: Giọt nước tròn bắn sang tab đích, màng chất lỏng kéo eo thắt cong tự nhiên */
+.auth-tabs.stretching-right .liquid-droplet-wrap {
+  transform: translateX(100%);
 }
-.auth-tabs.stretching-right .liquid-lead-dot {
+.auth-tabs.stretching-right .liquid-droplet {
   opacity: 1;
-  transform: translateX(148px) scale(0.9);
+  transform: scale(0.9);
   background: #7c3aed;
 }
-
-/* Lúc chuyển sang trái: Sợi tơ mảnh kéo lùi về */
-.auth-tabs.stretching-left .liquid-bridge {
-  opacity: 1;
-  transform: translateX(50%) scaleX(1.85) scaleY(0.7);
+.auth-tabs.stretching-right .liquid-pill {
+  transform: translateX(20%) scaleX(1.15) scaleY(0.92);
 }
-.auth-tabs.stretching-left .liquid-lead-dot {
+
+/* Lúc chuyển sang trái: Giọt nước tròn bắn lùi về, kéo eo thắt cong tự nhiên */
+.auth-tabs.stretching-left .liquid-droplet-wrap {
+  transform: translateX(0%);
+}
+.auth-tabs.stretching-left .liquid-droplet {
   opacity: 1;
-  transform: translateX(0px) scale(0.9);
+  transform: scale(0.9);
   background: #ff2d75;
+}
+.auth-tabs.stretching-left .liquid-pill {
+  transform: translateX(calc(80% + 4px)) scaleX(1.15) scaleY(0.92);
 }
 
 /* Nút tab text: nằm trên z-index: 2 để chữ sắc nét tuyệt đối */
