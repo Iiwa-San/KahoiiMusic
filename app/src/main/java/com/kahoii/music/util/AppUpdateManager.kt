@@ -21,9 +21,9 @@ import java.util.concurrent.TimeUnit
 object AppUpdateManager {
 
     private const val PRIMARY_VERSION_URL =
-        "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/AndroidApp/version.json"
-    private const val FALLBACK_VERSION_URL =
         "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/version.json"
+    private const val FALLBACK_VERSION_URL =
+        "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/AndroidApp/version.json"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -104,8 +104,11 @@ object AppUpdateManager {
         onProgress: (progress: Float, downloaded: Long, total: Long) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
+            val urlWithBuster = if (apkUrl.contains("?")) "$apkUrl&t=${System.currentTimeMillis()}" else "$apkUrl?t=${System.currentTimeMillis()}"
             val request = Request.Builder()
-                .url(apkUrl)
+                .url(urlWithBuster)
+                .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                .header("Pragma", "no-cache")
                 .header("User-Agent", "KahoiiMusic-Android/${BuildConfig.VERSION_NAME}")
                 .build()
 
