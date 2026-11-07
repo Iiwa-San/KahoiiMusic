@@ -172,6 +172,7 @@ namespace KahoiiMusic.Services
         private readonly object _preloadQueueLock = new object();
 
         private volatile bool _isPreloadingQueueRunning = false;
+        private int _currentLoadId = 0;
 
         public bool IsDownloadingOrPreloading
         {
@@ -595,12 +596,15 @@ namespace KahoiiMusic.Services
                         {
 
                             _activeDownloadProc.Kill();
+                            _activeDownloadProc.WaitForExit(800);
 
                         }
 
                     }
 
                     catch { }
+
+                    try { _activeDownloadProc.Dispose(); } catch { }
 
                     _activeDownloadProc = null;
 
@@ -655,12 +659,15 @@ namespace KahoiiMusic.Services
                         {
 
                             _preloadProc.Kill();
+                            _preloadProc.WaitForExit(800);
 
                         }
 
                     }
 
                     catch { }
+
+                    try { _preloadProc.Dispose(); } catch { }
 
                     _preloadProc = null;
 
@@ -835,7 +842,7 @@ namespace KahoiiMusic.Services
 
                     psi.WorkingDirectory = _cacheDirectory;
 
-                    psi.Arguments = string.Format("-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
+                    psi.Arguments = string.Format("-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best\" -N 4 --no-playlist --no-progress --no-mtime --no-warnings --no-check-certificates --retries 2 --fragment-retries 2 --socket-timeout 20 --force-ipv4 -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", _cacheDirectory, videoId);
 
                     psi.CreateNoWindow = true;
 
@@ -863,7 +870,12 @@ namespace KahoiiMusic.Services
 
                             {
 
-                                try { _preloadProc.Kill(); } catch { }
+                                try
+                                {
+                                    _preloadProc.Kill();
+                                    _preloadProc.WaitForExit(800);
+                                }
+                                catch { }
 
                                 return false;
 
@@ -888,6 +900,8 @@ namespace KahoiiMusic.Services
                 finally
 
                 {
+
+                    try { if (_preloadProc != null) _preloadProc.Dispose(); } catch { }
 
                     _preloadProc = null;
 
@@ -2277,6 +2291,8 @@ namespace KahoiiMusic.Services
 
             if (string.IsNullOrWhiteSpace(input)) return;
 
+            int myLoadId = Interlocked.Increment(ref _currentLoadId);
+
             input = input.Trim();
 
             if (!preserveQueueSource)
@@ -2297,6 +2313,8 @@ namespace KahoiiMusic.Services
 
                 {
 
+                    if (myLoadId != _currentLoadId) return;
+
                     string videoId = ExtractVideoId(input);
 
                     string listId = ExtractListId(input);
@@ -2306,6 +2324,8 @@ namespace KahoiiMusic.Services
                     if (string.IsNullOrEmpty(ytdlpPath))
 
                     {
+
+                        if (myLoadId != _currentLoadId) return;
 
                         _isLoading = false;
 
@@ -2543,6 +2563,8 @@ namespace KahoiiMusic.Services
 
                                 {
 
+                                    try { _preloadProc.PriorityClass = ProcessPriorityClass.Normal; } catch { }
+
                                     _preloadProc.WaitForExit(120000); // 2 minutes for large tracks
 
                                 }
@@ -2550,6 +2572,8 @@ namespace KahoiiMusic.Services
                             }
 
                             catch { }
+
+                            if (myLoadId != _currentLoadId) return;
 
                             audioPath = FindCachedAudioFile(videoId);
 
@@ -2567,11 +2591,11 @@ namespace KahoiiMusic.Services
 
                     }
 
+                    if (myLoadId != _currentLoadId) return;
+
                     if (string.IsNullOrEmpty(audioPath))
 
                     {
-
-                        RaiseStatus("Đang tải âm thanh từ YouTube...");
 
                         string targetArg = !string.IsNullOrEmpty(videoId)
 
@@ -2579,87 +2603,143 @@ namespace KahoiiMusic.Services
 
                             : string.Format("ytsearch1:\"{0}\"", input);
 
-                        ProcessStartInfo psi = new ProcessStartInfo();
+                        int maxAttempts = 3;
 
-                        psi.FileName = ytdlpPath;
-
-                        psi.WorkingDirectory = _cacheDirectory;
-
-                        psi.Arguments = string.Format("-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio\" -N 4 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"{1}\"", _cacheDirectory, targetArg);
-
-                        psi.CreateNoWindow = true;
-
-                        psi.UseShellExecute = false;
-
-                        psi.RedirectStandardOutput = false;
-
-                        psi.RedirectStandardError = false;
-
-                        lock (_downloadLock)
+                        for (int attempt = 1; attempt <= maxAttempts; attempt++)
 
                         {
 
-                            _activeDownloadProc = Process.Start(psi);
+                            if (myLoadId != _currentLoadId) return;
 
-                        }
-
-                        if (_activeDownloadProc != null)
-
-                        {
-
-                            if (!_activeDownloadProc.WaitForExit(180000)) // 3 minutes for large tracks >200MB
+                            if (attempt > 1)
 
                             {
 
-                                try { _activeDownloadProc.Kill(); } catch { }
+                                RaiseStatus(string.Format("Đang thử lại nạp âm thanh ({0}/{1})...", attempt, maxAttempts));
+
+                                Thread.Sleep(600 * (attempt - 1));
+
+                                if (myLoadId != _currentLoadId) return;
+
+                                CleanPartialFiles(videoId);
 
                             }
+
+                            else
+
+                            {
+
+                                RaiseStatus("Đang tải âm thanh từ YouTube...");
+
+                            }
+
+                            string formatArg = attempt == 1
+
+                                ? "-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best\""
+
+                                : (attempt == 2 ? "-f \"bestaudio/best\"" : "-f \"ba/b\"");
+
+                            ProcessStartInfo psi = new ProcessStartInfo();
+
+                            psi.FileName = ytdlpPath;
+
+                            psi.WorkingDirectory = _cacheDirectory;
+
+                            psi.Arguments = string.Format("{0} -N 4 --no-playlist --no-progress --no-mtime --no-warnings --no-check-certificates --retries 3 --fragment-retries 3 --socket-timeout 20 --force-ipv4 -o \"{1}\\%(id)s.%(ext)s\" \"{2}\"", formatArg, _cacheDirectory, targetArg);
+
+                            psi.CreateNoWindow = true;
+
+                            psi.UseShellExecute = false;
+
+                            psi.RedirectStandardOutput = false;
+
+                            psi.RedirectStandardError = false;
 
                             lock (_downloadLock)
 
                             {
 
-                                _activeDownloadProc = null;
+                                if (myLoadId != _currentLoadId) return;
+
+                                _activeDownloadProc = Process.Start(psi);
 
                             }
 
-                        }
+                            if (_activeDownloadProc != null)
 
-                        // Search for the downloaded file
+                            {
 
-                        audioPath = FindCachedAudioFile(videoId);
+                                if (!_activeDownloadProc.WaitForExit(180000)) // 3 minutes for large tracks >200MB
 
-                        // If videoId was empty (search query), search for the most recent file in cache
+                                {
 
-                        if (string.IsNullOrEmpty(audioPath))
+                                    try { _activeDownloadProc.Kill(); _activeDownloadProc.WaitForExit(500); } catch { }
 
-                        {
+                                }
 
-                            audioPath = FindMostRecentAudioFile();
+                                try { _activeDownloadProc.Dispose(); } catch { }
+
+                                lock (_downloadLock)
+
+                                {
+
+                                    _activeDownloadProc = null;
+
+                                }
+
+                            }
+
+                            if (myLoadId != _currentLoadId) return;
+
+                            // Search for the downloaded file
+
+                            audioPath = FindCachedAudioFile(videoId);
 
                             if (!string.IsNullOrEmpty(audioPath))
 
                             {
 
-                                string fname = Path.GetFileNameWithoutExtension(audioPath);
+                                break;
 
-                                if (fname.Length == 11)
+                            }
+
+                            // If videoId was empty (search query), search for the most recent file in cache
+
+                            if (string.IsNullOrEmpty(videoId))
+
+                            {
+
+                                audioPath = FindMostRecentAudioFile();
+
+                                if (!string.IsNullOrEmpty(audioPath))
 
                                 {
 
-                                    _currentVideoId = fname;
+                                    string fname = Path.GetFileNameWithoutExtension(audioPath);
 
-                                    ThreadPool.QueueUserWorkItem(delegate { FetchVideoTitle(fname); });
+                                    if (fname.Length == 11)
 
-                                    string thumb = string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", fname);
+                                    {
 
-                                    RaiseThumbnail(thumb);
+                                        _currentVideoId = fname;
+
+                                        ThreadPool.QueueUserWorkItem(delegate { FetchVideoTitle(fname); });
+
+                                        string thumb = string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", fname);
+
+                                        RaiseThumbnail(thumb);
+
+                                        break;
+
+                                    }
 
                                 }
 
                             }
 
                         }
+
+                        if (myLoadId != _currentLoadId) return;
 
                         if (string.IsNullOrEmpty(audioPath))
 
@@ -2675,9 +2755,13 @@ namespace KahoiiMusic.Services
 
                     }
 
+                    if (myLoadId != _currentLoadId) return;
+
                     _syncContext.Post(delegate
 
                     {
+
+                        if (myLoadId != _currentLoadId) return;
 
                         try
 
@@ -2883,6 +2967,8 @@ namespace KahoiiMusic.Services
 
                         {
 
+                            if (myLoadId != _currentLoadId) return;
+
                             _isLoading = false;
 
                             RaiseStatus("Lỗi phát audio: " + ex.Message);
@@ -2897,6 +2983,8 @@ namespace KahoiiMusic.Services
 
                 {
 
+                    if (myLoadId != _currentLoadId) return;
+
                     _isLoading = false;
 
                     RaiseStatus("Lỗi: " + ex.Message);
@@ -2905,6 +2993,45 @@ namespace KahoiiMusic.Services
 
             });
 
+        }
+
+        private static bool IsValidAudioFile(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            try
+            {
+                if (!File.Exists(path)) return false;
+                var fi = new FileInfo(path);
+                if (fi.Length < 100000) return false;
+
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    return fs.Length >= 100000;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void CleanPartialFiles(string videoId)
+        {
+            if (string.IsNullOrEmpty(videoId) || string.IsNullOrEmpty(_cacheDirectory)) return;
+            try
+            {
+                if (!Directory.Exists(_cacheDirectory)) return;
+                DirectoryInfo di = new DirectoryInfo(_cacheDirectory);
+                foreach (var fi in di.GetFiles(videoId + ".*"))
+                {
+                    string ext = fi.Extension.ToLower();
+                    if (ext == ".part" || ext == ".ytdl" || ext == ".temp" || ext == ".tmp" || fi.Name.Contains(".part") || fi.Length < 100000)
+                    {
+                        try { fi.Delete(); } catch { }
+                    }
+                }
+            }
+            catch { }
         }
 
         private string FindCachedAudioFile(string videoId)
@@ -2936,7 +3063,7 @@ namespace KahoiiMusic.Services
                 foreach (string ext in prioritizedExts)
                 {
                     string savedPath = Path.Combine(AppPaths.SavedAudioDir, videoId + ext);
-                    if (File.Exists(savedPath) && new FileInfo(savedPath).Length > 50000)
+                    if (IsValidAudioFile(savedPath))
                     {
                         return savedPath;
                     }
@@ -2948,14 +3075,10 @@ namespace KahoiiMusic.Services
                     foreach (string ext in prioritizedExts)
                     {
                         string candidate = Path.Combine(_cacheDirectory, videoId + ext);
-                        if (File.Exists(candidate))
+                        if (IsValidAudioFile(candidate))
                         {
-                            FileInfo fi = new FileInfo(candidate);
-                            if (fi.Length > 50000)
-                            {
-                                try { File.SetLastWriteTime(candidate, DateTime.Now); } catch { }
-                                return candidate;
-                            }
+                            try { File.SetLastWriteTime(candidate, DateTime.Now); } catch { }
+                            return candidate;
                         }
                     }
                 }
@@ -2992,15 +3115,21 @@ namespace KahoiiMusic.Services
 
                     {
 
-                        FileInfo fi = new FileInfo(file);
-
-                        if (fi.Length > 1000 && fi.LastWriteTime > bestTime)
+                        if (IsValidAudioFile(file))
 
                         {
 
-                            bestTime = fi.LastWriteTime;
+                            FileInfo fi = new FileInfo(file);
 
-                            bestFile = file;
+                            if (fi.LastWriteTime > bestTime)
+
+                            {
+
+                                bestTime = fi.LastWriteTime;
+
+                                bestFile = file;
+
+                            }
 
                         }
 

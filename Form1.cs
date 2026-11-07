@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Forms;
 using KahoiiMusic.Services;
 using KahoiiMusic.Models;
@@ -83,13 +86,13 @@ namespace KahoiiMusic
             InitializeTrayIcon();
             StartSingleInstanceIpcServer();
             FirebaseSyncService.Instance.InitializeAutoSync();
+            RegisterProtocolHandler();
 
             if (!string.IsNullOrEmpty(initialUrl))
             {
                 Shown += delegate
                 {
-                    searchPillBox.Text = initialUrl;
-                    _audioPlayer.LoadAndPlay(initialUrl);
+                    HandleIncomingUrl(initialUrl);
                 };
             }
         }
@@ -1275,15 +1278,7 @@ namespace KahoiiMusic
                                     {
                                         BeginInvoke(new Action(delegate
                                         {
-                                            RestoreFromTray();
-                                            if (msg != "__ACTIVATE__" && !string.IsNullOrWhiteSpace(msg))
-                                            {
-                                                searchPillBox.Text = msg;
-                                                if (_audioPlayer != null)
-                                                {
-                                                    _audioPlayer.LoadAndPlay(msg);
-                                                }
-                                            }
+                                            HandleIncomingUrl(msg);
                                         }));
                                     }
                                     catch { }
@@ -1296,6 +1291,279 @@ namespace KahoiiMusic
                         if (_isFormClosed) break;
                         System.Threading.Thread.Sleep(200);
                     }
+                }
+            });
+        }
+
+        private void RegisterProtocolHandler()
+        {
+            try
+            {
+                string exePath = Application.ExecutablePath;
+                using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes\kahoiimusic"))
+                {
+                    key.SetValue("", "URL:KahoiiMusic Protocol");
+                    key.SetValue("URL Protocol", "");
+                    using (var iconKey = key.CreateSubKey("DefaultIcon"))
+                    {
+                        iconKey.SetValue("", $"\"{exePath}\",0");
+                    }
+                    using (var cmdKey = key.CreateSubKey(@"shell\open\command"))
+                    {
+                        cmdKey.SetValue("", $"\"{exePath}\" \"%1\"");
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void HandleIncomingUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return;
+            RestoreFromTray();
+            BringToFront();
+            Activate();
+
+            string trimmed = url.Trim().Trim('"');
+            if (trimmed.Equals("__ACTIVATE__", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("kahoiimusic://", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("kahoiimusic://open", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Equals("kahoiimusic://open/", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (trimmed.StartsWith("kahoiimusic://sync", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Threading.Tasks.Task.Run(() => FirebaseSyncService.Instance.TriggerAutoFetchAsync());
+                return;
+            }
+
+            // Handle Save Playlist / Collection directly from URL
+            if (trimmed.StartsWith("kahoiimusic://save_collection", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("kahoiimusic://save_playlist", StringComparison.OrdinalIgnoreCase))
+            {
+                string targetUrl = null;
+                string playlistName = null;
+                try
+                {
+                    int qIdx = trimmed.IndexOf('?');
+                    if (qIdx >= 0)
+                    {
+                        string query = trimmed.Substring(qIdx + 1);
+                        foreach (var part in query.Split('&'))
+                        {
+                            var kv = part.Split('=');
+                            if (kv.Length == 2)
+                            {
+                                string k = Uri.UnescapeDataString(kv[0]);
+                                string v = Uri.UnescapeDataString(kv[1]);
+                                if (k.Equals("url", StringComparison.OrdinalIgnoreCase)) targetUrl = v;
+                                if (k.Equals("title", StringComparison.OrdinalIgnoreCase) || k.Equals("name", StringComparison.OrdinalIgnoreCase)) playlistName = v;
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                if (!string.IsNullOrEmpty(targetUrl))
+                {
+                    SavePlaylistUrlToCollectionAsync(targetUrl, playlistName);
+                    return;
+                }
+            }
+
+            // Handle Direct Download Track from URL
+            if (trimmed.StartsWith("kahoiimusic://download", StringComparison.OrdinalIgnoreCase))
+            {
+                string vId = null;
+                string vTitle = null;
+                string vAuthor = null;
+                int vDur = 0;
+                try
+                {
+                    int qIdx = trimmed.IndexOf('?');
+                    if (qIdx >= 0)
+                    {
+                        string query = trimmed.Substring(qIdx + 1);
+                        foreach (var part in query.Split('&'))
+                        {
+                            var kv = part.Split('=');
+                            if (kv.Length == 2)
+                            {
+                                string k = Uri.UnescapeDataString(kv[0]);
+                                string v = Uri.UnescapeDataString(kv[1]);
+                                if (k.Equals("v", StringComparison.OrdinalIgnoreCase) || k.Equals("id", StringComparison.OrdinalIgnoreCase)) vId = v;
+                                if (k.Equals("title", StringComparison.OrdinalIgnoreCase)) vTitle = v;
+                                if (k.Equals("author", StringComparison.OrdinalIgnoreCase)) vAuthor = v;
+                                if (k.Equals("dur", StringComparison.OrdinalIgnoreCase)) int.TryParse(v, out vDur);
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                if (!string.IsNullOrEmpty(vId))
+                {
+                    string cleanTitle = !string.IsNullOrEmpty(vTitle) ? AudioPlayerService.CleanDisplayTitle(vTitle) : "Bài hát YouTube";
+                    if (SavedTracksService.Instance.IsTrackSaved(vId))
+                    {
+                        _audioPlayer?.RaiseStatus(string.Format("✓ '{0}' đã có sẵn trong mục Đã tải!", cleanTitle));
+                        return;
+                    }
+
+                    var track = new PlaylistItem
+                    {
+                        Id = vId,
+                        Title = cleanTitle,
+                        Author = !string.IsNullOrEmpty(vAuthor) ? AudioPlayerService.CleanAuthor(vAuthor) : "",
+                        DurationSeconds = vDur
+                    };
+                    _audioPlayer?.RaiseStatus(string.Format("Đang bắt đầu tải '{0}' về máy...", track.Title));
+                    SavedTracksService.Instance.SaveTrackAsync(track, (success, msg) =>
+                    {
+                        BeginInvoke(new Action(delegate
+                        {
+                            _audioPlayer?.RaiseStatus(success ? ("✓ Đã tải xong: " + track.Title) : ("Lỗi tải: " + msg));
+                        }));
+                    });
+                    return;
+                }
+            }
+
+            string targetUrlToPlay = trimmed;
+            if (trimmed.StartsWith("kahoiimusic://", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    int qIdx = trimmed.IndexOf('?');
+                    if (qIdx >= 0)
+                    {
+                        string query = trimmed.Substring(qIdx + 1);
+                        foreach (var part in query.Split('&'))
+                        {
+                            var kv = part.Split('=');
+                            if (kv.Length == 2)
+                            {
+                                string k = Uri.UnescapeDataString(kv[0]);
+                                string v = Uri.UnescapeDataString(kv[1]);
+                                if (k.Equals("url", StringComparison.OrdinalIgnoreCase)) { targetUrlToPlay = v; break; }
+                                if (k.Equals("v", StringComparison.OrdinalIgnoreCase)) { targetUrlToPlay = "https://www.youtube.com/watch?v=" + v; break; }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+                catch
+                {
+                    return;
+                }
+            }
+
+            searchPillBox.Text = targetUrlToPlay;
+            SearchPillBox_UrlSubmitted(this, targetUrlToPlay);
+        }
+
+        private void SavePlaylistUrlToCollectionAsync(string playlistUrl, string customName)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    _audioPlayer?.RaiseStatus("Đang tải danh sách phát để lưu vào Bộ sưu tập...");
+
+                    string ytdlpPath = AudioPlayerService.FindYtDlp();
+                    if (string.IsNullOrEmpty(ytdlpPath)) return;
+
+                    string listId = AudioPlayerService.ExtractListId(playlistUrl);
+                    string targetUrl = playlistUrl.Trim();
+                    if (!string.IsNullOrEmpty(listId) && (listId.StartsWith("PL", StringComparison.OrdinalIgnoreCase) || listId.StartsWith("OLAK", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        targetUrl = "https://www.youtube.com/playlist?list=" + listId;
+                    }
+
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = ytdlpPath,
+                        Arguments = string.Format("--encoding utf-8 --yes-playlist --flat-playlist --print \"%(playlist_title)s\t%(id)s\t%(title)s\t%(duration)s\t%(uploader)s\" \"{0}\"", targetUrl),
+                        CreateNoWindow = true,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = false,
+                        StandardOutputEncoding = Encoding.UTF8
+                    };
+                    psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+
+                    List<PlaylistItem> items = new List<PlaylistItem>();
+                    string detectedTitle = customName;
+
+                    using (Process proc = Process.Start(psi))
+                    {
+                        string line;
+                        while ((line = proc.StandardOutput.ReadLine()) != null)
+                        {
+                            line = line.Trim();
+                            if (string.IsNullOrEmpty(line)) continue;
+                            string[] parts = line.Split('\t');
+                            if (parts.Length >= 3)
+                            {
+                                string plTitle = parts[0].Trim();
+                                string id = parts[1].Trim();
+                                string title = parts[2].Trim();
+                                int dur = 0;
+                                string author = (parts.Length >= 5) ? parts[4].Trim() : "";
+
+                                if (string.IsNullOrEmpty(detectedTitle) && !string.IsNullOrEmpty(plTitle) && plTitle != "NA" && plTitle != "None")
+                                {
+                                    detectedTitle = plTitle;
+                                }
+
+                                if (!string.IsNullOrEmpty(id) && id.Length == 11)
+                                {
+                                    if (!items.Exists(x => x.Id == id))
+                                    {
+                                        if (parts.Length >= 4) int.TryParse(parts[3].Trim(), out dur);
+                                        items.Add(new PlaylistItem
+                                        {
+                                            Id = id,
+                                            Title = AudioPlayerService.CleanDisplayTitle(title),
+                                            Author = AudioPlayerService.CleanAuthor(author),
+                                            DurationSeconds = dur
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        proc.WaitForExit(15000);
+                    }
+
+                    if (items.Count > 0)
+                    {
+                        string finalName = !string.IsNullOrWhiteSpace(detectedTitle) ? detectedTitle.Trim() : "Playlist YouTube";
+                        var saved = PlaylistCollectionService.Instance.SavePlaylist(finalName, items);
+                        if (saved != null)
+                        {
+                            BeginInvoke(new Action(delegate
+                            {
+                                _audioPlayer?.RaiseStatus(string.Format("✓ Đã lưu '{0}' ({1} bài) vào Bộ sưu tập!", saved.Name, saved.Items.Count));
+                                if (playlistPopup != null)
+                                {
+                                    playlistPopup.RefreshPlaylists();
+                                }
+                            }));
+                        }
+                    }
+                    else
+                    {
+                        _audioPlayer?.RaiseStatus("Không tìm thấy bài hát nào trong playlist để lưu.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _audioPlayer?.RaiseStatus("Lỗi lưu playlist: " + ex.Message);
                 }
             });
         }

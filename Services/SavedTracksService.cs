@@ -1,4 +1,4 @@
-﻿﻿﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -205,7 +205,7 @@ namespace KahoiiMusic.Services
                 foreach (string ext in exts)
                 {
                     string path = Path.Combine(AppPaths.SavedAudioDir, videoId + ext);
-                    if (File.Exists(path) && new FileInfo(path).Length > 50000)
+                    if (File.Exists(path) && new FileInfo(path).Length >= 100000)
                     {
                         return path;
                     }
@@ -238,6 +238,13 @@ namespace KahoiiMusic.Services
                 return;
             }
 
+            // Kiểm tra trùng: nếu bài hát đã có sẵn trong danh sách và file audio tồn tại
+            if (IsTrackSaved(item.Id))
+            {
+                callback?.Invoke(true, string.Format("Bài hát '{0}' đã có sẵn trong mục Đã tải!", item.Title ?? item.Id));
+                return;
+            }
+
             Interlocked.Increment(ref _activeSavingCount);
             ThreadPool.QueueUserWorkItem(_ =>
             {
@@ -252,7 +259,7 @@ namespace KahoiiMusic.Services
                     foreach (string ext in exts)
                     {
                         string p = Path.Combine(AppPaths.TempAudioDir, videoId + ext);
-                        if (File.Exists(p) && new FileInfo(p).Length > 50000)
+                        if (File.Exists(p) && new FileInfo(p).Length >= 100000)
                         {
                             existingTempAudio = p;
                             break;
@@ -301,7 +308,7 @@ namespace KahoiiMusic.Services
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = ytdlpPath;
                         psi.WorkingDirectory = AppPaths.SavedAudioDir;
-                        psi.Arguments = string.Format("-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio\" -N 8 --no-playlist --no-progress --no-part --no-mtime --no-warnings --no-check-certificates -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
+                        psi.Arguments = string.Format("-f \"bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best\" -N 4 --no-playlist --no-progress --no-mtime --no-warnings --no-check-certificates --retries 3 --fragment-retries 3 --socket-timeout 20 --force-ipv4 -o \"{0}\\%(id)s.%(ext)s\" \"https://www.youtube.com/watch?v={1}\"", AppPaths.SavedAudioDir, videoId);
                         psi.CreateNoWindow = true;
                         psi.UseShellExecute = false;
 

@@ -56,17 +56,49 @@ namespace KahoiiMusic.Services
             {
                 name = "Playlist " + DateTime.Now.ToString("dd/MM/yyyy HH:mm");
             }
+            name = name.Trim();
 
-            var playlist = new UserPlaylist(name, items);
             lock (_lock)
             {
                 if (!_isLoaded) LoadFromFile();
-                _playlists.Insert(0, playlist);
-                SaveToFile();
+                var existing = _playlists.Find(p => string.Equals(p.Name != null ? p.Name.Trim() : "", name, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                {
+                    if (existing.Items == null) existing.Items = new List<PlaylistItem>();
+                    if (items != null)
+                    {
+                        foreach (var item in items)
+                        {
+                            if (item != null && !string.IsNullOrEmpty(item.Id) && !existing.Items.Exists(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                existing.Items.Add(item);
+                            }
+                        }
+                    }
+                    SaveToFile();
+                    PlaylistsChanged?.Invoke(this, EventArgs.Empty);
+                    return existing;
+                }
+                else
+                {
+                    List<PlaylistItem> uniqueItems = new List<PlaylistItem>();
+                    if (items != null)
+                    {
+                        foreach (var item in items)
+                        {
+                            if (item != null && !string.IsNullOrEmpty(item.Id) && !uniqueItems.Exists(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                uniqueItems.Add(item);
+                            }
+                        }
+                    }
+                    var playlist = new UserPlaylist(name, uniqueItems);
+                    _playlists.Insert(0, playlist);
+                    SaveToFile();
+                    PlaylistsChanged?.Invoke(this, EventArgs.Empty);
+                    return playlist;
+                }
             }
-
-            PlaylistsChanged?.Invoke(this, EventArgs.Empty);
-            return playlist;
         }
 
         public void ClearAllPlaylists()
