@@ -1318,7 +1318,7 @@ namespace KahoiiMusic
             catch { }
         }
 
-        private void HandleIncomingUrl(string url)
+        private async void HandleIncomingUrl(string url)
         {
             if (string.IsNullOrWhiteSpace(url)) return;
             RestoreFromTray();
@@ -1358,18 +1358,12 @@ namespace KahoiiMusic
                 if (!FirebaseAuthService.Instance.IsLoggedIn)
                 {
                     // Ứng dụng chưa đăng nhập -> Tự động đăng nhập ngay lập tức không cần gõ mật khẩu!
-                    System.Threading.Tasks.Task.Run(async () =>
+                    var res = await FirebaseAuthService.Instance.SignInWithRefreshTokenAsync(commonRt, commonUser);
+                    if (res.Item1)
                     {
-                        var res = await FirebaseAuthService.Instance.SignInWithRefreshTokenAsync(commonRt, commonUser);
-                        if (res.Item1)
-                        {
-                            BeginInvoke(new Action(() =>
-                            {
-                                _audioPlayer?.RaiseStatus(string.Format("✓ Đã đăng nhập nhanh từ Extension: {0}", FirebaseAuthService.Instance.CurrentUser?.email));
-                                _ = FirebaseSyncService.Instance.TriggerAutoFetchAsync();
-                            }));
-                        }
-                    });
+                        _audioPlayer?.RaiseStatus(string.Format("✓ Đã đăng nhập nhanh từ Extension: {0}", FirebaseAuthService.Instance.CurrentUser?.email));
+                        _ = FirebaseSyncService.Instance.TriggerAutoFetchAsync();
+                    }
                 }
                 else if (!string.IsNullOrEmpty(commonUser) && !string.Equals(commonUser, appUserNow, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1383,18 +1377,12 @@ namespace KahoiiMusic
                     if (switchOk)
                     {
                         FirebaseAuthService.Instance.SignOut();
-                        System.Threading.Tasks.Task.Run(async () =>
+                        var res = await FirebaseAuthService.Instance.SignInWithRefreshTokenAsync(commonRt, commonUser);
+                        if (res.Item1)
                         {
-                            var res = await FirebaseAuthService.Instance.SignInWithRefreshTokenAsync(commonRt, commonUser);
-                            if (res.Item1)
-                            {
-                                BeginInvoke(new Action(() =>
-                                {
-                                    _audioPlayer?.RaiseStatus(string.Format("✓ Đã chuyển sang tài khoản: {0}", FirebaseAuthService.Instance.CurrentUser?.email));
-                                    _ = FirebaseSyncService.Instance.TriggerAutoFetchAsync();
-                                }));
-                            }
-                        });
+                            _audioPlayer?.RaiseStatus(string.Format("✓ Đã chuyển sang tài khoản: {0}", FirebaseAuthService.Instance.CurrentUser?.email));
+                            _ = FirebaseSyncService.Instance.TriggerAutoFetchAsync();
+                        }
                     }
                 }
             }
@@ -1409,7 +1397,7 @@ namespace KahoiiMusic
 
             if (trimmed.StartsWith("kahoiimusic://sync", StringComparison.OrdinalIgnoreCase))
             {
-                System.Threading.Tasks.Task.Run(() => FirebaseSyncService.Instance.TriggerAutoFetchAsync());
+                _ = FirebaseSyncService.Instance.TriggerAutoFetchAsync();
                 return;
             }
 
@@ -1441,6 +1429,19 @@ namespace KahoiiMusic
                     }
                 }
                 catch { }
+
+                // Kiểm tra tài khoản đã đăng nhập
+                if (!FirebaseAuthService.Instance.IsLoggedIn)
+                {
+                    _audioPlayer?.RaiseStatus("🔒 Tính năng Lưu BST yêu cầu đăng nhập tài khoản!");
+                    CyberConfirmDialog.ShowAlert(
+                        "Yêu cầu đăng nhập KahoiiMusic",
+                        "Chức năng Lưu vào Bộ sưu tập chỉ có thể sử dụng khi bạn đã đăng nhập tài khoản KahoiiMusic.\n\nVui lòng đăng nhập vào ứng dụng để tiếp tục!",
+                        okText: "Đã hiểu",
+                        owner: this);
+                    ShowAccountPopup();
+                    return;
+                }
 
                 // Kiểm tra tài khoản khớp giữa Extension và App
                 string appUser = FirebaseAuthService.Instance.CurrentUser?.email;
@@ -1493,6 +1494,19 @@ namespace KahoiiMusic
                     }
                 }
                 catch { }
+
+                // Kiểm tra tài khoản đã đăng nhập
+                if (!FirebaseAuthService.Instance.IsLoggedIn)
+                {
+                    _audioPlayer?.RaiseStatus("🔒 Tính năng Tải về yêu cầu đăng nhập tài khoản!");
+                    CyberConfirmDialog.ShowAlert(
+                        "Yêu cầu đăng nhập KahoiiMusic",
+                        "Chức năng Tải về (Offline) chỉ có thể sử dụng khi bạn đã đăng nhập tài khoản KahoiiMusic.\n\nVui lòng đăng nhập vào ứng dụng để tiếp tục!",
+                        okText: "Đã hiểu",
+                        owner: this);
+                    ShowAccountPopup();
+                    return;
+                }
 
                 // Kiểm tra tài khoản khớp giữa Extension và App
                 string appUser = FirebaseAuthService.Instance.CurrentUser?.email;
