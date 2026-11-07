@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -38,11 +38,13 @@ namespace KahoiiMusic.Services
         public event EventHandler SyncStatusChanged;
 
         private System.Threading.Timer _autoUploadTimer;
+        private System.Threading.Timer _autoPollTimer;
         private volatile bool _hasPendingAutoUpload = false;
         private readonly object _syncLock = new object();
         private volatile bool _isApplyingCloudPayload = true;
         private volatile bool _isAutoSyncInitialized = false;
         private string _lastSyncedUserId = null;
+        private string _lastSyncedUpdatedAt = null;
 
         private FirebaseSyncService()
         {
@@ -83,6 +85,92 @@ namespace KahoiiMusic.Services
                 _lastSyncedUserId = FirebaseAuthService.Instance.CurrentUser?.localId;
                 Task.Run(() => TriggerAutoFetchAsync());
             }
+
+            // Định kỳ thăm dò cập nhật từ Extension / Cloud mỗi 10 giây
+            _autoPollTimer = new System.Threading.Timer(OnAutoPollTimerFired, null, 10000, 10000);
+        }
+
+        private async void OnAutoPollTimerFired(object state)
+        {
+            if (_isApplyingCloudPayload || IsSyncing || _hasPendingAutoUpload || !FirebaseAuthService.Instance.IsLoggedIn)
+            {
+                return;
+            }
+
+            try
+            {
+                await CheckAndFetchCloudUpdatesAsync();
+            }
+            catch { }
+        }
+
+        public async Task CheckAndFetchCloudUpdatesAsync()
+        {
+            var user = FirebaseAuthService.Instance.CurrentUser;
+            if (user == null || string.IsNullOrWhiteSpace(user.localId) || string.IsNullOrWhiteSpace(user.idToken))
+            {
+                return;
+            }
+
+            try
+            {
+                string token = await FirebaseAuthService.Instance.GetValidTokenAsync().ConfigureAwait(false);
+                if (string.IsNullOrEmpty(token)) return;
+
+                string url = string.Format("https://firestore.googleapis.com/v1/projects/{0}/databases/(default)/documents/users/{1}?key={2}",
+                    ProjectId, user.localId, ApiKey);
+
+                var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+                var response = await _httpClient.SendAsync(req).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode) return;
+
+                string respJson = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var doc = _serializer.Deserialize<Dictionary<string, object>>(respJson);
+
+                if (doc.ContainsKey("fields") && doc["fields"] is Dictionary<string, object> fields)
+                {
+                    string cloudUpdatedAt = null;
+                    if (fields.ContainsKey("updatedAt") && fields["updatedAt"] is Dictionary<string, object> upField)
+                    {
+                        cloudUpdatedAt = upField.ContainsKey("stringValue") ? upField["stringValue"]?.ToString() : null;
+                    }
+
+                    if (fields.ContainsKey("musicDataJson") && fields["musicDataJson"] is Dictionary<string, object> jsonField)
+                    {
+                        string stringValue = jsonField.ContainsKey("stringValue") ? jsonField["stringValue"]?.ToString() : null;
+                        if (!string.IsNullOrWhiteSpace(stringValue))
+                        {
+                            if (!string.IsNullOrEmpty(cloudUpdatedAt) && string.Equals(cloudUpdatedAt, _lastSyncedUpdatedAt, StringComparison.Ordinal))
+                            {
+                                return;
+                            }
+
+                            var payload = _serializer.Deserialize<CloudMusicPayload>(stringValue);
+                            if (payload != null)
+                            {
+                                if (!string.IsNullOrEmpty(cloudUpdatedAt) && string.Equals(payload.updatedAt, _lastSyncedUpdatedAt, StringComparison.Ordinal))
+                                {
+                                    return;
+                                }
+
+                                _lastSyncedUpdatedAt = cloudUpdatedAt ?? payload.updatedAt;
+                                _isApplyingCloudPayload = true;
+                                try
+                                {
+                                    ApplyCloudPayload(payload);
+                                }
+                                finally
+                                {
+                                    _isApplyingCloudPayload = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
         }
 
         public void RequestAutoUpload()
@@ -270,6 +358,7 @@ namespace KahoiiMusic.Services
                         if (!string.IsNullOrWhiteSpace(stringValue))
                         {
                             var payload = _serializer.Deserialize<CloudMusicPayload>(stringValue);
+                            _lastSyncedUpdatedAt = payload.updatedAt;
                             SyncStatusMessage = "Tải đám mây thành công lúc " + DateTime.Now.ToString("HH:mm");
                             return payload;
                         }
@@ -359,6 +448,7 @@ namespace KahoiiMusic.Services
                 }
                 if (response.IsSuccessStatusCode)
                 {
+                    _lastSyncedUpdatedAt = payload.updatedAt;
                     SyncStatusMessage = "Đã tự động lưu đám mây lúc " + DateTime.Now.ToString("HH:mm");
                     return true;
                 }
