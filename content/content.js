@@ -123,7 +123,7 @@
           if (!currentSession) {
             cachedSavedTracks = [];
             cachedCollections = [];
-            updateButtonStatus();
+            renderButtonStatusDOM();
             return;
           }
         }
@@ -137,7 +137,7 @@
             cachedCollections = [];
           }
         }
-        updateButtonStatus();
+        renderButtonStatusDOM();
       }
     });
   }
@@ -149,33 +149,33 @@
         currentSession = null;
         cachedSavedTracks = [];
         cachedCollections = [];
-        updateButtonStatus();
+        renderButtonStatusDOM();
       } else if (msg.action === "LOGIN_SUCCESS" && msg.session) {
         currentSession = msg.session;
         if (msg.payload) {
           cachedSavedTracks = msg.payload.savedTracks || [];
           cachedCollections = msg.payload.collections || [];
         }
-        updateButtonStatus();
+        renderButtonStatusDOM();
       } else if (msg.action === "TRACK_SAVED" && msg.track) {
         const t = msg.track;
         const tid = (t.Id || t.id || t.videoId || "").toLowerCase();
         if (tid && !cachedSavedTracks.some(x => (x.Id || x.id || x.videoId || "").toLowerCase() === tid)) {
           cachedSavedTracks.unshift(t);
         }
-        updateButtonStatus();
+        renderButtonStatusDOM();
       } else if (msg.action === "COLLECTION_SAVED" && msg.collection) {
         const c = msg.collection;
         const cname = (c.Name || c.name || "").toLowerCase().trim();
         if (cname && !cachedCollections.some(x => (x.Name || x.name || "").toLowerCase().trim() === cname)) {
           cachedCollections.unshift(c);
         }
-        updateButtonStatus();
+        renderButtonStatusDOM();
       } else if (msg.action === "CLOUD_DATA_CHANGED" || msg.action === "STATE_UPDATED") {
         if (msg.payload) {
           cachedSavedTracks = msg.payload.savedTracks || [];
           cachedCollections = msg.payload.collections || [];
-          updateButtonStatus();
+          renderButtonStatusDOM();
         } else {
           syncCloudData();
         }
@@ -453,7 +453,7 @@
     }
 
     if (document.getElementById("kahoii-btn-group")) {
-      updateButtonStatus();
+      renderButtonStatusDOM(videoId, listId);
       return;
     }
 
@@ -509,7 +509,19 @@
       const listId = getListId() || "";
       const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
       const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
-      const metaParams = `&v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}${listId ? '&list=' + encodeURIComponent(listId) : ''}`;
+
+      let itemsParam = "";
+      if (isPlaylist) {
+        const extracted = extractPlaylistItemsFromPage();
+        if (extracted && extracted.length > 0) {
+          const ids = extracted.map(x => x.Id).filter(Boolean);
+          if (ids.length > 0) {
+            itemsParam = `&items=${encodeURIComponent(ids.slice(0, 50).join(","))}`;
+          }
+        }
+      }
+
+      const metaParams = `&v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}${listId ? '&list=' + encodeURIComponent(listId) : ''}${itemsParam}`;
       triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(targetUrl)}${metaParams}${userParam}${rtParam}`);
 
       if (isPlaylist) {
@@ -584,6 +596,7 @@
         if (!cachedSavedTracks.some(t => (t.Id || t.id || t.videoId || '').toLowerCase() === vId.toLowerCase())) {
           cachedSavedTracks.unshift(newTrack);
         }
+        renderButtonStatusDOM();
 
         // Gửi lệnh tải về máy qua URI Scheme kèm token đăng nhập nhanh
         const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
@@ -593,7 +606,7 @@
         // Safety fallback timer: Đảm bảo nút KHÔNG BAO GIỜ bị treo nếu đóng app ngay hoặc chrome background không phản hồi
         let safetyTimer = setTimeout(() => {
           isProcessingDownload = false;
-          updateButtonStatus();
+          renderButtonStatusDOM();
         }, 2500);
 
         // Đồng bộ lên đám mây Firestore savedTracks
@@ -674,26 +687,35 @@
 
         const targetUrl = window.location.href;
 
-        // 1. Gửi lệnh mở giao thức cho KahoiiMusic desktop kèm thông tin tài khoản đăng nhập nhanh
-        const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
-        const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
-        triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(playlistTitle)}${userParam}${rtParam}`);
-
         // Trích xuất các bài hát có trên trang
         const items = extractPlaylistItemsFromPage();
         const vId = getVideoId();
         const fallbackItems = items.length > 0 ? items : (vId ? [{ Id: vId, Title: getVideoTitle(), Author: getChannelName(), DurationSeconds: getVideoDuration() }] : []);
+
+        let itemsParam = "";
+        if (fallbackItems.length > 0) {
+          const ids = fallbackItems.map(x => x.Id).filter(Boolean);
+          if (ids.length > 0) {
+            itemsParam = `&items=${encodeURIComponent(ids.slice(0, 50).join(","))}`;
+          }
+        }
+
+        // 1. Gửi lệnh mở giao thức cho KahoiiMusic desktop kèm thông tin tài khoản đăng nhập nhanh và danh sách cụ thể
+        const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+        const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+        triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(playlistTitle)}${itemsParam}${userParam}${rtParam}`);
 
         // Optimistic update
         const newCol = { Name: playlistTitle, Items: fallbackItems };
         if (!cachedCollections.some(c => (c.name || c.Name || "").toLowerCase().trim() === playlistTitle.toLowerCase().trim())) {
           cachedCollections.unshift(newCol);
         }
+        renderButtonStatusDOM();
 
         // Safety fallback timer: Tối đa 2.5s sẽ tự động phục hồi nút
         let safetyTimer = setTimeout(() => {
           isProcessingSave = false;
-          updateButtonStatus();
+          renderButtonStatusDOM();
         }, 2500);
 
         // 2. Đồng thời lưu vào đám mây Firestore collections
