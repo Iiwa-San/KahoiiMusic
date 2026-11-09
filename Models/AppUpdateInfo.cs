@@ -20,3 +20,4 @@ namespace KahoiiMusic.Models
         public double DownloadSpeedBytesPerSec { get; set; }
     }
 }
+

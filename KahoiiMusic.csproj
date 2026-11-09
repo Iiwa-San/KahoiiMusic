@@ -218,7 +218,7 @@
   </Target>
   <Target Name="CopyToPublish" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <MakeDir Directories="$(ProjectDir)publish" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" ContinueOnError="true" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" ContinueOnError="true" Retries="0" />
     <Copy SourceFiles="$(TargetDir)yt-dlp.exe" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" ContinueOnError="true" />
     <Copy SourceFiles="$(ProjectDir)app.ico" DestinationFolder="$(ProjectDir)publish" SkipUnchangedFiles="false" ContinueOnError="true" />
     <MakeDir Directories="$(ProjectDir)publish\Saved\audio" />

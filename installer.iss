@@ -2,7 +2,7 @@
 ; Uses Inno Setup (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "Kahoii Music"
-#define MyAppVersion "1.0.14"
+#define MyAppVersion "1.0.15"
 #define MyAppPublisher "Kahoii"
 #define MyAppExeName "KahoiiMusic.exe"
 
@@ -40,10 +40,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-; Main application files from publish directory
-Source: "publish\KahoiiMusic.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "publish\yt-dlp.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "publish\app.ico"; DestDir: "{app}"; Flags: ignoreversion
+; Main application files from release build directory
+Source: "bin\Release\KahoiiMusic.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "yt-dlp.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "app.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}\Saved"; Permissions: users-modify

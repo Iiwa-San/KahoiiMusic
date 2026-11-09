@@ -252,6 +252,38 @@ namespace KahoiiMusic.Controls
                     {
                         g.DrawPath(borderPen, heartPath);
                     }
+
+                    // 5. Vibrant Green Checkmark on Red Heart
+                    PointF p1 = new PointF(heartX + heartW * 0.28f, heartY + heartH * 0.50f);
+                    PointF p2 = new PointF(heartX + heartW * 0.44f, heartY + heartH * 0.67f);
+                    PointF p3 = new PointF(heartX + heartW * 0.72f, heartY + heartH * 0.35f);
+
+                    // Drop shadow for crisp contrast
+                    using (Pen shadowPen = new Pen(Color.FromArgb(120, 0, 0, 0), 2.2f)
+                    {
+                        StartCap = LineCap.Round,
+                        EndCap = LineCap.Round,
+                        LineJoin = LineJoin.Round
+                    })
+                    {
+                        g.DrawLines(shadowPen, new PointF[] {
+                            new PointF(p1.X, p1.Y + 0.6f),
+                            new PointF(p2.X, p2.Y + 0.6f),
+                            new PointF(p3.X, p3.Y + 0.6f)
+                        });
+                    }
+
+                    // Green tick
+                    Color tickColor = _isHovered ? Color.FromArgb(74, 255, 140) : Color.FromArgb(34, 220, 94);
+                    using (Pen tickPen = new Pen(tickColor, 2.0f)
+                    {
+                        StartCap = LineCap.Round,
+                        EndCap = LineCap.Round,
+                        LineJoin = LineJoin.Round
+                    })
+                    {
+                        g.DrawLines(tickPen, new PointF[] { p1, p2, p3 });
+                    }
                 }
                 else
                 {
