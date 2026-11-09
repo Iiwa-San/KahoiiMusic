@@ -209,6 +209,14 @@ namespace KahoiiMusic
             btnMinimize.MouseLeave += (s, e) => btnMinimize.ForeColor = Color.FromArgb(140, 140, 140);
 
             _userToolTip = new ToolTip();
+            if (lblVersion != null)
+            {
+                lblVersion.Text = "v" + AppUpdateService.CurrentVersionName;
+                lblVersion.Click += async (s, e) => await CheckForAppUpdatesAsync(manual: true);
+                lblVersion.MouseEnter += (s, e) => lblVersion.ForeColor = Color.FromArgb(200, 180, 240);
+                lblVersion.MouseLeave += (s, e) => lblVersion.ForeColor = Color.FromArgb(130, 100, 170);
+                _userToolTip.SetToolTip(lblVersion, "Phiên bản v" + AppUpdateService.CurrentVersionName + " (Nhấn để kiểm tra cập nhật)");
+            }
             UpdateUserButtonAppearance();
             FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
             {
@@ -1611,12 +1619,6 @@ namespace KahoiiMusic
 
         private async Task CheckForAppUpdatesAsync(bool manual = false)
         {
-            if (!manual && AppUpdateService.IsDevEnvironment)
-            {
-                // Silent skip in development environment to avoid annoying developer during coding
-                return;
-            }
-
             try
             {
                 var update = await AppUpdateService.Instance.CheckForUpdateAsync();

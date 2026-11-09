@@ -53,6 +53,7 @@ namespace KahoiiMusic
             this.btnQuickDownload = new KahoiiMusic.Controls.QuickDownloadButton();
             this.musicTrackBar = new KahoiiMusic.Controls.MusicTrackBar();
             this.lblCopyright = new System.Windows.Forms.Label();
+            this.lblVersion = new System.Windows.Forms.Label();
             this.btnClose = new System.Windows.Forms.Label();
             this.btnMinimize = new System.Windows.Forms.Label();
             this.btnUser = new KahoiiMusic.Controls.UserAccountButton();
@@ -205,6 +206,7 @@ namespace KahoiiMusic
             this.panelBottomControls.Controls.Add(this.btnLyrics);
             this.panelBottomControls.Controls.Add(this.musicTrackBar);
             this.panelBottomControls.Controls.Add(this.lblCopyright);
+            this.panelBottomControls.Controls.Add(this.lblVersion);
             this.panelBottomControls.Location = new System.Drawing.Point(0, 236);
             this.panelBottomControls.Name = "panelBottomControls";
             this.panelBottomControls.Size = new System.Drawing.Size(476, 100);
@@ -317,6 +319,19 @@ namespace KahoiiMusic
             this.lblCopyright.Text = "copyright by Kahoii-San";
             this.lblCopyright.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
+            // lblVersion
+            // 
+            this.lblVersion.BackColor = System.Drawing.Color.Transparent;
+            this.lblVersion.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.lblVersion.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblVersion.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(130)))), ((int)(((byte)(100)))), ((int)(((byte)(170)))));
+            this.lblVersion.Location = new System.Drawing.Point(380, 78);
+            this.lblVersion.Name = "lblVersion";
+            this.lblVersion.Size = new System.Drawing.Size(84, 15);
+            this.lblVersion.TabIndex = 10;
+            this.lblVersion.Text = "v1.0.16";
+            this.lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            // 
             // musicTrackBar
             // 
             this.musicTrackBar.BackColor = System.Drawing.Color.Transparent;
@@ -422,6 +437,7 @@ namespace KahoiiMusic
         private KahoiiMusic.Controls.PlaylistButton btnPlaylist;
         private KahoiiMusic.Controls.LyricsButton btnLyrics;
         private System.Windows.Forms.Label lblCopyright;
+        private System.Windows.Forms.Label lblVersion;
         private System.Windows.Forms.Timer playbackTimer;
     }
 }

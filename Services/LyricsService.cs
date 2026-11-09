@@ -327,6 +327,16 @@ namespace KahoiiMusic.Services
             string aTarget = NormalizeForMatch(targetArtist);
             string aResult = NormalizeForMatch(resultArtist);
 
+            // MANDATORY ARTIST VERIFICATION:
+            // If both target artist and result artist are provided, verify they are compatible!
+            if (!string.IsNullOrEmpty(aTarget) && !string.IsNullOrEmpty(aResult))
+            {
+                if (!AreArtistsSimilar(aTarget, aResult))
+                {
+                    return false;
+                }
+            }
+
             // 1. Exact normalized title match
             if (string.Equals(tTarget, tTrack, StringComparison.OrdinalIgnoreCase))
                 return true;
@@ -337,14 +347,14 @@ namespace KahoiiMusic.Services
                 if (tTarget.Contains(tTrack) || tTrack.Contains(tTarget))
                 {
                     double ratio = (double)Math.Min(tTarget.Length, tTrack.Length) / Math.Max(tTarget.Length, tTrack.Length);
-                    if (ratio >= 0.40) return true;
+                    if (ratio >= 0.50) return true;
                 }
             }
 
             // 3. Album match (especially for anime / video game soundtrack releases)
             if (!string.IsNullOrEmpty(tAlbum) && (string.Equals(tTarget, tAlbum, StringComparison.OrdinalIgnoreCase) || (tTarget.Length >= 4 && tAlbum.Contains(tTarget))))
             {
-                if (string.IsNullOrEmpty(aTarget) || string.IsNullOrEmpty(aResult) || aTarget.Contains(aResult) || aResult.Contains(aTarget))
+                if (string.IsNullOrEmpty(aTarget) || string.IsNullOrEmpty(aResult) || AreArtistsSimilar(aTarget, aResult))
                 {
                     return true;
                 }
@@ -383,6 +393,31 @@ namespace KahoiiMusic.Services
             return false;
         }
 
+        public static bool AreArtistsSimilar(string a1, string a2)
+        {
+            if (string.IsNullOrWhiteSpace(a1) || string.IsNullOrWhiteSpace(a2)) return true;
+
+            string n1 = NormalizeForMatch(a1);
+            string n2 = NormalizeForMatch(a2);
+            if (string.Equals(n1, n2, StringComparison.OrdinalIgnoreCase)) return true;
+            if (n1.Contains(n2) || n2.Contains(n1)) return true;
+
+            // Token overlap of words with >= 2 characters
+            var w1 = Regex.Matches(a1.ToLowerInvariant(), @"\b[\p{L}\p{N}]{2,}\b");
+            var w2 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Match m in Regex.Matches(a2.ToLowerInvariant(), @"\b[\p{L}\p{N}]{2,}\b"))
+            {
+                w2.Add(m.Value);
+            }
+
+            foreach (Match m in w1)
+            {
+                if (w2.Contains(m.Value)) return true;
+            }
+
+            return false;
+        }
+
         private static bool IsCommonStopWord(string word)
         {
             switch (word)
@@ -412,6 +447,17 @@ namespace KahoiiMusic.Services
         {
             var list = new List<SearchCandidate>();
             if (string.IsNullOrWhiteSpace(title)) return list;
+
+            // Clean brackets, hashtags and metadata
+            string cleanT = CleanTitleForSearch(title);
+            string cleanA = CleanArtistForSearch(artist);
+
+            // Check for #Artist hashtag
+            var mHash = Regex.Match(title, @"#(\w+)");
+            if (mHash.Success && string.IsNullOrEmpty(cleanA))
+            {
+                cleanA = CleanArtistForSearch(mHash.Groups[1].Value.Trim());
+            }
 
             // 1. Japanese quotes:
             // "「Track/Artist」"
@@ -445,25 +491,12 @@ namespace KahoiiMusic.Services
                     }
                     else
                     {
-                        list.Add(new SearchCandidate(inner, artist));
+                        list.Add(new SearchCandidate(inner, cleanA));
                     }
                 }
             }
 
-            // Check for #Artist hashtag
-            var mHash = Regex.Match(title, @"#(\w+)");
-            string hashArtist = mHash.Success ? mHash.Groups[1].Value.Trim() : null;
-
-            // 2. Clean brackets and metadata
-            string cleanT = CleanTitleForSearch(title);
-            string cleanA = CleanTitleForSearch(artist);
-
-            if (!string.IsNullOrEmpty(hashArtist) && string.IsNullOrEmpty(cleanA))
-            {
-                cleanA = hashArtist;
-            }
-
-            // 3. Delimiters: " | ", " - ", " / ", " – ", " — "
+            // 2. Delimiters: " | ", " - ", " / ", " – ", " — "
             string[] separators = new string[] { " | ", " - ", " / ", " – ", " — " };
             foreach (var sep in separators)
             {
@@ -472,19 +505,29 @@ namespace KahoiiMusic.Services
                     string[] parts = cleanT.Split(new string[] { sep }, StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length >= 2)
                     {
-                        for (int i = 0; i < parts.Length; i++)
+                        string p0 = parts[0].Trim();
+                        string p1 = parts[1].Trim();
+
+                        // If p0 matches artist, then p1 is definitely track title!
+                        if (!string.IsNullOrEmpty(cleanA) && AreArtistsSimilar(p0, cleanA))
                         {
-                            string p = parts[i].Trim();
-                            if (p.Length >= 2)
+                            list.Insert(0, new SearchCandidate(p1, cleanA));
+                            list.Insert(1, new SearchCandidate(p1, p0));
+                        }
+                        // If p1 matches artist, then p0 is definitely track title!
+                        else if (!string.IsNullOrEmpty(cleanA) && AreArtistsSimilar(p1, cleanA))
+                        {
+                            list.Insert(0, new SearchCandidate(p0, cleanA));
+                            list.Insert(1, new SearchCandidate(p0, p1));
+                        }
+                        else
+                        {
+                            list.Add(new SearchCandidate(p0, p1));
+                            list.Add(new SearchCandidate(p1, p0));
+                            if (!string.IsNullOrEmpty(cleanA))
                             {
-                                list.Add(new SearchCandidate(p, cleanA));
-                                for (int j = 0; j < parts.Length; j++)
-                                {
-                                    if (i != j && parts[j].Trim().Length >= 2)
-                                    {
-                                        list.Add(new SearchCandidate(p, parts[j].Trim()));
-                                    }
-                                }
+                                list.Add(new SearchCandidate(p0, cleanA));
+                                list.Add(new SearchCandidate(p1, cleanA));
                             }
                         }
                     }
@@ -497,23 +540,39 @@ namespace KahoiiMusic.Services
             {
                 if (!string.IsNullOrEmpty(cleanA))
                 {
-                    list.Add(new SearchCandidate(cleanT, cleanA));
+                    list.Insert(0, new SearchCandidate(cleanT, cleanA));
                     // If artist is in title, remove it
                     if (cleanT.ToLower().Contains(cleanA.ToLower()))
                     {
                         string withoutA = Regex.Replace(cleanT, Regex.Escape(cleanA), "", RegexOptions.IgnoreCase).Trim(" -/|–—_".ToCharArray()).Trim();
                         if (!string.IsNullOrEmpty(withoutA))
                         {
-                            list.Add(new SearchCandidate(withoutA, cleanA));
+                            list.Insert(1, new SearchCandidate(withoutA, cleanA));
                         }
                     }
                 }
                 list.Add(new SearchCandidate(cleanT, ""));
             }
 
-            // Deduplicate while preserving order
+            // Deduplicate while prioritizing candidates WITH Artist
             var unique = new List<SearchCandidate>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Pass 1: candidates that have BOTH Track and Artist
+            foreach (var c in list)
+            {
+                string t = Regex.Replace(c.Track ?? "", @"\s+", " ").Trim();
+                string a = Regex.Replace(c.Artist ?? "", @"\s+", " ").Trim();
+                if (string.IsNullOrEmpty(t) || string.IsNullOrEmpty(a)) continue;
+                string key = t + "||" + a;
+                if (!seen.Contains(key))
+                {
+                    seen.Add(key);
+                    unique.Add(new SearchCandidate(t, a));
+                }
+            }
+
+            // Pass 2: candidates without Artist
             foreach (var c in list)
             {
                 string t = Regex.Replace(c.Track ?? "", @"\s+", " ").Trim();
@@ -1162,6 +1221,24 @@ namespace KahoiiMusic.Services
             // 6. Remove remaining brackets and quotes
             s = Regex.Replace(s, @"[\[\]\(\)\{\}【】『』「」""'~]", " ");
             // 7. Clean spacing and trim trailing/leading separators
+            s = Regex.Replace(s, @"\s+", " ").Trim(" -/|–—_ \t".ToCharArray());
+
+            return s;
+        }
+
+        public static string CleanArtistForSearch(string rawArtist)
+        {
+            if (string.IsNullOrWhiteSpace(rawArtist)) return string.Empty;
+
+            string s = rawArtist;
+            // 1. Remove YouTube Topic suffix: "Artist - Topic"
+            s = Regex.Replace(s, @"\s*-\s*Topic\b", " ", RegexOptions.IgnoreCase);
+            // 2. Remove VEVO, Official Channel, etc.
+            s = Regex.Replace(s, @"\b(?:Official\s+(?:Channel|Music|Audio|YouTube)|VEVO|Channel)\b", " ", RegexOptions.IgnoreCase);
+            // 3. Remove Japanese common suffixes
+            s = Regex.Replace(s, @"(?:公式チャンネル|Official\s*Channel)", " ", RegexOptions.IgnoreCase);
+            // 4. Clean brackets
+            s = Regex.Replace(s, @"[\[\]\(\)\{\}【】『』「」""'~]", " ");
             s = Regex.Replace(s, @"\s+", " ").Trim(" -/|–—_ \t".ToCharArray());
 
             return s;

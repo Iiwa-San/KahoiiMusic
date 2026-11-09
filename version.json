@@ -1,8 +1,8 @@
 {
-  "versionCode": 15,
-  "versionName": "1.0.15",
-  "changelog": "• Cập nhật biểu tượng Yêu thích (Favorite): Trái tim đỏ có dấu tick xanh khi thích bài hát\n• Hoàn thiện tính năng tự động kiểm tra bản cập nhật mới khi khởi động ứng dụng\n• Tối ưu hiệu năng và độ ổn định",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.15.exe",
+  "versionCode": 16,
+  "versionName": "1.0.16",
+  "changelog": "• Bổ sung số phiên bản (Version) hiển thị tinh tế ở góc dưới bên phải ứng dụng\n• Thêm tab 'non-synced' thông báo trạng thái lời bài hát chưa đồng bộ audio (cạnh nút Romaji/Pinyin)\n• Cải tiến thuật toán lấy Lyrics: Thêm lọc chính xác theo Tác giả (Artist) chống lấy nhầm lời bài hát khác\n• Cập nhật toàn bộ hệ sinh thái KahoiiMusic",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.16.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false
 }

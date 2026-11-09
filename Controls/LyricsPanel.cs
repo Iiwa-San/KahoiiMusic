@@ -611,25 +611,32 @@ namespace KahoiiMusic.Controls
             {
                 DrawRomanizationButton(g);
             }
-            else if (_lyrics != null && !_lyrics.IsSynced)
+
+            // Draw "non-synced" badge beside Romaji button if lyrics are not audio-synchronized
+            if (_lyrics != null && !_lyrics.IsSynced)
             {
-                DrawUnsyncedBadge(g);
+                DrawNonSyncedBadge(g);
             }
         }
 
-        private void DrawUnsyncedBadge(Graphics g)
+        private void DrawNonSyncedBadge(Graphics g)
         {
-            Rectangle badgeRect = new Rectangle(Width - 100, 6, 94, 20);
+            int badgeW = 78;
+            int badgeH = 20;
+            int badgeX = HasRomanizationSupport ? (_romaziBtnRect.Left - badgeW - 6) : (Width - badgeW - 10);
+            int badgeY = 6;
+            Rectangle badgeRect = new Rectangle(badgeX, badgeY, badgeW, badgeH);
+
             using (GraphicsPath path = CreateRoundedRectanglePath(badgeRect, 10))
-            using (SolidBrush fillBrush = new SolidBrush(Color.FromArgb(180, 30, 20, 50)))
-            using (Pen borderPen = new Pen(Color.FromArgb(90, 170, 160, 200), 1.0f))
-            using (Font font = new Font("Segoe UI", 8.0f, FontStyle.Regular))
-            using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(180, 210, 205, 230)))
+            using (SolidBrush fillBrush = new SolidBrush(Color.FromArgb(200, 32, 20, 52)))
+            using (Pen borderPen = new Pen(Color.FromArgb(140, 255, 175, 75), 1.0f))
+            using (Font font = new Font("Segoe UI", 7.8f, FontStyle.Bold))
+            using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(245, 235, 225)))
             using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             {
                 g.FillPath(fillBrush, path);
                 g.DrawPath(borderPen, path);
-                g.DrawString("Văn bản thuần", font, textBrush, badgeRect, sf);
+                g.DrawString("non-synced", font, textBrush, badgeRect, sf);
             }
         }
 
