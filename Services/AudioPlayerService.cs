@@ -1573,7 +1573,6 @@ namespace KahoiiMusic.Services
             _isPlayingFromHistory = false;
             _currentQueueSource = ActiveQueueSource.Collection;
             _playlist = new List<PlaylistItem>(items);
-            _sessionPlaylist = _playlist;
             _currentPlaylistId = playlistId;
 
             CurrentPlaylistTitle = playlistTitle;
@@ -1584,12 +1583,6 @@ namespace KahoiiMusic.Services
                 _shufflePlayedIndices.Clear();
                 if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
-
-            _syncContext.Post(delegate
-            {
-                if (PlaylistLoaded != null) PlaylistLoaded(this, _playlist);
-                if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, _currentPlaylistIndex);
-            }, null);
 
             PlayTrackAtIndex(_currentPlaylistIndex);
         }

@@ -137,6 +137,10 @@ namespace KahoiiMusic
 
             ToolTip menuTip = new ToolTip();
             menuTip.SetToolTip(btnPlaylist, "Menu (Danh sách phát, Lịch sử, Đã tải)");
+            if (btnBottomPlaylist != null)
+            {
+                menuTip.SetToolTip(btnBottomPlaylist, "Menu (Danh sách phát, Bộ sưu tập, Yêu thích)");
+            }
 
             // Window Dragging
             MouseDown += Window_MouseDown;
@@ -315,7 +319,7 @@ namespace KahoiiMusic
             };
 
             // Playlist Button and Popup Events
-            btnPlaylist.Click += (s, e) =>
+            Action togglePlaylistAction = () =>
             {
                 if (accountPopup != null && accountPopup.Visible)
                 {
@@ -325,6 +329,8 @@ namespace KahoiiMusic
                 {
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                     this.Activate();
                 }
                 else
@@ -333,9 +339,16 @@ namespace KahoiiMusic
                     playlistPopup.Location = screenPt;
                     playlistPopup.Show(this);
                     btnPlaylist.IsOpen = true;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = true;
                     this.Activate();
                 }
             };
+
+            btnPlaylist.Click += (s, e) => togglePlaylistAction();
+            if (btnBottomPlaylist != null)
+            {
+                btnBottomPlaylist.Click += (s, e) => togglePlaylistAction();
+            }
 
             // Close popup when main window loses focus (e.g. user Alt+Tabs or clicks another application)
             this.Deactivate += (s, e) =>
@@ -348,12 +361,15 @@ namespace KahoiiMusic
 
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                 }
             };
 
             playlistPopup.CloseRequested += (s, e) =>
             {
                 btnPlaylist.IsOpen = false;
+                if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
             };
 
             this.LocationChanged += (s, e) =>
@@ -403,6 +419,7 @@ namespace KahoiiMusic
             {
                 bool hasList = (list != null && list.Count > 0);
                 btnPlaylist.HasPlaylist = hasList;
+                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = hasList;
                 if (hasList)
                 {
                     playlistPopup.SetPlaylist(list, _audioPlayer.CurrentPlaylistIndex);
@@ -410,6 +427,7 @@ namespace KahoiiMusic
                 else
                 {
                     btnPlaylist.IsOpen = false;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                     playlistPopup.Clear();
                     playlistPopup.Hide();
                 }
@@ -417,7 +435,19 @@ namespace KahoiiMusic
 
             _audioPlayer.PlaylistIndexChanged += (s, idx) =>
             {
-                playlistPopup.SetCurrentIndex(idx);
+                if (_audioPlayer.CurrentQueueSource == ActiveQueueSource.Playlist)
+                {
+                    playlistPopup.SetCurrentIndex(idx);
+                }
+                else
+                {
+                    // Playing from Collection or History - don't hijack Tab 0 current index
+                    string currentId = _audioPlayer.CurrentVideoId;
+                    int plIdx = !string.IsNullOrEmpty(currentId)
+                        ? playlistPopup.PlaylistItems.FindIndex(x => string.Equals(x.Id, currentId, StringComparison.OrdinalIgnoreCase))
+                        : -1;
+                    playlistPopup.SetCurrentIndex(plIdx);
+                }
             };
 
             // Initialize volume levels
@@ -495,10 +525,12 @@ namespace KahoiiMusic
                 {
                     Rectangle popupScreenRect = playlistPopup.Bounds;
                     Rectangle btnScreenRect = panelTopBar.RectangleToScreen(btnPlaylist.Bounds);
-                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur))
+                    bool overBottomBtn = (btnBottomPlaylist != null && panelBottomControls.RectangleToScreen(btnBottomPlaylist.Bounds).Contains(cur));
+                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur) && !overBottomBtn)
                     {
                         playlistPopup.Hide();
                         btnPlaylist.IsOpen = false;
+                        if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                         this.Activate();
                     }
                 }
@@ -597,6 +629,7 @@ namespace KahoiiMusic
                     {
                         playlistPopup.Hide();
                         btnPlaylist.IsOpen = false;
+                        if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                         return true;
                     }
                     if (volumePopup != null && volumePopup.Visible)
@@ -821,6 +854,11 @@ namespace KahoiiMusic
                 marqueeAuthor.Text = string.Empty;
                 btnPlaylist.HasPlaylist = false;
                 btnPlaylist.IsOpen = false;
+                if (btnBottomPlaylist != null)
+                {
+                    btnBottomPlaylist.HasPlaylist = false;
+                    btnBottomPlaylist.IsOpen = false;
+                }
                 playlistPopup.Visible = false;
                 playlistPopup.Clear();
                 return;
@@ -852,6 +890,7 @@ namespace KahoiiMusic
                 if (!string.Equals(listId, _audioPlayer.CurrentPlaylistId, StringComparison.OrdinalIgnoreCase))
                 {
                     btnPlaylist.HasPlaylist = true;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                     playlistPopup.StartLoading();
                 }
 
@@ -873,13 +912,16 @@ namespace KahoiiMusic
             else if (!string.IsNullOrEmpty(videoId))
             {
                 btnPlaylist.HasPlaylist = true;
+                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                 _audioPlayer.EnqueueAndPlayTrack(videoId, null, null, 0, url);
                 return;
             }
             else
             {
                 // Standalone track -> DO NOT wipe out user's session playlist in Tab 0!
-                btnPlaylist.HasPlaylist = (_audioPlayer.HasSessionPlaylist || (playlistPopup.PlaylistItems != null && playlistPopup.PlaylistItems.Count > 0));
+                bool hasPl = (_audioPlayer.HasSessionPlaylist || (playlistPopup.PlaylistItems != null && playlistPopup.PlaylistItems.Count > 0));
+                btnPlaylist.HasPlaylist = hasPl;
+                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = hasPl;
             }
 
             // Immediately load audio in background
@@ -996,14 +1038,14 @@ namespace KahoiiMusic
 
             // Soft darkened tones for top and bottom ("làm mờ tự nhiên")
             Color darkTop = Color.FromArgb(
-                Math.Max(16, (int)(topColor.R * 0.32f)),
-                Math.Max(14, (int)(topColor.G * 0.32f)),
-                Math.Max(26, (int)(topColor.B * 0.32f)));
+                Math.Max(14, (int)(topColor.R * 0.28f)),
+                Math.Max(12, (int)(topColor.G * 0.28f)),
+                Math.Max(22, (int)(topColor.B * 0.28f)));
 
             Color darkBottom = Color.FromArgb(
-                Math.Max(28, (int)(bottomColor.R * 0.30f)),
-                Math.Max(14, (int)(bottomColor.G * 0.30f)),
-                Math.Max(22, (int)(bottomColor.B * 0.30f)));
+                Math.Max(18, (int)(bottomColor.R * 0.12f)),
+                Math.Max(10, (int)(bottomColor.G * 0.12f)),
+                Math.Max(18, (int)(bottomColor.B * 0.12f)));
 
             using (LinearGradientBrush lgb = new LinearGradientBrush(
                 new Rectangle(0, 0, w, h),
@@ -1012,7 +1054,7 @@ namespace KahoiiMusic
             {
                 ColorBlend cb = new ColorBlend(4);
                 cb.Colors = new Color[] { darkTop, topColor, bottomColor, darkBottom };
-                cb.Positions = new float[] { 0.0f, 0.15f, 0.65f, 1.0f };
+                cb.Positions = new float[] { 0.0f, 0.18f, 0.58f, 1.0f };
                 lgb.InterpolationColors = cb;
                 e.Graphics.FillRectangle(lgb, 0, 0, w, h);
             }
@@ -1225,6 +1267,7 @@ namespace KahoiiMusic
             {
                 playlistPopup.Hide();
                 btnPlaylist.IsOpen = false;
+                if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
             }
             if (accountPopup != null && accountPopup.Visible)
             {
@@ -1623,6 +1666,7 @@ namespace KahoiiMusic
                 if (vids.Length > 0)
                 {
                     btnPlaylist.HasPlaylist = true;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                     playlistPopup.StartLoading();
                     _audioPlayer.EnqueueTrackList(vids, incomingV, incomingTitle, incomingAuthor, incomingDur);
                     return;
@@ -1632,6 +1676,7 @@ namespace KahoiiMusic
             if (!string.IsNullOrEmpty(incomingV) && !string.IsNullOrEmpty(incomingList))
             {
                 btnPlaylist.HasPlaylist = true;
+                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                 playlistPopup.StartLoading();
                 _audioPlayer.EnqueueAndPlayTrack(incomingV, incomingTitle, incomingAuthor, incomingDur, targetUrlToPlay);
                 _audioPlayer.LoadPlaylistQueueOnly(targetUrlToPlay);
@@ -1641,6 +1686,7 @@ namespace KahoiiMusic
             if (!string.IsNullOrEmpty(incomingList))
             {
                 btnPlaylist.HasPlaylist = true;
+                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                 playlistPopup.StartLoading();
                 _audioPlayer.LoadPlaylistAsync(targetUrlToPlay, incomingV, playFirstIfNoVideo: true);
                 return;
@@ -1649,6 +1695,7 @@ namespace KahoiiMusic
             if (!string.IsNullOrEmpty(incomingV))
             {
                 btnPlaylist.HasPlaylist = true;
+                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                 _audioPlayer.EnqueueAndPlayTrack(incomingV, incomingTitle, incomingAuthor, incomingDur, targetUrlToPlay);
                 return;
             }
@@ -1953,6 +2000,7 @@ namespace KahoiiMusic
                 {
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
+                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                 }
                 ShowAccountPopup();
                 this.Activate();

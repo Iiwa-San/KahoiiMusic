@@ -32,7 +32,7 @@ namespace KahoiiMusic.Controls
                      ControlStyles.SupportsTransparentBackColor, true);
 
             BackColor = Color.Transparent;
-            Size = new Size(32, 32);
+            Size = new Size(28, 24);
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
 
@@ -179,28 +179,30 @@ namespace KahoiiMusic.Controls
             int w = Width;
             int h = Height;
 
-            // Hover circle background
+            // Optional hover glass pill background matching other buttons
             if (_isHovered)
             {
-                using (SolidBrush hoverBg = new SolidBrush(Color.FromArgb(28, 255, 255, 255)))
+                Color bg = _isPressed ? Color.FromArgb(50, 255, 255, 255) : Color.FromArgb(28, 255, 255, 255);
+                using (SolidBrush hoverBg = new SolidBrush(bg))
+                using (GraphicsPath pill = GetRoundedRect(new Rectangle(1, 1, w - 2, h - 2), 6))
                 {
-                    g.FillEllipse(hoverBg, 2, 2, w - 4, h - 4);
+                    g.FillPath(hoverBg, pill);
                 }
             }
 
-            // Target heart size
-            float heartW = 19f;
-            float heartH = 17f;
+            // Target heart size scaled for 28x24
+            float heartW = 16f;
+            float heartH = 14.5f;
 
             if (_isPressed)
             {
-                heartW *= 0.92f;
-                heartH *= 0.92f;
+                heartW *= 0.90f;
+                heartH *= 0.90f;
             }
             else if (_isHovered)
             {
-                heartW *= 1.05f;
-                heartH *= 1.05f;
+                heartW *= 1.06f;
+                heartH *= 1.06f;
             }
 
             float heartX = (w - heartW) / 2f;
@@ -212,30 +214,48 @@ namespace KahoiiMusic.Controls
             {
                 if (_isFavorite)
                 {
-                    // Soft Neon Glow behind
-                    RectangleF glowBounds = new RectangleF(heartX - 2.5f, heartY - 2.5f, heartW + 5f, heartH + 5f);
+                    // 1. Radiant Soft Neon Glow Halo behind heart
+                    RectangleF glowBounds = new RectangleF(heartX - 3f, heartY - 3f, heartW + 6f, heartH + 6f);
                     using (GraphicsPath glowPath = CreateHeartPath(glowBounds))
-                    using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(45, 255, 45, 85)))
+                    using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(60, 255, 23, 68)))
                     {
                         g.FillPath(glowBrush, glowPath);
                     }
 
-                    // Solid vibrant heart fill
-                    Color fillColor = _isHovered ? _activeHoverColor : _activeColor;
-                    using (SolidBrush fillBrush = new SolidBrush(fillColor))
+                    // 2. Rich Ruby Red Gradient Fill (bright neon coral-ruby to deep radiant ruby)
+                    Color topRuby = _isHovered ? Color.FromArgb(255, 95, 130) : Color.FromArgb(255, 68, 108);
+                    Color bottomRuby = _isHovered ? Color.FromArgb(255, 30, 80) : Color.FromArgb(235, 15, 65);
+                    using (LinearGradientBrush fillBrush = new LinearGradientBrush(
+                        heartBounds,
+                        topRuby,
+                        bottomRuby,
+                        LinearGradientMode.Vertical))
                     {
                         g.FillPath(fillBrush, heartPath);
                     }
 
-                    // Crisp border highlight
-                    using (Pen borderPen = new Pen(Color.FromArgb(200, 255, 120, 150), 1f))
+                    // 3. Specular highlight at top lobes for 3D depth and glass glow
+                    RectangleF highlightRect = new RectangleF(heartX + 2f, heartY + 1.2f, heartW - 4f, (heartH / 2f) - 1f);
+                    using (GraphicsPath hlPath = new GraphicsPath())
+                    {
+                        hlPath.AddEllipse(highlightRect);
+                        using (PathGradientBrush pgb = new PathGradientBrush(hlPath))
+                        {
+                            pgb.CenterColor = Color.FromArgb(170, 255, 220, 235);
+                            pgb.SurroundColors = new Color[] { Color.FromArgb(0, 255, 220, 235) };
+                            g.FillPath(pgb, hlPath);
+                        }
+                    }
+
+                    // 4. Crisp high-contrast border
+                    using (Pen borderPen = new Pen(Color.FromArgb(220, 255, 160, 190), 1.0f))
                     {
                         g.DrawPath(borderPen, heartPath);
                     }
                 }
                 else
                 {
-                    // Subtle inactive outline
+                    // Subtle elegant inactive outline
                     Color strokeColor = _isHovered ? _inactiveHoverColor : _inactiveColor;
                     using (Pen strokePen = new Pen(strokeColor, 1.8f) { LineJoin = LineJoin.Round })
                     {
@@ -243,6 +263,21 @@ namespace KahoiiMusic.Controls
                     }
                 }
             }
+        }
+
+        private static GraphicsPath GetRoundedRect(Rectangle rect, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            int d = radius * 2;
+            if (d > rect.Width) d = rect.Width;
+            if (d > rect.Height) d = rect.Height;
+
+            path.AddArc(rect.X, rect.Y, d, d, 180, 90);
+            path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);
+            path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
+            path.AddArc(rect.X, rect.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private static GraphicsPath CreateHeartPath(RectangleF rect)
@@ -298,3 +333,4 @@ namespace KahoiiMusic.Controls
         }
     }
 }
+
