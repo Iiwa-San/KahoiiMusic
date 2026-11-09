@@ -1611,6 +1611,12 @@ namespace KahoiiMusic
 
         private async Task CheckForAppUpdatesAsync(bool manual = false)
         {
+            if (!manual && AppUpdateService.IsDevEnvironment)
+            {
+                // Silent skip in development environment to avoid annoying developer during coding
+                return;
+            }
+
             try
             {
                 var update = await AppUpdateService.Instance.CheckForUpdateAsync();
