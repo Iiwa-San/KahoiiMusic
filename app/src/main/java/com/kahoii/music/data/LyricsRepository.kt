@@ -31,7 +31,7 @@ class LyricsRepository(private val context: Context) {
         .followSslRedirects(true)
         .build()
 
-    private val lyricsCacheDir = File(context.cacheDir, "lyrics").apply {
+    private val lyricsCacheDir = File(context.filesDir, "lyrics").apply {
         if (!exists()) mkdirs()
     }
 
@@ -39,7 +39,8 @@ class LyricsRepository(private val context: Context) {
         videoId: String,
         title: String,
         artist: String,
-        durationSeconds: Int
+        durationSeconds: Int,
+        forceRefresh: Boolean = false
     ): LyricsData = withContext(Dispatchers.IO) {
         val cleanVid = videoId.trim()
         val cleanTitle = title.trim()
@@ -49,8 +50,21 @@ class LyricsRepository(private val context: Context) {
             return@withContext LyricsData.empty(cleanVid)
         }
 
-        // 1. Check local disk cache
+        // Safeguard: If title is a temporary placeholder ("Đang tải..."), do not search or cache .none
+        if (isPlaceholderTitle(cleanTitle)) {
+            return@withContext LyricsData.empty(cleanVid)
+        }
+
+        // Clean up any stale .none markers from past buggy sessions
         if (cleanVid.isNotBlank()) {
+            val noneMarker = File(lyricsCacheDir, "$cleanVid.none")
+            if (noneMarker.exists()) {
+                noneMarker.delete()
+            }
+        }
+
+        // 1. Check local disk cache (unless forceRefresh is requested)
+        if (!forceRefresh && cleanVid.isNotBlank()) {
             val cachedLrc = File(lyricsCacheDir, "$cleanVid.lrc")
             if (cachedLrc.exists()) {
                 try {
@@ -79,15 +93,9 @@ class LyricsRepository(private val context: Context) {
                     e.printStackTrace()
                 }
             }
-
-            // Check .none marker (valid if written in last 30 minutes)
-            val noneMarker = File(lyricsCacheDir, "$cleanVid.none")
-            if (noneMarker.exists() && System.currentTimeMillis() - noneMarker.lastModified() < 30 * 60 * 1000L) {
-                return@withContext LyricsData.empty(cleanVid)
-            }
         }
 
-        // 2. Fetch from LRCLIB API
+        // 2. Fetch from LRCLIB API with smart multi-candidate search
         val lrclibResult = tryFetchFromLrclib(cleanVid, cleanTitle, cleanArtist, durationSeconds)
         if (lrclibResult != null && lrclibResult.hasLyrics && lrclibResult.isSynced) {
             cacheLyricsOnDisk(cleanVid, lrclibResult)
@@ -116,13 +124,6 @@ class LyricsRepository(private val context: Context) {
             return@withContext lrclibResult
         }
 
-        // 5. Mark as having no lyrics
-        if (cleanVid.isNotBlank()) {
-            try {
-                File(lyricsCacheDir, "$cleanVid.none").writeText(System.currentTimeMillis().toString())
-            } catch (_: Exception) {}
-        }
-
         LyricsData.empty(cleanVid)
     }
 
@@ -138,7 +139,7 @@ class LyricsRepository(private val context: Context) {
         var bestSyncedJson: JSONObject? = null
         var bestPlainJson: JSONObject? = null
 
-        val limit = minOf(4, candidates.size)
+        val limit = minOf(8, candidates.size)
         for (i in 0 until limit) {
             val cand = candidates[i]
 
@@ -206,7 +207,7 @@ class LyricsRepository(private val context: Context) {
                                     continue
                                 }
 
-                                if (durationSeconds > 0 && itemDur > 0 && abs(itemDur - durationSeconds) > 8) {
+                                if (durationSeconds > 0 && itemDur > 0 && abs(itemDur - durationSeconds) > 15) {
                                     continue
                                 }
 
@@ -214,7 +215,7 @@ class LyricsRepository(private val context: Context) {
                                 val plain = item.optString("plainLyrics", "")
 
                                 if (synced.isNotBlank()) {
-                                    if (durationSeconds <= 0 || itemDur <= 0 || abs(itemDur - durationSeconds) <= 6) {
+                                    if (durationSeconds <= 0 || itemDur <= 0 || abs(itemDur - durationSeconds) <= 10) {
                                         val data = parseLrc(synced, videoId, title, artist)
                                         if (data != null && data.hasLyrics) return data
                                     }
@@ -227,6 +228,9 @@ class LyricsRepository(private val context: Context) {
                     }
                 }
             } catch (_: Exception) {}
+
+            // If we already found a good synced match, stop searching further candidates
+            if (bestSyncedJson != null) break
         }
 
         if (bestSyncedJson != null) {
@@ -351,10 +355,7 @@ class LyricsRepository(private val context: Context) {
                     val updatedLines = data.lines.mapIndexed { idx, line ->
                         line.copy(romanizedText = list[idx].takeIf { it.isNotBlank() })
                     }
-                    // mutate lines list in data
-                    val field = data.javaClass.getDeclaredField("lines")
-                    field.isAccessible = true
-                    field.set(data, updatedLines)
+                    data.lines = updatedLines
                 }
             }
         } catch (_: Exception) {}
@@ -425,9 +426,7 @@ class LyricsRepository(private val context: Context) {
                 val updatedLines = data.lines.mapIndexed { idx, line ->
                     line.copy(romanizedText = romanizedLines[idx].takeIf { it.isNotBlank() })
                 }
-                val field = data.javaClass.getDeclaredField("lines")
-                field.isAccessible = true
-                field.set(data, updatedLines)
+                data.lines = updatedLines
 
                 File(lyricsCacheDir, "${videoId}_romaji.json").writeText(
                     gson.toJson(romanizedLines),
@@ -500,6 +499,21 @@ class LyricsRepository(private val context: Context) {
             )
         }
 
+        fun isPlaceholderTitle(title: String?): Boolean {
+            if (title.isNullOrBlank()) return true
+            val t = title.trim().lowercase()
+            return t == "đang tải..." ||
+                    t == "đang tải" ||
+                    t == "loading..." ||
+                    t == "loading" ||
+                    t == "none" ||
+                    t == "na" ||
+                    t == "bài hát" ||
+                    t.startsWith("bài ") ||
+                    t == "kahoii music" ||
+                    t == "chưa chọn bài hát"
+        }
+
         private data class SearchCandidate(val track: String, val artist: String)
 
         private fun buildSearchCandidates(title: String, artist: String): List<SearchCandidate> {
@@ -508,6 +522,13 @@ class LyricsRepository(private val context: Context) {
 
             val cleanT = cleanTitleForSearch(title)
             val cleanA = cleanArtistForSearch(artist)
+
+            // Check for #Artist hashtag
+            val mHash = Pattern.compile("#(\\w+)").matcher(title)
+            var effectiveArtist = cleanA
+            if (mHash.find() && effectiveArtist.isBlank()) {
+                effectiveArtist = cleanArtistForSearch(mHash.group(1) ?: "")
+            }
 
             // 1. Japanese quotes
             val mSlash = Pattern.compile("^[「『【]([^/」』】]+)/([^」』】]+)[」』】]").matcher(title)
@@ -530,7 +551,8 @@ class LyricsRepository(private val context: Context) {
                     list.add(SearchCandidate(p[0].trim(), p[1].trim()))
                     list.add(SearchCandidate(p[1].trim(), p[0].trim()))
                 } else {
-                    list.add(SearchCandidate(inner, cleanA))
+                    list.add(SearchCandidate(inner, effectiveArtist))
+                    list.add(SearchCandidate(inner, ""))
                 }
             }
 
@@ -542,19 +564,23 @@ class LyricsRepository(private val context: Context) {
                     if (parts.size >= 2) {
                         val p0 = parts[0]
                         val p1 = parts[1]
-                        if (cleanA.isNotBlank() && areArtistsSimilar(p0, cleanA)) {
-                            list.add(0, SearchCandidate(p1, cleanA))
+                        if (effectiveArtist.isNotBlank() && areArtistsSimilar(p0, effectiveArtist)) {
+                            list.add(0, SearchCandidate(p1, effectiveArtist))
                             list.add(1, SearchCandidate(p1, p0))
-                        } else if (cleanA.isNotBlank() && areArtistsSimilar(p1, cleanA)) {
-                            list.add(0, SearchCandidate(p0, cleanA))
+                            list.add(SearchCandidate(p1, ""))
+                        } else if (effectiveArtist.isNotBlank() && areArtistsSimilar(p1, effectiveArtist)) {
+                            list.add(0, SearchCandidate(p0, effectiveArtist))
                             list.add(1, SearchCandidate(p0, p1))
+                            list.add(SearchCandidate(p0, ""))
                         } else {
                             list.add(SearchCandidate(p0, p1))
                             list.add(SearchCandidate(p1, p0))
-                            if (cleanA.isNotBlank()) {
-                                list.add(SearchCandidate(p0, cleanA))
-                                list.add(SearchCandidate(p1, cleanA))
+                            if (effectiveArtist.isNotBlank()) {
+                                list.add(SearchCandidate(p0, effectiveArtist))
+                                list.add(SearchCandidate(p1, effectiveArtist))
                             }
+                            list.add(SearchCandidate(p0, ""))
+                            list.add(SearchCandidate(p1, ""))
                         }
                     }
                     break
@@ -563,22 +589,36 @@ class LyricsRepository(private val context: Context) {
 
             // 3. Clean track with clean artist
             if (cleanT.isNotBlank()) {
-                if (cleanA.isNotBlank()) {
-                    list.add(0, SearchCandidate(cleanT, cleanA))
-                    if (cleanT.contains(cleanA, ignoreCase = true)) {
-                        val withoutA = cleanT.replace(cleanA, "", ignoreCase = true)
+                if (effectiveArtist.isNotBlank()) {
+                    list.add(0, SearchCandidate(cleanT, effectiveArtist))
+                    if (cleanT.contains(effectiveArtist, ignoreCase = true)) {
+                        val withoutA = cleanT.replace(effectiveArtist, "", ignoreCase = true)
                             .trim(' ', '-', '/', '|', '–', '—', '_')
                         if (withoutA.isNotBlank()) {
-                            list.add(1, SearchCandidate(withoutA, cleanA))
+                            list.add(1, SearchCandidate(withoutA, effectiveArtist))
+                            list.add(SearchCandidate(withoutA, ""))
                         }
                     }
                 }
                 list.add(SearchCandidate(cleanT, ""))
             }
 
-            // Deduplicate
+            // Deduplicate prioritizing candidates with Artist first, then candidates without Artist
             val unique = mutableListOf<SearchCandidate>()
             val seen = mutableSetOf<String>()
+
+            // Pass 1: candidates that have BOTH Track and Artist
+            for (c in list) {
+                val t = c.track.replace("\\s+".toRegex(), " ").trim()
+                val a = c.artist.replace("\\s+".toRegex(), " ").trim()
+                if (t.isBlank() || a.isBlank()) continue
+                val key = "$t||$a".lowercase()
+                if (seen.add(key)) {
+                    unique.add(SearchCandidate(t, a))
+                }
+            }
+
+            // Pass 2: candidates without Artist (or remaining)
             for (c in list) {
                 val t = c.track.replace("\\s+".toRegex(), " ").trim()
                 val a = c.artist.replace("\\s+".toRegex(), " ").trim()
@@ -588,6 +628,7 @@ class LyricsRepository(private val context: Context) {
                     unique.add(SearchCandidate(t, a))
                 }
             }
+
             return unique
         }
 
@@ -610,6 +651,7 @@ class LyricsRepository(private val context: Context) {
             s = s.replace("Official Channel".toRegex(RegexOption.IGNORE_CASE), "")
             s = s.replace("Official".toRegex(RegexOption.IGNORE_CASE), "")
             s = s.replace("Channel".toRegex(RegexOption.IGNORE_CASE), "")
+            s = s.replace("Vevo".toRegex(RegexOption.IGNORE_CASE), "")
             return s.replace("\\s+".toRegex(), " ").trim()
         }
 
@@ -624,7 +666,22 @@ class LyricsRepository(private val context: Context) {
             val n2 = normalizeForMatch(a2)
             if (n1.equals(n2, ignoreCase = true)) return true
             if (n1.contains(n2) || n2.contains(n1)) return true
-            return false
+
+            // Token overlap of words with >= 2 characters
+            val wordRegex = Pattern.compile("[\\p{L}\\p{N}]{2,}")
+            val m1 = wordRegex.matcher(a1.lowercase())
+            val words1 = mutableListOf<String>()
+            while (m1.find()) {
+                words1.add(m1.group())
+            }
+
+            val m2 = wordRegex.matcher(a2.lowercase())
+            val words2 = mutableSetOf<String>()
+            while (m2.find()) {
+                words2.add(m2.group())
+            }
+
+            return words1.any { words2.contains(it) }
         }
 
         fun isTitleMatch(
@@ -639,20 +696,67 @@ class LyricsRepository(private val context: Context) {
             val tTrack = normalizeForMatch(resultTrack)
             val aTarget = normalizeForMatch(targetArtist)
             val aResult = normalizeForMatch(resultArtist)
+            val tAlbum = normalizeForMatch(resultAlbum)
 
-            if (aTarget.isNotBlank() && aResult.isNotBlank() && !areArtistsSimilar(aTarget, aResult)) {
-                return false
+            // Artist verification (only reject if both artists provided, neither is generic, and they don't match)
+            if (aTarget.isNotBlank() && aResult.isNotBlank()) {
+                val isGenericTarget = aTarget == "youtube" || aTarget == "official" || aTarget == "channel" || aTarget == "vevo"
+                val isGenericResult = aResult == "youtube" || aResult == "variousartists"
+                if (!isGenericTarget && !isGenericResult) {
+                    val fullMatch = areArtistsSimilar(targetArtist, resultArtist) ||
+                            normalizeForMatch(targetTitle).contains(aResult) ||
+                            areArtistsSimilar(targetTitle, resultArtist)
+                    if (!fullMatch) {
+                        // If title is an exact match and long enough (>= 6 chars), don't discard solely due to artist differences
+                        if (!tTarget.equals(tTrack, ignoreCase = true) || tTarget.length < 6) {
+                            return false
+                        }
+                    }
+                }
             }
 
+            // 1. Exact normalized title match
             if (tTarget.equals(tTrack, ignoreCase = true)) return true
+
+            // 2. Substring containment
             if (tTarget.length >= 4 && tTrack.length >= 4) {
                 if (tTarget.contains(tTrack) || tTrack.contains(tTarget)) {
                     val ratio = minOf(tTarget.length, tTrack.length).toDouble() / maxOf(tTarget.length, tTrack.length)
                     if (ratio >= 0.50) return true
                 }
             }
+
+            // 3. Album match (especially for soundtrack releases)
+            if (tAlbum.isNotBlank() && (tTarget.equals(tAlbum, ignoreCase = true) || (tTarget.length >= 4 && tAlbum.contains(tTarget)))) {
+                if (aTarget.isBlank() || aResult.isBlank() || areArtistsSimilar(targetArtist, resultArtist)) {
+                    return true
+                }
+            }
+
+            // 4. Token overlap of meaningful words
+            val stopWords = setOf("the", "a", "an", "and", "or", "in", "on", "at", "to", "for", "of", "with", "by", "from", "is", "it", "no", "ga", "wa", "wo", "ni", "de", "va", "la")
+            val wordRegex = Pattern.compile("[\\p{L}\\p{N}]{2,}")
+            val m1 = wordRegex.matcher(targetTitle.lowercase())
+            val words1 = mutableListOf<String>()
+            while (m1.find()) {
+                val w = m1.group()
+                if (w !in stopWords) words1.add(w)
+            }
+
+            val m2 = wordRegex.matcher(resultTrack.lowercase())
+            val words2 = mutableSetOf<String>()
+            while (m2.find()) {
+                val w = m2.group()
+                if (w !in stopWords) words2.add(w)
+            }
+
+            if (words1.isNotEmpty() && words2.isNotEmpty()) {
+                val matchCount = words1.count { words2.contains(it) }
+                val overlap = matchCount.toDouble() / minOf(words1.size, words2.size)
+                if (overlap >= 0.55) return true
+            }
+
             return false
         }
     }
 }
-

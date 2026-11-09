@@ -87,6 +87,7 @@ object MusicQueueManager {
 
     // Observers for MainViewModel UI
     var onTrackChanged: ((PlaylistItem) -> Unit)? = null
+    var onTrackResolved: ((PlaylistItem) -> Unit)? = null
     var onPlaylistIndexChanged: ((Int) -> Unit)? = null
     var onQueueUpdated: ((List<PlaylistItem>) -> Unit)? = null
     var onStatusMessage: ((String) -> Unit)? = null
@@ -340,6 +341,7 @@ object MusicQueueManager {
                     playStreamUrl(fileUri, savedTrack)
                     preloadNextTrack(savedTrack.id)
                     onResolved?.invoke(savedTrack)
+                    onTrackResolved?.invoke(savedTrack)
                     return@launch
                 }
 
@@ -354,6 +356,7 @@ object MusicQueueManager {
                     playStreamUrl(fileUri, cachedTrack)
                     preloadNextTrack(cachedTrack.id)
                     onResolved?.invoke(cachedTrack)
+                    onTrackResolved?.invoke(cachedTrack)
                     return@launch
                 }
 
@@ -371,6 +374,7 @@ object MusicQueueManager {
                     playStreamUrl(cachedStream.audioUrl, resolvedTrack, cachedStream.artworkBytes)
                     preloadNextTrack(resolvedTrack.id)
                     onResolved?.invoke(resolvedTrack)
+                    onTrackResolved?.invoke(resolvedTrack)
                     return@launch
                 }
 
@@ -396,6 +400,7 @@ object MusicQueueManager {
 
                     preloadNextTrack(resolvedTrack.id)
                     onResolved?.invoke(resolvedTrack)
+                    onTrackResolved?.invoke(resolvedTrack)
                 }.onFailure { err ->
                     onStatusMessage?.invoke("Lỗi kết nối: ${err.message}")
                     serviceScope.launch {

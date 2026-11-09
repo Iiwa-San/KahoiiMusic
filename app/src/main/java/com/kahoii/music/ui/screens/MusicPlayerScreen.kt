@@ -261,6 +261,11 @@ fun MusicPlayerScreen(
                         accentColor = NeonPink,
                         onSeek = { positionMs -> viewModel.seekTo(positionMs) },
                         onClose = { viewModel.toggleLyricsVisibility() },
+                        onRetry = {
+                            uiState.currentTrack?.let { cur ->
+                                viewModel.loadLyricsForTrack(cur.id, cur.safeTitle, cur.safeArtist, cur.durationSeconds, forceRefresh = true)
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 } else {

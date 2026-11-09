@@ -82,10 +82,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.kahoii.music.service.MusicQueueManager.onTrackChanged = { track ->
             _uiState.update { it.copy(currentTrack = track) }
             if (track != null) {
-                loadLyricsForTrack(track.id, track.safeTitle, track.safeArtist, track.durationSeconds)
+                if (!LyricsRepository.isPlaceholderTitle(track.title)) {
+                    loadLyricsForTrack(track.id, track.safeTitle, track.safeArtist, track.durationSeconds)
+                } else {
+                    _uiState.update { it.copy(lyricsData = null, isLyricsLoading = true, currentLyricIndex = -1) }
+                }
             } else {
                 _uiState.update { it.copy(lyricsData = null, isLyricsLoading = false, currentLyricIndex = -1) }
             }
+        }
+        com.kahoii.music.service.MusicQueueManager.onTrackResolved = { resolvedTrack ->
+            _uiState.update { state ->
+                val updatedPlaylist = state.playlist.map { pItem ->
+                    if (pItem.id.equals(resolvedTrack.id, ignoreCase = true)) {
+                        pItem.copy(
+                            title = resolvedTrack.title,
+                            artist = resolvedTrack.artist,
+                            durationSeconds = resolvedTrack.durationSeconds
+                        )
+                    } else pItem
+                }
+                state.copy(
+                    currentTrack = resolvedTrack,
+                    playlist = updatedPlaylist,
+                    durationMs = resolvedTrack.durationSeconds * 1000L
+                )
+            }
+            loadLyricsForTrack(resolvedTrack.id, resolvedTrack.safeTitle, resolvedTrack.safeArtist, resolvedTrack.durationSeconds)
         }
         com.kahoii.music.service.MusicQueueManager.onPlaylistIndexChanged = { idx ->
             _uiState.update { it.copy(currentPlaylistIndex = idx) }
@@ -588,6 +611,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     status = PlaybackStatus.BUFFERING
                 )
             }
+            if (!LyricsRepository.isPlaceholderTitle(item.title)) {
+                loadLyricsForTrack(item.id, item.safeTitle, item.safeArtist, item.durationSeconds)
+            }
 
             val result = youTubeRepository.resolveAudio(item.id)
             result.onSuccess { stream ->
@@ -727,6 +753,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         p.prepare()
         p.playWhenReady = true
         p.play()
+
+        // Auto-load lyrics for the track currently starting playback
+        if (!LyricsRepository.isPlaceholderTitle(track.title)) {
+            loadLyricsForTrack(track.id, track.safeTitle, track.safeArtist, track.durationSeconds)
+        }
     }
 
     fun togglePlayPause() {
@@ -796,10 +827,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleLyricsVisibility() {
-        _uiState.update { it.copy(isLyricsVisible = !it.isLyricsVisible) }
+        val willBeVisible = !_uiState.value.isLyricsVisible
+        _uiState.update { it.copy(isLyricsVisible = willBeVisible) }
+        if (willBeVisible) {
+            val cur = _uiState.value.currentTrack
+            val lyrics = _uiState.value.lyricsData
+            if (cur != null && cur.id.isNotBlank() && (lyrics == null || !lyrics.hasLyrics)) {
+                loadLyricsForTrack(cur.id, cur.safeTitle, cur.safeArtist, cur.durationSeconds, forceRefresh = true)
+            }
+        }
     }
 
-    fun loadLyricsForTrack(videoId: String, title: String, artist: String, durationSeconds: Int) {
+    fun loadLyricsForTrack(
+        videoId: String,
+        title: String,
+        artist: String,
+        durationSeconds: Int,
+        forceRefresh: Boolean = false
+    ) {
+        if (videoId.isBlank()) {
+            _uiState.update { it.copy(lyricsData = null, isLyricsLoading = false, currentLyricIndex = -1) }
+            return
+        }
+
+        if (LyricsRepository.isPlaceholderTitle(title)) {
+            // Track is still resolving, hold loading state until stream resolves
+            _uiState.update { it.copy(lyricsData = null, isLyricsLoading = true, currentLyricIndex = -1) }
+            return
+        }
+
+        if (!forceRefresh && _uiState.value.lyricsData?.videoId == videoId && _uiState.value.lyricsData?.hasLyrics == true) {
+            return
+        }
+
         lyricsJob?.cancel()
         _uiState.update {
             it.copy(
@@ -809,12 +869,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         lyricsJob = viewModelScope.launch {
-            val result = lyricsRepository.fetchLyrics(videoId, title, artist, durationSeconds)
-            _uiState.update {
-                it.copy(
-                    lyricsData = result,
-                    isLyricsLoading = false
-                )
+            val result = lyricsRepository.fetchLyrics(videoId, title, artist, durationSeconds, forceRefresh)
+            if (_uiState.value.currentTrack?.id == videoId) {
+                _uiState.update {
+                    it.copy(
+                        lyricsData = result,
+                        isLyricsLoading = false
+                    )
+                }
             }
         }
     }

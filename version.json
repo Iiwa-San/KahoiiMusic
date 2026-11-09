@@ -1,7 +1,7 @@
 {
-  "versionCode": 23,
-  "versionName": "1.4.0",
-  "changelog": "• Bổ sung tính năng Lời bài hát (Lyrics) đồng bộ thời gian thực từ LRCLIB và YouTube\n• Thiết kế lại nút Play/Pause siêu mượt, căn chỉnh hình học chính xác 100%\n• Đồng bộ quy tắc bảo mật Lịch sử phát nhạc (yêu cầu đăng nhập tài khoản Kahoii)\n• Tối ưu cơ chế kiểm tra và cập nhật ứng dụng OTA tự động khi mở ứng dụng",
+  "versionCode": 24,
+  "versionName": "1.4.1",
+  "changelog": "• Sửa lỗi không tải được lời bài hát (Lyrics): hoàn thiện cơ chế tự động tìm và đồng bộ lời từ LRCLIB và YouTube\n• Thêm nút 'Tìm lại lời bài hát' trực tiếp trên giao diện khi bài hát chưa nạp xong\n• Tự động làm mới lời khi bài hát hoàn tất giải mã âm thanh từ YouTube\n• Tối ưu bộ đệm lưu trữ lời bài hát và hiển thị phiên âm tiếng Nhật/tiếng Trung",
   "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
   "forceUpdate": false
 }
