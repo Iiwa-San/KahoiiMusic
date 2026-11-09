@@ -16,7 +16,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import kotlin.math.abs
@@ -55,7 +54,7 @@ class LyricsRepository(private val context: Context) {
             val cachedLrc = File(lyricsCacheDir, "$cleanVid.lrc")
             if (cachedLrc.exists()) {
                 try {
-                    val lrcContent = cachedLrc.readText(StandardCharsets.UTF8)
+                    val lrcContent = cachedLrc.readText(Charsets.UTF_8)
                     val data = parseLrc(lrcContent, cleanVid, cleanTitle, cleanArtist)
                     if (data != null && data.hasLyrics) {
                         attachCachedRomanization(cleanVid, data)
@@ -70,7 +69,7 @@ class LyricsRepository(private val context: Context) {
             val cachedTxt = File(lyricsCacheDir, "$cleanVid.txt")
             if (cachedTxt.exists()) {
                 try {
-                    val txtContent = cachedTxt.readText(StandardCharsets.UTF8)
+                    val txtContent = cachedTxt.readText(Charsets.UTF_8)
                     val data = parsePlainText(txtContent, cleanVid, cleanTitle, cleanArtist)
                     if (data != null && data.hasLyrics) {
                         attachCachedRomanization(cleanVid, data)
@@ -331,9 +330,9 @@ class LyricsRepository(private val context: Context) {
         if (videoId.isBlank() || !data.hasLyrics) return
         try {
             if (data.isSynced && data.plainText.isNotBlank()) {
-                File(lyricsCacheDir, "$videoId.lrc").writeText(data.plainText, StandardCharsets.UTF8)
+                File(lyricsCacheDir, "$videoId.lrc").writeText(data.plainText, Charsets.UTF_8)
             } else if (data.plainText.isNotBlank()) {
-                File(lyricsCacheDir, "$videoId.txt").writeText(data.plainText, StandardCharsets.UTF8)
+                File(lyricsCacheDir, "$videoId.txt").writeText(data.plainText, Charsets.UTF_8)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -345,7 +344,7 @@ class LyricsRepository(private val context: Context) {
         try {
             val romFile = File(lyricsCacheDir, "${videoId}_romaji.json")
             if (romFile.exists()) {
-                val json = romFile.readText(StandardCharsets.UTF8)
+                val json = romFile.readText(Charsets.UTF_8)
                 val type = object : TypeToken<List<String>>() {}.type
                 val list: List<String>? = gson.fromJson(json, type)
                 if (list != null && list.size == data.lines.size) {
@@ -432,7 +431,7 @@ class LyricsRepository(private val context: Context) {
 
                 File(lyricsCacheDir, "${videoId}_romaji.json").writeText(
                     gson.toJson(romanizedLines),
-                    StandardCharsets.UTF8
+                    Charsets.UTF_8
                 )
             }
         } catch (_: Exception) {}
@@ -656,3 +655,4 @@ class LyricsRepository(private val context: Context) {
         }
     }
 }
+
