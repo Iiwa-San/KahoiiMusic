@@ -352,3 +352,4 @@ fun LyricsView(
         }
     }
 }
+

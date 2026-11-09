@@ -1,4 +1,4 @@
-﻿package com.kahoii.music.data
+package com.kahoii.music.data
 
 import android.content.Context
 import com.google.gson.Gson

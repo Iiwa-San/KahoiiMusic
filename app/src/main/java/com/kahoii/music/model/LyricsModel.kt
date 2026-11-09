@@ -23,3 +23,4 @@ data class LyricsData(
         fun empty(videoId: String = "") = LyricsData(videoId = videoId)
     }
 }
+
