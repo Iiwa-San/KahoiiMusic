@@ -31,7 +31,8 @@ namespace KahoiiMusic.Services
         Playlist,
         Collection,
         Saved,
-        History
+        History,
+        Favorites
     }
 
     public class TrackLoadedEventArgs : EventArgs
@@ -1533,6 +1534,27 @@ namespace KahoiiMusic.Services
             _currentPlaylistId = null;
 
             CurrentPlaylistTitle = "Đã tải";
+            _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
+
+            lock (_shufflePlayedIndices)
+            {
+                _shufflePlayedIndices.Clear();
+                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
+            }
+
+            PlayTrackAtIndex(_currentPlaylistIndex);
+        }
+
+        public void PlayFavorites(List<PlaylistItem> favoriteItems, int startIndex = 0)
+        {
+            if (favoriteItems == null || favoriteItems.Count == 0) return;
+
+            _isPlayingFromHistory = false;
+            _currentQueueSource = ActiveQueueSource.Favorites;
+            _playlist = new List<PlaylistItem>(favoriteItems);
+            _currentPlaylistId = null;
+
+            CurrentPlaylistTitle = "Yêu thích";
             _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
 
             lock (_shufflePlayedIndices)

@@ -12,6 +12,7 @@ namespace KahoiiMusic.Controls
     {
         Playlist,
         Collection,
+        Favorite,
         History,
         Saved
     }
@@ -20,6 +21,7 @@ namespace KahoiiMusic.Controls
     {
         private MenuTab _activeTab = MenuTab.Playlist;
         private List<PlaylistItem> _playlistItems = new List<PlaylistItem>();
+        private List<PlaylistItem> _favoriteItems = new List<PlaylistItem>();
         private List<PlaylistItem> _historyItems = new List<PlaylistItem>();
         private List<PlaylistItem> _savedItems = new List<PlaylistItem>();
         private List<UserPlaylist> _collectionPlaylists = new List<UserPlaylist>();
@@ -29,7 +31,7 @@ namespace KahoiiMusic.Controls
         public List<PlaylistItem> PlaylistItems => _playlistItems;
         public int CurrentPlaylistIndex => _currentPlaylistIndex;
         private int _hoveredRowIndex = -1;
-        private int _hoveredTabIndex = -1; // 0: Playlist, 1: Collection, 2: History, 3: Saved
+        private int _hoveredTabIndex = -1; // 0: Playlist, 1: Collection, 2: Favorite, 3: History, 4: Saved
         private bool _isHoveringClose = false;
         private bool _isLoading = false;
 
@@ -151,6 +153,7 @@ namespace KahoiiMusic.Controls
             get
             {
                 if (_activeTab == MenuTab.Playlist) return _playlistItems;
+                if (_activeTab == MenuTab.Favorite) return _favoriteItems;
                 if (_activeTab == MenuTab.History) return _historyItems;
                 if (_activeTab == MenuTab.Saved) return _savedItems;
                 return _playlistItems;
@@ -175,10 +178,11 @@ namespace KahoiiMusic.Controls
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.FromArgb(20, 18, 30);
-            Size = new Size(530, 360);
+            Size = new Size(550, 360);
             DoubleBuffered = true;
             KeyPreview = true;
 
+            _favoriteItems = FavoritesService.GetFavorites();
             _historyItems = HistoryService.GetHistory();
             _savedItems = SavedTracksService.Instance.GetSavedTracks();
             _collectionPlaylists = PlaylistCollectionService.Instance.GetPlaylists();
@@ -288,6 +292,27 @@ namespace KahoiiMusic.Controls
                 }
             };
 
+            FavoritesService.FavoritesChanged += (s, e) =>
+            {
+                if (IsHandleCreated)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            _favoriteItems = FavoritesService.GetFavorites();
+                            if (_activeTab == MenuTab.Favorite) ClampScroll();
+                            Invalidate();
+                        }));
+                    }
+                    catch { }
+                }
+                else
+                {
+                    _favoriteItems = FavoritesService.GetFavorites();
+                }
+            };
+
             PlaylistCollectionService.Instance.PlaylistsChanged += (s, e) =>
             {
                 if (IsHandleCreated)
@@ -389,10 +414,18 @@ namespace KahoiiMusic.Controls
         {
             base.OnShown(e);
             UpdateSearchBoxesVisibility();
+            RefreshFavorites();
             RefreshHistory();
             RefreshSaved();
             RefreshPlaylists();
             UpdateRegion();
+        }
+
+        public void RefreshFavorites()
+        {
+            _favoriteItems = FavoritesService.GetFavorites();
+            if (_activeTab == MenuTab.Favorite) ClampScroll();
+            Invalidate();
         }
 
         public void RefreshPlaylists()
@@ -457,8 +490,155 @@ namespace KahoiiMusic.Controls
             if (e.KeyCode == Keys.Escape)
             {
                 Hide();
+                return;
             }
-            else if (e.KeyCode == Keys.Down)
+
+            bool isSearchFocused = (_searchTracksBox != null && _searchTracksBox.ContainsFocus) ||
+                                   (_searchCollectionsBox != null && _searchCollectionsBox.ContainsFocus) ||
+                                   (_searchCollectionTracksBox != null && _searchCollectionTracksBox.ContainsFocus);
+
+            if (!isSearchFocused)
+            {
+                // Number keys 1-5 to switch tabs
+                if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1)
+                {
+                    ActiveTab = MenuTab.Playlist;
+                    return;
+                }
+                if (e.KeyCode == Keys.D2 || e.KeyCode == Keys.NumPad2)
+                {
+                    ActiveTab = MenuTab.Collection;
+                    RefreshPlaylists();
+                    return;
+                }
+                if (e.KeyCode == Keys.D3 || e.KeyCode == Keys.NumPad3)
+                {
+                    ActiveTab = MenuTab.Favorite;
+                    RefreshFavorites();
+                    return;
+                }
+                if (e.KeyCode == Keys.D4 || e.KeyCode == Keys.NumPad4)
+                {
+                    ActiveTab = MenuTab.History;
+                    RefreshHistory();
+                    return;
+                }
+                if (e.KeyCode == Keys.D5 || e.KeyCode == Keys.NumPad5)
+                {
+                    ActiveTab = MenuTab.Saved;
+                    RefreshSaved();
+                    return;
+                }
+
+                // 'F' key toggles favorite for hovered item or current track
+                if (e.KeyCode == Keys.F)
+                {
+                    var filtered = FilteredItems;
+                    if (_hoveredRowIndex >= 0 && _hoveredRowIndex < filtered.Count)
+                    {
+                        var item = filtered[_hoveredRowIndex];
+                        bool isFav = FavoritesService.ToggleFavorite(item);
+                        AudioPlayer?.RaiseStatus(isFav ? ("❤️ Đã thêm vào Yêu thích: " + item.Title) : ("💔 Đã xóa khỏi Yêu thích: " + item.Title));
+                        Invalidate();
+                        return;
+                    }
+                    else if (AudioPlayer != null && !string.IsNullOrEmpty(AudioPlayer.CurrentVideoId))
+                    {
+                        var curItem = new PlaylistItem
+                        {
+                            Id = AudioPlayer.CurrentVideoId,
+                            Title = AudioPlayer.CurrentTitle,
+                            Author = AudioPlayer.CurrentAuthor,
+                            DurationSeconds = (int)AudioPlayer.TotalDuration.TotalSeconds
+                        };
+                        bool isFav = FavoritesService.ToggleFavorite(curItem);
+                        AudioPlayer?.RaiseStatus(isFav ? ("❤️ Đã thêm vào Yêu thích: " + curItem.Title) : ("💔 Đã xóa khỏi Yêu thích: " + curItem.Title));
+                        Invalidate();
+                        return;
+                    }
+                }
+
+                // Enter key plays hovered song
+                if (e.KeyCode == Keys.Enter)
+                {
+                    var filtered = FilteredItems;
+                    if (_hoveredRowIndex >= 0 && _hoveredRowIndex < filtered.Count)
+                    {
+                        PlaylistItem clickedItem = filtered[_hoveredRowIndex];
+                        if (_activeTab == MenuTab.Playlist)
+                        {
+                            int realIdx = _playlistItems.IndexOf(clickedItem);
+                            _currentPlaylistIndex = realIdx >= 0 ? realIdx : _hoveredRowIndex;
+                            Invalidate();
+                            TrackSelected?.Invoke(this, clickedItem);
+                        }
+                        else if (_activeTab == MenuTab.Favorite)
+                        {
+                            if (AudioPlayer != null)
+                            {
+                                int realIdx = _favoriteItems.IndexOf(clickedItem);
+                                AudioPlayer.PlayFavorites(_favoriteItems, realIdx >= 0 ? realIdx : 0);
+                            }
+                            Invalidate();
+                        }
+                        else if (_activeTab == MenuTab.History)
+                        {
+                            if (AudioPlayer != null)
+                            {
+                                int realIdx = _historyItems.IndexOf(clickedItem);
+                                AudioPlayer.PlayHistory(_historyItems, realIdx >= 0 ? realIdx : 0);
+                            }
+                            Invalidate();
+                        }
+                        else if (_activeTab == MenuTab.Saved)
+                        {
+                            if (AudioPlayer != null)
+                            {
+                                int realIdx = _savedItems.IndexOf(clickedItem);
+                                AudioPlayer.PlaySavedTracks(_savedItems, realIdx >= 0 ? realIdx : 0);
+                            }
+                            Invalidate();
+                        }
+                        return;
+                    }
+                }
+
+                // Delete key removes item from current tab
+                if (e.KeyCode == Keys.Delete)
+                {
+                    var filtered = FilteredItems;
+                    if (_hoveredRowIndex >= 0 && _hoveredRowIndex < filtered.Count)
+                    {
+                        PlaylistItem targetItem = filtered[_hoveredRowIndex];
+                        if (_activeTab == MenuTab.Favorite)
+                        {
+                            FavoritesService.RemoveFavorite(targetItem.Id);
+                            AudioPlayer?.RaiseStatus("💔 Đã xóa khỏi Yêu thích: " + targetItem.Title);
+                            RefreshFavorites();
+                            return;
+                        }
+                        else if (_activeTab == MenuTab.History)
+                        {
+                            HistoryService.RemoveTrack(targetItem.Id);
+                            AudioPlayer?.RaiseStatus("Đã xóa khỏi lịch sử: " + targetItem.Title);
+                            RefreshHistory();
+                            return;
+                        }
+                        else if (_activeTab == MenuTab.Playlist)
+                        {
+                            int realIdx = _playlistItems.IndexOf(targetItem);
+                            if (AudioPlayer != null && realIdx >= 0)
+                            {
+                                AudioPlayer.RemoveFromPlaylist(realIdx);
+                                Invalidate();
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (e.KeyCode == Keys.Down)
             {
                 if (_activeTab == MenuTab.Collection)
                 {
@@ -526,6 +706,7 @@ namespace KahoiiMusic.Controls
             if (Visible)
             {
                 UpdateSearchBoxesVisibility();
+                RefreshFavorites();
                 RefreshHistory();
                 RefreshSaved();
                 RefreshPlaylists();
@@ -708,10 +889,11 @@ namespace KahoiiMusic.Controls
         {
             switch (index)
             {
-                case 0: return new Rectangle(8, 7, 134, 28);   // Danh sách phát
-                case 1: return new Rectangle(146, 7, 106, 28);  // Bộ sưu tập
-                case 2: return new Rectangle(256, 7, 94, 28);  // Lịch sử
-                case 3: return new Rectangle(354, 7, 90, 28);  // Đã tải
+                case 0: return new Rectangle(8, 7, 120, 28);   // Danh sách phát
+                case 1: return new Rectangle(132, 7, 96, 28);  // Bộ sưu tập
+                case 2: return new Rectangle(232, 7, 90, 28);  // Yêu thích
+                case 3: return new Rectangle(326, 7, 82, 28);  // Lịch sử
+                case 4: return new Rectangle(412, 7, 82, 28);  // Đã tải
                 default: return Rectangle.Empty;
             }
         }
@@ -835,7 +1017,7 @@ namespace KahoiiMusic.Controls
             // Tab headers hover
             int oldHoverTab = _hoveredTabIndex;
             _hoveredTabIndex = -1;
-            for (int t = 0; t < 4; t++)
+            for (int t = 0; t < 5; t++)
             {
                 if (GetTabRect(t).Contains(pt))
                 {
@@ -951,8 +1133,9 @@ namespace KahoiiMusic.Controls
 
             Rectangle tab0Rect = GetTabRect(0); // Danh sách phát
             Rectangle tab1Rect = GetTabRect(1); // Bộ sưu tập
-            Rectangle tab2Rect = GetTabRect(2); // Lịch sử
-            Rectangle tab3Rect = GetTabRect(3); // Đã tải
+            Rectangle tab2Rect = GetTabRect(2); // Yêu thích
+            Rectangle tab3Rect = GetTabRect(3); // Lịch sử
+            Rectangle tab4Rect = GetTabRect(4); // Đã tải
             Rectangle closeRect = new Rectangle(Width - 32, 10, 22, 22);
 
             if (e.Button == MouseButtons.Right)
@@ -971,10 +1154,17 @@ namespace KahoiiMusic.Controls
                     return;
                 }
 
-                // Right click on Tab 2 (Lịch sử) -> Context menu: Xóa toàn bộ lịch sử
+                // Right click on Tab 2 (Yêu thích) -> Context menu: Phát tất cả yêu thích, Xóa toàn bộ
                 if (tab2Rect.Contains(e.Location))
                 {
-                    ShowHistoryTabContextMenu(PointToScreen(new Point(tab2Rect.Left, tab2Rect.Bottom + 2)));
+                    ShowFavoriteTabContextMenu(PointToScreen(new Point(tab2Rect.Left, tab2Rect.Bottom + 2)));
+                    return;
+                }
+
+                // Right click on Tab 3 (Lịch sử) -> Context menu: Xóa toàn bộ lịch sử
+                if (tab3Rect.Contains(e.Location))
+                {
+                    ShowHistoryTabContextMenu(PointToScreen(new Point(tab3Rect.Left, tab3Rect.Bottom + 2)));
                     return;
                 }
 
@@ -1065,8 +1255,19 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
-            // 4. Tab 2 clicked (Lịch sử)
+            // 4. Tab 2 clicked (Yêu thích)
             if (tab2Rect.Contains(e.Location))
+            {
+                if (_activeTab != MenuTab.Favorite)
+                {
+                    ActiveTab = MenuTab.Favorite;
+                    RefreshFavorites();
+                }
+                return;
+            }
+
+            // 5. Tab 3 clicked (Lịch sử)
+            if (tab3Rect.Contains(e.Location))
             {
                 if (_activeTab != MenuTab.History)
                 {
@@ -1076,8 +1277,8 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
-            // 5. Tab 3 clicked (Đã tải - Saved)
-            if (tab3Rect.Contains(e.Location))
+            // 6. Tab 4 clicked (Đã tải - Saved)
+            if (tab4Rect.Contains(e.Location))
             {
                 if (_activeTab != MenuTab.Saved)
                 {
@@ -1210,6 +1411,15 @@ namespace KahoiiMusic.Controls
                         _currentPlaylistIndex = realIdx >= 0 ? realIdx : _hoveredRowIndex;
                         Invalidate();
                         TrackSelected?.Invoke(this, clickedItem);
+                    }
+                    else if (_activeTab == MenuTab.Favorite)
+                    {
+                        if (AudioPlayer != null)
+                        {
+                            int realIdx = _favoriteItems.IndexOf(clickedItem);
+                            AudioPlayer.PlayFavorites(_favoriteItems, realIdx >= 0 ? realIdx : 0);
+                        }
+                        Invalidate();
                     }
                     else if (_activeTab == MenuTab.History)
                     {
@@ -1445,8 +1655,19 @@ namespace KahoiiMusic.Controls
                 RefreshPlaylists();
             };
 
+            bool isFavTrack = FavoritesService.IsFavorite(item.Id);
+            var itemFavTrack = new ToolStripMenuItem(isFavTrack ? "💔 Xóa khỏi Yêu thích" : "❤️ Thêm vào Yêu thích");
+            itemFavTrack.Click += (s, e) =>
+            {
+                bool res = FavoritesService.ToggleFavorite(item);
+                AudioPlayer?.RaiseStatus(res ? ("❤️ Đã thêm vào Yêu thích: " + item.Title) : ("💔 Đã xóa khỏi Yêu thích: " + item.Title));
+                Invalidate();
+            };
+
             menu.Items.Add(itemPlay);
             menu.Items.Add(itemAddQueue);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(itemFavTrack);
             menu.Items.Add(new ToolStripSeparator());
             AppendAddToCollectionSubmenu(menu, item);
             menu.Items.Add(new ToolStripSeparator());
@@ -1512,7 +1733,68 @@ namespace KahoiiMusic.Controls
             menu.Renderer = new Form1.DarkMenuRenderer();
             menu.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
 
-            if (_activeTab == MenuTab.Saved)
+            bool isFav = FavoritesService.IsFavorite(item.Id);
+            var itemFav = new ToolStripMenuItem(isFav ? "💔 Xóa khỏi Yêu thích" : "❤️ Thêm vào Yêu thích");
+            itemFav.Click += (s, e) =>
+            {
+                bool res = FavoritesService.ToggleFavorite(item);
+                AudioPlayer?.RaiseStatus(res ? ("❤️ Đã thêm vào Yêu thích: " + item.Title) : ("💔 Đã xóa khỏi Yêu thích: " + item.Title));
+                Invalidate();
+            };
+
+            if (_activeTab == MenuTab.Favorite)
+            {
+                var itemPlay = new ToolStripMenuItem("▶ Phát từ bài này");
+                itemPlay.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+                itemPlay.Click += (s, e) =>
+                {
+                    if (AudioPlayer != null)
+                    {
+                        int fIdx = _favoriteItems.FindIndex(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
+                        AudioPlayer.PlayFavorites(_favoriteItems, fIdx >= 0 ? fIdx : 0);
+                    }
+                };
+
+                var itemAdd = new ToolStripMenuItem("Thêm vào danh sách phát");
+                itemAdd.Click += (s, e) =>
+                {
+                    if (AudioPlayer != null)
+                    {
+                        AudioPlayer.AddToPlaylist(item);
+                        Invalidate();
+                    }
+                };
+
+                bool isSaved = SavedTracksService.Instance.IsTrackSaved(item.Id);
+                var itemDownload = new ToolStripMenuItem(isSaved ? "✓ Đã lưu Offline (Saved)" : "📥 Tải về nghe Offline");
+                itemDownload.Enabled = !isSaved;
+                itemDownload.Click += (s, e) =>
+                {
+                    AudioPlayer?.RaiseStatus("Đang lưu bài hát về máy: " + item.Title + "...");
+                    SavedTracksService.Instance.SaveTrackAsync(item, (success, msg) =>
+                    {
+                        AudioPlayer?.RaiseStatus(success ? ("✓ Đã lưu bài hát: " + item.Title) : ("Lỗi lưu bài: " + msg));
+                    });
+                };
+
+                var itemDelete = new ToolStripMenuItem("💔 Xóa khỏi Yêu thích");
+                itemDelete.Click += (s, e) =>
+                {
+                    FavoritesService.RemoveFavorite(item.Id);
+                    AudioPlayer?.RaiseStatus("💔 Đã xóa khỏi Yêu thích: " + item.Title);
+                    RefreshFavorites();
+                };
+
+                menu.Items.Add(itemPlay);
+                menu.Items.Add(itemAdd);
+                menu.Items.Add(new ToolStripSeparator());
+                AppendAddToCollectionSubmenu(menu, item);
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemDownload);
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemDelete);
+            }
+            else if (_activeTab == MenuTab.Saved)
             {
                 var itemPlay = new ToolStripMenuItem("Phát ngay");
                 itemPlay.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
@@ -1549,6 +1831,8 @@ namespace KahoiiMusic.Controls
 
                 menu.Items.Add(itemPlay);
                 menu.Items.Add(itemAdd);
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemFav);
                 menu.Items.Add(new ToolStripSeparator());
                 AppendAddToCollectionSubmenu(menu, item);
                 menu.Items.Add(new ToolStripSeparator());
@@ -1606,6 +1890,8 @@ namespace KahoiiMusic.Controls
                 menu.Items.Add(itemAdd);
                 menu.Items.Add(itemPlay);
                 menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemFav);
+                menu.Items.Add(new ToolStripSeparator());
                 AppendAddToCollectionSubmenu(menu, item);
                 menu.Items.Add(new ToolStripSeparator());
                 menu.Items.Add(itemDownload);
@@ -1654,6 +1940,8 @@ namespace KahoiiMusic.Controls
 
                 menu.Items.Add(itemPlay);
                 menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add(itemFav);
+                menu.Items.Add(new ToolStripSeparator());
                 AppendAddToCollectionSubmenu(menu, item);
                 menu.Items.Add(new ToolStripSeparator());
                 menu.Items.Add(itemDownload);
@@ -1661,6 +1949,50 @@ namespace KahoiiMusic.Controls
                 menu.Items.Add(itemRemove);
             }
 
+            menu.Show(screenLocation);
+        }
+
+        private void ShowFavoriteTabContextMenu(Point screenLocation)
+        {
+            ContextMenuStrip menu = new ContextMenuStrip();
+            menu.ShowImageMargin = false;
+            menu.ShowCheckMargin = false;
+            menu.BackColor = Color.FromArgb(24, 24, 28);
+            menu.ForeColor = Color.FromArgb(235, 235, 235);
+            menu.Renderer = new Form1.DarkMenuRenderer();
+            menu.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+
+            var itemPlayAll = new ToolStripMenuItem("▶ Phát tất cả yêu thích (" + _favoriteItems.Count + " bài)");
+            itemPlayAll.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            itemPlayAll.Enabled = _favoriteItems != null && _favoriteItems.Count > 0;
+            itemPlayAll.Click += (s, e) =>
+            {
+                if (AudioPlayer != null && _favoriteItems != null && _favoriteItems.Count > 0)
+                {
+                    AudioPlayer.PlayFavorites(_favoriteItems, 0);
+                }
+            };
+
+            var itemClearAll = new ToolStripMenuItem("🗑️ Xóa toàn bộ yêu thích");
+            itemClearAll.Enabled = _favoriteItems != null && _favoriteItems.Count > 0;
+            itemClearAll.Click += (s, e) =>
+            {
+                bool ok = CyberConfirmDialog.ShowConfirm(
+                    "Xác nhận xóa danh sách Yêu thích",
+                    "Bạn có chắc muốn xóa tất cả bài hát khỏi danh sách Yêu thích không?\n\n(Dữ liệu sẽ được đồng bộ lên đám mây)",
+                    "Xóa tất cả",
+                    "Hủy",
+                    this.FindForm());
+                if (ok)
+                {
+                    FavoritesService.ClearFavorites();
+                    RefreshFavorites();
+                }
+            };
+
+            menu.Items.Add(itemPlayAll);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(itemClearAll);
             menu.Show(screenLocation);
         }
 
@@ -1813,11 +2145,13 @@ namespace KahoiiMusic.Controls
             Rectangle tab1Rect = GetTabRect(1);
             Rectangle tab2Rect = GetTabRect(2);
             Rectangle tab3Rect = GetTabRect(3);
+            Rectangle tab4Rect = GetTabRect(4);
 
             DrawTab(g, tab0Rect, "Danh sách phát", _playlistItems.Count, _activeTab == MenuTab.Playlist, _hoveredTabIndex == 0);
             DrawTab(g, tab1Rect, "Bộ sưu tập", _collectionPlaylists.Count, _activeTab == MenuTab.Collection, _hoveredTabIndex == 1);
-            DrawTab(g, tab2Rect, "Lịch sử", FirebaseAuthService.Instance.IsLoggedIn ? _historyItems.Count : 0, _activeTab == MenuTab.History, _hoveredTabIndex == 2);
-            DrawTab(g, tab3Rect, "Đã tải", _savedItems.Count, _activeTab == MenuTab.Saved, _hoveredTabIndex == 3);
+            DrawTab(g, tab2Rect, "Yêu thích", _favoriteItems.Count, _activeTab == MenuTab.Favorite, _hoveredTabIndex == 2, isFavoriteTab: true);
+            DrawTab(g, tab3Rect, "Lịch sử", FirebaseAuthService.Instance.IsLoggedIn ? _historyItems.Count : 0, _activeTab == MenuTab.History, _hoveredTabIndex == 3);
+            DrawTab(g, tab4Rect, "Đã tải", _savedItems.Count, _activeTab == MenuTab.Saved, _hoveredTabIndex == 4);
 
             // Close button "✕"
             Color closeColor = _isHoveringClose ? Color.FromArgb(255, 120, 120) : Color.FromArgb(150, 150, 160);
@@ -1876,6 +2210,11 @@ namespace KahoiiMusic.Controls
                     {
                         g.DrawString("Chưa có danh sách phát", emptyFont, b1, new RectangleF(0, listTop + 40, w, 24), sf);
                         g.DrawString("Dán link YouTube playlist hoặc chuột phải vào bài hát để thêm", hintFont, b2, new RectangleF(0, listTop + 66, w, 20), sf);
+                    }
+                    else if (_activeTab == MenuTab.Favorite)
+                    {
+                        g.DrawString("Chưa có bài hát yêu thích", emptyFont, b1, new RectangleF(0, listTop + 40, w, 24), sf);
+                        g.DrawString("Bấm nút trái tim hoặc nhấn phím 'F' khi nghe nhạc để thêm vào Yêu thích", hintFont, b2, new RectangleF(0, listTop + 66, w, 20), sf);
                     }
                     else if (_activeTab == MenuTab.History)
                     {
@@ -2434,20 +2773,24 @@ namespace KahoiiMusic.Controls
             g.ResetClip();
         }
 
-        private void DrawTab(Graphics g, Rectangle rect, string text, int count, bool isActive, bool isHovered)
+        private void DrawTab(Graphics g, Rectangle rect, string text, int count, bool isActive, bool isHovered, bool isFavoriteTab = false)
         {
+            Color activeBgColor = isFavoriteTab ? Color.FromArgb(50, 255, 45, 85) : Color.FromArgb(50, 168, 85, 247);
+            Color activeBorderColor = isFavoriteTab ? Color.FromArgb(120, 255, 45, 85) : Color.FromArgb(90, 168, 85, 247);
+            Color activeLineColor = isFavoriteTab ? Color.FromArgb(255, 45, 85) : Color.FromArgb(192, 132, 252);
+
             if (isActive)
             {
                 using (GraphicsPath p = GetRoundedRect(rect, 6))
-                using (SolidBrush b = new SolidBrush(Color.FromArgb(50, 168, 85, 247)))
-                using (Pen pen = new Pen(Color.FromArgb(90, 168, 85, 247), 1))
+                using (SolidBrush b = new SolidBrush(activeBgColor))
+                using (Pen pen = new Pen(activeBorderColor, 1))
                 {
                     g.FillPath(b, p);
                     g.DrawPath(pen, p);
                 }
 
                 // Bottom active indicator line
-                using (SolidBrush lineBrush = new SolidBrush(Color.FromArgb(192, 132, 252)))
+                using (SolidBrush lineBrush = new SolidBrush(activeLineColor))
                 {
                     g.FillRectangle(lineBrush, rect.X + 12, rect.Bottom - 2, rect.Width - 24, 2);
                 }
@@ -2462,7 +2805,7 @@ namespace KahoiiMusic.Controls
             }
 
             using (Font f = new Font("Segoe UI", 9f, isActive ? FontStyle.Bold : FontStyle.Regular))
-            using (SolidBrush tb = new SolidBrush(isActive ? Color.White : (isHovered ? Color.FromArgb(220, 220, 230) : Color.FromArgb(160, 160, 175))))
+            using (SolidBrush tb = new SolidBrush(isActive ? Color.White : (isHovered ? (isFavoriteTab ? Color.FromArgb(255, 120, 150) : Color.FromArgb(220, 220, 230)) : (isFavoriteTab ? Color.FromArgb(220, 140, 165) : Color.FromArgb(160, 160, 175)))))
             using (StringFormat sf = new StringFormat() { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             {
                 string displayText = (count > 0) ? string.Format("{0} ({1})", text, count) : text;

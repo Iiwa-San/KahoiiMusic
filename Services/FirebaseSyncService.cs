@@ -78,6 +78,7 @@ namespace KahoiiMusic.Services
 
             SavedTracksService.Instance.SavedTracksChanged += (s, e) => RequestAutoUpload();
             HistoryService.HistoryChanged += (s, e) => RequestAutoUpload();
+            FavoritesService.FavoritesChanged += (s, e) => RequestAutoUpload();
             PlaylistCollectionService.Instance.PlaylistsChanged += (s, e) => RequestAutoUpload();
 
             if (FirebaseAuthService.Instance.IsLoggedIn)
@@ -238,6 +239,7 @@ namespace KahoiiMusic.Services
             {
                 savedTracks = SavedTracksService.Instance.GetSavedTracks(),
                 history = HistoryService.GetHistory(),
+                favorites = FavoritesService.GetFavorites(),
                 collections = PlaylistCollectionService.Instance.GetPlaylists()
             };
         }
@@ -502,7 +504,13 @@ namespace KahoiiMusic.Services
                 }
             }
 
-            // 3. Gộp danh sách bài đã lưu từ đám mây vào metadata trước
+            // 3. Merge Favorites
+            if (payload.favorites != null && payload.favorites.Count > 0)
+            {
+                FavoritesService.MergeFavorites(payload.favorites);
+            }
+
+            // 4. Gộp danh sách bài đã lưu từ đám mây vào metadata trước
             if (payload.savedTracks != null && payload.savedTracks.Count > 0)
             {
                 SavedTracksService.Instance.MergeSavedTracks(payload.savedTracks);

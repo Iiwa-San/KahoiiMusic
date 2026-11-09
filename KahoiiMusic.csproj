@@ -99,6 +99,9 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Controls\UserAccountButton.cs" />
+    <Compile Include="Controls\FavoriteButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\PlaylistButton.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -159,6 +162,7 @@
 
     <Compile Include="Services\AppPaths.cs" />
 
+    <Compile Include="Services\FavoritesService.cs" />
     <Compile Include="Services\SavedTracksService.cs" />
     <Compile Include="Services\FirebaseAuthService.cs" />
     <Compile Include="Services\FirebaseSyncService.cs" />

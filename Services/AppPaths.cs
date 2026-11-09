@@ -55,6 +55,7 @@ namespace KahoiiMusic.Services
         public static string SavedThumbDir => Path.Combine(SavedDir, "thumb");
         public static string SavedJsonFile => Path.Combine(SavedDir, "saved.json");
         public static string PlaylistsJsonFile => Path.Combine(SavedDir, "playlists.json");
+        public static string FavoritesJsonFile => Path.Combine(SavedDir, "favorites.json");
 
         // Application Temporary Cache Folder
         public static string TempDir => Path.Combine(DataRoot, "KahoiiTemp");

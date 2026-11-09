@@ -220,15 +220,17 @@ namespace KahoiiMusic
                 string cleanTitle = AudioPlayerService.CleanDisplayTitle(title);
                 marqueeTitle.Text = cleanTitle;
                 UpdateTrayTooltip(cleanTitle);
-                if (btnQuickDownload != null && !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                if (!string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
                 {
-                    btnQuickDownload.SetCurrentTrack(new PlaylistItem
+                    var trackItem = new PlaylistItem
                     {
                         Id = _audioPlayer.CurrentVideoId,
                         Title = cleanTitle,
                         Author = marqueeAuthor.Text,
                         DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
-                    });
+                    };
+                    if (btnQuickDownload != null) btnQuickDownload.SetCurrentTrack(trackItem);
+                    if (btnFavorite != null) btnFavorite.SetCurrentTrack(trackItem);
                 }
             };
             _audioPlayer.ThumbnailUrlReady += AudioPlayer_ThumbnailUrlReady;
@@ -246,17 +248,26 @@ namespace KahoiiMusic
                 }
                 string curA = !string.IsNullOrEmpty(args.Author) ? args.Author : _audioPlayer.CurrentAuthor;
                 marqueeAuthor.Text = AudioPlayerService.CleanAuthor(curA ?? string.Empty);
-                if (btnQuickDownload != null)
+
+                var loadedItem = new PlaylistItem
                 {
-                    btnQuickDownload.SetCurrentTrack(new PlaylistItem
-                    {
-                        Id = args.VideoId,
-                        Title = args.Title,
-                        Author = marqueeAuthor.Text,
-                        DurationSeconds = (int)args.Duration.TotalSeconds
-                    });
-                }
+                    Id = args.VideoId,
+                    Title = args.Title,
+                    Author = marqueeAuthor.Text,
+                    DurationSeconds = (int)args.Duration.TotalSeconds
+                };
+                if (btnQuickDownload != null) btnQuickDownload.SetCurrentTrack(loadedItem);
+                if (btnFavorite != null) btnFavorite.SetCurrentTrack(loadedItem);
             };
+
+            if (btnFavorite != null)
+            {
+                btnFavorite.FavoriteChanged += (s, isFav) =>
+                {
+                    string t = !string.IsNullOrEmpty(_audioPlayer.CurrentTitle) ? AudioPlayerService.CleanDisplayTitle(_audioPlayer.CurrentTitle) : "Bài hát";
+                    _audioPlayer.RaiseStatus(isFav ? ("❤️ Đã thêm vào Yêu thích: " + t) : ("💔 Đã xóa khỏi Yêu thích: " + t));
+                };
+            }
 
             // Loop Button
             btnLoop.LoopChanged += (s, e) =>
@@ -564,6 +575,22 @@ namespace KahoiiMusic
                         _trayItemLoop.Text = GetLoopMenuText(btnLoop.Mode);
                     }
                     return true;
+
+                case Keys.F:
+                case (Keys.Control | Keys.D):
+                    if (btnFavorite != null)
+                    {
+                        if (string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                        {
+                            _audioPlayer.RaiseStatus("Chưa có bài hát nào đang phát");
+                        }
+                        else
+                        {
+                            btnFavorite.ToggleFavorite();
+                        }
+                        return true;
+                    }
+                    break;
 
                 case Keys.Escape:
                     if (playlistPopup != null && playlistPopup.Visible)
