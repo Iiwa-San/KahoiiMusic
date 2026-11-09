@@ -2284,7 +2284,11 @@ namespace KahoiiMusic.Services
 
                     string ytdlpPath = FindYtDlp();
 
-                    if (string.IsNullOrEmpty(ytdlpPath)) return;
+                    if (string.IsNullOrEmpty(ytdlpPath))
+                    {
+                        RaiseStatus("Lỗi: Không tìm thấy yt-dlp.exe.");
+                        return;
+                    }
 
                     string listId = ExtractListId(playlistUrl);
 
@@ -4001,41 +4005,111 @@ namespace KahoiiMusic.Services
         }
 
         public static string FindYtDlp()
-
         {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
 
             // 1. Local directory next to executable
-
-            string localPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
-
+            string localPath = Path.Combine(baseDir, "yt-dlp.exe");
             if (File.Exists(localPath) && new FileInfo(localPath).Length > 1000000) return localPath;
 
             // 2. Cached in AppData directory
-
             string cachedYtDlp = Path.Combine(AppPaths.TempDir, "yt-dlp.exe");
-
             if (File.Exists(cachedYtDlp) && new FileInfo(cachedYtDlp).Length > 1000000)
-
             {
-
                 return cachedYtDlp;
-
             }
 
-            // 3. Project directory or Python Scripts path
+            // 3. Search relative parent paths (1 level up for publish/, 2 levels up for bin/Release, etc.)
+            string[] relativeCandidates = new string[]
+            {
+                Path.Combine(baseDir, "..", "yt-dlp.exe"),
+                Path.Combine(baseDir, "..", "..", "yt-dlp.exe"),
+                Path.Combine(baseDir, "..", "bin", "Release", "yt-dlp.exe"),
+                Path.Combine(baseDir, "..", "bin", "Debug", "yt-dlp.exe"),
+                Path.Combine(baseDir, "..", "..", "bin", "Release", "yt-dlp.exe"),
+                Path.Combine(AppPaths.DataRoot, "yt-dlp.exe"),
+                Path.Combine(AppPaths.SavedDir, "yt-dlp.exe")
+            };
 
-            string projPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\yt-dlp.exe");
+            foreach (var rel in relativeCandidates)
+            {
+                try
+                {
+                    string full = Path.GetFullPath(rel);
+                    if (File.Exists(full) && new FileInfo(full).Length > 1000000)
+                    {
+                        // Auto-copy to local directory or TempDir for fast future lookups
+                        try
+                        {
+                            if (!File.Exists(localPath)) File.Copy(full, localPath, false);
+                        }
+                        catch { }
+                        return full;
+                    }
+                }
+                catch { }
+            }
 
-            if (File.Exists(projPath) && new FileInfo(projPath).Length > 1000000) return Path.GetFullPath(projPath);
+            // 4. Search in system PATH
+            try
+            {
+                string pathEnv = Environment.GetEnvironmentVariable("PATH");
+                if (!string.IsNullOrEmpty(pathEnv))
+                {
+                    foreach (string p in pathEnv.Split(';'))
+                    {
+                        string trimmed = p.Trim('"', ' ');
+                        if (string.IsNullOrEmpty(trimmed)) continue;
+                        try
+                        {
+                            string candidate = Path.Combine(trimmed, "yt-dlp.exe");
+                            if (File.Exists(candidate) && new FileInfo(candidate).Length > 1000000)
+                            {
+                                return candidate;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
 
-            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            // 5. Python Scripts directories & WinGet
+            try
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
-            string pyPath = Path.Combine(userProfile, @"AppData\Roaming\Python\Python314\Scripts\yt-dlp.exe");
+                string[] pyRoots = new string[]
+                {
+                    Path.Combine(appData, "Python"),
+                    Path.Combine(localAppData, "Programs", "Python")
+                };
 
-            if (File.Exists(pyPath)) return pyPath;
+                foreach (var pyRoot in pyRoots)
+                {
+                    if (Directory.Exists(pyRoot))
+                    {
+                        foreach (var pyDir in Directory.GetDirectories(pyRoot))
+                        {
+                            string pyCandidate = Path.Combine(pyDir, "Scripts", "yt-dlp.exe");
+                            if (File.Exists(pyCandidate) && new FileInfo(pyCandidate).Length > 1000000)
+                            {
+                                return pyCandidate;
+                            }
+                        }
+                    }
+                }
 
-            return "yt-dlp";
+                string wingetCandidate = Path.Combine(localAppData, @"Microsoft\WinGet\Links\yt-dlp.exe");
+                if (File.Exists(wingetCandidate) && new FileInfo(wingetCandidate).Length > 1000000)
+                {
+                    return wingetCandidate;
+                }
+            }
+            catch { }
 
+            return null;
         }
 
         public static string ExtractVideoId(string url)
