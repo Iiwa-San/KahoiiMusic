@@ -1620,9 +1620,19 @@ namespace KahoiiMusic
 
         private async Task CheckForAppUpdatesAsync(bool manual = false)
         {
+            if (manual)
+            {
+                _audioPlayer?.RaiseStatus("Đang kiểm tra bản cập nhật...");
+            }
+
             try
             {
                 var update = await AppUpdateService.Instance.CheckForUpdateAsync();
+                if (manual)
+                {
+                    _audioPlayer?.RaiseStatus(null);
+                }
+
                 if (update != null)
                 {
                     if (InvokeRequired)
@@ -1643,14 +1653,11 @@ namespace KahoiiMusic
                 {
                     Action showLatestDlg = () =>
                     {
-                        using (var dlg = new CyberConfirmDialog(
+                        CyberConfirmDialog.ShowAlert(
                             "Kiểm tra cập nhật",
                             $"Bạn đang sử dụng phiên bản mới nhất (v{AppUpdateService.CurrentVersionName})!",
-                            yesText: "Đã hiểu",
-                            isConfirm: false))
-                        {
-                            dlg.ShowDialog(this);
-                        }
+                            okText: "Đã hiểu",
+                            owner: this);
                     };
 
                     if (InvokeRequired)
@@ -1667,16 +1674,14 @@ namespace KahoiiMusic
             {
                 if (manual)
                 {
+                    _audioPlayer?.RaiseStatus(null);
                     Action showErrorDlg = () =>
                     {
-                        using (var dlg = new CyberConfirmDialog(
+                        CyberConfirmDialog.ShowAlert(
                             "Lỗi kiểm tra cập nhật",
                             "Không thể kết nối đến máy chủ cập nhật. Vui lòng kiểm tra lại kết nối mạng.",
-                            yesText: "Đóng",
-                            isConfirm: false))
-                        {
-                            dlg.ShowDialog(this);
-                        }
+                            okText: "Đóng",
+                            owner: this);
                     };
 
                     if (InvokeRequired)

@@ -233,13 +233,35 @@ namespace KahoiiMusic.Controls
             return path;
         }
 
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            if (Owner != null && Owner.Visible)
+            {
+                int x = Owner.Location.X + (Owner.Width - Width) / 2;
+                int y = Owner.Location.Y + (Owner.Height - Height) / 2;
+                Screen scr = Screen.FromControl(Owner);
+                Rectangle bounds = scr.WorkingArea;
+                x = Math.Max(bounds.Left, Math.Min(x, bounds.Right - Width));
+                y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - Height));
+                Location = new Point(x, y);
+            }
+        }
+
         public static bool ShowConfirm(string title, string message, string yesText = "Chuyển ngay", string noText = "Để sau", Form owner = null)
         {
             using (var dlg = new CyberConfirmDialog(title, message, yesText, noText, isConfirm: true))
             {
                 if (owner != null && owner.Visible)
                 {
-                    dlg.StartPosition = FormStartPosition.CenterParent;
+                    dlg.StartPosition = FormStartPosition.Manual;
+                    int x = owner.Location.X + (owner.Width - dlg.Width) / 2;
+                    int y = owner.Location.Y + (owner.Height - dlg.Height) / 2;
+                    Screen scr = Screen.FromControl(owner);
+                    Rectangle bounds = scr.WorkingArea;
+                    x = Math.Max(bounds.Left, Math.Min(x, bounds.Right - dlg.Width));
+                    y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - dlg.Height));
+                    dlg.Location = new Point(x, y);
                     dlg.ShowDialog(owner);
                 }
                 else
@@ -258,7 +280,14 @@ namespace KahoiiMusic.Controls
             {
                 if (owner != null && owner.Visible)
                 {
-                    dlg.StartPosition = FormStartPosition.CenterParent;
+                    dlg.StartPosition = FormStartPosition.Manual;
+                    int x = owner.Location.X + (owner.Width - dlg.Width) / 2;
+                    int y = owner.Location.Y + (owner.Height - dlg.Height) / 2;
+                    Screen scr = Screen.FromControl(owner);
+                    Rectangle bounds = scr.WorkingArea;
+                    x = Math.Max(bounds.Left, Math.Min(x, bounds.Right - dlg.Width));
+                    y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - dlg.Height));
+                    dlg.Location = new Point(x, y);
                     dlg.ShowDialog(owner);
                 }
                 else

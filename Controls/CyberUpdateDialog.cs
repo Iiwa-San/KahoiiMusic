@@ -60,6 +60,17 @@ namespace KahoiiMusic.Controls
             {
                 using (var dialog = new CyberUpdateDialog(info))
                 {
+                    if (owner is Form ownerForm && ownerForm.Visible)
+                    {
+                        dialog.StartPosition = FormStartPosition.Manual;
+                        int x = ownerForm.Location.X + (ownerForm.Width - dialog.Width) / 2;
+                        int y = ownerForm.Location.Y + (ownerForm.Height - dialog.Height) / 2;
+                        Screen scr = Screen.FromControl(ownerForm);
+                        Rectangle bounds = scr.WorkingArea;
+                        x = Math.Max(bounds.Left, Math.Min(x, bounds.Right - dialog.Width));
+                        y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - dialog.Height));
+                        dialog.Location = new Point(x, y);
+                    }
                     dialog.ShowDialog(owner);
                 }
             }
@@ -568,6 +579,21 @@ namespace KahoiiMusic.Controls
                         g.DrawPath(borderPen, p);
                     }
                 }
+            }
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            if (Owner != null && Owner.Visible)
+            {
+                int x = Owner.Location.X + (Owner.Width - Width) / 2;
+                int y = Owner.Location.Y + (Owner.Height - Height) / 2;
+                Screen scr = Screen.FromControl(Owner);
+                Rectangle bounds = scr.WorkingArea;
+                x = Math.Max(bounds.Left, Math.Min(x, bounds.Right - Width));
+                y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - Height));
+                Location = new Point(x, y);
             }
         }
 
