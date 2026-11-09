@@ -312,9 +312,9 @@ namespace KahoiiMusic
             this.lblCopyright.BackColor = System.Drawing.Color.Transparent;
             this.lblCopyright.Font = new System.Drawing.Font("Segoe UI", 7.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblCopyright.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(120)))), ((int)(((byte)(90)))), ((int)(((byte)(160)))));
-            this.lblCopyright.Location = new System.Drawing.Point(0, 78);
+            this.lblCopyright.Location = new System.Drawing.Point(100, 78);
             this.lblCopyright.Name = "lblCopyright";
-            this.lblCopyright.Size = new System.Drawing.Size(476, 15);
+            this.lblCopyright.Size = new System.Drawing.Size(276, 15);
             this.lblCopyright.TabIndex = 6;
             this.lblCopyright.Text = "copyright by Kahoii-San";
             this.lblCopyright.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -324,10 +324,10 @@ namespace KahoiiMusic
             this.lblVersion.BackColor = System.Drawing.Color.Transparent;
             this.lblVersion.Cursor = System.Windows.Forms.Cursors.Hand;
             this.lblVersion.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblVersion.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(130)))), ((int)(((byte)(100)))), ((int)(((byte)(170)))));
+            this.lblVersion.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(160)))), ((int)(((byte)(135)))), ((int)(((byte)(205)))));
             this.lblVersion.Location = new System.Drawing.Point(380, 78);
             this.lblVersion.Name = "lblVersion";
-            this.lblVersion.Size = new System.Drawing.Size(84, 15);
+            this.lblVersion.Size = new System.Drawing.Size(86, 15);
             this.lblVersion.TabIndex = 10;
             this.lblVersion.Text = "v1.0.16";
             this.lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleRight;

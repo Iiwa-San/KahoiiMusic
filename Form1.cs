@@ -212,9 +212,10 @@ namespace KahoiiMusic
             if (lblVersion != null)
             {
                 lblVersion.Text = "v" + AppUpdateService.CurrentVersionName;
+                lblVersion.BringToFront();
                 lblVersion.Click += async (s, e) => await CheckForAppUpdatesAsync(manual: true);
-                lblVersion.MouseEnter += (s, e) => lblVersion.ForeColor = Color.FromArgb(200, 180, 240);
-                lblVersion.MouseLeave += (s, e) => lblVersion.ForeColor = Color.FromArgb(130, 100, 170);
+                lblVersion.MouseEnter += (s, e) => lblVersion.ForeColor = Color.FromArgb(220, 200, 255);
+                lblVersion.MouseLeave += (s, e) => lblVersion.ForeColor = Color.FromArgb(160, 135, 205);
                 _userToolTip.SetToolTip(lblVersion, "Phiên bản v" + AppUpdateService.CurrentVersionName + " (Nhấn để kiểm tra cập nhật)");
             }
             UpdateUserButtonAppearance();
