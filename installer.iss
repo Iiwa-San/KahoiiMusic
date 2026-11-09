@@ -2,7 +2,7 @@
 ; Uses Inno Setup (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "Kahoii Music"
-#define MyAppVersion "1.0.12"
+#define MyAppVersion "1.0.13"
 #define MyAppPublisher "Kahoii"
 #define MyAppExeName "KahoiiMusic.exe"
 
@@ -49,9 +49,11 @@ Source: "publish\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{app}\Saved"; Permissions: users-modify
 Name: "{app}\Saved\audio"; Permissions: users-modify
 Name: "{app}\Saved\thumb"; Permissions: users-modify
+Name: "{app}\Saved\lyrics"; Permissions: users-modify
 Name: "{app}\KahoiiTemp"; Permissions: users-modify
 Name: "{app}\KahoiiTemp\audio"; Permissions: users-modify
 Name: "{app}\KahoiiTemp\thumb"; Permissions: users-modify
+Name: "{app}\KahoiiTemp\lyrics"; Permissions: users-modify
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"
