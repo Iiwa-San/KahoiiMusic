@@ -6,7 +6,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -60,7 +62,8 @@ fun ArtworkView(
     modifier: Modifier = Modifier,
     accentColor: Color = NeonPink,
     onSwipeLeft: () -> Unit = {},
-    onSwipeRight: () -> Unit = {}
+    onSwipeRight: () -> Unit = {},
+    onArtworkClick: () -> Unit = {}
 ) {
     val currentOnSwipeLeft by rememberUpdatedState(onSwipeLeft)
     val currentOnSwipeRight by rememberUpdatedState(onSwipeRight)
@@ -177,6 +180,11 @@ fun ArtworkView(
                         listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
                     ),
                     shape = RoundedCornerShape(cornerRadius)
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onArtworkClick
                 ),
             contentAlignment = Alignment.Center
         ) {

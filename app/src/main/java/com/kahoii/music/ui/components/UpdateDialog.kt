@@ -2,6 +2,7 @@ package com.kahoii.music.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -353,6 +354,27 @@ fun UpdateDialog(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val context = androidx.compose.ui.platform.LocalContext.current
+                Text(
+                    text = "Tải trực tiếp qua trình duyệt ↗",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clickable {
+                            try {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(updateInfo.apkUrl)
+                                )
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
         }
     }

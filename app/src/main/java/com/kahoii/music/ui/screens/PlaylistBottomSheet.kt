@@ -31,7 +31,10 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Search
@@ -123,6 +126,8 @@ fun PlaylistBottomSheet(
     onDeleteSavedTrack: (String) -> Unit,
     onPlayAllSavedTracks: () -> Unit,
     onPlayAllFavorites: () -> Unit,
+    isLoggedIn: Boolean = false,
+    onOpenAccount: () -> Unit = {},
     onDismissRequest: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
@@ -228,7 +233,7 @@ fun PlaylistBottomSheet(
                     onClick = { selectedTab = 3 },
                     text = {
                         Text(
-                            text = "Lịch sử (${history.size})",
+                            text = "Lịch sử (${if (isLoggedIn) history.size else 0})",
                             fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal,
                             color = if (selectedTab == 3) NeonPink else Color.White.copy(alpha = 0.6f),
                             fontSize = 13.5.sp
@@ -914,7 +919,60 @@ fun PlaylistBottomSheet(
                     }
                 }
 
-                if (history.isNotEmpty()) {
+                if (!isLoggedIn) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(NeonPink.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = NeonPink,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = "Yêu cầu đăng nhập tài khoản",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Đăng nhập tài khoản Kahoii để xem và lưu lịch sử nghe nhạc",
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(18.dp))
+                        Button(
+                            onClick = { onOpenAccount() },
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonPink),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = "Đăng Nhập Ngay",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp
+                            )
+                        }
+                    }
+                } else {
+                    if (history.isNotEmpty()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1021,6 +1079,7 @@ fun PlaylistBottomSheet(
                         }
                     }
                 }
+            }
             }
             // ================= TAB 4: FAVORITES (YÊU THÍCH) =================
             else {

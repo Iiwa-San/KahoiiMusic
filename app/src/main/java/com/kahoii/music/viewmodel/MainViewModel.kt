@@ -19,9 +19,11 @@ import com.kahoii.music.data.FirebaseAuthRepository
 import com.kahoii.music.data.FirebaseSyncRepository
 import com.kahoii.music.data.FirebaseUser
 import com.kahoii.music.data.HistoryRepository
+import com.kahoii.music.data.LyricsRepository
 import com.kahoii.music.data.PlaylistCollectionRepository
 import com.kahoii.music.data.SavedTracksRepository
 import com.kahoii.music.data.YouTubeRepository
+import com.kahoii.music.model.LyricsData
 import com.kahoii.music.util.AppUpdateManager
 import com.kahoii.music.util.NetworkUtils
 import com.kahoii.music.model.ActiveQueueSource
@@ -54,7 +56,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val playlistCollectionRepository = PlaylistCollectionRepository(application)
     private val authRepository = FirebaseAuthRepository(application)
     private val syncRepository = FirebaseSyncRepository(authRepository)
+    private val lyricsRepository = LyricsRepository(application)
     private var syncJob: Job? = null
+    private var lyricsJob: Job? = null
     private var isApplyingCloudPayload = true
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -67,14 +71,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingMediaItem: Pair<String, PlaylistItem>? = null
 
     init {
+        historyRepository.isLoggedIn = { authRepository.currentUser.value != null }
         initMediaController()
         observeHistory()
         observeSavedTracks()
         observeFavorites()
         observePlaylists()
         observeAuth()
+        checkAppUpdate(isManual = false)
         com.kahoii.music.service.MusicQueueManager.onTrackChanged = { track ->
             _uiState.update { it.copy(currentTrack = track) }
+            if (track != null) {
+                loadLyricsForTrack(track.id, track.safeTitle, track.safeArtist, track.durationSeconds)
+            } else {
+                _uiState.update { it.copy(lyricsData = null, isLyricsLoading = false, currentLyricIndex = -1) }
+            }
         }
         com.kahoii.music.service.MusicQueueManager.onPlaylistIndexChanged = { idx ->
             _uiState.update { it.copy(currentPlaylistIndex = idx) }
@@ -96,6 +107,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             startProgressUpdates()
             com.kahoii.music.service.MusicQueueManager.currentTrack?.let { cur ->
                 _uiState.update { it.copy(currentTrack = cur, currentPlaylistIndex = com.kahoii.music.service.MusicQueueManager.currentIndex) }
+                loadLyricsForTrack(cur.id, cur.safeTitle, cur.safeArtist, cur.durationSeconds)
             }
             pendingMediaItem?.let { (url, track) ->
                 playStreamUrl(url, track)
@@ -208,10 +220,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (p != null && p.isPlaying) {
                     val currentPos = p.currentPosition.coerceAtLeast(0L)
                     val dur = p.duration.coerceAtLeast(0L)
+                    val lyrics = _uiState.value.lyricsData
+                    val newIndex = if (lyrics != null && lyrics.isSynced && lyrics.lines.isNotEmpty()) {
+                        val targetMs = currentPos + 120L
+                        var found = -1
+                        for (i in lyrics.lines.indices) {
+                            if (lyrics.lines[i].timestampMs <= targetMs) {
+                                found = i
+                            } else {
+                                break
+                            }
+                        }
+                        found
+                    } else -1
+
                     _uiState.update {
                         it.copy(
                             currentPositionMs = currentPos,
-                            durationMs = if (dur > 0) dur else it.durationMs
+                            durationMs = if (dur > 0) dur else it.durationMs,
+                            currentLyricIndex = newIndex
                         )
                     }
                 }
@@ -762,6 +789,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun seekTo(positionMs: Long) {
+        val p = controller ?: return
+        p.seekTo(positionMs)
+        _uiState.update { it.copy(currentPositionMs = positionMs) }
+    }
+
+    fun toggleLyricsVisibility() {
+        _uiState.update { it.copy(isLyricsVisible = !it.isLyricsVisible) }
+    }
+
+    fun loadLyricsForTrack(videoId: String, title: String, artist: String, durationSeconds: Int) {
+        lyricsJob?.cancel()
+        _uiState.update {
+            it.copy(
+                lyricsData = null,
+                isLyricsLoading = true,
+                currentLyricIndex = -1
+            )
+        }
+        lyricsJob = viewModelScope.launch {
+            val result = lyricsRepository.fetchLyrics(videoId, title, artist, durationSeconds)
+            _uiState.update {
+                it.copy(
+                    lyricsData = result,
+                    isLyricsLoading = false
+                )
+            }
+        }
+    }
+
     fun toggleLoopMode() {
         val nextMode = when (_uiState.value.loopMode) {
             LoopMode.OFF -> LoopMode.ALL
@@ -983,11 +1040,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 lastObservedUserId = newId
                 _uiState.update { it.copy(currentUser = user) }
                 if (user != null) {
+                    historyRepository.loadHistory()
                     if (prevId != newId) {
                         syncCloudData(user)
                     }
                 } else {
                     isApplyingCloudPayload = false
+                    historyRepository.onLoggedOut()
                 }
             }
         }
@@ -1063,6 +1122,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun signOut() {
         clearUserDataExceptCurrentPlaying()
+        historyRepository.onLoggedOut()
         authRepository.signOut()
         _uiState.update { it.copy(currentUser = null, syncStatusMessage = null) }
         Toast.makeText(getApplication(), "Đã đăng xuất", Toast.LENGTH_SHORT).show()

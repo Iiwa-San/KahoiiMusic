@@ -30,10 +30,14 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.ui.text.style.TextAlign
+import com.kahoii.music.BuildConfig
 import com.kahoii.music.ui.components.AccountBottomSheet
 import com.kahoii.music.ui.components.CellularDownloadDialog
+import com.kahoii.music.ui.components.LyricsView
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -241,17 +245,36 @@ fun MusicPlayerScreen(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // ================= 2. ALBUM ARTWORK =================
-            ArtworkView(
-                thumbnailUrl = uiState.currentTrack?.thumbnailUrl,
-                isPlaying = uiState.isPlaying,
-                accentColor = NeonPink,
-                onSwipeLeft = { viewModel.playNext() },
-                onSwipeRight = { viewModel.playPrevious() },
+            // ================= 2. ALBUM ARTWORK OR LYRICS =================
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .weight(1f, fill = false)
-            )
+                    .fillMaxWidth(0.88f)
+                    .weight(1f, fill = false),
+                contentAlignment = Alignment.Center
+            ) {
+                if (uiState.isLyricsVisible) {
+                    LyricsView(
+                        lyricsData = uiState.lyricsData,
+                        isLoading = uiState.isLyricsLoading,
+                        currentPositionMs = uiState.currentPositionMs,
+                        currentLyricIndex = uiState.currentLyricIndex,
+                        accentColor = NeonPink,
+                        onSeek = { positionMs -> viewModel.seekTo(positionMs) },
+                        onClose = { viewModel.toggleLyricsVisibility() },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    ArtworkView(
+                        thumbnailUrl = uiState.currentTrack?.thumbnailUrl,
+                        isPlaying = uiState.isPlaying,
+                        accentColor = NeonPink,
+                        onSwipeLeft = { viewModel.playNext() },
+                        onSwipeRight = { viewModel.playPrevious() },
+                        onArtworkClick = { viewModel.toggleLyricsVisibility() },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -294,7 +317,32 @@ fun MusicPlayerScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Lyrics Button
+                IconButton(
+                    onClick = { viewModel.toggleLyricsVisibility() },
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    if (uiState.isLyricsLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = NeonPink,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Lời bài hát",
+                            tint = when {
+                                uiState.isLyricsVisible -> NeonPink
+                                uiState.hasLyrics -> Color.White
+                                else -> Color.White.copy(alpha = 0.45f)
+                            },
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
 
                 // Favorite Heart Button
                 IconButton(
@@ -367,7 +415,7 @@ fun MusicPlayerScreen(
                 playlistCount = uiState.playlist.size,
                 savedCount = uiState.savedTracks.size,
                 favoritesCount = uiState.favorites.size,
-                historyCount = uiState.history.size,
+                historyCount = if (uiState.isLoggedIn) uiState.history.size else 0,
                 onPlaylistClick = {
                     selectedSheetTab = 0
                     showPlaylistSheet = true
@@ -397,7 +445,38 @@ fun MusicPlayerScreen(
                 }
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // ================= 8. FOOTER: COPYRIGHT & CLICKABLE VERSION =================
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Spacer(modifier = Modifier.width(44.dp))
+                Text(
+                    text = "copyright by Kahoii-San",
+                    color = Color.White.copy(alpha = 0.35f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME}",
+                    color = NeonPink.copy(alpha = 0.8f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { viewModel.checkAppUpdate(isManual = true) }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
         }
 
         // ================= BOTTOM SHEETS & DIALOGS =================
@@ -484,6 +563,11 @@ fun MusicPlayerScreen(
                 },
                 onPlayAllFavorites = {
                     viewModel.playAllFavorites()
+                },
+                isLoggedIn = uiState.isLoggedIn,
+                onOpenAccount = {
+                    showPlaylistSheet = false
+                    showAccountSheet = true
                 },
                 onDismissRequest = { showPlaylistSheet = false }
             )

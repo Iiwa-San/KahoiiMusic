@@ -66,8 +66,14 @@ data class PlayerUiState(
     val pendingCellularDownloadTracks: List<PlaylistItem> = emptyList(),
     val updateInfo: AppUpdateInfo? = null,
     val updateDownloadState: UpdateDownloadState = UpdateDownloadState.Idle,
-    val isCheckingUpdate: Boolean = false
+    val isCheckingUpdate: Boolean = false,
+    val lyricsData: LyricsData? = null,
+    val isLyricsLoading: Boolean = false,
+    val currentLyricIndex: Int = -1,
+    val isLyricsVisible: Boolean = false
 ) {
+    val hasLyrics: Boolean
+        get() = lyricsData != null && lyricsData.hasLyrics
     val isLoggedIn: Boolean
         get() = currentUser != null
     val isPlaying: Boolean

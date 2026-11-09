@@ -24,6 +24,8 @@ object AppUpdateManager {
         "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/version.json"
     private const val FALLBACK_VERSION_URL =
         "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/AndroidApp/version.json"
+    private const val FALLBACK_MAIN_URL =
+        "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/version.json"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -41,7 +43,7 @@ object AppUpdateManager {
      * Fetch remote version info from GitHub.
      */
     suspend fun fetchRemoteVersion(): AppUpdateInfo? = withContext(Dispatchers.IO) {
-        val urls = listOf(PRIMARY_VERSION_URL, FALLBACK_VERSION_URL)
+        val urls = listOf(PRIMARY_VERSION_URL, FALLBACK_VERSION_URL, FALLBACK_MAIN_URL)
         for (baseUrl in urls) {
             try {
                 val urlWithBuster = "$baseUrl?t=${System.currentTimeMillis()}"
@@ -56,14 +58,15 @@ object AppUpdateManager {
                     if (!response.isSuccessful) return@use
                     val bodyStr = response.body?.string() ?: return@use
                     val json = JSONObject(bodyStr)
-                    val versionCode = json.optInt("versionCode", 0)
-                    val versionName = json.optString("versionName", "")
-                    val changelog = json.optString("changelog", "")
-                    val apkUrl = json.optString(
+                    val targetObj = if (json.has("android")) json.getJSONObject("android") else json
+                    val versionCode = targetObj.optInt("versionCode", 0)
+                    val versionName = targetObj.optString("versionName", "")
+                    val changelog = targetObj.optString("changelog", "")
+                    val apkUrl = targetObj.optString(
                         "apkUrl",
                         "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk"
                     )
-                    val forceUpdate = json.optBoolean("forceUpdate", false)
+                    val forceUpdate = targetObj.optBoolean("forceUpdate", false)
 
                     if (versionCode > 0 && apkUrl.isNotBlank()) {
                         return@withContext AppUpdateInfo(

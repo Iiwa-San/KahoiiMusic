@@ -1,7 +1,7 @@
 {
-  "versionCode": 22,
-  "versionName": "1.3.9",
-  "changelog": "• Hỗ trợ nút Chia sẻ (Share) trực tiếp từ app YouTube sang KahoiiMusic\n• Tự động trích xuất link chuẩn từ văn bản chia sẻ\n• Tối ưu hiệu năng và phát nhạc không gián đoạn",
+  "versionCode": 23,
+  "versionName": "1.4.0",
+  "changelog": "• Bổ sung tính năng Lời bài hát (Lyrics) đồng bộ thời gian thực từ LRCLIB và YouTube\n• Thiết kế lại nút Play/Pause siêu mượt, căn chỉnh hình học chính xác 100%\n• Đồng bộ quy tắc bảo mật Lịch sử phát nhạc (yêu cầu đăng nhập tài khoản Kahoii)\n• Tối ưu cơ chế kiểm tra và cập nhật ứng dụng OTA tự động khi mở ứng dụng",
   "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
   "forceUpdate": false
 }

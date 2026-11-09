@@ -20,6 +20,8 @@ class HistoryRepository(private val context: Context) {
     private val historyFile = File(context.filesDir, "history.json")
     private val favoritesFile = File(context.filesDir, "favorites.json")
 
+    var isLoggedIn: () -> Boolean = { false }
+
     private val _history = MutableStateFlow<List<PlaylistItem>>(emptyList())
     val history: StateFlow<List<PlaylistItem>> = _history.asStateFlow()
 
@@ -28,13 +30,19 @@ class HistoryRepository(private val context: Context) {
 
     init {
         CoroutineScope(Dispatchers.IO).launch {
-            loadHistory()
+            if (isLoggedIn()) {
+                loadHistory()
+            }
             loadFavorites()
         }
     }
 
     @Synchronized
-    private fun loadHistory() {
+    fun loadHistory() {
+        if (!isLoggedIn()) {
+            _history.value = emptyList()
+            return
+        }
         try {
             if (historyFile.exists()) {
                 val json = historyFile.readText()
@@ -51,8 +59,13 @@ class HistoryRepository(private val context: Context) {
         _history.value = emptyList()
     }
 
+    fun onLoggedOut() {
+        _history.value = emptyList()
+    }
+
     @Synchronized
     private fun saveHistory() {
+        if (!isLoggedIn()) return
         try {
             val json = gson.toJson(_history.value)
             historyFile.writeText(json)
@@ -90,6 +103,7 @@ class HistoryRepository(private val context: Context) {
     }
 
     suspend fun addTrack(track: PlaylistItem) = withContext(Dispatchers.IO) {
+        if (!isLoggedIn()) return@withContext
         if (track.safeId.isBlank()) return@withContext
         val current = _history.value.toMutableList()
         val existing = current.find { it.id.equals(track.id, ignoreCase = true) }
@@ -107,6 +121,7 @@ class HistoryRepository(private val context: Context) {
     }
 
     suspend fun updateTrackInfoOnly(track: PlaylistItem) = withContext(Dispatchers.IO) {
+        if (!isLoggedIn()) return@withContext
         if (track.safeId.isBlank()) return@withContext
         val current = _history.value.toMutableList()
         val index = current.indexOfFirst { it.id.equals(track.id, ignoreCase = true) }
@@ -134,6 +149,7 @@ class HistoryRepository(private val context: Context) {
     }
 
     suspend fun mergeHistory(cloudHistory: List<PlaylistItem>) = withContext(Dispatchers.IO) {
+        if (!isLoggedIn()) return@withContext
         if (cloudHistory.isEmpty()) return@withContext
         val current = _history.value.toMutableList()
         for (track in cloudHistory) {
