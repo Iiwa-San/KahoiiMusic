@@ -311,9 +311,10 @@ fun LyricsView(
                                     lineHeight = if (isActive) 25.sp else 21.sp
                                 )
 
-                                if (!line.romanizedText.isNullOrBlank()) {
+                                val romText = line.romanizedText
+                                if (!romText.isNullOrBlank()) {
                                     Text(
-                                        text = line.romanizedText,
+                                        text = romText,
                                         color = if (isActive) accentColor.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.28f),
                                         fontSize = if (isActive) 13.5.sp else 11.5.sp,
                                         fontWeight = FontWeight.Medium,

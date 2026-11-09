@@ -3,7 +3,7 @@ package com.kahoii.music.model
 data class LyricLine(
     val timestampMs: Long,
     val text: String,
-    var romanizedText: String? = null
+    val romanizedText: String? = null
 )
 
 data class LyricsData(
