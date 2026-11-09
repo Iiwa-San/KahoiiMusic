@@ -1,0 +1,8 @@
+{
+  "versionCode": 14,
+  "versionName": "1.0.14",
+  "changelog": "• Bổ sung tính năng hiển thị Lời bài hát (Lyrics) đồng bộ thời gian thực\n• Tự động tìm kiếm & tải lời bài hát từ kho dữ liệu LRCLIB\n• Hỗ trợ phiên âm Pinyin (Trung) & Romaji (Nhật)\n• Tự động kiểm tra bản cập nhật mới khi khởi động ứng dụng\n• Nâng cấp giao diện Cyberpunk Neon đồng bộ toàn hệ sinh thái Kahoii",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.14.exe",
+  "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
+  "forceUpdate": false
+}

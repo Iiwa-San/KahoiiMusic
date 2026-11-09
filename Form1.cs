@@ -7,6 +7,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using KahoiiMusic.Services;
 using KahoiiMusic.Models;
@@ -101,6 +102,19 @@ namespace KahoiiMusic
                     HandleIncomingUrl(initialUrl);
                 };
             }
+
+            Shown += (s, e) =>
+            {
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(2500);
+                        await CheckForAppUpdatesAsync(manual: false);
+                    }
+                    catch { }
+                });
+            };
         }
 
         private void LoadAppLogo()
@@ -1439,8 +1453,13 @@ namespace KahoiiMusic
                 trayItemTimer.DropDownItems.Add(new ToolStripSeparator());
                 addTrayTimer("T\u1eaft h\u1eb9n gi\u1edd", KahoiiMusic.Services.SleepTimerOption.Off);
 
+                var itemCheckUpdate = new ToolStripMenuItem("Kiểm tra bản cập nhật...");
+                itemCheckUpdate.Click += async (s, e) => await CheckForAppUpdatesAsync(manual: true);
+
                 _trayMenu.Items.Add(_trayItemLoop);
                 _trayMenu.Items.Add(trayItemTimer);
+                _trayMenu.Items.Add(new ToolStripSeparator());
+                _trayMenu.Items.Add(itemCheckUpdate);
                 _trayMenu.Items.Add(new ToolStripSeparator());
                 _trayMenu.Items.Add(itemExit);
 
@@ -1588,6 +1607,79 @@ namespace KahoiiMusic
                 TopMost = false;
             }
             catch { }
+        }
+
+        private async Task CheckForAppUpdatesAsync(bool manual = false)
+        {
+            try
+            {
+                var update = await AppUpdateService.Instance.CheckForUpdateAsync();
+                if (update != null)
+                {
+                    if (InvokeRequired)
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            RestoreFromTray();
+                            CyberUpdateDialog.ShowUpdate(this, update);
+                        }));
+                    }
+                    else
+                    {
+                        RestoreFromTray();
+                        CyberUpdateDialog.ShowUpdate(this, update);
+                    }
+                }
+                else if (manual)
+                {
+                    Action showLatestDlg = () =>
+                    {
+                        using (var dlg = new CyberConfirmDialog(
+                            "Kiểm tra cập nhật",
+                            $"Bạn đang sử dụng phiên bản mới nhất (v{AppUpdateService.CurrentVersionName})!",
+                            yesText: "Đã hiểu",
+                            isConfirm: false))
+                        {
+                            dlg.ShowDialog(this);
+                        }
+                    };
+
+                    if (InvokeRequired)
+                    {
+                        BeginInvoke(showLatestDlg);
+                    }
+                    else
+                    {
+                        showLatestDlg();
+                    }
+                }
+            }
+            catch
+            {
+                if (manual)
+                {
+                    Action showErrorDlg = () =>
+                    {
+                        using (var dlg = new CyberConfirmDialog(
+                            "Lỗi kiểm tra cập nhật",
+                            "Không thể kết nối đến máy chủ cập nhật. Vui lòng kiểm tra lại kết nối mạng.",
+                            yesText: "Đóng",
+                            isConfirm: false))
+                        {
+                            dlg.ShowDialog(this);
+                        }
+                    };
+
+                    if (InvokeRequired)
+                    {
+                        BeginInvoke(showErrorDlg);
+                    }
+                    else
+                    {
+                        showErrorDlg();
+                    }
+                }
+            }
         }
 
         private void StartSingleInstanceIpcServer()

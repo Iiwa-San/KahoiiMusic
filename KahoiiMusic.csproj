@@ -122,10 +122,14 @@
     <Compile Include="Models\UserPlaylist.cs" />
 
     <Compile Include="Models\LoopMode.cs" />
+    <Compile Include="Models\AppUpdateInfo.cs" />
     <Compile Include="Controls\InputDialog.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Controls\CyberConfirmDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Controls\CyberUpdateDialog.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Controls\ImageCropDialog.cs">
@@ -177,6 +181,7 @@
     </Compile>
     <Compile Include="Services\PlaylistCollectionService.cs" />
     <Compile Include="Services\LyricsService.cs" />
+    <Compile Include="Services\AppUpdateService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
