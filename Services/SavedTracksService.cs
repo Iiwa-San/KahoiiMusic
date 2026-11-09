@@ -49,6 +49,7 @@ namespace KahoiiMusic.Services
             AppPaths.EnsureDirectoriesExist();
             CleanupLegacyDegradedAudio();
             LoadFromFile();
+            UpdateLyricsForSavedTracksAsync();
         }
 
         private void CleanupLegacyDegradedAudio()
@@ -136,6 +137,17 @@ namespace KahoiiMusic.Services
                 }
             }
             return null;
+        }
+
+        public int GetTrackDuration(string videoId)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return 0;
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                var match = _savedTracks.Find(x => string.Equals(x.Id, videoId, StringComparison.OrdinalIgnoreCase));
+                return match != null ? match.DurationSeconds : 0;
+            }
         }
 
 
@@ -384,6 +396,7 @@ namespace KahoiiMusic.Services
                     }
 
                     SavedTracksChanged?.Invoke(this, EventArgs.Empty);
+                    SaveLyricsForTrack(videoId, item.Title, item.Author, item.DurationSeconds);
                     callback?.Invoke(true, "Đã lưu bài hát vào mục Đã tải!");
                 }
                 catch (Exception ex)
@@ -421,9 +434,110 @@ namespace KahoiiMusic.Services
                     try { File.Delete(thumbFile); } catch { }
                 }
 
+                // Delete lyrics files in Saved/lyrics/
+                try
+                {
+                    string lrcFile = Path.Combine(AppPaths.SavedLyricsDir, videoId + ".lrc");
+                    if (File.Exists(lrcFile)) File.Delete(lrcFile);
+                    string txtFile = Path.Combine(AppPaths.SavedLyricsDir, videoId + ".txt");
+                    if (File.Exists(txtFile)) File.Delete(txtFile);
+                    string romFile = Path.Combine(AppPaths.SavedLyricsDir, videoId + "_romaji.json");
+                    if (File.Exists(romFile)) File.Delete(romFile);
+                }
+                catch { }
+
                 SavedTracksChanged?.Invoke(this, EventArgs.Empty);
                 return removed > 0;
             }
+        }
+
+        public void SaveLyricsForTrack(string videoId, string title, string author, int duration)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return;
+
+            ThreadPool.QueueUserWorkItem(async _ =>
+            {
+                try
+                {
+                    AppPaths.EnsureDirectoriesExist();
+                    string savedLrc = Path.Combine(AppPaths.SavedLyricsDir, videoId + ".lrc");
+                    string savedTxt = Path.Combine(AppPaths.SavedLyricsDir, videoId + ".txt");
+                    if (File.Exists(savedLrc) || File.Exists(savedTxt)) return;
+
+                    // Copy from Temp if already fetched
+                    string tempLrc = Path.Combine(AppPaths.TempLyricsDir, videoId + ".lrc");
+                    if (File.Exists(tempLrc))
+                    {
+                        try
+                        {
+                            File.Copy(tempLrc, savedLrc, true);
+                            string tempRom = Path.Combine(AppPaths.TempLyricsDir, videoId + "_romaji.json");
+                            if (File.Exists(tempRom))
+                            {
+                                File.Copy(tempRom, Path.Combine(AppPaths.SavedLyricsDir, videoId + "_romaji.json"), true);
+                            }
+                            return;
+                        }
+                        catch { }
+                    }
+
+                    var lyrics = await LyricsService.Instance.FetchLyricsAsync(videoId, title, author, duration);
+                    if (lyrics != null && lyrics.HasLyrics)
+                    {
+                        if (lyrics.IsSynced) File.WriteAllText(savedLrc, lyrics.PlainText ?? string.Empty, Encoding.UTF8);
+                        else File.WriteAllText(savedTxt, lyrics.PlainText ?? string.Empty, Encoding.UTF8);
+                    }
+                }
+                catch { }
+            });
+        }
+
+        public void UpdateLyricsForSavedTracksAsync()
+        {
+            ThreadPool.QueueUserWorkItem(async _ =>
+            {
+                try
+                {
+                    // Delay slightly to allow main form startup without disk congestion
+                    Thread.Sleep(3000);
+                    var tracks = GetSavedTracks();
+                    foreach (var t in tracks)
+                    {
+                        if (t == null || string.IsNullOrWhiteSpace(t.Id)) continue;
+                        string lrc = Path.Combine(AppPaths.SavedLyricsDir, t.Id + ".lrc");
+                        string txt = Path.Combine(AppPaths.SavedLyricsDir, t.Id + ".txt");
+                        if (File.Exists(lrc) || File.Exists(txt)) continue;
+
+                        string tempLrc = Path.Combine(AppPaths.TempLyricsDir, t.Id + ".lrc");
+                        if (File.Exists(tempLrc))
+                        {
+                            try
+                            {
+                                File.Copy(tempLrc, lrc, true);
+                                string tempRom = Path.Combine(AppPaths.TempLyricsDir, t.Id + "_romaji.json");
+                                if (File.Exists(tempRom))
+                                {
+                                    File.Copy(tempRom, Path.Combine(AppPaths.SavedLyricsDir, t.Id + "_romaji.json"), true);
+                                }
+                                continue;
+                            }
+                            catch { }
+                        }
+
+                        var lyrics = await LyricsService.Instance.FetchLyricsAsync(t.Id, t.Title, t.Author, t.DurationSeconds);
+                        if (lyrics != null && lyrics.HasLyrics)
+                        {
+                            try
+                            {
+                                if (lyrics.IsSynced) File.WriteAllText(lrc, lyrics.PlainText ?? string.Empty, Encoding.UTF8);
+                                else File.WriteAllText(txt, lyrics.PlainText ?? string.Empty, Encoding.UTF8);
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+            });
         }
 
         public void ClearAllSaved(string exceptVideoId = null)

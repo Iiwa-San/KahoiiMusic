@@ -105,6 +105,12 @@
     <Compile Include="Controls\PlaylistButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\LyricsButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Controls\LyricsPanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\PlaylistSearchBox.cs" />
     <Compile Include="Controls\PlaylistPopup.cs">
       <SubType>Form</SubType>
@@ -170,6 +176,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Services\PlaylistCollectionService.cs" />
+    <Compile Include="Services\LyricsService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -192,6 +199,7 @@
       <Link>Resources\NAudio.WinMM.dll</Link>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\logo_icon.png" />
+    <EmbeddedResource Include="Resources\lyrics_icon.png" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Resources\" />

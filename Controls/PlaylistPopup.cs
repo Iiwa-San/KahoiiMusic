@@ -710,6 +710,13 @@ namespace KahoiiMusic.Controls
                 RefreshHistory();
                 RefreshSaved();
                 RefreshPlaylists();
+
+                // If any session playlist items have missing duration, resolve them now
+                if (AudioPlayer != null && AudioPlayer.HasSessionPlaylist && AudioPlayer.SessionPlaylist.Exists(x => x.DurationSeconds <= 0))
+                {
+                    AudioPlayer.ResolveMissingTrackDurationsAsync(AudioPlayer.CurrentPlaylistId, null);
+                }
+
                 ClampScroll();
                 ClampCollectionScroll();
                 Invalidate();

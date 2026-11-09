@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -16,7 +16,43 @@ namespace KahoiiMusic.Services
 
         private static List<PlaylistItem> _history = new List<PlaylistItem>();
         private static bool _autoCleanTempOnExit = false;
+        private static int _lyricsDelayOffsetMs = 0; // Default: 0ms true audio synchronization
+        private static int _lyricsRomanizationMode = 1; // Default: Dual mode (Song ngữ)
         private static bool _initialized = false;
+
+        public static int LyricsDelayOffsetMs
+        {
+            get { lock (_lock) { return _lyricsDelayOffsetMs; } }
+            set
+            {
+                lock (_lock)
+                {
+                    if (_lyricsDelayOffsetMs != value)
+                    {
+                        _lyricsDelayOffsetMs = value;
+                        SaveSettings();
+                    }
+                }
+                SettingsChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
+
+        public static int LyricsRomanizationMode
+        {
+            get { lock (_lock) { return _lyricsRomanizationMode; } }
+            set
+            {
+                lock (_lock)
+                {
+                    if (_lyricsRomanizationMode != value)
+                    {
+                        _lyricsRomanizationMode = value;
+                        SaveSettings();
+                    }
+                }
+                SettingsChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
 
         public static event EventHandler HistoryChanged;
         public static event EventHandler SettingsChanged;
@@ -151,6 +187,16 @@ namespace KahoiiMusic.Services
                 }
             }
             return null;
+        }
+
+        public static int GetTrackDuration(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return 0;
+            lock (_lock)
+            {
+                var match = _history.Find(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+                return match != null ? match.DurationSeconds : 0;
+            }
         }
 
 
@@ -442,19 +488,36 @@ namespace KahoiiMusic.Services
                     if (m.Success)
                     {
                         _autoCleanTempOnExit = bool.Parse(m.Groups[1].Value);
-                        return;
                     }
+
+                    Match mDelay = Regex.Match(text, "\"lyricsDelayOffsetMs\"\\s*:\\s*(-?\\d+)", RegexOptions.IgnoreCase);
+                    if (mDelay.Success)
+                    {
+                        int.TryParse(mDelay.Groups[1].Value, out _lyricsDelayOffsetMs);
+                    }
+
+                    Match mRom = Regex.Match(text, "\"lyricsRomanizationMode\"\\s*:\\s*(\\d+)", RegexOptions.IgnoreCase);
+                    if (mRom.Success)
+                    {
+                        int.TryParse(mRom.Groups[1].Value, out _lyricsRomanizationMode);
+                    }
+                    return;
                 }
             }
             catch { }
             _autoCleanTempOnExit = true; // Default: ON (clean unused temp on exit)
+            _lyricsDelayOffsetMs = 0;
+            _lyricsRomanizationMode = 1;
         }
 
         private static void SaveSettings()
         {
             try
             {
-                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0}\r\n}}", _autoCleanTempOnExit ? "true" : "false");
+                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2}\r\n}}",
+                    _autoCleanTempOnExit ? "true" : "false",
+                    _lyricsDelayOffsetMs,
+                    _lyricsRomanizationMode);
                 File.WriteAllText(SettingsFile, json, Encoding.UTF8);
             }
             catch { }

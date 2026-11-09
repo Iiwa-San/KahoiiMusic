@@ -53,6 +53,7 @@ namespace KahoiiMusic.Services
         public static string SavedDir => Path.Combine(DataRoot, "Saved");
         public static string SavedAudioDir => Path.Combine(SavedDir, "audio");
         public static string SavedThumbDir => Path.Combine(SavedDir, "thumb");
+        public static string SavedLyricsDir => Path.Combine(SavedDir, "lyrics");
         public static string SavedJsonFile => Path.Combine(SavedDir, "saved.json");
         public static string PlaylistsJsonFile => Path.Combine(SavedDir, "playlists.json");
         public static string FavoritesJsonFile => Path.Combine(SavedDir, "favorites.json");
@@ -61,6 +62,7 @@ namespace KahoiiMusic.Services
         public static string TempDir => Path.Combine(DataRoot, "KahoiiTemp");
         public static string TempAudioDir => Path.Combine(TempDir, "audio");
         public static string TempThumbDir => Path.Combine(TempDir, "thumb");
+        public static string TempLyricsDir => Path.Combine(TempDir, "lyrics");
 
         public static void EnsureDirectoriesExist()
         {
@@ -70,10 +72,12 @@ namespace KahoiiMusic.Services
                 if (!Directory.Exists(SavedDir)) Directory.CreateDirectory(SavedDir);
                 if (!Directory.Exists(SavedAudioDir)) Directory.CreateDirectory(SavedAudioDir);
                 if (!Directory.Exists(SavedThumbDir)) Directory.CreateDirectory(SavedThumbDir);
+                if (!Directory.Exists(SavedLyricsDir)) Directory.CreateDirectory(SavedLyricsDir);
 
                 if (!Directory.Exists(TempDir)) Directory.CreateDirectory(TempDir);
                 if (!Directory.Exists(TempAudioDir)) Directory.CreateDirectory(TempAudioDir);
                 if (!Directory.Exists(TempThumbDir)) Directory.CreateDirectory(TempThumbDir);
+                if (!Directory.Exists(TempLyricsDir)) Directory.CreateDirectory(TempLyricsDir);
             }
             catch { }
         }

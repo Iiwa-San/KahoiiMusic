@@ -42,6 +42,11 @@ namespace KahoiiMusic
         private NotifyIcon _trayIcon;
         private ContextMenuStrip _trayMenu;
         private ToolStripMenuItem _trayItemLoop;
+        private bool _isLyricsOpen = false;
+        private bool _lyricsSlideTargetOpen = false;
+        private float _lyricsSlideProgress = 0f;
+        private System.Windows.Forms.Timer _lyricsSlideTimer;
+        private string _currentLyricsVideoId = null;
         private volatile bool _isFormClosed = false;
         public bool IsFormClosed => _isFormClosed;
 
@@ -137,10 +142,19 @@ namespace KahoiiMusic
 
             ToolTip menuTip = new ToolTip();
             menuTip.SetToolTip(btnPlaylist, "Menu (Danh sách phát, Lịch sử, Đã tải)");
-            if (btnBottomPlaylist != null)
+            if (btnLyrics != null)
             {
-                menuTip.SetToolTip(btnBottomPlaylist, "Menu (Danh sách phát, Bộ sưu tập, Yêu thích)");
+                menuTip.SetToolTip(btnLyrics, "Lời bài hát (Lyrics)");
+                btnLyrics.Click += (s, e) =>
+                {
+                    if (btnLyrics.Enabled)
+                    {
+                        ToggleLyrics();
+                    }
+                };
             }
+
+            InitializeLyrics();
 
             // Window Dragging
             MouseDown += Window_MouseDown;
@@ -262,6 +276,12 @@ namespace KahoiiMusic
                 };
                 if (btnQuickDownload != null) btnQuickDownload.SetCurrentTrack(loadedItem);
                 if (btnFavorite != null) btnFavorite.SetCurrentTrack(loadedItem);
+
+                if (lyricsPanel != null && args.Duration > TimeSpan.Zero)
+                {
+                    lyricsPanel.TotalDuration = args.Duration;
+                }
+                LoadLyricsForTrack(args.VideoId, curT, curA, (int)args.Duration.TotalSeconds);
             };
 
             if (btnFavorite != null)
@@ -329,8 +349,6 @@ namespace KahoiiMusic
                 {
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                     this.Activate();
                 }
                 else
@@ -339,16 +357,11 @@ namespace KahoiiMusic
                     playlistPopup.Location = screenPt;
                     playlistPopup.Show(this);
                     btnPlaylist.IsOpen = true;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = true;
                     this.Activate();
                 }
             };
 
             btnPlaylist.Click += (s, e) => togglePlaylistAction();
-            if (btnBottomPlaylist != null)
-            {
-                btnBottomPlaylist.Click += (s, e) => togglePlaylistAction();
-            }
 
             // Close popup when main window loses focus (e.g. user Alt+Tabs or clicks another application)
             this.Deactivate += (s, e) =>
@@ -361,15 +374,12 @@ namespace KahoiiMusic
 
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                 }
             };
 
             playlistPopup.CloseRequested += (s, e) =>
             {
                 btnPlaylist.IsOpen = false;
-                if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
             };
 
             this.LocationChanged += (s, e) =>
@@ -419,7 +429,6 @@ namespace KahoiiMusic
             {
                 bool hasList = (list != null && list.Count > 0);
                 btnPlaylist.HasPlaylist = hasList;
-                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = hasList;
                 if (hasList)
                 {
                     playlistPopup.SetPlaylist(list, _audioPlayer.CurrentPlaylistIndex);
@@ -427,7 +436,6 @@ namespace KahoiiMusic
                 else
                 {
                     btnPlaylist.IsOpen = false;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                     playlistPopup.Clear();
                     playlistPopup.Hide();
                 }
@@ -491,6 +499,16 @@ namespace KahoiiMusic
                         return true;
                     }
                 }
+                else if (lyricsPanel != null && lyricsPanel.Visible && lyricsPanel.IsHandleCreated)
+                {
+                    Point cur = Cursor.Position;
+                    Point ptLyrics = lyricsPanel.PointToClient(cur);
+                    if (lyricsPanel.ClientRectangle.Contains(ptLyrics))
+                    {
+                        SendMessage(lyricsPanel.Handle, m.Msg, (int)m.WParam, (int)m.LParam);
+                        return true;
+                    }
+                }
                 else
                 {
                     Point cur = Cursor.Position;
@@ -525,12 +543,10 @@ namespace KahoiiMusic
                 {
                     Rectangle popupScreenRect = playlistPopup.Bounds;
                     Rectangle btnScreenRect = panelTopBar.RectangleToScreen(btnPlaylist.Bounds);
-                    bool overBottomBtn = (btnBottomPlaylist != null && panelBottomControls.RectangleToScreen(btnBottomPlaylist.Bounds).Contains(cur));
-                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur) && !overBottomBtn)
+                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur))
                     {
                         playlistPopup.Hide();
                         btnPlaylist.IsOpen = false;
-                        if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                         this.Activate();
                     }
                 }
@@ -624,17 +640,53 @@ namespace KahoiiMusic
                     }
                     break;
 
+                case (Keys.Control | Keys.L):
+                    if (btnLyrics != null && btnLyrics.Enabled)
+                    {
+                        ToggleLyrics();
+                        return true;
+                    }
+                    break;
+
+                case Keys.OemOpenBrackets:
+                    if (!searchPillBox.ContainsFocus && lyricsPanel != null)
+                    {
+                        int newOffset = HistoryService.LyricsDelayOffsetMs - 50;
+                        if (newOffset < -500) newOffset = -500;
+                        HistoryService.LyricsDelayOffsetMs = newOffset;
+                        lyricsPanel.DelayOffsetMs = newOffset;
+                        _audioPlayer.RaiseStatus(string.Format("⏱️ Độ trễ lời: {0}ms {1}", newOffset, newOffset >= 150 ? "(Khớp tai nghe Bluetooth)" : ""));
+                        return true;
+                    }
+                    break;
+
+                case Keys.OemCloseBrackets:
+                    if (!searchPillBox.ContainsFocus && lyricsPanel != null)
+                    {
+                        int newOffset = HistoryService.LyricsDelayOffsetMs + 50;
+                        if (newOffset > 1000) newOffset = 1000;
+                        HistoryService.LyricsDelayOffsetMs = newOffset;
+                        lyricsPanel.DelayOffsetMs = newOffset;
+                        _audioPlayer.RaiseStatus(string.Format("⏱️ Độ trễ lời: +{0}ms {1}", newOffset, newOffset >= 150 ? "(Khớp tai nghe Bluetooth)" : ""));
+                        return true;
+                    }
+                    break;
+
                 case Keys.Escape:
                     if (playlistPopup != null && playlistPopup.Visible)
                     {
                         playlistPopup.Hide();
                         btnPlaylist.IsOpen = false;
-                        if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                         return true;
                     }
                     if (volumePopup != null && volumePopup.Visible)
                     {
                         volumePopup.Visible = false;
+                        return true;
+                    }
+                    if (_isLyricsOpen)
+                    {
+                        ToggleLyrics(false);
                         return true;
                     }
                     break;
@@ -798,6 +850,14 @@ namespace KahoiiMusic
                     musicTrackBar.Value = _audioPlayer.Progress;
                 }
                 artworkBox.TimeText = FormatTimeSpan(_audioPlayer.Position, _audioPlayer.TotalDuration);
+                if (lyricsPanel != null && lyricsPanel.Visible)
+                {
+                    if (_audioPlayer.TotalDuration > TimeSpan.Zero && lyricsPanel.TotalDuration != _audioPlayer.TotalDuration)
+                    {
+                        lyricsPanel.TotalDuration = _audioPlayer.TotalDuration;
+                    }
+                    lyricsPanel.CurrentPosition = _audioPlayer.Position;
+                }
             }
         }
 
@@ -807,6 +867,14 @@ namespace KahoiiMusic
             {
                 _audioPlayer.SeekNormalized(val);
                 artworkBox.TimeText = FormatTimeSpan(_audioPlayer.Position, _audioPlayer.TotalDuration);
+                if (lyricsPanel != null && lyricsPanel.Visible)
+                {
+                    if (_audioPlayer.TotalDuration > TimeSpan.Zero && lyricsPanel.TotalDuration != _audioPlayer.TotalDuration)
+                    {
+                        lyricsPanel.TotalDuration = _audioPlayer.TotalDuration;
+                    }
+                    lyricsPanel.CurrentPosition = _audioPlayer.Position;
+                }
             }
         }
 
@@ -854,10 +922,18 @@ namespace KahoiiMusic
                 marqueeAuthor.Text = string.Empty;
                 btnPlaylist.HasPlaylist = false;
                 btnPlaylist.IsOpen = false;
-                if (btnBottomPlaylist != null)
+                if (btnLyrics != null)
                 {
-                    btnBottomPlaylist.HasPlaylist = false;
-                    btnBottomPlaylist.IsOpen = false;
+                    btnLyrics.HasLyrics = false;
+                    btnLyrics.IsOpen = false;
+                }
+                if (_isLyricsOpen)
+                {
+                    ToggleLyrics(false);
+                }
+                if (lyricsPanel != null)
+                {
+                    lyricsPanel.Lyrics = null;
                 }
                 playlistPopup.Visible = false;
                 playlistPopup.Clear();
@@ -890,7 +966,6 @@ namespace KahoiiMusic
                 if (!string.Equals(listId, _audioPlayer.CurrentPlaylistId, StringComparison.OrdinalIgnoreCase))
                 {
                     btnPlaylist.HasPlaylist = true;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                     playlistPopup.StartLoading();
                 }
 
@@ -912,7 +987,6 @@ namespace KahoiiMusic
             else if (!string.IsNullOrEmpty(videoId))
             {
                 btnPlaylist.HasPlaylist = true;
-                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                 _audioPlayer.EnqueueAndPlayTrack(videoId, null, null, 0, url);
                 return;
             }
@@ -921,7 +995,6 @@ namespace KahoiiMusic
                 // Standalone track -> DO NOT wipe out user's session playlist in Tab 0!
                 bool hasPl = (_audioPlayer.HasSessionPlaylist || (playlistPopup.PlaylistItems != null && playlistPopup.PlaylistItems.Count > 0));
                 btnPlaylist.HasPlaylist = hasPl;
-                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = hasPl;
             }
 
             // Immediately load audio in background
@@ -939,6 +1012,208 @@ namespace KahoiiMusic
                 return string.Format("{0:h\\:mm\\:ss} / {1:h\\:mm\\:ss}", current, total);
             }
             return string.Format("{0:mm\\:ss} / {1:mm\\:ss}", current, total);
+        }
+
+        private void InitializeLyrics()
+        {
+            _lyricsSlideTimer = new System.Windows.Forms.Timer { Interval = 15 };
+            _lyricsSlideTimer.Tick += LyricsSlideTimer_Tick;
+
+            if (lyricsPanel != null)
+            {
+                lyricsPanel.SeekRequested += (targetTime) =>
+                {
+                    if (_audioPlayer != null && _audioPlayer.HasTrack && _audioPlayer.TotalDuration > TimeSpan.Zero)
+                    {
+                        _audioPlayer.Position = targetTime;
+                        artworkBox.TimeText = FormatTimeSpan(targetTime, _audioPlayer.TotalDuration);
+                        lyricsPanel.CurrentPosition = targetTime;
+                    }
+                };
+            }
+        }
+
+        private void ToggleLyrics(bool? forceOpen = null)
+        {
+            bool target = forceOpen.HasValue ? forceOpen.Value : !_isLyricsOpen;
+
+            // Cannot open if lyrics are not available
+            if (target && (btnLyrics == null || !btnLyrics.Enabled || lyricsPanel == null || lyricsPanel.Lyrics == null || !lyricsPanel.Lyrics.HasLyrics))
+            {
+                return;
+            }
+
+            if (_isLyricsOpen == target && _lyricsSlideTargetOpen == target) return;
+
+            _lyricsSlideTargetOpen = target;
+            _isLyricsOpen = target;
+
+            if (btnLyrics != null)
+            {
+                btnLyrics.IsOpen = _isLyricsOpen;
+            }
+
+            if (_lyricsSlideTargetOpen && lyricsPanel != null)
+            {
+                lyricsPanel.Visible = true;
+                if (_audioPlayer != null && _audioPlayer.TotalDuration > TimeSpan.Zero)
+                {
+                    lyricsPanel.TotalDuration = _audioPlayer.TotalDuration;
+                    lyricsPanel.CurrentPosition = _audioPlayer.Position;
+                }
+            }
+
+            if (_lyricsSlideTimer != null && !_lyricsSlideTimer.Enabled)
+            {
+                _lyricsSlideTimer.Start();
+            }
+        }
+
+        private void LyricsSlideTimer_Tick(object sender, EventArgs e)
+        {
+            float step = 0.14f;
+            if (_lyricsSlideTargetOpen)
+            {
+                _lyricsSlideProgress += step;
+                if (_lyricsSlideProgress >= 1f)
+                {
+                    _lyricsSlideProgress = 1f;
+                    _lyricsSlideTimer.Stop();
+                }
+            }
+            else
+            {
+                _lyricsSlideProgress -= step;
+                if (_lyricsSlideProgress <= 0f)
+                {
+                    _lyricsSlideProgress = 0f;
+                    _lyricsSlideTimer.Stop();
+                    if (lyricsPanel != null) lyricsPanel.Visible = false;
+                }
+            }
+
+            // Ease-out cubic: 1 - (1 - t)^3
+            float t = _lyricsSlideProgress;
+            float ease = (float)(1 - Math.Pow(1 - t, 3));
+
+            int artX = (int)Math.Round(156 - (156 - 8) * ease);
+            artworkBox.Left = artX;
+
+            int titleX = (int)Math.Round(23 - (23 - 8) * ease);
+            int titleW = (int)Math.Round(430 - (430 - 164) * ease);
+            marqueeTitle.Left = titleX;
+            marqueeTitle.Width = titleW;
+            marqueeAuthor.Left = titleX;
+            marqueeAuthor.Width = titleW;
+        }
+
+        private void LoadLyricsForTrack(string videoId, string title, string author, int durationSeconds)
+        {
+            _currentLyricsVideoId = videoId;
+
+            if (btnLyrics != null)
+            {
+                btnLyrics.IsLoading = true;
+                btnLyrics.IsOpen = _isLyricsOpen;
+            }
+
+            if (lyricsPanel != null)
+            {
+                lyricsPanel.IsLoading = true;
+                lyricsPanel.Lyrics = null;
+            }
+
+            System.Threading.ThreadPool.QueueUserWorkItem(async delegate
+            {
+                try
+                {
+                    var lyricsData = await LyricsService.Instance.FetchLyricsAsync(videoId, title, author, durationSeconds);
+                    if (_currentLyricsVideoId == videoId && !IsDisposed && IsHandleCreated)
+                    {
+                        BeginInvoke(new Action(delegate
+                        {
+                            if (btnLyrics != null) btnLyrics.IsLoading = false;
+                            if (lyricsPanel != null) lyricsPanel.IsLoading = false;
+
+                            if (lyricsData != null && lyricsData.HasLyrics)
+                            {
+                                if (btnLyrics != null)
+                                {
+                                    btnLyrics.HasLyrics = true;
+                                    btnLyrics.IsOpen = _isLyricsOpen;
+                                }
+                                if (lyricsPanel != null)
+                                {
+                                    if (_audioPlayer != null && _audioPlayer.TotalDuration > TimeSpan.Zero)
+                                    {
+                                        lyricsPanel.TotalDuration = _audioPlayer.TotalDuration;
+                                    }
+                                    else if (durationSeconds > 0)
+                                    {
+                                        lyricsPanel.TotalDuration = TimeSpan.FromSeconds(durationSeconds);
+                                    }
+                                    lyricsPanel.Lyrics = lyricsData;
+                                    if (_audioPlayer != null)
+                                    {
+                                        lyricsPanel.CurrentPosition = _audioPlayer.Position;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                if (btnLyrics != null)
+                                {
+                                    btnLyrics.HasLyrics = false;
+                                }
+                                if (lyricsPanel != null)
+                                {
+                                    lyricsPanel.Lyrics = null;
+                                }
+                                if (_isLyricsOpen)
+                                {
+                                    ToggleLyrics(false);
+                                }
+                            }
+                        }));
+                    }
+
+                    // Pre-fetch next track in queue
+                    TryPrefetchNextTrackLyrics();
+                }
+                catch { }
+            });
+        }
+
+        public void NotifyLyricsUpdated(string videoId)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => NotifyLyricsUpdated(videoId)));
+                return;
+            }
+
+            if (_currentLyricsVideoId == videoId && lyricsPanel != null)
+            {
+                lyricsPanel.RebuildAndRefresh();
+            }
+        }
+
+        private void TryPrefetchNextTrackLyrics()
+        {
+            try
+            {
+                var pl = _audioPlayer?.Playlist;
+                int curIdx = _audioPlayer != null ? _audioPlayer.CurrentPlaylistIndex : -1;
+                if (pl != null && curIdx >= 0 && curIdx + 1 < pl.Count)
+                {
+                    var next = pl[curIdx + 1];
+                    if (next != null && !string.IsNullOrEmpty(next.Id))
+                    {
+                        LyricsService.Instance.PrefetchLyricsAsync(next.Id, next.Title, next.Author, next.DurationSeconds);
+                    }
+                }
+            }
+            catch { }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -993,6 +1268,11 @@ namespace KahoiiMusic
             {
                 try { _ramTimer.Stop(); _ramTimer.Dispose(); } catch { }
                 _ramTimer = null;
+            }
+            if (_lyricsSlideTimer != null)
+            {
+                try { _lyricsSlideTimer.Stop(); _lyricsSlideTimer.Dispose(); } catch { }
+                _lyricsSlideTimer = null;
             }
             if (playbackTimer != null)
             {
@@ -1267,7 +1547,6 @@ namespace KahoiiMusic
             {
                 playlistPopup.Hide();
                 btnPlaylist.IsOpen = false;
-                if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
             }
             if (accountPopup != null && accountPopup.Visible)
             {
@@ -1666,9 +1945,12 @@ namespace KahoiiMusic
                 if (vids.Length > 0)
                 {
                     btnPlaylist.HasPlaylist = true;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                     playlistPopup.StartLoading();
                     _audioPlayer.EnqueueTrackList(vids, incomingV, incomingTitle, incomingAuthor, incomingDur);
+                    if (!string.IsNullOrEmpty(incomingList))
+                    {
+                        _audioPlayer.ResolveMissingTrackDurationsAsync(incomingList, targetUrlToPlay);
+                    }
                     return;
                 }
             }
@@ -1676,7 +1958,6 @@ namespace KahoiiMusic
             if (!string.IsNullOrEmpty(incomingV) && !string.IsNullOrEmpty(incomingList))
             {
                 btnPlaylist.HasPlaylist = true;
-                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                 playlistPopup.StartLoading();
                 _audioPlayer.EnqueueAndPlayTrack(incomingV, incomingTitle, incomingAuthor, incomingDur, targetUrlToPlay);
                 _audioPlayer.LoadPlaylistQueueOnly(targetUrlToPlay);
@@ -1686,7 +1967,6 @@ namespace KahoiiMusic
             if (!string.IsNullOrEmpty(incomingList))
             {
                 btnPlaylist.HasPlaylist = true;
-                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                 playlistPopup.StartLoading();
                 _audioPlayer.LoadPlaylistAsync(targetUrlToPlay, incomingV, playFirstIfNoVideo: true);
                 return;
@@ -1695,7 +1975,6 @@ namespace KahoiiMusic
             if (!string.IsNullOrEmpty(incomingV))
             {
                 btnPlaylist.HasPlaylist = true;
-                if (btnBottomPlaylist != null) btnBottomPlaylist.HasPlaylist = true;
                 _audioPlayer.EnqueueAndPlayTrack(incomingV, incomingTitle, incomingAuthor, incomingDur, targetUrlToPlay);
                 return;
             }
@@ -1724,12 +2003,25 @@ namespace KahoiiMusic
                                 string v = vid.Trim();
                                 if (!string.IsNullOrEmpty(v))
                                 {
+                                    string actualId = v;
+                                    int actualDur = 0;
+                                    int colonIdx = v.IndexOf(':');
+                                    if (colonIdx > 0)
+                                    {
+                                        actualId = v.Substring(0, colonIdx).Trim();
+                                        int.TryParse(v.Substring(colonIdx + 1).Trim(), out actualDur);
+                                    }
+                                    if (actualDur <= 0)
+                                    {
+                                        actualDur = SavedTracksService.Instance.GetTrackDuration(actualId);
+                                        if (actualDur <= 0) actualDur = HistoryService.GetTrackDuration(actualId);
+                                    }
                                     exactItems.Add(new PlaylistItem
                                     {
-                                        Id = v,
+                                        Id = actualId,
                                         Title = "Đang tải tên bài hát...",
                                         Author = "",
-                                        DurationSeconds = 0
+                                        DurationSeconds = actualDur
                                     });
                                 }
                             }
@@ -2000,7 +2292,6 @@ namespace KahoiiMusic
                 {
                     playlistPopup.Hide();
                     btnPlaylist.IsOpen = false;
-                    if (btnBottomPlaylist != null) btnBottomPlaylist.IsOpen = false;
                 }
                 ShowAccountPopup();
                 this.Activate();
