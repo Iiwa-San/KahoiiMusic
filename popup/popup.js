@@ -815,9 +815,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const durParam = currentDurationSeconds > 0 ? `&dur=${currentDurationSeconds}` : "";
     let itemsParam = "";
     if (isCurrentPlaylist && currentPlaylistItems && currentPlaylistItems.length > 0) {
-      const ids = currentPlaylistItems.map(x => x.Id).filter(Boolean);
-      if (ids.length > 0) {
-        itemsParam = `&items=${encodeURIComponent(ids.slice(0, 50).join(","))}`;
+      const itemStrings = currentPlaylistItems.map(x => (x.DurationSeconds > 0 ? `${x.Id}:${x.DurationSeconds}` : x.Id)).filter(Boolean);
+      if (itemStrings.length > 0) {
+        itemsParam = `&items=${encodeURIComponent(itemStrings.slice(0, 100).join(","))}`;
       }
     }
     const metaParams = `&v=${encodeURIComponent(currentVideoId || '')}&title=${encodeURIComponent(currentTitle || '')}&author=${encodeURIComponent(currentAuthor || '')}${durParam}${itemsParam}`;
@@ -971,7 +971,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // 4. Kích hoạt giao thức mở App KahoiiMusic sau 60ms
     const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
     const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
-    const itemsParam = (itemsToSave && itemsToSave.length > 0) ? '&items=' + encodeURIComponent(itemsToSave.map(x => x.Id).filter(Boolean).slice(0, 50).join(',')) : '';
+    const itemsParam = (itemsToSave && itemsToSave.length > 0)
+      ? '&items=' + encodeURIComponent(itemsToSave.map(x => (x.DurationSeconds > 0 ? `${x.Id}:${x.DurationSeconds}` : x.Id)).filter(Boolean).slice(0, 100).join(','))
+      : '';
     setTimeout(() => {
       triggerProtocol(`kahoiimusic://save_collection?url=${encodeURIComponent(currentTargetUrl)}&title=${encodeURIComponent(finalTitle)}${itemsParam}${userParam}${rtParam}`);
     }, 60);

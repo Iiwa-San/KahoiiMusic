@@ -218,22 +218,94 @@
     return "YouTube";
   }
 
+  function parseDurationText(str) {
+    if (!str) return 0;
+    const cleaned = str.trim();
+
+    // 1. Format MM:SS or HH:MM:SS
+    const colonMatch = cleaned.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+    if (colonMatch) {
+      if (colonMatch[3] !== undefined) {
+        return parseInt(colonMatch[1], 10) * 3600 + parseInt(colonMatch[2], 10) * 60 + parseInt(colonMatch[3], 10);
+      }
+      return parseInt(colonMatch[1], 10) * 60 + parseInt(colonMatch[2], 10);
+    }
+
+    // 2. Format with words (e.g. "1 giờ 20 phút 30 giây", "1 hour 20 minutes 30 seconds", "3 phút 15 giây")
+    let totalSec = 0;
+    const hourMatch = cleaned.match(/(\d+)\s*(?:giờ|hours?|hrs?|h)\b/i);
+    const minMatch = cleaned.match(/(\d+)\s*(?:phút|minutes?|mins?|m)\b/i);
+    const secMatch = cleaned.match(/(\d+)\s*(?:giây|seconds?|secs?|s)\b/i);
+
+    if (hourMatch) totalSec += parseInt(hourMatch[1], 10) * 3600;
+    if (minMatch) totalSec += parseInt(minMatch[1], 10) * 60;
+    if (secMatch) totalSec += parseInt(secMatch[1], 10);
+
+    return totalSec;
+  }
+
+  function extractDurationFromElement(el) {
+    if (!el) return 0;
+
+    // Check Polymer internal data first if available
+    try {
+      const dataObj = el.data || el.__data?.data;
+      if (dataObj) {
+        if (dataObj.lengthText?.simpleText) {
+          const d = parseDurationText(dataObj.lengthText.simpleText);
+          if (d > 0) return d;
+        }
+        if (Array.isArray(dataObj.lengthText?.runs) && dataObj.lengthText.runs[0]?.text) {
+          const d = parseDurationText(dataObj.lengthText.runs[0].text);
+          if (d > 0) return d;
+        }
+      }
+    } catch (_) {}
+
+    const selectors = [
+      "ytd-thumbnail-overlay-time-status-renderer span#text",
+      "span.ytd-thumbnail-overlay-time-status-renderer",
+      ".badge-shape-wiz__text",
+      "#time-status",
+      ".ytd-thumbnail-overlay-time-status-renderer",
+      "#thumbnail span#text",
+      "span.badge-shape-wiz__text"
+    ];
+    for (const sel of selectors) {
+      const durEl = el.querySelector(sel);
+      if (durEl && durEl.textContent && durEl.textContent.trim()) {
+        const d = parseDurationText(durEl.textContent.trim());
+        if (d > 0) return d;
+      }
+    }
+
+    // Check aria-label attributes
+    const ariaTargets = [el, el.querySelector("a#wc-endpoint"), el.querySelector("#video-title"), el.querySelector("a#thumbnail")];
+    for (const target of ariaTargets) {
+      if (target) {
+        const label = target.getAttribute("aria-label");
+        if (label) {
+          const d = parseDurationText(label);
+          if (d > 0) return d;
+        }
+      }
+    }
+
+    return 0;
+  }
+
   function getVideoDuration() {
     const durEl = document.querySelector(".ytp-time-duration");
     if (durEl && durEl.textContent) {
-      const parts = durEl.textContent.trim().split(":").map(n => parseInt(n, 10));
-      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-        return parts[0] * 60 + parts[1];
-      }
-      if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-        return parts[0] * 3600 + parts[1] * 60 + parts[2];
-      }
+      const d = parseDurationText(durEl.textContent);
+      if (d > 0) return d;
     }
     return 0;
   }
 
   function extractPlaylistItemsFromPage() {
     const items = [];
+    const currentV = getVideoId();
     const panelRenderers = document.querySelectorAll("ytd-playlist-panel-video-renderer");
     if (panelRenderers && panelRenderers.length > 0) {
       panelRenderers.forEach((el) => {
@@ -245,8 +317,12 @@
         const title = titleEl ? titleEl.textContent.trim() : "";
         const authorEl = el.querySelector("#byline") || el.querySelector("#channel-name");
         const author = authorEl ? authorEl.textContent.trim() : "YouTube";
+        let dur = extractDurationFromElement(el);
+        if (dur === 0 && vid && currentV && vid === currentV) {
+          dur = getVideoDuration();
+        }
         if (vid && title && !items.some(x => x.Id === vid)) {
-          items.push({ Id: vid, Title: title, Author: author, DurationSeconds: 0 });
+          items.push({ Id: vid, Title: title, Author: author, DurationSeconds: dur });
         }
       });
     }
@@ -263,8 +339,12 @@
           const title = titleEl ? titleEl.textContent.trim() : "";
           const authorEl = el.querySelector("#byline-container a") || el.querySelector("#channel-name");
           const author = authorEl ? authorEl.textContent.trim() : "YouTube";
+          let dur = extractDurationFromElement(el);
+          if (dur === 0 && vid && currentV && vid === currentV) {
+            dur = getVideoDuration();
+          }
           if (vid && title && !items.some(x => x.Id === vid)) {
-            items.push({ Id: vid, Title: title, Author: author, DurationSeconds: 0 });
+            items.push({ Id: vid, Title: title, Author: author, DurationSeconds: dur });
           }
         });
       }
@@ -514,9 +594,9 @@
       if (isPlaylist) {
         const extracted = extractPlaylistItemsFromPage();
         if (extracted && extracted.length > 0) {
-          const ids = extracted.map(x => x.Id).filter(Boolean);
-          if (ids.length > 0) {
-            itemsParam = `&items=${encodeURIComponent(ids.slice(0, 50).join(","))}`;
+          const itemStrings = extracted.map(x => (x.DurationSeconds > 0 ? `${x.Id}:${x.DurationSeconds}` : x.Id)).filter(Boolean);
+          if (itemStrings.length > 0) {
+            itemsParam = `&items=${encodeURIComponent(itemStrings.slice(0, 100).join(","))}`;
           }
         }
       }
@@ -694,9 +774,9 @@
 
         let itemsParam = "";
         if (fallbackItems.length > 0) {
-          const ids = fallbackItems.map(x => x.Id).filter(Boolean);
-          if (ids.length > 0) {
-            itemsParam = `&items=${encodeURIComponent(ids.slice(0, 50).join(","))}`;
+          const itemStrings = fallbackItems.map(x => (x.DurationSeconds > 0 ? `${x.Id}:${x.DurationSeconds}` : x.Id)).filter(Boolean);
+          if (itemStrings.length > 0) {
+            itemsParam = `&items=${encodeURIComponent(itemStrings.slice(0, 100).join(","))}`;
           }
         }
 
