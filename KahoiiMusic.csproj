@@ -83,6 +83,12 @@
     <Compile Include="Controls\SearchPillBox.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\SearchDropdownPopup.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Controls\SearchResultsView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="Controls\VolumeButton.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -182,6 +188,7 @@
     <Compile Include="Services\PlaylistCollectionService.cs" />
     <Compile Include="Services\LyricsService.cs" />
     <Compile Include="Services\AppUpdateService.cs" />
+    <Compile Include="Services\YouTubeSearchService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

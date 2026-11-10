@@ -24,8 +24,8 @@ namespace KahoiiMusic.Services
 
         // Current Assembly version
         public static Version CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version;
-        // Build number is the integer version code (e.g. 1.0.20.0 -> 20)
-        public static int CurrentVersionCode => CurrentVersion.Build > 0 ? CurrentVersion.Build : 20;
+        // Build number is the integer version code (e.g. 1.0.21.0 -> 21)
+        public static int CurrentVersionCode => CurrentVersion.Build > 0 ? CurrentVersion.Build : 21;
         public static string CurrentVersionName => $"{CurrentVersion.Major}.{CurrentVersion.Minor}.{Math.Max(0, CurrentVersion.Build)}";
 
         public static bool IsDevEnvironment

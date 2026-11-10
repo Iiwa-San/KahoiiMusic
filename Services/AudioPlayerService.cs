@@ -1904,6 +1904,24 @@ namespace KahoiiMusic.Services
             LoadAndPlay(targetUrl);
         }
 
+        public void AddTrackToQueue(PlaylistItem item)
+        {
+            if (item == null || string.IsNullOrEmpty(item.Id)) return;
+            if (_sessionPlaylist == null)
+            {
+                _sessionPlaylist = new List<PlaylistItem>();
+            }
+            if (!_sessionPlaylist.Exists(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                _sessionPlaylist.Add(item);
+                _playlist = _sessionPlaylist;
+                _syncContext?.Post(delegate
+                {
+                    PlaylistLoaded?.Invoke(this, _sessionPlaylist);
+                }, null);
+            }
+        }
+
         public void EnqueueTrackList(string[] videoIds, string currentVideoId = null, string currentTrackTitle = null, string currentTrackAuthor = null, int currentTrackDur = 0, string playlistTitle = null)
         {
             if (videoIds == null || videoIds.Length == 0) return;

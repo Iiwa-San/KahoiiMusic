@@ -330,7 +330,7 @@ namespace KahoiiMusic
             this.lblVersion.Name = "lblVersion";
             this.lblVersion.Size = new System.Drawing.Size(86, 15);
             this.lblVersion.TabIndex = 10;
-            this.lblVersion.Text = "v1.0.20";
+            this.lblVersion.Text = "v1.0.21";
             this.lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
             // musicTrackBar

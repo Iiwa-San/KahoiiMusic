@@ -1,14 +1,14 @@
 {
-  "versionCode": 20,
-  "versionName": "1.0.20",
-  "changelog": "• Khắc phục triệt để lỗi bài hát trong lịch sử nghe dù đã xóa nhưng sau một thời gian lại tự động xuất hiện lại\n• Bổ sung cơ chế Tombstone tracking (đồng bộ danh sách đã xóa deletedHistoryIds) qua Firebase Firestore\n• Ngăn chặn hiện tượng tự phục hồi bài hát đã xóa khi đồng bộ 2 chiều (Cloud Merge) giữa PC và Android\n• Đảm bảo bài hát đã xóa sẽ biến mất vĩnh viễn trên mọi thiết bị và chỉ xuất hiện lại khi người dùng chủ động bấm nghe lại",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.20.exe",
+  "versionCode": 21,
+  "versionName": "1.0.21",
+  "changelog": "• Ra mắt tính năng Tìm kiếm YouTube thông minh (Hybrid Search): vừa gợi ý nhanh vừa mở trang kết quả đầy đủ\n• Gợi ý tức thì (Real-time Suggestions): hiển thị top bài hát kèm thumbnail và thời lượng ngay khi đang gõ\n• Trang kết quả tìm kiếm đầy đủ (Full Results View): hiển thị Best Match và danh sách kết quả với nút phát / thêm vào hàng đợi\n• Thanh tìm kiếm cách điệu Cyberpunk Neon hiện đại với huy hiệu YouTube và các phím tắt tiện lợi\n• Tự động phân biệt thông minh giữa từ khóa tìm kiếm và đường link YouTube / Playlist URL",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.21.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {
-    "versionCode": 29,
-    "versionName": "1.4.6",
-    "changelog": "• Khắc phục triệt để lỗi bài hát trong lịch sử nghe dù đã xóa nhưng sau một thời gian lại tự động xuất hiện lại\n• Bổ sung cơ chế Tombstone tracking (đồng bộ danh sách đã xóa deletedHistoryIds) qua Firebase Firestore\n• Ngăn chặn hiện tượng tự phục hồi bài hát đã xóa khi đồng bộ 2 chiều (Cloud Merge) giữa PC và Android\n• Đảm bảo bài hát đã xóa sẽ biến mất vĩnh viễn trên mọi thiết bị và chỉ xuất hiện lại khi người dùng chủ động bấm nghe lại",
+    "versionCode": 30,
+    "versionName": "1.4.7",
+    "changelog": "• Ra mắt tính năng Tìm kiếm YouTube thông minh (Hybrid Search): vừa gợi ý nhanh vừa mở trang kết quả đầy đủ\n• Gợi ý tức thì (Real-time Suggestions): hiển thị top bài hát kèm thumbnail và thời lượng ngay khi đang gõ\n• Trang kết quả tìm kiếm đầy đủ (Full Results View): hiển thị Best Match và danh sách kết quả với nút phát / thêm vào hàng đợi\n• Thanh tìm kiếm cách điệu Cyberpunk Neon hiện đại với huy hiệu YouTube và các phím tắt tiện lợi\n• Tự động phân biệt thông minh giữa từ khóa tìm kiếm và đường link YouTube / Playlist URL",
     "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
     "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
     "forceUpdate": false

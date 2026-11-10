@@ -48,6 +48,8 @@ namespace KahoiiMusic
         private float _lyricsSlideProgress = 0f;
         private System.Windows.Forms.Timer _lyricsSlideTimer;
         private string _currentLyricsVideoId = null;
+        private Controls.SearchDropdownPopup _searchDropdown;
+        private Controls.SearchResultsView _searchResultsView;
         private volatile bool _isFormClosed = false;
         public bool IsFormClosed => _isFormClosed;
 
@@ -441,6 +443,10 @@ namespace KahoiiMusic
                     y = Math.Max(bounds.Top, Math.Min(y, bounds.Bottom - accountPopup.Height));
                     accountPopup.Location = new Point(x, y);
                 }
+                if (_searchDropdown != null && _searchDropdown.Visible)
+                {
+                    _searchDropdown.Location = panelTopBar.PointToScreen(new Point(Math.Max(10, searchPillBox.Left - 10), searchPillBox.Bottom + 4));
+                }
             };
 
             playlistPopup.TrackSelected += (s, item) =>
@@ -527,6 +533,105 @@ namespace KahoiiMusic
 
             // YouTube URL entered
             searchPillBox.UrlSubmitted += SearchPillBox_UrlSubmitted;
+
+            // Hybrid YouTube Search (Real-time dropdown + Full search results tab)
+            SetupHybridSearch();
+        }
+
+        private void SetupHybridSearch()
+        {
+            _searchDropdown = new Controls.SearchDropdownPopup();
+            _searchDropdown.TrackPlaySelected += (s, item) =>
+            {
+                _searchDropdown.Hide();
+                searchPillBox.RemoveFocus();
+                if (item != null)
+                {
+                    SearchPillBox_UrlSubmitted(searchPillBox, item.Url);
+                }
+            };
+            _searchDropdown.TrackAddSelected += (s, item) =>
+            {
+                if (item != null)
+                {
+                    _audioPlayer.AddTrackToQueue(item);
+                }
+            };
+            _searchDropdown.ViewAllSelected += (s, query) =>
+            {
+                _searchDropdown.Hide();
+                searchPillBox.RemoveFocus();
+                ShowFullSearchResultsAsync(query);
+            };
+
+            searchPillBox.SearchQueryDebounced += async (s, query) =>
+            {
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    _searchDropdown.Hide();
+                    return;
+                }
+                var results = await Services.YouTubeSearchService.SearchAsync(query, 5);
+                if (results != null && results.Count > 0 && searchPillBox.HasRealText && string.Equals(searchPillBox.Text.Trim(), query, StringComparison.OrdinalIgnoreCase))
+                {
+                    Point pt = panelTopBar.PointToScreen(new Point(Math.Max(10, searchPillBox.Left - 10), searchPillBox.Bottom + 4));
+                    _searchDropdown.Location = pt;
+                    _searchDropdown.SetResults(query, results);
+                    if (!_searchDropdown.Visible)
+                    {
+                        _searchDropdown.Show(this);
+                        this.Activate();
+                    }
+                }
+                else
+                {
+                    _searchDropdown.Hide();
+                }
+            };
+
+            searchPillBox.SearchSubmitted += (s, query) =>
+            {
+                _searchDropdown.Hide();
+                searchPillBox.RemoveFocus();
+                ShowFullSearchResultsAsync(query);
+            };
+
+            searchPillBox.SearchCleared += (s, e) =>
+            {
+                _searchDropdown.Hide();
+            };
+
+            _searchResultsView = new Controls.SearchResultsView();
+            _searchResultsView.Dock = DockStyle.Fill;
+            _searchResultsView.Visible = false;
+            _searchResultsView.TrackPlaySelected += (s, item) =>
+            {
+                if (item != null)
+                {
+                    SearchPillBox_UrlSubmitted(searchPillBox, item.Url);
+                }
+            };
+            _searchResultsView.TrackAddSelected += (s, item) =>
+            {
+                if (item != null)
+                {
+                    _audioPlayer.AddTrackToQueue(item);
+                }
+            };
+            _searchResultsView.CloseRequested += (s, e) =>
+            {
+                _searchResultsView.Visible = false;
+            };
+            gradientPanel.Controls.Add(_searchResultsView);
+        }
+
+        private async void ShowFullSearchResultsAsync(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return;
+            _searchResultsView.BringToFront();
+            _searchResultsView.Visible = true;
+            var results = await Services.YouTubeSearchService.SearchAsync(query, 25);
+            _searchResultsView.SetResults(query, results);
         }
 
         public bool PreFilterMessage(ref Message m)
@@ -606,9 +711,20 @@ namespace KahoiiMusic
                 if (searchPillBox != null && searchPillBox.Visible && searchPillBox.ContainsFocus)
                 {
                     Rectangle searchScreenRect = panelTopBar.RectangleToScreen(searchPillBox.Bounds);
-                    if (!searchScreenRect.Contains(cur))
+                    bool insideDropdown = (_searchDropdown != null && _searchDropdown.Visible && new Rectangle(_searchDropdown.Location, _searchDropdown.Size).Contains(cur));
+                    if (!searchScreenRect.Contains(cur) && !insideDropdown)
                     {
                         searchPillBox.RemoveFocus();
+                        _searchDropdown?.Hide();
+                    }
+                }
+                else if (_searchDropdown != null && _searchDropdown.Visible)
+                {
+                    Rectangle dropRect = new Rectangle(_searchDropdown.Location, _searchDropdown.Size);
+                    Rectangle searchScreenRect = panelTopBar.RectangleToScreen(searchPillBox.Bounds);
+                    if (!dropRect.Contains(cur) && !searchScreenRect.Contains(cur))
+                    {
+                        _searchDropdown.Hide();
                     }
                 }
             }
@@ -617,11 +733,25 @@ namespace KahoiiMusic
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            if (_searchDropdown != null && _searchDropdown.Visible && keyData == Keys.Escape)
+            {
+                _searchDropdown.Hide();
+                searchPillBox.RemoveFocus();
+                return true;
+            }
+
+            if (_searchResultsView != null && _searchResultsView.Visible && keyData == Keys.Escape)
+            {
+                _searchResultsView.Visible = false;
+                return true;
+            }
+
             if (searchPillBox != null && searchPillBox.ContainsFocus)
             {
                 if (keyData == Keys.Escape)
                 {
                     searchPillBox.RemoveFocus();
+                    _searchDropdown?.Hide();
                     return true;
                 }
                 return base.ProcessCmdKey(ref msg, keyData);
