@@ -211,6 +211,7 @@ namespace KahoiiMusic
             _userToolTip = new ToolTip();
             if (lblVersion != null)
             {
+                lblVersion.UseCompatibleTextRendering = true;
                 lblVersion.Text = "v" + AppUpdateService.CurrentVersionName;
                 lblVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
                 lblVersion.ForeColor = Color.FromArgb(200, 185, 235);
@@ -224,20 +225,6 @@ namespace KahoiiMusic
 
             if (panelBottomControls != null)
             {
-                panelBottomControls.Paint += (s, e) =>
-                {
-                    // Direct render fallback to 100% guarantee version visibility on all DPIs and Windows environments
-                    string ver = "v" + AppUpdateService.CurrentVersionName;
-                    using (Font f = new Font("Segoe UI", 7.2f, FontStyle.Regular))
-                    using (SolidBrush b = new SolidBrush(Color.FromArgb(200, 185, 235)))
-                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
-                    {
-                        Rectangle r = new Rectangle(panelBottomControls.ClientSize.Width - 96, panelBottomControls.ClientSize.Height - 22, 86, 16);
-                        e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-                        e.Graphics.DrawString(ver, f, b, r, sf);
-                    }
-                };
-
                 panelBottomControls.Resize += (s, e) =>
                 {
                     if (lblVersion != null)
@@ -249,7 +236,6 @@ namespace KahoiiMusic
                     {
                         lblCopyright.Location = new Point((panelBottomControls.ClientSize.Width - lblCopyright.Width) / 2, panelBottomControls.ClientSize.Height - lblCopyright.Height - 6);
                     }
-                    panelBottomControls.Invalidate();
                 };
             }
             UpdateUserButtonAppearance();
@@ -1512,27 +1498,10 @@ namespace KahoiiMusic
                 trayItemTimer.DropDownItems.Add(new ToolStripSeparator());
                 addTrayTimer("T\u1eaft h\u1eb9n gi\u1edd", KahoiiMusic.Services.SleepTimerOption.Off);
 
-                var trayItemArtwork = new ToolStripMenuItem("Kiểu ảnh bìa");
-                var miTrayVinyl = new ToolStripMenuItem("💿 Đĩa than quay (Vinyl Record)");
-                miTrayVinyl.Click += (s, e) =>
-                {
-                    if (artworkBox != null) artworkBox.SetDisplayMode(ArtworkDisplayMode.VinylRecord);
-                    else HistoryService.ArtworkMode = ArtworkDisplayMode.VinylRecord;
-                };
-                var miTrayCard = new ToolStripMenuItem("🔲 Khung vuông bo góc (Card Android)");
-                miTrayCard.Click += (s, e) =>
-                {
-                    if (artworkBox != null) artworkBox.SetDisplayMode(ArtworkDisplayMode.RoundedCard);
-                    else HistoryService.ArtworkMode = ArtworkDisplayMode.RoundedCard;
-                };
-                trayItemArtwork.DropDownItems.Add(miTrayVinyl);
-                trayItemArtwork.DropDownItems.Add(miTrayCard);
-
                 var itemCheckUpdate = new ToolStripMenuItem("Kiểm tra bản cập nhật...");
                 itemCheckUpdate.Click += async (s, e) => await CheckForAppUpdatesAsync(manual: true);
 
                 _trayMenu.Items.Add(_trayItemLoop);
-                _trayMenu.Items.Add(trayItemArtwork);
                 _trayMenu.Items.Add(trayItemTimer);
                 _trayMenu.Items.Add(new ToolStripSeparator());
                 _trayMenu.Items.Add(itemCheckUpdate);
@@ -1557,12 +1526,6 @@ namespace KahoiiMusic
                     if (_trayItemLoop != null)
                     {
                         _trayItemLoop.Checked = (btnLoop != null) ? btnLoop.IsLooping : (_audioPlayer != null && _audioPlayer.IsLooping);
-                    }
-                    if (miTrayVinyl != null && miTrayCard != null)
-                    {
-                        var curMode = HistoryService.ArtworkMode;
-                        miTrayVinyl.Checked = (curMode == ArtworkDisplayMode.VinylRecord);
-                        miTrayCard.Checked = (curMode == ArtworkDisplayMode.RoundedCard);
                     }
                     if (trayItemTimer != null)
                     {
