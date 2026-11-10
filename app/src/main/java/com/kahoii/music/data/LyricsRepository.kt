@@ -64,6 +64,10 @@ class LyricsRepository(private val context: Context) {
             if (forceRefresh) {
                 val staleRom = File(lyricsCacheDir, "${cleanVid}_romaji.json")
                 if (staleRom.exists()) staleRom.delete()
+                val staleLrc = File(lyricsCacheDir, "$cleanVid.lrc")
+                if (staleLrc.exists()) staleLrc.delete()
+                val staleTxt = File(lyricsCacheDir, "$cleanVid.txt")
+                if (staleTxt.exists()) staleTxt.delete()
             }
         }
 
@@ -75,8 +79,15 @@ class LyricsRepository(private val context: Context) {
                     val lrcContent = cachedLrc.readText(Charsets.UTF_8)
                     val data = parseLrc(lrcContent, cleanVid, cleanTitle, cleanArtist)
                     if (data != null && data.hasLyrics) {
-                        attachCachedRomanization(cleanVid, data)
-                        return@withContext data
+                        // Duration safeguard: If cached LRC last timestamp exceeds actual track length by >12s, it's a mismatched song!
+                        val maxTs = data.lines.lastOrNull()?.timestampMs ?: 0L
+                        if (durationSeconds > 0 && maxTs > (durationSeconds + 12) * 1000L) {
+                            cachedLrc.delete()
+                            File(lyricsCacheDir, "${cleanVid}_romaji.json").delete()
+                        } else {
+                            attachCachedRomanization(cleanVid, data)
+                            return@withContext data
+                        }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -207,11 +218,12 @@ class LyricsRepository(private val context: Context) {
                                 val itemAlbum = item.optString("albumName", "")
                                 val itemDur = item.optDouble("duration", 0.0).toInt()
 
-                                if (!isTitleMatch(cand.track, itemTrack, cand.artist, itemArtist, itemAlbum)) {
+                                val effectiveTargetArtist = if (artist.isNotBlank()) artist else cand.artist
+                                if (!isTitleMatch(cand.track, itemTrack, effectiveTargetArtist, itemArtist, itemAlbum)) {
                                     continue
                                 }
 
-                                if (durationSeconds > 0 && itemDur > 0 && abs(itemDur - durationSeconds) > 15) {
+                                if (durationSeconds > 0 && itemDur > 0 && abs(itemDur - durationSeconds) > 8) {
                                     continue
                                 }
 
@@ -219,7 +231,7 @@ class LyricsRepository(private val context: Context) {
                                 val plain = item.optString("plainLyrics", "")
 
                                 if (synced.isNotBlank()) {
-                                    if (durationSeconds <= 0 || itemDur <= 0 || abs(itemDur - durationSeconds) <= 10) {
+                                    if (durationSeconds <= 0 || itemDur <= 0 || abs(itemDur - durationSeconds) <= 6) {
                                         val data = parseLrc(synced, videoId, title, artist)
                                         if (data != null && data.hasLyrics) return data
                                     }
@@ -768,7 +780,8 @@ class LyricsRepository(private val context: Context) {
             val aResult = normalizeForMatch(resultArtist)
             val tAlbum = normalizeForMatch(resultAlbum)
 
-            // Artist verification (only reject if both artists provided, neither is generic, and they don't match)
+            // MANDATORY ARTIST VERIFICATION:
+            // If both target artist and result artist are provided, verify they are compatible!
             if (aTarget.isNotBlank() && aResult.isNotBlank()) {
                 val isGenericTarget = aTarget == "youtube" || aTarget == "official" || aTarget == "channel" || aTarget == "vevo"
                 val isGenericResult = aResult == "youtube" || aResult == "variousartists"
@@ -777,10 +790,7 @@ class LyricsRepository(private val context: Context) {
                             normalizeForMatch(targetTitle).contains(aResult) ||
                             areArtistsSimilar(targetTitle, resultArtist)
                     if (!fullMatch) {
-                        // If title is an exact match and long enough (>= 6 chars), don't discard solely due to artist differences
-                        if (!tTarget.equals(tTrack, ignoreCase = true) || tTarget.length < 6) {
-                            return false
-                        }
+                        return false
                     }
                 }
             }

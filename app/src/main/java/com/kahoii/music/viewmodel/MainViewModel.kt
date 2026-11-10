@@ -885,8 +885,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 currentLyricIndex = -1
             )
         }
+        val effectiveDuration = if (durationSeconds > 0) durationSeconds else {
+            val exoDur = controller?.duration ?: -1L
+            if (exoDur > 1000L) (exoDur / 1000L).toInt() else 0
+        }
         lyricsJob = viewModelScope.launch {
-            val result = lyricsRepository.fetchLyrics(videoId, title, artist, durationSeconds, forceRefresh)
+            val result = lyricsRepository.fetchLyrics(videoId, title, artist, effectiveDuration, forceRefresh)
             if (_uiState.value.currentTrack?.id == videoId) {
                 _uiState.update {
                     it.copy(

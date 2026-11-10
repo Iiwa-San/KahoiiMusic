@@ -219,6 +219,23 @@ fun LyricsView(
                         }
                     }
 
+                    // Refresh / Re-fetch lyrics button
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.10f))
+                            .clickable(onClick = onRetry),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Tải lại lời bài hát",
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
                     // Close / Flip back to Vinyl Disc button
                     Box(
                         modifier = Modifier

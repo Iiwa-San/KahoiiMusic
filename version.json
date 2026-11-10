@@ -1,7 +1,7 @@
 {
-  "versionCode": 26,
-  "versionName": "1.4.3",
-  "changelog": "• Bổ sung thanh cuộn (Scroll) thông minh cho hộp thoại thông tin tài khoản (User Profile) khi xoay ngang điện thoại hoặc màn hình hẹp\n• Khắc phục hoàn toàn lỗi bị che khuất nút Đăng xuất và nút Cập nhật trên màn hình ngang\n• Tối ưu khoảng đệm chân trang tránh cấn thanh điều hướng hệ thống (navigation bar)",
+  "versionCode": 27,
+  "versionName": "1.4.4",
+  "changelog": "• Khắc phục triệt để lỗi nhận diện sai lời bài hát (nhầm bài hát cùng tên nhưng khác ca sĩ hoặc khác độ dài)\n• Tự động kiểm tra và xóa cache lời bài hát cũ nếu độ dài bài hát không khớp với mốc thời gian lyrics\n• Bổ sung nút Tải lại lời bài hát (Refresh) ngay trên giao diện lyrics\n• Bổ sung thanh cuộn thông minh cho hộp thoại thông tin tài khoản khi xoay ngang điện thoại hoặc màn hình hẹp",
   "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
   "forceUpdate": false
 }
