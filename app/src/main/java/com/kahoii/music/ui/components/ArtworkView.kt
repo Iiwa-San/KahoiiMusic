@@ -61,6 +61,7 @@ fun ArtworkView(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
     accentColor: Color = NeonPink,
+    matchHeightConstraintsFirst: Boolean = false,
     onSwipeLeft: () -> Unit = {},
     onSwipeRight: () -> Unit = {},
     onArtworkClick: () -> Unit = {}
@@ -91,7 +92,7 @@ fun ArtworkView(
 
     Box(
         modifier = modifier
-            .aspectRatio(1f)
+            .aspectRatio(1f, matchHeightConstraintsFirst = matchHeightConstraintsFirst)
             .scale(scaleAnim)
             .offset { IntOffset(offsetX.value.roundToInt(), 0) }
             .graphicsLayer {

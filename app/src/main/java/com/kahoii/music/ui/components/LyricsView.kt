@@ -75,6 +75,7 @@ fun LyricsView(
     onSeek: (Long) -> Unit = {},
     onClose: () -> Unit = {},
     onRetry: () -> Unit = {},
+    isSquare: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -108,7 +109,7 @@ fun LyricsView(
 
     Box(
         modifier = modifier
-            .aspectRatio(1f)
+            .then(if (isSquare) Modifier.aspectRatio(1f) else Modifier)
             .shadow(16.dp, RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
             .background(Color(0xFF130E22).copy(alpha = 0.92f))

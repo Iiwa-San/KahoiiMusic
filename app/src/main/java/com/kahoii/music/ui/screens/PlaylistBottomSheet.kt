@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -161,12 +162,17 @@ fun PlaylistBottomSheet(
         containerColor = Color(0xFF140F24),
         dragHandle = null
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.85f)
-                .padding(top = 12.dp)
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 680.dp)
+                    .fillMaxHeight(0.85f)
+                    .padding(top = 12.dp)
+            ) {
             // Drag handle pill
             Box(
                 modifier = Modifier
@@ -1347,6 +1353,7 @@ fun PlaylistBottomSheet(
                 )
             }
         }
+    }
 
         // Dialog thêm từng bài vào bộ sưu tập
         if (trackForCollectionPicker != null) {

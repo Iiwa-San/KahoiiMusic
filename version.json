@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
-  "versionName": "1.4.1",
-  "changelog": "• Sửa lỗi không tải được lời bài hát (Lyrics): hoàn thiện cơ chế tự động tìm và đồng bộ lời từ LRCLIB và YouTube\n• Thêm nút 'Tìm lại lời bài hát' trực tiếp trên giao diện khi bài hát chưa nạp xong\n• Tự động làm mới lời khi bài hát hoàn tất giải mã âm thanh từ YouTube\n• Tối ưu bộ đệm lưu trữ lời bài hát và hiển thị phiên âm tiếng Nhật/tiếng Trung",
+  "versionCode": 25,
+  "versionName": "1.4.2",
+  "changelog": "• Hỗ trợ giao diện Responsive toàn diện cho máy tính bảng (Tablet) và chế độ xoay ngang (Landscape)\n• Chế độ xoay ngang 2 cột thông minh: theo dõi lời bài hát đồng bộ thời gian thực song song với đĩa quay và danh sách phát chờ\n• Nâng cấp tính năng Lời bài hát: hỗ trợ chuyển đổi chế độ phiên âm (Gốc / Song ngữ / Romaji & Pinyin), lưu trạng thái cài đặt\n• Cập nhật huy hiệu 'audio synced' và 'non-synced' theo chuẩn mới\n• Thiết kế mới icon Lời bài hát hiện đại và tối ưu kích thước hộp thoại trên màn hình lớn",
   "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
   "forceUpdate": false
 }

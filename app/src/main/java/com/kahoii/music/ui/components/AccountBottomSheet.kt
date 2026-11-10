@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -191,11 +192,16 @@ fun AccountBottomSheet(
         containerColor = Color(0xFF140F24),
         dragHandle = null
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 540.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+            ) {
             // Drag Indicator
             Box(
                 modifier = Modifier
@@ -685,4 +691,5 @@ fun AccountBottomSheet(
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
+}
 }
