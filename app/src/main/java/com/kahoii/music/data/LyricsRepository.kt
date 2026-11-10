@@ -16,6 +16,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.URLEncoder
+import java.text.Normalizer
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import kotlin.math.abs
@@ -148,8 +150,54 @@ class LyricsRepository(private val context: Context) {
         artist: String,
         durationSeconds: Int
     ): LyricsData? {
-        val candidates = buildSearchCandidates(title, artist)
-        if (candidates.isEmpty()) return null
+        val rawCandidates = buildSearchCandidates(title, artist)
+        if (rawCandidates.isEmpty()) return null
+
+        val candidates = mutableListOf<SearchCandidate>()
+        if (rawCandidates.isNotEmpty()) {
+            candidates.add(rawCandidates[0])
+        }
+
+        val cleanA = cleanArtistForSearch(artist)
+
+        // Enrich candidates with English translation & Romaji/Pinyin for CJK titles
+        val tracksWithCjk = rawCandidates.map { it.track }.filter { containsCjk(it) }.distinct()
+        for (trk in tracksWithCjk.take(2)) {
+            val trkRes = translateAndRomanize(trk)
+            if (trkRes != null) {
+                val trans = trkRes.translation
+                val cleanRom = removeDiacritics(trkRes.romaji)
+
+                if (trans.isNotBlank() && !trans.equals(trk, ignoreCase = true)) {
+                    candidates.add(SearchCandidate(trans, cleanA))
+                    val otherArtist = rawCandidates.firstOrNull { it.artist.isNotBlank() && it.artist != cleanA }?.artist
+                    if (!otherArtist.isNullOrBlank()) {
+                        candidates.add(SearchCandidate(trans, otherArtist))
+                    }
+                }
+                if (cleanRom.isNotBlank() && !cleanRom.equals(trk, ignoreCase = true) && !cleanRom.equals(trans, ignoreCase = true)) {
+                    candidates.add(SearchCandidate(cleanRom, cleanA))
+                }
+            }
+        }
+
+        // If artist has CJK, translate artist too
+        if (containsCjk(cleanA)) {
+            val artRes = translateAndRomanize(cleanA)
+            if (artRes != null && artRes.translation.isNotBlank() && !artRes.translation.equals(cleanA, ignoreCase = true)) {
+                val artTrans = artRes.translation
+                for (cand in candidates.toList()) {
+                    candidates.add(SearchCandidate(cand.track, artTrans))
+                }
+            }
+        }
+
+        // Append remaining raw candidates
+        for (rc in rawCandidates) {
+            if (!candidates.any { it.track.equals(rc.track, ignoreCase = true) && it.artist.equals(rc.artist, ignoreCase = true) }) {
+                candidates.add(rc)
+            }
+        }
 
         var bestSyncedJson: JSONObject? = null
         var bestPlainJson: JSONObject? = null
@@ -179,9 +227,12 @@ class LyricsRepository(private val context: Context) {
                                 val isInst = json.optBoolean("instrumental", false)
                                 if (!isInst) {
                                     val synced = json.optString("syncedLyrics", "")
+                                    val plain = json.optString("plainLyrics", "")
                                     if (synced.isNotBlank()) {
                                         val data = parseLrc(synced, videoId, title, artist)
                                         if (data != null && data.hasLyrics) return data
+                                    } else if (plain.isNotBlank() && bestPlainJson == null) {
+                                        bestPlainJson = json
                                     }
                                 }
                             }
@@ -742,12 +793,118 @@ class LyricsRepository(private val context: Context) {
             return s.lowercase().replace("[\\s\\-_/|–—'\"~`\\.・,!?\\(\\)\\[\\]\\{\\}【】『』「」]+".toRegex(), "")
         }
 
+        data class TranslationResult(val translation: String, val romaji: String, val sourceLang: String)
+
+        private val translationMemoryCache = ConcurrentHashMap<String, TranslationResult>()
+
+        private val staticHttpClient = OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
+
+        fun containsCjk(s: String?): Boolean {
+            if (s.isNullOrBlank()) return false
+            for (i in 0 until s.length) {
+                val c = s[i]
+                if (c in '\u3040'..'\u309F' || // Hiragana
+                    c in '\u30A0'..'\u30FF' || // Katakana
+                    c in '\u4E00'..'\u9FFF' || // CJK Unified Ideographs
+                    c in '\u3400'..'\u4DBF' || // CJK Extension A
+                    c in '\uAC00'..'\uD7AF'    // Hangul
+                ) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        fun removeDiacritics(text: String?): String {
+            if (text.isNullOrBlank()) return ""
+            val normalized = Normalizer.normalize(text, Normalizer.Form.NFD)
+            return normalized.replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+                .replace("[āǎàá]".toRegex(), "a")
+                .replace("[ōǒòó]".toRegex(), "o")
+                .replace("[ūǔùú]".toRegex(), "u")
+                .replace("[ēěèé]".toRegex(), "e")
+                .replace("[īǐìí]".toRegex(), "i")
+                .replace("[ĀǍÀÁ]".toRegex(), "A")
+                .replace("[ŌǑÒÓ]".toRegex(), "O")
+                .replace("[ŪǓÙÚ]".toRegex(), "U")
+                .replace("[ĒĚÈÉ]".toRegex(), "E")
+                .replace("[ĪǏÌÍ]".toRegex(), "I")
+        }
+
+        fun translateAndRomanize(text: String?): TranslationResult? {
+            if (text.isNullOrBlank() || !containsCjk(text)) return null
+            val clean = text.trim()
+            translationMemoryCache[clean]?.let { return it }
+
+            try {
+                val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&dt=rm&q=" +
+                        URLEncoder.encode(clean, "UTF-8")
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    .build()
+
+                staticHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return null
+                    val body = response.body?.string() ?: return null
+                    val jsonArray = JSONArray(body)
+                    val partsArray = jsonArray.optJSONArray(0) ?: return null
+                    val sb = StringBuilder()
+                    var romaji = ""
+                    for (i in 0 until partsArray.length()) {
+                        val part = partsArray.optJSONArray(i) ?: continue
+                        val piece = part.optString(0, "")
+                        if (piece.isNotBlank() && piece != "null") {
+                            sb.append(piece)
+                        }
+                        val romPiece = part.optString(3, "")
+                        if (romPiece.isNotBlank() && romPiece != "null") {
+                            romaji = romPiece
+                        }
+                    }
+                    val sourceLang = jsonArray.optString(2, "")
+                    val result = TranslationResult(
+                        translation = sb.toString().trim(),
+                        romaji = romaji.trim(),
+                        sourceLang = sourceLang.trim()
+                    )
+                    if (result.translation.isNotBlank() || result.romaji.isNotBlank()) {
+                        translationMemoryCache[clean] = result
+                        return result
+                    }
+                }
+            } catch (_: Exception) {}
+            return null
+        }
+
         fun areArtistsSimilar(a1: String, a2: String): Boolean {
             if (a1.isBlank() || a2.isBlank()) return true
             val n1 = normalizeForMatch(a1)
             val n2 = normalizeForMatch(a2)
             if (n1.equals(n2, ignoreCase = true)) return true
             if (n1.contains(n2) || n2.contains(n1)) return true
+
+            // Translation & Romanization check if either artist contains CJK
+            if (containsCjk(a1)) {
+                val t1 = translateAndRomanize(a1)
+                if (t1 != null) {
+                    if (t1.translation.isNotBlank() && areArtistsSimilar(t1.translation, a2)) return true
+                    val cleanRom = removeDiacritics(t1.romaji)
+                    if (cleanRom.isNotBlank() && areArtistsSimilar(cleanRom, a2)) return true
+                }
+            }
+            if (containsCjk(a2)) {
+                val t2 = translateAndRomanize(a2)
+                if (t2 != null) {
+                    if (t2.translation.isNotBlank() && areArtistsSimilar(a1, t2.translation)) return true
+                    val cleanRom = removeDiacritics(t2.romaji)
+                    if (cleanRom.isNotBlank() && areArtistsSimilar(a1, cleanRom)) return true
+                }
+            }
 
             // Token overlap of words with >= 2 characters
             val wordRegex = Pattern.compile("[\\p{L}\\p{N}]{2,}")
@@ -797,6 +954,25 @@ class LyricsRepository(private val context: Context) {
 
             // 1. Exact normalized title match
             if (tTarget.equals(tTrack, ignoreCase = true)) return true
+
+            // 1b. Cleaned title match (ignoring (feat. ...), [MV], etc.)
+            val cTarget = normalizeForMatch(cleanTitleForSearch(targetTitle))
+            val cTrack = normalizeForMatch(cleanTitleForSearch(resultTrack))
+            if (cTarget.isNotBlank() && cTarget.equals(cTrack, ignoreCase = true)) return true
+
+            // 1c. Translation & Romanization match for CJK songs
+            if (containsCjk(targetTitle)) {
+                val trkRes = translateAndRomanize(targetTitle)
+                if (trkRes != null) {
+                    if (trkRes.translation.isNotBlank() && isTitleMatch(trkRes.translation, resultTrack, targetArtist, resultArtist, resultAlbum)) {
+                        return true
+                    }
+                    val cleanRom = removeDiacritics(trkRes.romaji)
+                    if (cleanRom.isNotBlank() && isTitleMatch(cleanRom, resultTrack, targetArtist, resultArtist, resultAlbum)) {
+                        return true
+                    }
+                }
+            }
 
             // 2. Substring containment
             if (tTarget.length >= 4 && tTrack.length >= 4) {
