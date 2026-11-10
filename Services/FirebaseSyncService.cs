@@ -16,6 +16,7 @@ namespace KahoiiMusic.Services
         public List<PlaylistItem> playlists { get; set; } = new List<PlaylistItem>();
         public List<PlaylistItem> savedTracks { get; set; } = new List<PlaylistItem>();
         public List<PlaylistItem> history { get; set; } = new List<PlaylistItem>();
+        public List<string> deletedHistoryIds { get; set; } = new List<string>();
         public List<PlaylistItem> favorites { get; set; } = new List<PlaylistItem>();
         public List<UserPlaylist> collections { get; set; } = new List<UserPlaylist>();
         public string updatedAt { get; set; } = DateTime.UtcNow.ToString("o");
@@ -239,6 +240,7 @@ namespace KahoiiMusic.Services
             {
                 savedTracks = SavedTracksService.Instance.GetSavedTracks(),
                 history = HistoryService.GetHistory(),
+                deletedHistoryIds = HistoryService.GetDeletedHistoryIds(),
                 favorites = FavoritesService.GetFavorites(),
                 collections = PlaylistCollectionService.Instance.GetPlaylists()
             };
@@ -487,13 +489,7 @@ namespace KahoiiMusic.Services
             if (payload == null) return;
 
             // 1. Merge History
-            if (payload.history != null)
-            {
-                foreach (var item in payload.history)
-                {
-                    HistoryService.AddTrack(item);
-                }
-            }
+            HistoryService.MergeHistory(payload.history, payload.deletedHistoryIds);
 
             // 2. Merge Collections
             if (payload.collections != null)

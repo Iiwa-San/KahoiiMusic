@@ -19,8 +19,10 @@ namespace KahoiiMusic.Services
         private static readonly string DataFolder;
         private static readonly string HistoryFile;
         private static readonly string SettingsFile;
+        private static readonly string DeletedHistoryFile;
 
         private static List<PlaylistItem> _history = new List<PlaylistItem>();
+        private static HashSet<string> _deletedHistoryIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static bool _autoCleanTempOnExit = false;
         private static int _lyricsDelayOffsetMs = 0; // Default: 0ms true audio synchronization
         private static int _lyricsRomanizationMode = 1; // Default: Dual mode (Song ngữ)
@@ -117,6 +119,7 @@ namespace KahoiiMusic.Services
 
             HistoryFile = Path.Combine(DataFolder, "history.json");
             SettingsFile = Path.Combine(DataFolder, "settings.json");
+            DeletedHistoryFile = Path.Combine(DataFolder, "deleted_history.json");
 
             FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
             {
@@ -124,11 +127,13 @@ namespace KahoiiMusic.Services
                 {
                     if (FirebaseAuthService.Instance.IsLoggedIn)
                     {
+                        LoadDeletedHistory();
                         LoadHistory();
                     }
                     else
                     {
                         _history.Clear();
+                        _deletedHistoryIds.Clear();
                     }
                 }
                 HistoryChanged?.Invoke(null, EventArgs.Empty);
@@ -144,6 +149,7 @@ namespace KahoiiMusic.Services
             {
                 _initialized = true;
                 LoadSettings();
+                LoadDeletedHistory();
                 if (FirebaseAuthService.Instance.IsLoggedIn)
                 {
                     LoadHistory();
@@ -152,6 +158,14 @@ namespace KahoiiMusic.Services
                 {
                     _history.Clear();
                 }
+            }
+        }
+
+        public static List<string> GetDeletedHistoryIds()
+        {
+            lock (_lock)
+            {
+                return new List<string>(_deletedHistoryIds);
             }
         }
 
@@ -233,6 +247,12 @@ namespace KahoiiMusic.Services
             bool changed = false;
             lock (_lock)
             {
+                if (_deletedHistoryIds.Contains(item.Id))
+                {
+                    _deletedHistoryIds.Remove(item.Id);
+                    SaveDeletedHistory();
+                }
+
                 int existingIdx = _history.FindIndex(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
                 if (existingIdx >= 0)
                 {
@@ -401,6 +421,13 @@ namespace KahoiiMusic.Services
             bool changed = false;
             lock (_lock)
             {
+                if (!_deletedHistoryIds.Contains(id))
+                {
+                    _deletedHistoryIds.Add(id);
+                    TrimDeletedHistoryIds();
+                    SaveDeletedHistory();
+                }
+
                 int idx = _history.FindIndex(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
                 if (idx >= 0)
                 {
@@ -421,11 +448,95 @@ namespace KahoiiMusic.Services
         {
             lock (_lock)
             {
-                _history.Clear();
+                foreach (var item in _history)
+                {
+                    if (item != null && !string.IsNullOrWhiteSpace(item.Id) && (exceptVideoId == null || !string.Equals(item.Id, exceptVideoId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        _deletedHistoryIds.Add(item.Id);
+                    }
+                }
+                TrimDeletedHistoryIds();
+                SaveDeletedHistory();
+
+                if (string.IsNullOrWhiteSpace(exceptVideoId))
+                {
+                    _history.Clear();
+                }
+                else
+                {
+                    _history.RemoveAll(x => !string.Equals(x.Id, exceptVideoId, StringComparison.OrdinalIgnoreCase));
+                }
                 SaveHistory();
             }
             CleanNonHistoryTempFiles(true);
             HistoryChanged?.Invoke(null, EventArgs.Empty);
+        }
+
+        public static void MergeHistory(List<PlaylistItem> cloudHistory, List<string> cloudDeletedIds = null)
+        {
+            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
+
+            bool changed = false;
+            lock (_lock)
+            {
+                if (cloudDeletedIds != null && cloudDeletedIds.Count > 0)
+                {
+                    foreach (var id in cloudDeletedIds)
+                    {
+                        if (!string.IsNullOrWhiteSpace(id) && _deletedHistoryIds.Add(id))
+                        {
+                            changed = true;
+                        }
+                    }
+                    if (changed)
+                    {
+                        TrimDeletedHistoryIds();
+                        SaveDeletedHistory();
+                    }
+                }
+
+                // Purge any local history tracks that are marked as deleted
+                if (_deletedHistoryIds.Count > 0)
+                {
+                    int removed = _history.RemoveAll(x => _deletedHistoryIds.Contains(x.Id));
+                    if (removed > 0)
+                    {
+                        changed = true;
+                    }
+                }
+
+                // Merge incoming cloud tracks (skip if deleted or already present)
+                if (cloudHistory != null && cloudHistory.Count > 0)
+                {
+                    foreach (var track in cloudHistory)
+                    {
+                        if (track == null || string.IsNullOrWhiteSpace(track.Id)) continue;
+                        if (_deletedHistoryIds.Contains(track.Id)) continue;
+
+                        if (!_history.Exists(x => string.Equals(x.Id, track.Id, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            _history.Add(track);
+                            changed = true;
+                        }
+                    }
+                }
+
+                if (_history.Count > 500)
+                {
+                    _history.RemoveRange(500, _history.Count - 500);
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    SaveHistory();
+                }
+            }
+
+            if (changed)
+            {
+                HistoryChanged?.Invoke(null, EventArgs.Empty);
+            }
         }
 
         public static void DeleteCachedAudioForTrack(string id)
@@ -571,11 +682,13 @@ namespace KahoiiMusic.Services
                         var mId = Regex.Match(block, @"""id""\s*:\s*""([^""]*)""");
                         if (!mId.Success || string.IsNullOrEmpty(mId.Groups[1].Value)) continue;
 
+                        string id = mId.Groups[1].Value;
+                        if (_deletedHistoryIds.Contains(id)) continue;
+
                         var mTitle = Regex.Match(block, @"""title""\s*:\s*""((?:\\.|[^""])*)""");
                         var mDur = Regex.Match(block, @"""duration""\s*:\s*(\d+)");
                         var mAuthor = Regex.Match(block, @"""(?:author|artist)""\s*:\s*""((?:\\.|[^""])*)""");
 
-                        string id = mId.Groups[1].Value;
                         string title = mTitle.Success ? Regex.Unescape(mTitle.Groups[1].Value) : "Bài hát";
                         int duration = 0;
                         if (mDur.Success) int.TryParse(mDur.Groups[1].Value, out duration);
@@ -593,9 +706,61 @@ namespace KahoiiMusic.Services
                             DurationSeconds = duration
                         });
                     }
-            }
                 }
+            }
             catch { }
+        }
+
+        private static void LoadDeletedHistory()
+        {
+            try
+            {
+                _deletedHistoryIds.Clear();
+                if (File.Exists(DeletedHistoryFile))
+                {
+                    string json = File.ReadAllText(DeletedHistoryFile, Encoding.UTF8);
+                    var matches = Regex.Matches(json, @"""([^""]+)""");
+                    foreach (Match m in matches)
+                    {
+                        string val = m.Groups[1].Value;
+                        if (!string.IsNullOrWhiteSpace(val))
+                        {
+                            _deletedHistoryIds.Add(val);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static void SaveDeletedHistory()
+        {
+            if (!FirebaseAuthService.Instance.IsLoggedIn) return;
+            try
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine("[");
+                int count = 0;
+                foreach (var id in _deletedHistoryIds)
+                {
+                    if (count > 0) sb.AppendLine(",");
+                    sb.AppendFormat("  \"{0}\"", EscapeJson(id));
+                    count++;
+                }
+                sb.AppendLine();
+                sb.AppendLine("]");
+                File.WriteAllText(DeletedHistoryFile, sb.ToString(), Encoding.UTF8);
+            }
+            catch { }
+        }
+
+        private static void TrimDeletedHistoryIds()
+        {
+            if (_deletedHistoryIds.Count > 500)
+            {
+                var list = new List<string>(_deletedHistoryIds);
+                _deletedHistoryIds = new HashSet<string>(list.GetRange(list.Count - 500, 500), StringComparer.OrdinalIgnoreCase);
+            }
         }
 
         private static void SaveHistory()
