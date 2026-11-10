@@ -7,6 +7,12 @@ using KahoiiMusic.Models;
 
 namespace KahoiiMusic.Services
 {
+    public enum ArtworkDisplayMode
+    {
+        VinylRecord = 0,
+        RoundedCard = 1
+    }
+
     public static class HistoryService
     {
         private static readonly object _lock = new object();
@@ -18,6 +24,7 @@ namespace KahoiiMusic.Services
         private static bool _autoCleanTempOnExit = false;
         private static int _lyricsDelayOffsetMs = 0; // Default: 0ms true audio synchronization
         private static int _lyricsRomanizationMode = 1; // Default: Dual mode (Song ngữ)
+        private static int _artworkDisplayMode = 0; // 0 = VinylRecord, 1 = RoundedCard
         private static bool _initialized = false;
 
         public static int LyricsDelayOffsetMs
@@ -47,6 +54,24 @@ namespace KahoiiMusic.Services
                     if (_lyricsRomanizationMode != value)
                     {
                         _lyricsRomanizationMode = value;
+                        SaveSettings();
+                    }
+                }
+                SettingsChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
+
+        public static ArtworkDisplayMode ArtworkMode
+        {
+            get { lock (_lock) { return (ArtworkDisplayMode)_artworkDisplayMode; } }
+            set
+            {
+                lock (_lock)
+                {
+                    int val = (int)value;
+                    if (_artworkDisplayMode != val)
+                    {
+                        _artworkDisplayMode = val;
                         SaveSettings();
                     }
                 }
@@ -501,6 +526,12 @@ namespace KahoiiMusic.Services
                     {
                         int.TryParse(mRom.Groups[1].Value, out _lyricsRomanizationMode);
                     }
+
+                    Match mArt = Regex.Match(text, "\"artworkDisplayMode\"\\s*:\\s*(\\d+)", RegexOptions.IgnoreCase);
+                    if (mArt.Success)
+                    {
+                        int.TryParse(mArt.Groups[1].Value, out _artworkDisplayMode);
+                    }
                     return;
                 }
             }
@@ -508,16 +539,18 @@ namespace KahoiiMusic.Services
             _autoCleanTempOnExit = true; // Default: ON (clean unused temp on exit)
             _lyricsDelayOffsetMs = 0;
             _lyricsRomanizationMode = 1;
+            _artworkDisplayMode = 0;
         }
 
         private static void SaveSettings()
         {
             try
             {
-                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2}\r\n}}",
+                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2},\r\n  \"artworkDisplayMode\": {3}\r\n}}",
                     _autoCleanTempOnExit ? "true" : "false",
                     _lyricsDelayOffsetMs,
-                    _lyricsRomanizationMode);
+                    _lyricsRomanizationMode,
+                    _artworkDisplayMode);
                 File.WriteAllText(SettingsFile, json, Encoding.UTF8);
             }
             catch { }

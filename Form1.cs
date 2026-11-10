@@ -1512,10 +1512,27 @@ namespace KahoiiMusic
                 trayItemTimer.DropDownItems.Add(new ToolStripSeparator());
                 addTrayTimer("T\u1eaft h\u1eb9n gi\u1edd", KahoiiMusic.Services.SleepTimerOption.Off);
 
+                var trayItemArtwork = new ToolStripMenuItem("Kiểu ảnh bìa");
+                var miTrayVinyl = new ToolStripMenuItem("💿 Đĩa than quay (Vinyl Record)");
+                miTrayVinyl.Click += (s, e) =>
+                {
+                    if (artworkBox != null) artworkBox.SetDisplayMode(ArtworkDisplayMode.VinylRecord);
+                    else HistoryService.ArtworkMode = ArtworkDisplayMode.VinylRecord;
+                };
+                var miTrayCard = new ToolStripMenuItem("🔲 Khung vuông bo góc (Card Android)");
+                miTrayCard.Click += (s, e) =>
+                {
+                    if (artworkBox != null) artworkBox.SetDisplayMode(ArtworkDisplayMode.RoundedCard);
+                    else HistoryService.ArtworkMode = ArtworkDisplayMode.RoundedCard;
+                };
+                trayItemArtwork.DropDownItems.Add(miTrayVinyl);
+                trayItemArtwork.DropDownItems.Add(miTrayCard);
+
                 var itemCheckUpdate = new ToolStripMenuItem("Kiểm tra bản cập nhật...");
                 itemCheckUpdate.Click += async (s, e) => await CheckForAppUpdatesAsync(manual: true);
 
                 _trayMenu.Items.Add(_trayItemLoop);
+                _trayMenu.Items.Add(trayItemArtwork);
                 _trayMenu.Items.Add(trayItemTimer);
                 _trayMenu.Items.Add(new ToolStripSeparator());
                 _trayMenu.Items.Add(itemCheckUpdate);
@@ -1540,6 +1557,12 @@ namespace KahoiiMusic
                     if (_trayItemLoop != null)
                     {
                         _trayItemLoop.Checked = (btnLoop != null) ? btnLoop.IsLooping : (_audioPlayer != null && _audioPlayer.IsLooping);
+                    }
+                    if (miTrayVinyl != null && miTrayCard != null)
+                    {
+                        var curMode = HistoryService.ArtworkMode;
+                        miTrayVinyl.Checked = (curMode == ArtworkDisplayMode.VinylRecord);
+                        miTrayCard.Checked = (curMode == ArtworkDisplayMode.RoundedCard);
                     }
                     if (trayItemTimer != null)
                     {

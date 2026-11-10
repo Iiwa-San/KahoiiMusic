@@ -19,6 +19,11 @@ namespace KahoiiMusic.Controls
         private readonly System.Diagnostics.Stopwatch _stopwatch = new System.Diagnostics.Stopwatch();
         private const float DegreesPerSecond = 36f; // Exactly 10 seconds per revolution (smooth, natural, relaxing)
         private System.Windows.Forms.Timer _spinTimer;
+        private ArtworkDisplayMode _displayMode = ArtworkDisplayMode.VinylRecord;
+        private ContextMenuStrip _contextMenu;
+        private ToolStripMenuItem _miVinyl;
+        private ToolStripMenuItem _miCard;
+        private ToolTip _toolTip;
 
         public ArtworkBox()
         {
@@ -31,10 +36,130 @@ namespace KahoiiMusic.Controls
             BackColor = Color.Transparent;
             Size = new Size(164, 162);
             DoubleBuffered = true;
+            Cursor = Cursors.Hand;
+
+            try
+            {
+                _displayMode = HistoryService.ArtworkMode;
+            }
+            catch { }
 
             _spinTimer = new System.Windows.Forms.Timer();
             _spinTimer.Interval = 16; // ~60 FPS buttery smooth rotation
             _spinTimer.Tick += SpinTimer_Tick;
+
+            InitializeContextMenu();
+            UpdateToolTip();
+
+            HistoryService.SettingsChanged += (s, e) =>
+            {
+                if (IsHandleCreated)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            DisplayMode = HistoryService.ArtworkMode;
+                        }));
+                    }
+                    catch { }
+                }
+                else
+                {
+                    _displayMode = HistoryService.ArtworkMode;
+                }
+            };
+        }
+
+        [Category("Appearance")]
+        public ArtworkDisplayMode DisplayMode
+        {
+            get => _displayMode;
+            set
+            {
+                if (_displayMode != value)
+                {
+                    _displayMode = value;
+                    UpdateContextMenuCheckedStates();
+                    UpdateToolTip();
+                    Invalidate();
+                }
+            }
+        }
+
+        public void SetDisplayMode(ArtworkDisplayMode mode)
+        {
+            DisplayMode = mode;
+            try
+            {
+                HistoryService.ArtworkMode = mode;
+            }
+            catch { }
+        }
+
+        private void InitializeContextMenu()
+        {
+            _contextMenu = new ContextMenuStrip();
+            try
+            {
+                _contextMenu.Renderer = new Form1.DarkMenuRenderer();
+            }
+            catch { }
+            _contextMenu.BackColor = Color.FromArgb(24, 20, 32);
+            _contextMenu.ForeColor = Color.FromArgb(235, 235, 245);
+            _contextMenu.ShowImageMargin = false;
+
+            var header = new ToolStripMenuItem("Kiểu hiển thị ảnh bìa:")
+            {
+                Enabled = false,
+                ForeColor = Color.FromArgb(160, 140, 195),
+                Font = new Font("Segoe UI", 8.2f, FontStyle.Bold)
+            };
+
+            _miVinyl = new ToolStripMenuItem("💿 Đĩa than quay (Vinyl Record)");
+            _miVinyl.Click += (s, e) => SetDisplayMode(ArtworkDisplayMode.VinylRecord);
+
+            _miCard = new ToolStripMenuItem("🔲 Khung vuông bo góc (Card Android)");
+            _miCard.Click += (s, e) => SetDisplayMode(ArtworkDisplayMode.RoundedCard);
+
+            _contextMenu.Items.Add(header);
+            _contextMenu.Items.Add(new ToolStripSeparator());
+            _contextMenu.Items.Add(_miVinyl);
+            _contextMenu.Items.Add(_miCard);
+
+            this.ContextMenuStrip = _contextMenu;
+            UpdateContextMenuCheckedStates();
+        }
+
+        private void UpdateContextMenuCheckedStates()
+        {
+            if (_miVinyl != null) _miVinyl.Checked = (_displayMode == ArtworkDisplayMode.VinylRecord);
+            if (_miCard != null) _miCard.Checked = (_displayMode == ArtworkDisplayMode.RoundedCard);
+        }
+
+        private void UpdateToolTip()
+        {
+            if (_toolTip == null)
+            {
+                _toolTip = new ToolTip { InitialDelay = 500, ReshowDelay = 200 };
+            }
+            string msg = (_displayMode == ArtworkDisplayMode.VinylRecord)
+                ? "Đĩa than quay (Nhấn chuột trái để đổi sang Khung vuông bo góc, chuột phải để chọn)"
+                : "Khung vuông bo góc (Nhấn chuột trái để đổi sang Đĩa than quay, chuột phải để chọn)";
+            _toolTip.SetToolTip(this, msg);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button == MouseButtons.Left)
+            {
+                // Left click toggles between the two artwork styles
+                var next = (_displayMode == ArtworkDisplayMode.VinylRecord)
+                    ? ArtworkDisplayMode.RoundedCard
+                    : ArtworkDisplayMode.VinylRecord;
+                SetDisplayMode(next);
+            }
         }
 
         [Category("Behavior")]
@@ -102,7 +227,7 @@ namespace KahoiiMusic.Controls
 
         private void SpinTimer_Tick(object sender, EventArgs e)
         {
-            if (_isSpinning)
+            if (_isSpinning && _displayMode == ArtworkDisplayMode.VinylRecord)
             {
                 // Wall-clock continuous rotation: completely immune to timer jitter, drift or delays
                 _rotationAngle = (float)((_stopwatch.Elapsed.TotalSeconds * DegreesPerSecond) % 360.0);
@@ -143,20 +268,20 @@ namespace KahoiiMusic.Controls
                     if (!string.IsNullOrEmpty(videoId))
                     {
                         string savedThumb = Path.Combine(AppPaths.SavedThumbDir, videoId + ".jpg");
-                        resultThumb = TryLoadCircularThumbFromFile(savedThumb);
+                        resultThumb = TryLoadArtworkFromFile(savedThumb);
                     }
 
                     // 3. Check KahoiiTemp/thumb/ (Cached thumbnails)
                     if (resultThumb == null && !string.IsNullOrEmpty(videoId))
                     {
                         string tempThumb = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
-                        resultThumb = TryLoadCircularThumbFromFile(tempThumb);
+                        resultThumb = TryLoadArtworkFromFile(tempThumb);
                     }
 
                     // 4. Check if urlOrVideoId is an existing direct file path
                     if (resultThumb == null && File.Exists(urlOrVideoId))
                     {
-                        resultThumb = TryLoadCircularThumbFromFile(urlOrVideoId);
+                        resultThumb = TryLoadArtworkFromFile(urlOrVideoId);
                     }
 
                     // If successfully loaded from local disk, apply immediately! (0ms offline visual feedback)
@@ -203,7 +328,7 @@ namespace KahoiiMusic.Controls
                                 using (MemoryStream ms = new MemoryStream(data))
                                 using (Image loaded = Image.FromStream(ms))
                                 {
-                                    resultThumb = CreateCircularVinylArtwork(loaded);
+                                    resultThumb = CreateArtworkBitmap(loaded);
                                 }
 
                                 if (resultThumb != null)
@@ -239,7 +364,7 @@ namespace KahoiiMusic.Controls
             });
         }
 
-        private Bitmap TryLoadCircularThumbFromFile(string filePath)
+        private Bitmap TryLoadArtworkFromFile(string filePath)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return null;
             try
@@ -251,7 +376,7 @@ namespace KahoiiMusic.Controls
                     using (MemoryStream ms = new MemoryStream(data))
                     using (Image loaded = Image.FromStream(ms))
                     {
-                        return CreateCircularVinylArtwork(loaded);
+                        return CreateArtworkBitmap(loaded);
                     }
                 }
             }
@@ -259,12 +384,12 @@ namespace KahoiiMusic.Controls
             return null;
         }
 
-        private Bitmap CreateCircularVinylArtwork(Image loaded)
+        private Bitmap CreateArtworkBitmap(Image loaded)
         {
             if (loaded == null) return null;
             try
             {
-                int thumbDim = 116;
+                int thumbDim = 256;
                 Bitmap thumb = new Bitmap(thumbDim, thumbDim, PixelFormat.Format32bppPArgb);
                 using (Graphics g = Graphics.FromImage(thumb))
                 {
@@ -272,29 +397,23 @@ namespace KahoiiMusic.Controls
                     g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                     g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-                    using (GraphicsPath circlePath = new GraphicsPath())
+                    int cropSize;
+                    if (Math.Abs(loaded.Width - loaded.Height) <= 2 || loaded.Width <= 64)
                     {
-                        circlePath.AddEllipse(0, 0, thumbDim, thumbDim);
-                        g.SetClip(circlePath);
-
-                        int cropSize;
-                        if (Math.Abs(loaded.Width - loaded.Height) <= 2 || loaded.Width <= 64)
-                        {
-                            // Already square or micro-thumbnail: preserve entire image
-                            cropSize = Math.Min(loaded.Width, loaded.Height);
-                        }
-                        else
-                        {
-                            // Standard 16:9 YouTube thumbnail: crop center 75% focused area
-                            cropSize = (int)(Math.Min(loaded.Width, loaded.Height) * 0.75f);
-                        }
-                        int srcX = (loaded.Width - cropSize) / 2;
-                        int srcY = (loaded.Height - cropSize) / 2;
-                        Rectangle srcRect = new Rectangle(srcX, srcY, cropSize, cropSize);
-                        Rectangle destRect = new Rectangle(0, 0, thumbDim, thumbDim);
-
-                        g.DrawImage(loaded, destRect, srcRect, GraphicsUnit.Pixel);
+                        // Already square or micro-thumbnail: preserve entire image
+                        cropSize = Math.Min(loaded.Width, loaded.Height);
                     }
+                    else
+                    {
+                        // Standard 16:9 YouTube thumbnail: crop center 85% focused area
+                        cropSize = (int)(Math.Min(loaded.Width, loaded.Height) * 0.85f);
+                    }
+                    int srcX = (loaded.Width - cropSize) / 2;
+                    int srcY = (loaded.Height - cropSize) / 2;
+                    Rectangle srcRect = new Rectangle(srcX, srcY, cropSize, cropSize);
+                    Rectangle destRect = new Rectangle(0, 0, thumbDim, thumbDim);
+
+                    g.DrawImage(loaded, destRect, srcRect, GraphicsUnit.Pixel);
                 }
                 return thumb;
             }
@@ -349,9 +468,28 @@ namespace KahoiiMusic.Controls
 
             int cx = Width / 2;
             int cy = 72;
-            int R = 66; // Vinyl record radius (diameter = 132)
+            int R = 66; // Vinyl record radius & half-width of card (diameter = 132)
             int rLabel = 29; // Center artwork sticker radius (diameter = 58)
 
+            if (_displayMode == ArtworkDisplayMode.RoundedCard)
+            {
+                int cardW = 132;
+                int cardH = 132;
+                int cardX = cx - cardW / 2;
+                int cardY = cy - cardH / 2;
+                DrawRoundedCard(g, cardX, cardY, cardW, cardH, 16f);
+            }
+            else
+            {
+                DrawVinylRecord(g, cx, cy, R, rLabel);
+            }
+
+            // Text below the artwork (Time display or "Chưa phát hiện Audio")
+            DrawBottomTimeText(g, cy + R + 3);
+        }
+
+        private void DrawVinylRecord(Graphics g, int cx, int cy, int R, int rLabel)
+        {
             // 1. Soft Ambient Drop Shadow under the vinyl disc
             using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(50, 0, 0, 0)))
             {
@@ -395,11 +533,19 @@ namespace KahoiiMusic.Controls
             // Center Label / Album Artwork
             if (_image != null)
             {
-                g.InterpolationMode = InterpolationMode.HighQualityBilinear;
-                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                g.DrawImage(_image, cx - rLabel, cy - rLabel, 2 * rLabel, 2 * rLabel);
+                // Circular clipping for the vinyl center sticker
+                using (GraphicsPath clipPath = new GraphicsPath())
+                {
+                    clipPath.AddEllipse(cx - rLabel, cy - rLabel, 2 * rLabel, 2 * rLabel);
+                    Region oldClip = g.Clip;
+                    g.SetClip(clipPath, CombineMode.Intersect);
+                    g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.DrawImage(_image, cx - rLabel, cy - rLabel, 2 * rLabel, 2 * rLabel);
+                    g.Clip = oldClip;
+                }
 
-                // Fine gold/silver border around center artwork
+                // Fine border around center artwork
                 using (Pen labelBorder = new Pen(Color.FromArgb(100, 255, 255, 255), 1.5f))
                 {
                     g.DrawEllipse(labelBorder, cx - rLabel, cy - rLabel, 2 * rLabel, 2 * rLabel);
@@ -407,7 +553,7 @@ namespace KahoiiMusic.Controls
             }
             else
             {
-                // Empty state: Golden-amber vinyl label matching the theme
+                // Empty state: Golden-amber vinyl label matching the cyber theme
                 using (SolidBrush labelBrush = new SolidBrush(Color.FromArgb(43, 16, 127)))
                 using (Pen labelBorder = new Pen(Color.FromArgb(255, 38, 128), 1.2f))
                 {
@@ -443,8 +589,132 @@ namespace KahoiiMusic.Controls
                 g.FillEllipse(holeBrush, cx - 4, cy - 4, 8, 8);
                 g.DrawEllipse(silverPen, cx - 4, cy - 4, 8, 8);
             }
+        }
 
-            // 5. Text below the vinyl disc (Time display or "Chưa phát hiện Audio")
+        private void DrawRoundedCard(Graphics g, int cardX, int cardY, int cardW, int cardH, float radius)
+        {
+            Rectangle cardRect = new Rectangle(cardX, cardY, cardW, cardH);
+
+            // 1. Soft Ambient Drop Shadow under the card
+            Rectangle shadowRect = new Rectangle(cardX + 2, cardY + 5, cardW - 4, cardH - 2);
+            using (GraphicsPath shadowPath = CreateRoundedRectanglePath(shadowRect, radius))
+            using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
+            {
+                g.FillPath(shadowBrush, shadowPath);
+            }
+
+            // 2. Main Rounded Card Body
+            using (GraphicsPath cardPath = CreateRoundedRectanglePath(cardRect, radius))
+            {
+                if (_image != null)
+                {
+                    // Draw Album Artwork clipped inside rounded card
+                    GraphicsState state = g.Save();
+                    Region oldClip = g.Clip;
+                    g.SetClip(cardPath, CombineMode.Intersect);
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.DrawImage(_image, cardRect);
+
+                    // Subtle top specular reflection gradient (giving it glass / tactile card sheen)
+                    Rectangle sheenRect = new Rectangle(cardX, cardY, cardW, cardH / 2);
+                    using (LinearGradientBrush sheenBrush = new LinearGradientBrush(
+                        sheenRect,
+                        Color.FromArgb(36, 255, 255, 255),
+                        Color.FromArgb(0, 255, 255, 255),
+                        LinearGradientMode.Vertical))
+                    {
+                        g.FillRectangle(sheenBrush, sheenRect);
+                    }
+
+                    g.Clip = oldClip;
+                    g.Restore(state);
+                }
+                else
+                {
+                    // Empty state: matches Android ArtworkView background gradient
+                    // Brush.verticalGradient(listOf(Color(0xFF221A36), Color(0xFF140F22)))
+                    using (LinearGradientBrush bgBrush = new LinearGradientBrush(
+                        cardRect,
+                        Color.FromArgb(0x22, 0x1A, 0x36),
+                        Color.FromArgb(0x14, 0x0F, 0x22),
+                        LinearGradientMode.Vertical))
+                    {
+                        g.FillPath(bgBrush, cardPath);
+                    }
+
+                    // Draw stylized vector music note
+                    int centerNoteX = cardX + cardW / 2;
+                    int centerNoteY = cardY + cardH / 2 - 4;
+                    DrawStylizedMusicNote(g, centerNoteX, centerNoteY);
+                }
+
+                // 1px Glass border around the card (matching Android: White 22% to White 5%)
+                using (LinearGradientBrush borderBrush = new LinearGradientBrush(
+                    cardRect,
+                    Color.FromArgb(56, 255, 255, 255),
+                    Color.FromArgb(16, 255, 255, 255),
+                    LinearGradientMode.Vertical))
+                using (Pen borderPen = new Pen(borderBrush, 1.2f))
+                {
+                    g.DrawPath(borderPen, cardPath);
+                }
+            }
+        }
+
+        private void DrawStylizedMusicNote(Graphics g, int cx, int cy)
+        {
+            // Stylized vector double music note in neon pink (#FF2680)
+            using (SolidBrush noteBrush = new SolidBrush(Color.FromArgb(210, 255, 38, 128)))
+            using (Pen stemPen = new Pen(Color.FromArgb(210, 255, 38, 128), 3.0f))
+            {
+                stemPen.StartCap = LineCap.Round;
+                stemPen.EndCap = LineCap.Round;
+
+                // Note head 1 (tilted ellipse)
+                GraphicsState s1 = g.Save();
+                g.TranslateTransform(cx - 16, cy + 12);
+                g.RotateTransform(-25f);
+                g.FillEllipse(noteBrush, -9, -6, 18, 13);
+                g.Restore(s1);
+
+                // Note head 2 (tilted ellipse)
+                GraphicsState s2 = g.Save();
+                g.TranslateTransform(cx + 10, cy + 6);
+                g.RotateTransform(-25f);
+                g.FillEllipse(noteBrush, -9, -6, 18, 13);
+                g.Restore(s2);
+
+                // Vertical stems
+                g.DrawLine(stemPen, cx - 9, cy + 10, cx - 9, cy - 15);
+                g.DrawLine(stemPen, cx + 17, cy + 4, cx + 17, cy - 21);
+
+                // Top connecting beam
+                using (GraphicsPath beamPath = new GraphicsPath())
+                {
+                    beamPath.AddPolygon(new PointF[]
+                    {
+                        new PointF(cx - 10, cy - 11),
+                        new PointF(cx + 18, cy - 17),
+                        new PointF(cx + 18, cy - 23),
+                        new PointF(cx - 10, cy - 17)
+                    });
+                    g.FillPath(noteBrush, beamPath);
+                }
+            }
+
+            // "Kahoii Music" subtitle under the note (like Android app)
+            using (Font noteFont = new Font("Segoe UI", 7.5f, FontStyle.Bold))
+            using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(140, 255, 255, 255)))
+            using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                Rectangle textRect = new Rectangle(cx - 50, cy + 28, 100, 16);
+                g.DrawString("Kahoii Music", noteFont, textBrush, textRect, sf);
+            }
+        }
+
+        private void DrawBottomTimeText(Graphics g, int textY)
+        {
             if (_image == null)
             {
                 using (Font textFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
@@ -454,8 +724,8 @@ namespace KahoiiMusic.Controls
                 {
                     sf.Alignment = StringAlignment.Center;
                     sf.LineAlignment = StringAlignment.Center;
-                    Rectangle textRectShadow = new Rectangle(0, cy + R + 4, Width, 18);
-                    Rectangle textRect = new Rectangle(0, cy + R + 3, Width, 18);
+                    Rectangle textRectShadow = new Rectangle(0, textY + 1, Width, 18);
+                    Rectangle textRect = new Rectangle(0, textY, Width, 18);
                     g.DrawString("Chưa phát hiện Audio", textFont, textShadow, textRectShadow, sf);
                     g.DrawString("Chưa phát hiện Audio", textFont, textBrush, textRect, sf);
                 }
@@ -470,12 +740,34 @@ namespace KahoiiMusic.Controls
                 {
                     sf.Alignment = StringAlignment.Center;
                     sf.LineAlignment = StringAlignment.Center;
-                    Rectangle textRectShadow = new Rectangle(0, cy + R + 4, Width, 18);
-                    Rectangle textRect = new Rectangle(0, cy + R + 3, Width, 18);
+                    Rectangle textRectShadow = new Rectangle(0, textY + 1, Width, 18);
+                    Rectangle textRect = new Rectangle(0, textY, Width, 18);
                     g.DrawString(displayTime, textFont, textShadow, textRectShadow, sf);
                     g.DrawString(displayTime, textFont, textBrush, textRect, sf);
                 }
             }
+        }
+
+        private static GraphicsPath CreateRoundedRectanglePath(Rectangle rect, float radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            float diameter = radius * 2f;
+            RectangleF arc = new RectangleF(rect.X, rect.Y, diameter, diameter);
+
+            // Top-left
+            path.AddArc(arc, 180, 90);
+            // Top-right
+            arc.X = rect.Right - diameter;
+            path.AddArc(arc, 270, 90);
+            // Bottom-right
+            arc.Y = rect.Bottom - diameter;
+            path.AddArc(arc, 0, 90);
+            // Bottom-left
+            arc.X = rect.Left;
+            path.AddArc(arc, 90, 90);
+
+            path.CloseFigure();
+            return path;
         }
     }
 }
