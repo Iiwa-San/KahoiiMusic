@@ -25,9 +25,18 @@ namespace KahoiiMusic.Controls
                 Form parent = FindForm();
                 if (parent != null && parent.WindowState == FormWindowState.Normal)
                 {
-                    int x = (short)(m.LParam.ToInt32() & 0xFFFF);
-                    int y = (short)((m.LParam.ToInt32() >> 16) & 0xFFFF);
-                    Point pt = parent.PointToClient(new Point(x, y));
+                    Point screenPt;
+                    if (m.LParam != IntPtr.Zero)
+                    {
+                        int x = unchecked((short)(m.LParam.ToInt64() & 0xFFFF));
+                        int y = unchecked((short)((m.LParam.ToInt64() >> 16) & 0xFFFF));
+                        screenPt = new Point(x, y);
+                    }
+                    else
+                    {
+                        screenPt = Cursor.Position;
+                    }
+                    Point pt = parent.PointToClient(screenPt);
 
                     int w = parent.ClientSize.Width;
                     int h = parent.ClientSize.Height;
@@ -44,3 +53,4 @@ namespace KahoiiMusic.Controls
         }
     }
 }
+

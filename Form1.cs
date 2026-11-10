@@ -642,6 +642,7 @@ namespace KahoiiMusic
         private async void ShowFullSearchResultsAsync(string query)
         {
             if (string.IsNullOrWhiteSpace(query)) return;
+            if (searchPillBox != null && searchPillBox.Text != query) searchPillBox.Text = query;
             _searchResultsView.BringToFront();
             _searchResultsView.Visible = true;
             _searchResultsView.ShowLoading(query);
@@ -1431,6 +1432,7 @@ namespace KahoiiMusic
             get
             {
                 CreateParams cp = base.CreateParams;
+                cp.Style |= 0x40000; // WS_THICKFRAME (WS_SIZEBOX - enables native Windows window edge resizing)
                 cp.Style |= 0x20000; // WS_MINIMIZEBOX (enables minimize from taskbar)
                 cp.Style |= 0x80000; // WS_SYSMENU (enables Alt+F4 and standard close signals)
                 return cp;
@@ -2465,6 +2467,7 @@ namespace KahoiiMusic
             }
         }
 
+        private const int WM_NCCALCSIZE = 0x83;
         private const int WM_NCHITTEST = 0x84;
         private const int HTCLIENT = 1;
         private const int HTCAPTION = 2;
@@ -2481,11 +2484,26 @@ namespace KahoiiMusic
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
             if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
             {
-                int x = (short)(m.LParam.ToInt32() & 0xFFFF);
-                int y = (short)((m.LParam.ToInt32() >> 16) & 0xFFFF);
-                Point pt = PointToClient(new Point(x, y));
+                Point screenPt;
+                if (m.LParam != IntPtr.Zero)
+                {
+                    int x = unchecked((short)(m.LParam.ToInt64() & 0xFFFF));
+                    int y = unchecked((short)((m.LParam.ToInt64() >> 16) & 0xFFFF));
+                    screenPt = new Point(x, y);
+                }
+                else
+                {
+                    screenPt = Cursor.Position;
+                }
+                Point pt = PointToClient(screenPt);
                 int w = ClientSize.Width;
                 int h = ClientSize.Height;
 

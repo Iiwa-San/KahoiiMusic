@@ -123,7 +123,7 @@ namespace KahoiiMusic
             this.searchPillBox.BackColor = System.Drawing.Color.Transparent;
             this.searchPillBox.Location = new System.Drawing.Point(46, 4);
             this.searchPillBox.Name = "searchPillBox";
-            this.searchPillBox.PlaceholderText = "link youtube...";
+            this.searchPillBox.PlaceholderText = "Tìm bài hát, nghệ sĩ hoặc dán link...";
             this.searchPillBox.Size = new System.Drawing.Size(384, 22);
             this.searchPillBox.TabIndex = 0;
             // 

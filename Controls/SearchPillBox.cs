@@ -2,26 +2,49 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace KahoiiMusic.Controls
 {
     public class SearchPillBox : Control
     {
-        private TextBox _textBox;
-        private string _placeholderText = "Tìm bài hát, dán link YouTube...";
+        internal class CueTextBox : TextBox
+        {
+            private const int WM_PAINT = 0xF;
+            public string CueBannerText { get; set; } = string.Empty;
+            public Color CueColor { get; set; } = Color.FromArgb(145, 135, 175);
+
+            protected override void WndProc(ref Message m)
+            {
+                base.WndProc(ref m);
+                if (m.Msg == WM_PAINT && string.IsNullOrEmpty(Text) && !string.IsNullOrEmpty(CueBannerText))
+                {
+                    using (Graphics g = Graphics.FromHwnd(Handle))
+                    using (SolidBrush brush = new SolidBrush(Focused ? Color.FromArgb(115, 105, 140) : CueColor))
+                    using (StringFormat sf = new StringFormat { LineAlignment = StringAlignment.Center })
+                    {
+                        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                        g.DrawString(CueBannerText, Font, brush, new RectangleF(2, 0, Width - 4, Height), sf);
+                    }
+                }
+            }
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern int SendMessage(IntPtr hWnd, int msg, int wParam, [MarshalAs(UnmanagedType.LPWStr)] string lParam);
+        private const int EM_SETCUEBANNER = 0x1501;
+
+        private CueTextBox _textBox;
+        private string _placeholderText = "Tìm bài hát, nghệ sĩ hoặc dán link...";
         private Color _pillBgColor = Color.FromArgb(28, 23, 53);
         private Color _borderColorIdle = Color.FromArgb(60, 48, 96);
         private Color _borderColorFocused = Color.FromArgb(255, 45, 133);
-        private Color _placeholderColor = Color.FromArgb(135, 125, 160);
         private Color _textColor = Color.White;
-        private bool _isPlaceholderActive = true;
-        private bool _alreadyFocused = false;
 
         private System.Windows.Forms.Timer _debounceTimer;
-        private Rectangle _clearBtnRect;
-        private Rectangle _submitBtnRect;
-        private Rectangle _ytBadgeRect;
+        private Rectangle _clearBtnRect = Rectangle.Empty;
+        private Rectangle _submitBtnRect = Rectangle.Empty;
         private bool _isHoveringClear = false;
         private bool _isHoveringSubmit = false;
 
@@ -42,20 +65,20 @@ namespace KahoiiMusic.Controls
             DoubleBuffered = true;
 
             _debounceTimer = new System.Windows.Forms.Timer();
-            _debounceTimer.Interval = 240;
+            _debounceTimer.Interval = 750;
             _debounceTimer.Tick += DebounceTimer_Tick;
 
-            _textBox = new TextBox();
+            _textBox = new CueTextBox();
             _textBox.BorderStyle = BorderStyle.None;
             _textBox.BackColor = _pillBgColor;
-            _textBox.ForeColor = _placeholderColor;
+            _textBox.ForeColor = _textColor;
             _textBox.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-            _textBox.Text = _placeholderText;
             _textBox.TextAlign = HorizontalAlignment.Left;
+            _textBox.CueBannerText = _placeholderText;
 
-            _textBox.GotFocus += TextBox_GotFocus;
-            _textBox.MouseDown += TextBox_MouseDown;
-            _textBox.LostFocus += TextBox_LostFocus;
+            _textBox.HandleCreated += (s, e) => UpdateCueBanner();
+            _textBox.GotFocus += (s, e) => Invalidate();
+            _textBox.LostFocus += (s, e) => Invalidate();
             _textBox.KeyDown += TextBox_KeyDown;
             _textBox.TextChanged += TextBox_TextChanged;
 
@@ -63,18 +86,31 @@ namespace KahoiiMusic.Controls
             UpdateLayoutPositions();
         }
 
+        private void UpdateCueBanner()
+        {
+            if (_textBox != null)
+            {
+                _textBox.CueBannerText = _placeholderText ?? string.Empty;
+                if (_textBox.IsHandleCreated)
+                {
+                    try
+                    {
+                        SendMessage(_textBox.Handle, EM_SETCUEBANNER, 1, _placeholderText ?? string.Empty);
+                    }
+                    catch { }
+                }
+                _textBox.Invalidate();
+            }
+        }
+
         [Category("Appearance")]
         public string PlaceholderText
         {
-            get { return _placeholderText; }
+            get => _placeholderText;
             set
             {
-                _placeholderText = value;
-                if (_isPlaceholderActive)
-                {
-                    _textBox.Text = _placeholderText;
-                    _textBox.ForeColor = _placeholderColor;
-                }
+                _placeholderText = value ?? string.Empty;
+                UpdateCueBanner();
             }
         }
 
@@ -83,35 +119,19 @@ namespace KahoiiMusic.Controls
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
         public override string Text
         {
-            get
-            {
-                return !_isPlaceholderActive ? _textBox.Text : string.Empty;
-            }
+            get => _textBox?.Text ?? string.Empty;
             set
             {
-                if (string.IsNullOrEmpty(value))
+                if (_textBox != null)
                 {
-                    _isPlaceholderActive = true;
-                    _textBox.Text = _placeholderText;
-                    _textBox.ForeColor = _placeholderColor;
+                    _textBox.Text = value ?? string.Empty;
+                    UpdateLayoutPositions();
+                    Invalidate();
                 }
-                else
-                {
-                    _isPlaceholderActive = false;
-                    _textBox.Text = value;
-                    _textBox.ForeColor = _textColor;
-                }
-                Invalidate();
             }
         }
 
-        public bool HasRealText
-        {
-            get
-            {
-                return !_isPlaceholderActive && !string.IsNullOrWhiteSpace(_textBox.Text);
-            }
-        }
+        public bool HasRealText => !string.IsNullOrWhiteSpace(_textBox?.Text);
 
         private bool IsUrl(string text)
         {
@@ -127,9 +147,10 @@ namespace KahoiiMusic.Controls
         {
             UpdateLayoutPositions();
             Invalidate();
-            if (_isPlaceholderActive) return;
 
-            string query = _textBox.Text.Trim();
+            string raw = _textBox.Text;
+            string query = raw.Trim();
+
             if (string.IsNullOrEmpty(query))
             {
                 _debounceTimer.Stop();
@@ -137,15 +158,34 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
-            if (!IsUrl(query))
+            if (IsUrl(query))
             {
                 _debounceTimer.Stop();
+                SearchCleared?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            // Word / Phrase search: require at least 2 characters before suggesting
+            if (query.Length < 2)
+            {
+                _debounceTimer.Stop();
+                SearchCleared?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            // If user just typed a space, a word was completed -> trigger quickly (120ms)
+            if (raw.EndsWith(" "))
+            {
+                _debounceTimer.Stop();
+                _debounceTimer.Interval = 120;
                 _debounceTimer.Start();
             }
             else
             {
+                // In the middle of typing a word: wait for pause (750ms) so we don't query every single character
                 _debounceTimer.Stop();
-                SearchCleared?.Invoke(this, EventArgs.Empty);
+                _debounceTimer.Interval = 750;
+                _debounceTimer.Start();
             }
         }
 
@@ -154,94 +194,20 @@ namespace KahoiiMusic.Controls
             _debounceTimer.Stop();
             if (HasRealText && !IsUrl(_textBox.Text))
             {
-                SearchQueryDebounced?.Invoke(this, _textBox.Text.Trim());
-            }
-        }
-
-        private void TextBox_GotFocus(object sender, EventArgs e)
-        {
-            if (_isPlaceholderActive)
-            {
-                _isPlaceholderActive = false;
-                _textBox.Text = string.Empty;
-                _textBox.ForeColor = _textColor;
-            }
-            else
-            {
-                _textBox.ForeColor = _textColor;
-                if (!_alreadyFocused)
+                string query = _textBox.Text.Trim();
+                if (query.Length >= 2)
                 {
-                    _alreadyFocused = true;
-                    BeginInvoke(new Action(() =>
-                    {
-                        if (_textBox.Focused)
-                        {
-                            _textBox.SelectAll();
-                        }
-                    }));
+                    SearchQueryDebounced?.Invoke(this, query);
                 }
             }
-            Invalidate();
-        }
-
-        private void TextBox_MouseDown(object sender, MouseEventArgs e)
-        {
-            if (!_alreadyFocused)
-            {
-                _alreadyFocused = true;
-                if (_isPlaceholderActive)
-                {
-                    _isPlaceholderActive = false;
-                    _textBox.Text = string.Empty;
-                    _textBox.ForeColor = _textColor;
-                }
-                else
-                {
-                    _textBox.ForeColor = _textColor;
-                    BeginInvoke(new Action(() =>
-                    {
-                        if (_textBox.Focused)
-                        {
-                            _textBox.SelectAll();
-                        }
-                    }));
-                }
-            }
-            Invalidate();
-        }
-
-        private void TextBox_LostFocus(object sender, EventArgs e)
-        {
-            _alreadyFocused = false;
-            if (string.IsNullOrWhiteSpace(_textBox.Text) || _isPlaceholderActive)
-            {
-                _isPlaceholderActive = true;
-                _textBox.Text = _placeholderText;
-                _textBox.ForeColor = _placeholderColor;
-            }
-            else
-            {
-                _textBox.ForeColor = Color.FromArgb(200, 195, 220);
-            }
-            _textBox.SelectionLength = 0;
-            Invalidate();
         }
 
         public void RemoveFocus()
         {
-            _alreadyFocused = false;
-            _textBox.SelectionLength = 0;
-            if (string.IsNullOrWhiteSpace(_textBox.Text) || _isPlaceholderActive)
+            if (_textBox != null)
             {
-                _isPlaceholderActive = true;
-                _textBox.Text = _placeholderText;
-                _textBox.ForeColor = _placeholderColor;
+                _textBox.SelectionLength = 0;
             }
-            else
-            {
-                _textBox.ForeColor = Color.FromArgb(200, 195, 220);
-            }
-
             Form parent = FindForm();
             if (parent != null)
             {
@@ -287,16 +253,11 @@ namespace KahoiiMusic.Controls
             if (_textBox == null) return;
 
             int leftPadding = 34; // space for magnifying glass
-            int rightControlsWidth = 28; // space for submit arrow
+            int rightControlsWidth = 28; // space for submit arrow (➔)
 
             if (HasRealText)
             {
-                rightControlsWidth += 24; // space for clear button
-            }
-
-            if (Width >= 280)
-            {
-                rightControlsWidth += 60; // space for "YouTube" badge
+                rightControlsWidth += 24; // space for clear button (✕)
             }
 
             int tbHeight = _textBox.PreferredHeight;
@@ -310,18 +271,6 @@ namespace KahoiiMusic.Controls
             int btnH = Math.Min(22, Height - 8);
             curX -= (btnH + 2);
             _submitBtnRect = new Rectangle(curX, (Height - btnH) / 2, btnH, btnH);
-
-            // YouTube badge
-            if (Width >= 280)
-            {
-                int bdgeH = Math.Min(18, Height - 10);
-                curX -= 56;
-                _ytBadgeRect = new Rectangle(curX, (Height - bdgeH) / 2, 52, bdgeH);
-            }
-            else
-            {
-                _ytBadgeRect = Rectangle.Empty;
-            }
 
             // Clear button
             if (HasRealText)
@@ -429,33 +378,6 @@ namespace KahoiiMusic.Controls
 
             // Draw Magnifying Glass Icon (Vector)
             DrawMagnifyingGlass(g, 13, (Height - 12) / 2, isFocused || HasRealText);
-
-            // Draw "YouTube" Badge
-            if (!_ytBadgeRect.IsEmpty)
-            {
-                using (GraphicsPath bPath = new GraphicsPath())
-                {
-                    int bD = _ytBadgeRect.Height;
-                    bPath.AddArc(_ytBadgeRect.X, _ytBadgeRect.Y, bD, bD, 90, 180);
-                    bPath.AddArc(_ytBadgeRect.Right - bD, _ytBadgeRect.Y, bD, bD, 270, 180);
-                    bPath.CloseFigure();
-
-                    using (SolidBrush bBrush = new SolidBrush(Color.FromArgb(40, 255, 45, 133)))
-                    {
-                        g.FillPath(bBrush, bPath);
-                    }
-                    using (Pen bPen = new Pen(Color.FromArgb(90, 255, 45, 133), 1f))
-                    {
-                        g.DrawPath(bPen, bPath);
-                    }
-                }
-                using (Font bFont = new Font("Segoe UI", 7.0f, FontStyle.Bold))
-                using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(255, 100, 165)))
-                {
-                    StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    g.DrawString("YouTube", bFont, textBrush, _ytBadgeRect, sf);
-                }
-            }
 
             // Draw Clear button (✕)
             if (HasRealText && !_clearBtnRect.IsEmpty)
