@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace KahoiiMusic.Controls
 {
-    public class GradientPanel : Panel
+    public class GradientPanel : EdgeTransparentPanel
     {
         private Color _topColor = Color.FromArgb(43, 16, 127);
         private Color _bottomColor = Color.FromArgb(255, 38, 128);

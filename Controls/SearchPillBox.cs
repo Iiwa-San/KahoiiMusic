@@ -42,7 +42,7 @@ namespace KahoiiMusic.Controls
             DoubleBuffered = true;
 
             _debounceTimer = new System.Windows.Forms.Timer();
-            _debounceTimer.Interval = 320;
+            _debounceTimer.Interval = 240;
             _debounceTimer.Tick += DebounceTimer_Tick;
 
             _textBox = new TextBox();

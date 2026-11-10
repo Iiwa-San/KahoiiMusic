@@ -71,7 +71,8 @@ namespace KahoiiMusic
             // Enable double buffering on the Form to prevent any flicker
             SetStyle(ControlStyles.AllPaintingInWmPaint |
                      ControlStyles.UserPaint |
-                     ControlStyles.OptimizedDoubleBuffer, true);
+                     ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.ResizeRedraw, true);
 
             Application.AddMessageFilter(this);
 
@@ -594,7 +595,6 @@ namespace KahoiiMusic
                     if (!_searchDropdown.Visible)
                     {
                         _searchDropdown.Show(this);
-                        this.Activate();
                     }
                 }
                 else
@@ -644,6 +644,7 @@ namespace KahoiiMusic
             if (string.IsNullOrWhiteSpace(query)) return;
             _searchResultsView.BringToFront();
             _searchResultsView.Visible = true;
+            _searchResultsView.ShowLoading(query);
             var results = await Services.YouTubeSearchService.SearchAsync(query, 25);
             _searchResultsView.SetResults(query, results);
         }
@@ -1295,7 +1296,6 @@ namespace KahoiiMusic
                 {
                     _lyricsSlideProgress = 0f;
                     _lyricsSlideTimer.Stop();
-                    if (lyricsPanel != null) lyricsPanel.Visible = false;
                 }
             }
 
@@ -1303,15 +1303,7 @@ namespace KahoiiMusic
             float t = _lyricsSlideProgress;
             float ease = (float)(1 - Math.Pow(1 - t, 3));
 
-            int artX = (int)Math.Round(156 - (156 - 8) * ease);
-            artworkBox.Left = artX;
-
-            int titleX = (int)Math.Round(23 - (23 - 8) * ease);
-            int titleW = (int)Math.Round(430 - (430 - 164) * ease);
-            marqueeTitle.Left = titleX;
-            marqueeTitle.Width = titleW;
-            marqueeAuthor.Left = titleX;
-            marqueeAuthor.Width = titleW;
+            UpdateCenterAreaLayout(ease);
         }
 
         private void LoadLyricsForTrack(string videoId, string title, string author, int durationSeconds, bool forceRefresh = false)
@@ -2491,7 +2483,6 @@ namespace KahoiiMusic
         {
             if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
             {
-                base.WndProc(ref m);
                 int x = (short)(m.LParam.ToInt32() & 0xFFFF);
                 int y = (short)((m.LParam.ToInt32() >> 16) & 0xFFFF);
                 Point pt = PointToClient(new Point(x, y));
@@ -2511,8 +2502,6 @@ namespace KahoiiMusic
                 if (right) { m.Result = (IntPtr)HTRIGHT; return; }
                 if (top) { m.Result = (IntPtr)HTTOP; return; }
                 if (bottom) { m.Result = (IntPtr)HTBOTTOM; return; }
-
-                return;
             }
             base.WndProc(ref m);
         }
@@ -2607,23 +2596,8 @@ namespace KahoiiMusic
             gradientPanel.Location = new Point(0, midY);
             gradientPanel.Size = new Size(cardW, midH);
 
-            // Artwork Box inside gradientPanel
-            int maxArtByHeight = midH - 60;
-            int maxArtByWidth = cardW - 60;
-            int artSize = Math.Max(150, Math.Min(240, Math.Min(maxArtByHeight, maxArtByWidth)));
-            artworkBox.Size = new Size(artSize, artSize);
-            artworkBox.Location = new Point((cardW - artSize) / 2, Math.Max(6, (midH - artSize - 50) / 2));
-
-            // Marquee Title and Author below artworkBox
-            marqueeTitle.Location = new Point(24, artworkBox.Bottom + 6);
-            marqueeTitle.Size = new Size(Math.Max(100, cardW - 48), 22);
-
-            marqueeAuthor.Location = new Point(24, marqueeTitle.Bottom + 2);
-            marqueeAuthor.Size = new Size(Math.Max(100, cardW - 48), 18);
-
-            // LyricsPanel
-            lyricsPanel.Location = new Point(16, 8);
-            lyricsPanel.Size = new Size(Math.Max(100, cardW - 32), Math.Max(40, midH - 16));
+            // 5. Update Center Area (Artwork, Marquee, Lyrics)
+            UpdateCenterAreaLayout(_isLyricsOpen ? 1f : 0f);
 
             // VolumePopup position above btnVolume
             if (volumePopup != null && btnVolume != null)
@@ -2646,6 +2620,63 @@ namespace KahoiiMusic
             }
 
             panelPlayerCard.Invalidate();
+        }
+
+        private void UpdateCenterAreaLayout(float ease)
+        {
+            if (gradientPanel == null || artworkBox == null) return;
+            int cardW = gradientPanel.Width;
+            int midH = gradientPanel.Height;
+            if (cardW <= 0 || midH <= 0) return;
+
+            // When lyrics are CLOSED (ease = 0):
+            int closedArtSize = Math.Max(150, Math.Min(240, Math.Min(midH - 60, cardW - 60)));
+            int closedArtX = (cardW - closedArtSize) / 2;
+            int closedArtY = Math.Max(6, (midH - closedArtSize - 50) / 2);
+            int closedTitleX = 24;
+            int closedTitleW = Math.Max(100, cardW - 48);
+
+            // When lyrics are OPEN (ease = 1):
+            // Artwork on the LEFT:
+            int openArtSize = Math.Max(140, Math.Min(210, midH - 65));
+            int openArtX = 16;
+            int openArtY = Math.Max(6, (midH - openArtSize - 45) / 2);
+            int openTitleX = 16;
+            int openTitleW = openArtSize;
+
+            // Interpolate smoothly with ease:
+            int currentArtSize = (int)Math.Round(closedArtSize - (closedArtSize - openArtSize) * ease);
+            int currentArtX = (int)Math.Round(closedArtX - (closedArtX - openArtX) * ease);
+            int currentArtY = (int)Math.Round(closedArtY - (closedArtY - openArtY) * ease);
+            int currentTitleX = (int)Math.Round(closedTitleX - (closedTitleX - openTitleX) * ease);
+            int currentTitleW = (int)Math.Round(closedTitleW - (closedTitleW - openTitleW) * ease);
+
+            artworkBox.Size = new Size(currentArtSize, currentArtSize);
+            artworkBox.Location = new Point(currentArtX, currentArtY);
+
+            marqueeTitle.Location = new Point(currentTitleX, artworkBox.Bottom + 6);
+            marqueeTitle.Size = new Size(currentTitleW, 22);
+
+            marqueeAuthor.Location = new Point(currentTitleX, marqueeTitle.Bottom + 2);
+            marqueeAuthor.Size = new Size(currentTitleW, 18);
+
+            // LyricsPanel on the RIGHT:
+            if (lyricsPanel != null)
+            {
+                if (ease <= 0.01f)
+                {
+                    lyricsPanel.Visible = false;
+                }
+                else
+                {
+                    int lyricsLeft = artworkBox.Right + 16;
+                    int lyricsWidth = cardW - lyricsLeft - 16;
+                    lyricsPanel.Location = new Point(lyricsLeft, 8);
+                    lyricsPanel.Size = new Size(Math.Max(100, lyricsWidth), Math.Max(40, midH - 16));
+                    lyricsPanel.Visible = true;
+                    lyricsPanel.BringToFront();
+                }
+            }
         }
 
         internal class DarkMenuRenderer : ToolStripProfessionalRenderer

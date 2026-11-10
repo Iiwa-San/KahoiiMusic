@@ -80,6 +80,9 @@
     <Compile Include="Controls\PlayPauseButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\EdgeTransparentPanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\SearchPillBox.cs">
       <SubType>Component</SubType>
     </Compile>

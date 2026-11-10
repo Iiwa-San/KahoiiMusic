@@ -198,8 +198,8 @@ namespace KahoiiMusic.Controls
                 if (_timeText != val)
                 {
                     _timeText = val;
-                    // Only explicitly invalidate when not spinning (when spinning, the 60fps timer already renders it)
-                    if (!_isSpinning)
+                    // Invalidate when not spinning OR when in RoundedCard mode (since RoundedCard doesn't rotate via SpinTimer)
+                    if (!_isSpinning || _displayMode == ArtworkDisplayMode.RoundedCard)
                     {
                         Invalidate();
                     }

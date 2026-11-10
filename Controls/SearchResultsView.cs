@@ -49,8 +49,21 @@ namespace KahoiiMusic.Controls
             DoubleBuffered = true;
         }
 
+        private bool _isLoading = false;
+
+        public void ShowLoading(string query)
+        {
+            _query = query ?? string.Empty;
+            _items = new List<PlaylistItem>();
+            _isLoading = true;
+            _scrollOffset = 0;
+            _hoveredIndex = -1;
+            Invalidate();
+        }
+
         public void SetResults(string query, List<PlaylistItem> items)
         {
+            _isLoading = false;
             _query = query ?? string.Empty;
             _items = items ?? new List<PlaylistItem>();
             _scrollOffset = 0;
@@ -283,6 +296,31 @@ namespace KahoiiMusic.Controls
             // Clip for scrollable area
             Rectangle contentArea = new Rectangle(0, TopHeaderHeight, Width, Height - TopHeaderHeight);
             g.SetClip(contentArea);
+
+            if (_isLoading)
+            {
+                using (Font lFont = new Font("Segoe UI", 10.0f, FontStyle.Bold))
+                using (Font subFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
+                using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(255, 45, 133)))
+                using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(160, 150, 185)))
+                {
+                    StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("⚡ Đang tìm kiếm trên YouTube...", lFont, textBrush, new RectangleF(0, Height / 2 - 25, Width, 24), sf);
+                    g.DrawString("Vui lòng đợi giây lát", subFont, subBrush, new RectangleF(0, Height / 2 + 2, Width, 20), sf);
+                }
+                return;
+            }
+
+            if (_items.Count == 0)
+            {
+                using (Font emptyFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
+                using (SolidBrush emptyBrush = new SolidBrush(Color.FromArgb(160, 150, 185)))
+                {
+                    StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("Không tìm thấy kết quả phù hợp cho \"" + _query + "\"", emptyFont, emptyBrush, new RectangleF(0, Height / 2 - 15, Width, 30), sf);
+                }
+                return;
+            }
 
             int curY = TopHeaderHeight + 6 - _scrollOffset;
 

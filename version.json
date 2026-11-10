@@ -1,8 +1,8 @@
 {
-  "versionCode": 22,
-  "versionName": "1.0.22",
-  "changelog": "• Nâng cấp giao diện Responsive thông minh & mở rộng kích thước mặc định lên 680x520 cực kỳ thoáng đãng\n• Hỗ trợ kéo dãn kích thước cửa sổ tự do từ 4 góc / 4 cạnh viền (Window Edge Resizing) mượt mà\n• Bổ sung nút Maximize / Restore trên thanh tiêu đề và hỗ trợ nhấn đúp để phóng to / thu nhỏ\n• Nâng cấp thanh tìm kiếm Search Pill lên chiều cao 36px chuẩn Cyberpunk, khắc phục triệt để lỗi viền bị che\n• Đĩa than / Album art tự động co giãn sắc nét và căn giữa hoàn hảo\n• Tối ưu hóa cực đỉnh: Toàn bộ cơ chế Responsive chỉ tốn ~47MB RAM (không tốn thêm tài nguyên)",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.22.exe",
+  "versionCode": 23,
+  "versionName": "1.0.23",
+  "changelog": "• Khắc phục giao diện: Lời bài hát (Lyrics) hiển thị chuẩn bên phải, tách biệt với ảnh đĩa/card bên trái\n• Sửa triệt để lỗi đứng thời gian hiển thị khi chuyển sang Khung vuông bo góc (Rounded Card)\n• Kéo giãn tự do linh hoạt từ 4 cạnh viền và 4 góc cửa sổ (Window Edge Resizing)\n• Tối ưu độ mượt của ô tìm kiếm và hoạt ảnh dropdown trượt mở không cướp tiêu điểm\n• Giữ nguyên hiệu năng tối ưu: RAM chỉ ~47MB",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.23.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {

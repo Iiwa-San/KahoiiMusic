@@ -31,8 +31,8 @@ namespace KahoiiMusic
             this.components = new System.ComponentModel.Container();
             this.picLogo = new System.Windows.Forms.PictureBox();
             this.lblLogo = new System.Windows.Forms.Label();
-            this.panelPlayerCard = new System.Windows.Forms.Panel();
-            this.panelTopBar = new System.Windows.Forms.Panel();
+            this.panelPlayerCard = new KahoiiMusic.Controls.EdgeTransparentPanel();
+            this.panelTopBar = new KahoiiMusic.Controls.EdgeTransparentPanel();
             this.btnPlaylist = new KahoiiMusic.Controls.PlaylistButton();
                         this.searchPillBox = new KahoiiMusic.Controls.SearchPillBox();
             this.gradientPanel = new KahoiiMusic.Controls.GradientPanel();
@@ -42,7 +42,7 @@ namespace KahoiiMusic
             this.marqueeTitle = new KahoiiMusic.Controls.MarqueeLabel();
             this.marqueeAuthor = new KahoiiMusic.Controls.MarqueeLabel();
             this.btnFavorite = new KahoiiMusic.Controls.FavoriteButton();
-            this.panelBottomControls = new System.Windows.Forms.Panel();
+            this.panelBottomControls = new KahoiiMusic.Controls.EdgeTransparentPanel();
             this.btnLyrics = new KahoiiMusic.Controls.LyricsButton();
             this.btnVolume = new KahoiiMusic.Controls.VolumeButton();
             this.btnPrevious = new KahoiiMusic.Controls.DirectionalButton();
@@ -331,7 +331,7 @@ namespace KahoiiMusic
             this.lblVersion.Name = "lblVersion";
             this.lblVersion.Size = new System.Drawing.Size(86, 15);
             this.lblVersion.TabIndex = 10;
-            this.lblVersion.Text = "v1.0.22";
+            this.lblVersion.Text = "v1.0.23";
             this.lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
             // musicTrackBar
@@ -436,13 +436,13 @@ namespace KahoiiMusic
         private System.Windows.Forms.Label btnMaximize;
         private System.Windows.Forms.Label btnMinimize;
         private KahoiiMusic.Controls.UserAccountButton btnUser;
-        private System.Windows.Forms.Panel panelPlayerCard;
-        private System.Windows.Forms.Panel panelTopBar;
+        private KahoiiMusic.Controls.EdgeTransparentPanel panelPlayerCard;
+        private KahoiiMusic.Controls.EdgeTransparentPanel panelTopBar;
         private KahoiiMusic.Controls.SearchPillBox searchPillBox;
         private KahoiiMusic.Controls.GradientPanel gradientPanel;
         private KahoiiMusic.Controls.ArtworkBox artworkBox;
         private KahoiiMusic.Controls.LyricsPanel lyricsPanel;
-        private System.Windows.Forms.Panel panelBottomControls;
+        private KahoiiMusic.Controls.EdgeTransparentPanel panelBottomControls;
         private KahoiiMusic.Controls.MusicTrackBar musicTrackBar;
         private KahoiiMusic.Controls.DirectionalButton btnPrevious;
         private KahoiiMusic.Controls.PlayPauseButton btnPlayPause;

@@ -25,6 +25,10 @@ namespace KahoiiMusic.Controls
         public event EventHandler<PlaylistItem> TrackAddSelected;
         public event EventHandler<string> ViewAllSelected;
 
+        private System.Windows.Forms.Timer _slideAnimTimer;
+        private int _targetHeight = 100;
+        private int _currentAnimHeight = 100;
+
         public SearchDropdownPopup()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint |
@@ -38,6 +42,43 @@ namespace KahoiiMusic.Controls
             BackColor = Color.FromArgb(22, 17, 42);
             Size = new Size(420, 100);
             DoubleBuffered = true;
+
+            _slideAnimTimer = new System.Windows.Forms.Timer { Interval = 15 };
+            _slideAnimTimer.Tick += (s, e) =>
+            {
+                int diff = _targetHeight - _currentAnimHeight;
+                if (Math.Abs(diff) <= 3)
+                {
+                    _currentAnimHeight = _targetHeight;
+                    _slideAnimTimer.Stop();
+                }
+                else
+                {
+                    _currentAnimHeight += Math.Max(1, (int)Math.Ceiling(diff * 0.45f));
+                }
+                Height = Math.Max(20, _currentAnimHeight);
+                UpdateRegion();
+                Invalidate();
+            };
+        }
+
+        public new void Hide()
+        {
+            _slideAnimTimer?.Stop();
+            base.Hide();
+        }
+
+        protected override bool ShowWithoutActivation => true;
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= 0x08000000; // WS_EX_NOACTIVATE
+                cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW
+                return cp;
+            }
         }
 
         public void SetResults(string query, List<PlaylistItem> items, int targetWidth = 0)
@@ -49,8 +90,21 @@ namespace KahoiiMusic.Controls
 
             int targetHeight = HeaderHeight + (_items.Count * ItemHeight) + FooterHeight;
             int w = targetWidth > 100 ? targetWidth : Width;
-            Size = new Size(w, targetHeight);
-            UpdateRegion();
+            _targetHeight = targetHeight;
+            Width = w;
+
+            if (!Visible)
+            {
+                _currentAnimHeight = Math.Max(20, (int)(targetHeight * 0.45f));
+                Height = _currentAnimHeight;
+                UpdateRegion();
+                _slideAnimTimer.Start();
+            }
+            else
+            {
+                Height = targetHeight;
+                UpdateRegion();
+            }
 
             // Fetch thumbnails in background
             foreach (var item in _items)
