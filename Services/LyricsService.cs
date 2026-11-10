@@ -1,6 +1,11 @@
 using System;
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -58,8 +63,104 @@ namespace KahoiiMusic.Services
         }
     }
 
+    public class TranslationResult
+    {
+        public string Translation { get; set; }
+        public string Romaji { get; set; }
+        public string SourceLang { get; set; }
+    }
+
     public class LyricsService
     {
+        private static readonly ConcurrentDictionary<string, TranslationResult> _translationMemoryCache =
+            new ConcurrentDictionary<string, TranslationResult>(StringComparer.OrdinalIgnoreCase);
+
+        public static bool ContainsCjk(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            foreach (char c in s)
+            {
+                if ((c >= '\u3040' && c <= '\u309F') || // Hiragana
+                    (c >= '\u30A0' && c <= '\u30FF') || // Katakana
+                    (c >= '\u4E00' && c <= '\u9FFF') || // CJK Unified Ideographs
+                    (c >= '\u3400' && c <= '\u4DBF') || // CJK Extension A
+                    (c >= '\uAC00' && c <= '\uD7AF'))   // Hangul
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static string RemoveDiacritics(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+            string normalized = text.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder();
+            foreach (char c in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                    sb.Append(c);
+            }
+            string res = sb.ToString().Normalize(NormalizationForm.FormC);
+            return Regex.Replace(res, "[āǎàá]", "a", RegexOptions.IgnoreCase)
+                        .Replace("ō", "o").Replace("Ō", "O")
+                        .Replace("ū", "u").Replace("Ū", "U")
+                        .Replace("ē", "e").Replace("Ē", "E")
+                        .Replace("ī", "i").Replace("Ī", "I");
+        }
+
+        public static TranslationResult TranslateAndRomanizeSync(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text) || !ContainsCjk(text)) return null;
+            string clean = text.Trim();
+            if (_translationMemoryCache.TryGetValue(clean, out var cached)) return cached;
+
+            try
+            {
+                string url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&dt=rm&q=" + Uri.EscapeDataString(clean);
+                using (var wc = new WebClient())
+                {
+                    wc.Headers[HttpRequestHeader.UserAgent] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
+                    wc.Encoding = Encoding.UTF8;
+                    string json = wc.DownloadString(url);
+                    if (!string.IsNullOrWhiteSpace(json))
+                    {
+                        var serializer = new JavaScriptSerializer();
+                        var list = serializer.Deserialize<ArrayList>(json);
+                        if (list != null && list.Count > 0 && list[0] is ArrayList parts)
+                        {
+                            var sb = new StringBuilder();
+                            string romaji = string.Empty;
+                            foreach (var p in parts)
+                            {
+                                if (p is ArrayList item)
+                                {
+                                    if (item.Count > 0 && item[0] is string piece && !string.IsNullOrWhiteSpace(piece))
+                                        sb.Append(piece);
+                                    if (item.Count > 3 && item[3] is string rom && !string.IsNullOrWhiteSpace(rom))
+                                        romaji = rom;
+                                }
+                            }
+                            string srcLang = list.Count > 2 && list[2] is string sl ? sl : string.Empty;
+                            var result = new TranslationResult
+                            {
+                                Translation = sb.ToString().Trim(),
+                                Romaji = romaji.Trim(),
+                                SourceLang = srcLang.Trim()
+                            };
+                            if (!string.IsNullOrEmpty(result.Translation) || !string.IsNullOrEmpty(result.Romaji))
+                            {
+                                _translationMemoryCache[clean] = result;
+                                return result;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
         private static readonly Lazy<LyricsService> _instance = new Lazy<LyricsService>(() => new LyricsService());
         public static LyricsService Instance => _instance.Value;
 
@@ -477,6 +578,26 @@ namespace KahoiiMusic.Services
             if (string.Equals(tTarget, tTrack, StringComparison.OrdinalIgnoreCase))
                 return true;
 
+            // 1b. Cleaned title match (ignoring (feat. ...), [MV], etc.)
+            string cTarget = NormalizeForMatch(CleanTitleForSearch(targetTitle));
+            string cTrack = NormalizeForMatch(CleanTitleForSearch(resultTrack));
+            if (!string.IsNullOrEmpty(cTarget) && string.Equals(cTarget, cTrack, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // 1c. Translation & Romanization match for CJK songs
+            if (ContainsCjk(targetTitle))
+            {
+                var trkRes = TranslateAndRomanizeSync(targetTitle);
+                if (trkRes != null)
+                {
+                    if (!string.IsNullOrEmpty(trkRes.Translation) && IsTitleMatch(trkRes.Translation, resultTrack, targetArtist, resultArtist, resultAlbum))
+                        return true;
+                    string cleanRom = RemoveDiacritics(trkRes.Romaji);
+                    if (!string.IsNullOrEmpty(cleanRom) && IsTitleMatch(cleanRom, resultTrack, targetArtist, resultArtist, resultAlbum))
+                        return true;
+                }
+            }
+
             // 2. Substring containment
             if (tTarget.Length >= 4 && tTrack.Length >= 4)
             {
@@ -537,6 +658,28 @@ namespace KahoiiMusic.Services
             string n2 = NormalizeForMatch(a2);
             if (string.Equals(n1, n2, StringComparison.OrdinalIgnoreCase)) return true;
             if (n1.Contains(n2) || n2.Contains(n1)) return true;
+
+            // Translation & Romanization check if either artist contains CJK
+            if (ContainsCjk(a1))
+            {
+                var t1 = TranslateAndRomanizeSync(a1);
+                if (t1 != null)
+                {
+                    if (!string.IsNullOrEmpty(t1.Translation) && AreArtistsSimilar(t1.Translation, a2)) return true;
+                    string cleanRom = RemoveDiacritics(t1.Romaji);
+                    if (!string.IsNullOrEmpty(cleanRom) && AreArtistsSimilar(cleanRom, a2)) return true;
+                }
+            }
+            if (ContainsCjk(a2))
+            {
+                var t2 = TranslateAndRomanizeSync(a2);
+                if (t2 != null)
+                {
+                    if (!string.IsNullOrEmpty(t2.Translation) && AreArtistsSimilar(a1, t2.Translation)) return true;
+                    string cleanRom = RemoveDiacritics(t2.Romaji);
+                    if (!string.IsNullOrEmpty(cleanRom) && AreArtistsSimilar(a1, cleanRom)) return true;
+                }
+            }
 
             // Token overlap of words with >= 2 characters
             var w1 = Regex.Matches(a1.ToLowerInvariant(), @"\b[\p{L}\p{N}]{2,}\b");
@@ -753,14 +896,69 @@ namespace KahoiiMusic.Services
         {
             try
             {
-                var candidates = BuildSearchCandidates(title, artist);
-                if (candidates.Count == 0) return null;
+                var rawCandidates = BuildSearchCandidates(title, artist);
+                if (rawCandidates.Count == 0) return null;
+
+                var candidates = new List<SearchCandidate>();
+                if (rawCandidates.Count > 0) candidates.Add(rawCandidates[0]);
+
+                string cleanA = CleanArtistForSearch(artist);
+
+                // Enrich candidates with English translation & Romaji/Pinyin for CJK titles
+                var tracksWithCjk = rawCandidates.Select(c => c.Track).Where(ContainsCjk).Distinct().Take(2).ToList();
+                foreach (var trk in tracksWithCjk)
+                {
+                    var trkRes = TranslateAndRomanizeSync(trk);
+                    if (trkRes != null)
+                    {
+                        string trans = trkRes.Translation;
+                        string cleanRom = RemoveDiacritics(trkRes.Romaji);
+
+                        if (!string.IsNullOrWhiteSpace(trans) && !string.Equals(trans, trk, StringComparison.OrdinalIgnoreCase))
+                        {
+                            candidates.Add(new SearchCandidate(trans, cleanA));
+                            var otherArtist = rawCandidates.FirstOrDefault(c => !string.IsNullOrEmpty(c.Artist) && c.Artist != cleanA)?.Artist;
+                            if (!string.IsNullOrEmpty(otherArtist))
+                            {
+                                candidates.Add(new SearchCandidate(trans, otherArtist));
+                            }
+                        }
+                        if (!string.IsNullOrWhiteSpace(cleanRom) && !string.Equals(cleanRom, trk, StringComparison.OrdinalIgnoreCase) && !string.Equals(cleanRom, trans, StringComparison.OrdinalIgnoreCase))
+                        {
+                            candidates.Add(new SearchCandidate(cleanRom, cleanA));
+                        }
+                    }
+                }
+
+                // If artist has CJK, translate artist too
+                if (ContainsCjk(cleanA))
+                {
+                    var artRes = TranslateAndRomanizeSync(cleanA);
+                    if (artRes != null && !string.IsNullOrWhiteSpace(artRes.Translation) && !string.Equals(artRes.Translation, cleanA, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string artTrans = artRes.Translation;
+                        var currentCands = candidates.ToList();
+                        foreach (var cand in currentCands)
+                        {
+                            candidates.Add(new SearchCandidate(cand.Track, artTrans));
+                        }
+                    }
+                }
+
+                // Append remaining raw candidates
+                foreach (var rc in rawCandidates)
+                {
+                    if (!candidates.Any(c => string.Equals(c.Track, rc.Track, StringComparison.OrdinalIgnoreCase) && string.Equals(c.Artist, rc.Artist, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        candidates.Add(rc);
+                    }
+                }
 
                 Dictionary<string, object> bestSyncedMatch = null;
                 Dictionary<string, object> bestPlainMatch = null;
 
-                // Take top 4 most promising candidates to keep lookups fast (<400ms)
-                int candLimit = Math.Min(4, candidates.Count);
+                // Take top 8 most promising candidates
+                int candLimit = Math.Min(8, candidates.Count);
                 for (int ci = 0; ci < candLimit; ci++)
                 {
                     var cand = candidates[ci];
@@ -787,10 +985,15 @@ namespace KahoiiMusic.Services
                                     if (!isInst)
                                     {
                                         string synced = item.ContainsKey("syncedLyrics") ? item["syncedLyrics"] as string : null;
+                                        string plain = item.ContainsKey("plainLyrics") ? item["plainLyrics"] as string : null;
                                         if (!string.IsNullOrWhiteSpace(synced))
                                         {
                                             var data = ParseLrc(synced, videoId, title, artist);
                                             if (data != null && data.HasLyrics) return data;
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(plain) && bestPlainMatch == null)
+                                        {
+                                            bestPlainMatch = item;
                                         }
                                     }
                                 }
