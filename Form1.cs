@@ -785,6 +785,10 @@ namespace KahoiiMusic
                 {
                     marqueeTitle.Text = _audioPlayer.CurrentTitle;
                 }
+                else
+                {
+                    marqueeTitle.Text = string.Empty;
+                }
             }
             else
             {
@@ -1728,6 +1732,13 @@ namespace KahoiiMusic
                     {
                         showErrorDlg();
                     }
+                }
+            }
+            finally
+            {
+                if (manual)
+                {
+                    _audioPlayer?.RaiseStatus(null);
                 }
             }
         }

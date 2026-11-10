@@ -3,6 +3,9 @@ bin/
 obj/
 scratch/
 publish/
+!publish/Installer/
+!publish/Installer/*.exe
+!publish/KahoiiMusic.exe
 *.user
 *.suo
 

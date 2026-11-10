@@ -1,8 +1,8 @@
 {
-  "versionCode": 16,
-  "versionName": "1.0.16",
-  "changelog": "• Bổ sung số phiên bản (Version) hiển thị tinh tế ở góc dưới bên phải ứng dụng\n• Thêm tab 'non-synced' thông báo trạng thái lời bài hát chưa đồng bộ audio (cạnh nút Romaji/Pinyin)\n• Cải tiến thuật toán lấy Lyrics: Thêm lọc chính xác theo Tác giả (Artist) chống lấy nhầm lời bài hát khác\n• Thêm tùy chọn giao diện Đĩa xoay hoặc Card vuông bo tròn\n• Cập nhật toàn bộ hệ sinh thái KahoiiMusic",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.16.exe",
+  "versionCode": 17,
+  "versionName": "1.0.17",
+  "changelog": "• Bổ sung số phiên bản (Version) hiển thị tinh tế ở góc dưới bên phải ứng dụng\n• Thêm tùy chọn chuyển đổi giao diện: Đĩa xoay Vinyl hoặc Khung Card bo tròn giống Android\n• Sửa triệt để lỗi treo chữ 'Đang kiểm tra bản cập nhật...' sau khi đóng thông báo phiên bản\n• Thêm tab 'non-synced' cạnh Romaji/Pinyin cho lời bài hát chưa đồng bộ audio\n• Cải tiến thuật toán lấy Lyrics: Thêm lọc chính xác theo Tác giả (Artist) chống lấy nhầm lời bài hát khác\n• Tối ưu khử răng cưa text hiển thị số phiên bản trên Windows",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.17.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {
