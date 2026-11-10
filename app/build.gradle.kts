@@ -12,8 +12,8 @@ android {
         applicationId = "com.kahoii.music"
         minSdk = 24
         targetSdk = 34
-        versionCode = 27
-        versionName = "1.4.4"
+        versionCode = 28
+        versionName = "1.4.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
