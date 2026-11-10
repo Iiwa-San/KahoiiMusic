@@ -1336,7 +1336,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(playlist = payload.playlist) }
         }
         historyRepository.mergeFavorites(payload.favorites)
-        historyRepository.mergeHistory(payload.history)
+        historyRepository.mergeHistory(payload.history, payload.deletedHistoryIds)
         savedTracksRepository.mergeSavedTracks(payload.savedTracks)
         playlistCollectionRepository.mergeCollections(payload.collections)
     }
@@ -1357,6 +1357,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             playlist = _uiState.value.playlist,
             favorites = _uiState.value.favorites,
             history = _uiState.value.history,
+            deletedHistoryIds = historyRepository.getDeletedHistoryIds(),
             savedTracks = _uiState.value.savedTracks,
             collections = _uiState.value.playlists
         )
@@ -1467,12 +1468,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearHistory() {
         viewModelScope.launch {
             historyRepository.clearHistory()
+            triggerCloudUpload()
         }
     }
 
     fun removeHistoryItem(id: String) {
         viewModelScope.launch {
             historyRepository.removeTrack(id)
+            triggerCloudUpload()
         }
     }
 

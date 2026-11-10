@@ -19,6 +19,7 @@ class HistoryRepository(private val context: Context) {
     private val gson = GsonUtils.gson
     private val historyFile = File(context.filesDir, "history.json")
     private val favoritesFile = File(context.filesDir, "favorites.json")
+    private val deletedHistoryFile = File(context.filesDir, "deleted_history.json")
 
     var isLoggedIn: () -> Boolean = { false }
 
@@ -27,6 +28,8 @@ class HistoryRepository(private val context: Context) {
 
     private val _favorites = MutableStateFlow<List<PlaylistItem>>(emptyList())
     val favorites: StateFlow<List<PlaylistItem>> = _favorites.asStateFlow()
+
+    private val _deletedHistoryIds = mutableSetOf<String>()
 
     init {
         CoroutineScope(Dispatchers.IO).launch {
@@ -41,15 +44,18 @@ class HistoryRepository(private val context: Context) {
     fun loadHistory() {
         if (!isLoggedIn()) {
             _history.value = emptyList()
+            _deletedHistoryIds.clear()
             return
         }
+        loadDeletedHistory()
         try {
             if (historyFile.exists()) {
                 val json = historyFile.readText()
                 val listType = object : TypeToken<List<PlaylistItem>>() {}.type
                 val loadedList: List<PlaylistItem>? = gson.fromJson(json, listType)
                 if (loadedList != null) {
-                    _history.value = loadedList
+                    val filtered = loadedList.filterNot { item -> _deletedHistoryIds.contains(item.id.lowercase()) }
+                    _history.value = filtered
                     return
                 }
             }
@@ -59,8 +65,47 @@ class HistoryRepository(private val context: Context) {
         _history.value = emptyList()
     }
 
+    @Synchronized
+    private fun loadDeletedHistory() {
+        try {
+            _deletedHistoryIds.clear()
+            if (deletedHistoryFile.exists()) {
+                val json = deletedHistoryFile.readText()
+                val listType = object : TypeToken<List<String>>() {}.type
+                val loadedList: List<String>? = gson.fromJson(json, listType)
+                if (loadedList != null) {
+                    _deletedHistoryIds.addAll(loadedList.map { it.lowercase() })
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    @Synchronized
+    private fun saveDeletedHistory() {
+        if (!isLoggedIn()) return
+        try {
+            val list = _deletedHistoryIds.toList()
+            val trimmed = if (list.size > 500) list.takeLast(500) else list
+            val json = gson.toJson(trimmed)
+            deletedHistoryFile.writeText(json)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun getDeletedHistoryIds(): List<String> {
+        return synchronized(this) {
+            _deletedHistoryIds.toList()
+        }
+    }
+
     fun onLoggedOut() {
         _history.value = emptyList()
+        synchronized(this) {
+            _deletedHistoryIds.clear()
+        }
     }
 
     @Synchronized
@@ -105,6 +150,11 @@ class HistoryRepository(private val context: Context) {
     suspend fun addTrack(track: PlaylistItem) = withContext(Dispatchers.IO) {
         if (!isLoggedIn()) return@withContext
         if (track.safeId.isBlank()) return@withContext
+        synchronized(this@HistoryRepository) {
+            if (_deletedHistoryIds.remove(track.id.lowercase())) {
+                saveDeletedHistory()
+            }
+        }
         val current = _history.value.toMutableList()
         val existing = current.find { it.id.equals(track.id, ignoreCase = true) }
         val finalTrack = if (existing != null && track.durationSeconds <= 0 && existing.durationSeconds > 0) {
@@ -142,25 +192,56 @@ class HistoryRepository(private val context: Context) {
     }
 
     suspend fun removeTrack(id: String) = withContext(Dispatchers.IO) {
+        if (id.isNotBlank()) {
+            synchronized(this@HistoryRepository) {
+                _deletedHistoryIds.add(id.lowercase())
+                if (_deletedHistoryIds.size > 500) {
+                    val trimmed = _deletedHistoryIds.toList().takeLast(500)
+                    _deletedHistoryIds.clear()
+                    _deletedHistoryIds.addAll(trimmed)
+                }
+                saveDeletedHistory()
+            }
+        }
         val current = _history.value.toMutableList()
         current.removeAll { it.id.equals(id, ignoreCase = true) }
         _history.value = current
         saveHistory()
     }
 
-    suspend fun mergeHistory(cloudHistory: List<PlaylistItem>) = withContext(Dispatchers.IO) {
+    suspend fun mergeHistory(cloudHistory: List<PlaylistItem>, cloudDeletedIds: List<String> = emptyList()) = withContext(Dispatchers.IO) {
         if (!isLoggedIn()) return@withContext
-        if (cloudHistory.isEmpty()) return@withContext
+        var deletedChanged = false
+        synchronized(this@HistoryRepository) {
+            if (cloudDeletedIds.isNotEmpty()) {
+                for (id in cloudDeletedIds) {
+                    if (id.isNotBlank() && _deletedHistoryIds.add(id.lowercase())) {
+                        deletedChanged = true
+                    }
+                }
+                if (deletedChanged) {
+                    saveDeletedHistory()
+                }
+            }
+        }
+
         val current = _history.value.toMutableList()
+        val removed = current.removeAll { it.safeId.isBlank() || _deletedHistoryIds.contains(it.id.lowercase()) }
+        var changed = removed
+
         for (track in cloudHistory) {
             if (track.safeId.isBlank()) continue
+            if (_deletedHistoryIds.contains(track.id.lowercase())) continue
             if (!current.any { it.id.equals(track.id, ignoreCase = true) }) {
                 current.add(track)
+                changed = true
             }
         }
         val finalHistory = if (current.size > 200) current.take(200) else current
         _history.value = finalHistory
-        saveHistory()
+        if (changed) {
+            saveHistory()
+        }
     }
 
     suspend fun mergeFavorites(cloudFavorites: List<PlaylistItem>) = withContext(Dispatchers.IO) {
@@ -177,6 +258,14 @@ class HistoryRepository(private val context: Context) {
     }
 
     suspend fun clearAll() = withContext(Dispatchers.IO) {
+        synchronized(this@HistoryRepository) {
+            _history.value.forEach { track ->
+                if (track.safeId.isNotBlank()) {
+                    _deletedHistoryIds.add(track.id.lowercase())
+                }
+            }
+            saveDeletedHistory()
+        }
         _history.value = emptyList()
         _favorites.value = emptyList()
         saveHistory()
@@ -184,11 +273,27 @@ class HistoryRepository(private val context: Context) {
     }
 
     suspend fun clearHistory() = withContext(Dispatchers.IO) {
+        synchronized(this@HistoryRepository) {
+            _history.value.forEach { track ->
+                if (track.safeId.isNotBlank()) {
+                    _deletedHistoryIds.add(track.id.lowercase())
+                }
+            }
+            saveDeletedHistory()
+        }
         _history.value = emptyList()
         saveHistory()
     }
 
     suspend fun clearHistoryExcept(exceptId: String?) = withContext(Dispatchers.IO) {
+        synchronized(this@HistoryRepository) {
+            _history.value.forEach { track ->
+                if (track.safeId.isNotBlank() && !track.id.equals(exceptId, ignoreCase = true)) {
+                    _deletedHistoryIds.add(track.id.lowercase())
+                }
+            }
+            saveDeletedHistory()
+        }
         val keep = _history.value.find { !exceptId.isNullOrBlank() && it.id.equals(exceptId, ignoreCase = true) }
         _history.value = if (keep != null) listOf(keep) else emptyList()
         _favorites.value = emptyList()

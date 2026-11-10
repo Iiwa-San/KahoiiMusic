@@ -1,7 +1,7 @@
 {
-  "versionCode": 28,
-  "versionName": "1.4.5",
-  "changelog": "• Bổ sung cơ chế tự động dịch (Translation) và phiên âm Romaji / Pinyin thời gian thực cho bài hát tiếng Nhật & tiếng Trung\n• Mở rộng từ khóa đa ngữ khi tìm kiếm trên LRCLIB (tìm song song tên tiếng Nhật, tên tiếng Anh dịch, và tên phiên âm Romaji/Pinyin)\n• Khắc phục triệt để lỗi không lấy được lời bài hát hoặc nhầm bài đối với các ca khúc tiếng Nhật quốc tế hóa (ví dụ: ラベンダー - MIMI / Lavender)\n• Tự động dọn dẹp cache lời bài hát bị lệch thời lượng\n• Bổ sung nút Tải lại lời bài hát (Refresh) ngay trên giao diện lyrics\n• Bổ sung thanh cuộn thông minh cho popup thông tin tài khoản khi xoay ngang điện thoại",
+  "versionCode": 29,
+  "versionName": "1.4.6",
+  "changelog": "• Khắc phục triệt để lỗi bài hát trong lịch sử nghe dù đã xóa nhưng sau một thời gian lại tự động xuất hiện lại\n• Bổ sung cơ chế Tombstone tracking (đồng bộ danh sách đã xóa deletedHistoryIds) qua Firebase Firestore\n• Ngăn chặn hiện tượng tự phục hồi bài hát đã xóa khi đồng bộ 2 chiều (Cloud Merge) giữa PC và Android\n• Đảm bảo bài hát đã xóa sẽ biến mất vĩnh viễn trên mọi thiết bị và chỉ xuất hiện lại khi người dùng chủ động bấm nghe lại",
   "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
   "forceUpdate": false
 }

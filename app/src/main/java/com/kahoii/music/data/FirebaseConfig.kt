@@ -49,6 +49,9 @@ data class CloudMusicPayload(
     @SerializedName("history", alternate = ["History"])
     val history: List<com.kahoii.music.model.PlaylistItem> = emptyList(),
 
+    @SerializedName("deletedHistoryIds", alternate = ["DeletedHistoryIds"])
+    val deletedHistoryIds: List<String> = emptyList(),
+
     @SerializedName("savedTracks", alternate = ["SavedTracks"])
     val savedTracks: List<com.kahoii.music.model.PlaylistItem> = emptyList(),
 
