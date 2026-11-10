@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "KahoiiMusic - Đồng Bộ YouTube",
   "short_name": "KahoiiMusic",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Đăng nhập và nhanh chóng nạp bài hát YouTube vào tài khoản KahoiiMusic của bạn.",
   "icons": {
     "16": "icons/icon16.png",
