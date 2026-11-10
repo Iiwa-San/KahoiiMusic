@@ -18,12 +18,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -54,10 +54,13 @@ import com.kahoii.music.ui.theme.NeonPink
 @Composable
 fun SearchPillBox(
     onSearchSubmitted: (String) -> Unit,
+    onQueryChanged: (String) -> Unit = {},
+    onDismissSuggestions: () -> Unit = {},
     modifier: Modifier = Modifier,
     placeholderText: String = "Tìm kiếm bài hát, dán link YouTube..."
 ) {
     var text by remember { mutableStateOf("") }
+    var isFocused by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val clipboardManager = LocalClipboardManager.current
@@ -75,15 +78,15 @@ fun SearchPillBox(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(42.dp)
+            .height(44.dp)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.08f))
+            .background(Color(0xFF1E1938))
             .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.14f),
+                width = if (isFocused || text.isNotEmpty()) 1.5.dp else 1.dp,
+                color = if (isFocused || text.isNotEmpty()) NeonPink else Color.White.copy(alpha = 0.16f),
                 shape = CircleShape
             )
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 14.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
@@ -93,9 +96,9 @@ fun SearchPillBox(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Tìm kiếm",
-                tint = Color.White.copy(alpha = 0.55f),
+                tint = if (isFocused || text.isNotEmpty()) NeonPink else Color.White.copy(alpha = 0.55f),
                 modifier = Modifier
-                    .size(18.dp)
+                    .size(19.dp)
                     .clickable { submit() }
             )
 
@@ -117,7 +120,10 @@ fun SearchPillBox(
 
                 BasicTextField(
                     value = text,
-                    onValueChange = { text = it },
+                    onValueChange = {
+                        text = it
+                        onQueryChanged(it)
+                    },
                     singleLine = true,
                     textStyle = TextStyle(
                         color = Color.White,
@@ -128,6 +134,7 @@ fun SearchPillBox(
                     keyboardActions = KeyboardActions(onSearch = { submit() }),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .onFocusChanged { isFocused = it.isFocused }
                         .onPreviewKeyEvent { event ->
                             if (event.type == KeyEventType.KeyUp && (event.key == Key.Enter || event.key == Key.NumPadEnter)) {
                                 submit()
@@ -139,19 +146,63 @@ fun SearchPillBox(
                 )
             }
 
-            // Quick Paste button when input is empty, or Clear button when input has text (Matches iOS SearchPillBar)
+            // Right side buttons
             if (text.isNotEmpty()) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Xóa nội dung",
-                    tint = Color.White.copy(alpha = 0.55f),
-                    modifier = Modifier
-                        .size(17.dp)
-                        .clickable {
-                            text = ""
-                            focusManager.clearFocus()
-                        }
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 2.dp)
+                ) {
+                    // YouTube Badge
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(NeonPink.copy(alpha = 0.2f))
+                            .border(1.dp, NeonPink.copy(alpha = 0.4f), CircleShape)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "YouTube",
+                            color = NeonPink,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Clear button
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Xóa nội dung",
+                        tint = Color.White.copy(alpha = 0.65f),
+                        modifier = Modifier
+                            .size(17.dp)
+                            .clickable {
+                                text = ""
+                                onDismissSuggestions()
+                                focusManager.clearFocus()
+                            }
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Submit arrow button
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(NeonPink)
+                            .clickable { submit() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Tìm",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
             } else {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

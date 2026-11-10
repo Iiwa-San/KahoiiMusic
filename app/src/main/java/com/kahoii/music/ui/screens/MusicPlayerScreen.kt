@@ -80,6 +80,8 @@ import com.kahoii.music.ui.components.MarqueeText
 import com.kahoii.music.ui.components.MusicTrackBarView
 import com.kahoii.music.ui.components.PlaybackControlsView
 import com.kahoii.music.ui.components.SearchPillBox
+import com.kahoii.music.ui.components.SearchDropdownOverlay
+import com.kahoii.music.ui.components.FullSearchResultsView
 import com.kahoii.music.ui.components.SleepTimerDialog
 import com.kahoii.music.ui.components.VolumeSliderSection
 import com.kahoii.music.ui.theme.NeonPink
@@ -150,23 +152,59 @@ fun MusicPlayerScreen(
                             onOpenAccount = { showAccountSheet = true }
                         )
 
-                        SearchPillBox(
-                            onSearchSubmitted = { query ->
-                                viewModel.loadAndPlay(query)
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            SearchPillBox(
+                                onSearchSubmitted = { query ->
+                                    viewModel.openFullSearchResults(query)
+                                },
+                                onQueryChanged = { query ->
+                                    viewModel.onSearchQueryChanged(query)
+                                },
+                                onDismissSuggestions = {
+                                    viewModel.clearSearchSuggestions()
+                                }
+                            )
+
+                            if (uiState.searchSuggestions.isNotEmpty() && !uiState.isFullSearchActive) {
+                                SearchDropdownOverlay(
+                                    query = uiState.currentSearchQuery.ifBlank { "kết quả" },
+                                    suggestions = uiState.searchSuggestions,
+                                    onTrackPlay = { track ->
+                                        viewModel.clearSearchSuggestions()
+                                        viewModel.playTrack(track)
+                                    },
+                                    onViewAll = { q ->
+                                        viewModel.openFullSearchResults(q)
+                                    },
+                                    modifier = Modifier.padding(top = 48.dp)
+                                )
                             }
-                        )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // ================= 2. ALBUM ARTWORK OR LYRICS =================
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(if (isTablet) 0.70f else 0.88f)
-                            .widthIn(max = 400.dp)
-                            .weight(1f, fill = false),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    if (uiState.isFullSearchActive) {
+                        FullSearchResultsView(
+                            query = uiState.currentSearchQuery,
+                            results = uiState.searchResults,
+                            isSearching = uiState.isSearching,
+                            onTrackPlay = { track -> viewModel.playTrack(track) },
+                            onTrackAdd = { track -> viewModel.addTrackToCurrentQueue(track) },
+                            onClose = { viewModel.closeFullSearchResults() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        )
+                    } else {
+                        // ================= 2. ALBUM ARTWORK OR LYRICS =================
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(if (isTablet) 0.70f else 0.88f)
+                                .widthIn(max = 400.dp)
+                                .weight(1f, fill = false),
+                            contentAlignment = Alignment.Center
+                        ) {
                         if (uiState.isLyricsVisible) {
                             LyricsView(
                                 lyricsData = uiState.lyricsData,
@@ -198,8 +236,9 @@ fun MusicPlayerScreen(
                             )
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                     // ================= 3. TRACK INFO & FAVORITE / DOWNLOAD =================
                     TrackInfoRow(
@@ -343,29 +382,66 @@ fun MusicPlayerScreen(
                             onOpenAccount = { showAccountSheet = true }
                         )
 
-                        SearchPillBox(
-                            onSearchSubmitted = { query ->
-                                viewModel.loadAndPlay(query)
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            SearchPillBox(
+                                onSearchSubmitted = { query ->
+                                    viewModel.openFullSearchResults(query)
+                                },
+                                onQueryChanged = { query ->
+                                    viewModel.onSearchQueryChanged(query)
+                                },
+                                onDismissSuggestions = {
+                                    viewModel.clearSearchSuggestions()
+                                }
+                            )
+
+                            if (uiState.searchSuggestions.isNotEmpty() && !uiState.isFullSearchActive) {
+                                SearchDropdownOverlay(
+                                    query = uiState.currentSearchQuery.ifBlank { "kết quả" },
+                                    suggestions = uiState.searchSuggestions,
+                                    onTrackPlay = { track ->
+                                        viewModel.clearSearchSuggestions()
+                                        viewModel.playTrack(track)
+                                    },
+                                    onViewAll = { q ->
+                                        viewModel.openFullSearchResults(q)
+                                    },
+                                    modifier = Modifier.padding(top = 48.dp)
+                                )
                             }
-                        )
+                        }
                     }
 
-                    // Artwork View (scales vertically without overflow)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .padding(vertical = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        ArtworkView(
-                            thumbnailUrl = uiState.currentTrack?.thumbnailUrl,
-                            isPlaying = uiState.isPlaying,
-                            accentColor = NeonPink,
-                            matchHeightConstraintsFirst = true,
-                            onSwipeLeft = { viewModel.playNext() },
-                            onSwipeRight = { viewModel.playPrevious() },
-                            onArtworkClick = { viewModel.toggleLyricsVisibility() }
+                    if (uiState.isFullSearchActive) {
+                        FullSearchResultsView(
+                            query = uiState.currentSearchQuery,
+                            results = uiState.searchResults,
+                            isSearching = uiState.isSearching,
+                            onTrackPlay = { track -> viewModel.playTrack(track) },
+                            onTrackAdd = { track -> viewModel.addTrackToCurrentQueue(track) },
+                            onClose = { viewModel.closeFullSearchResults() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
                         )
+                    } else {
+                        // Artwork View (scales vertically without overflow)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ArtworkView(
+                                thumbnailUrl = uiState.currentTrack?.thumbnailUrl,
+                                isPlaying = uiState.isPlaying,
+                                accentColor = NeonPink,
+                                matchHeightConstraintsFirst = true,
+                                onSwipeLeft = { viewModel.playNext() },
+                                onSwipeRight = { viewModel.playPrevious() },
+                                onArtworkClick = { viewModel.toggleLyricsVisibility() }
+                            )
+                        }
                     }
 
                     // Track Info (Title marquee, Subtitle, Favorite, Lyrics button)

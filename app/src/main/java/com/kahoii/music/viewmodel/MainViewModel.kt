@@ -731,6 +731,89 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var searchSuggestionJob: Job? = null
+
+    fun onSearchQueryChanged(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank() || YouTubeRepository.extractVideoId(trimmed) != null || YouTubeRepository.extractPlaylistId(trimmed) != null) {
+            searchSuggestionJob?.cancel()
+            _uiState.update { it.copy(searchSuggestions = emptyList()) }
+            return
+        }
+
+        searchSuggestionJob?.cancel()
+        searchSuggestionJob = viewModelScope.launch {
+            delay(320)
+            val res = youTubeRepository.search(trimmed)
+            res.onSuccess { items ->
+                if (_uiState.value.isFullSearchActive) return@onSuccess
+                _uiState.update { it.copy(searchSuggestions = items.take(4)) }
+            }
+        }
+    }
+
+    fun clearSearchSuggestions() {
+        searchSuggestionJob?.cancel()
+        _uiState.update { it.copy(searchSuggestions = emptyList()) }
+    }
+
+    fun openFullSearchResults(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        clearSearchSuggestions()
+
+        val videoId = YouTubeRepository.extractVideoId(trimmed)
+        val listId = YouTubeRepository.extractPlaylistId(trimmed)
+        if (!videoId.isNullOrBlank() || !listId.isNullOrBlank()) {
+            loadAndPlay(trimmed)
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isFullSearchActive = true,
+                    isSearching = true,
+                    currentSearchQuery = trimmed,
+                    statusMessage = "Đang tìm kiếm trên YouTube..."
+                )
+            }
+            val res = youTubeRepository.search(trimmed)
+            res.onSuccess { items ->
+                _uiState.update {
+                    it.copy(
+                        searchResults = items,
+                        isSearching = false,
+                        statusMessage = if (items.isNotEmpty()) "Tìm thấy ${items.size} bài hát" else "Không tìm thấy kết quả"
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isSearching = false,
+                        statusMessage = "Lỗi tìm kiếm: ${err.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    fun closeFullSearchResults() {
+        _uiState.update { it.copy(isFullSearchActive = false) }
+    }
+
+    fun addTrackToCurrentQueue(track: PlaylistItem) {
+        val current = _uiState.value.playlist.toMutableList()
+        if (!current.any { it.id.equals(track.id, ignoreCase = true) }) {
+            current.add(track)
+            _uiState.update { it.copy(playlist = current) }
+            com.kahoii.music.service.MusicQueueManager.activeQueue = current
+            Toast.makeText(getApplication(), "Đã thêm vào danh sách phát", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(getApplication(), "Bài hát đã có trong danh sách", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun playStreamUrl(audioUrl: String, track: PlaylistItem, artworkBytes: ByteArray? = null) {
         val p = controller
         if (p == null) {
