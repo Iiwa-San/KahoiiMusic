@@ -32,10 +32,12 @@ import com.kahoii.music.model.LoopMode
 import com.kahoii.music.model.PlaybackStatus
 import com.kahoii.music.model.PlayerUiState
 import com.kahoii.music.model.PlaylistItem
+import com.kahoii.music.model.RomanizationDisplayMode
 import com.kahoii.music.model.SleepTimerOption
 import com.kahoii.music.model.UpdateDownloadState
 import com.kahoii.music.model.UserPlaylist
 import com.kahoii.music.service.MusicPlaybackService
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
@@ -57,6 +59,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = FirebaseAuthRepository(application)
     private val syncRepository = FirebaseSyncRepository(authRepository)
     private val lyricsRepository = LyricsRepository(application)
+    private val appPrefs = application.getSharedPreferences("kahoii_prefs", Context.MODE_PRIVATE)
     private var syncJob: Job? = null
     private var lyricsJob: Job? = null
     private var isApplyingCloudPayload = true
@@ -71,6 +74,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingMediaItem: Pair<String, PlaylistItem>? = null
 
     init {
+        val savedRomMode = appPrefs.getInt("lyrics_romanization_mode", RomanizationDisplayMode.DUAL.value)
+        _uiState.update { it.copy(romanizationMode = RomanizationDisplayMode.fromValue(savedRomMode)) }
+
         historyRepository.isLoggedIn = { authRepository.currentUser.value != null }
         initMediaController()
         observeHistory()
@@ -836,6 +842,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 loadLyricsForTrack(cur.id, cur.safeTitle, cur.safeArtist, cur.durationSeconds, forceRefresh = true)
             }
         }
+    }
+
+    fun cycleRomanizationMode() {
+        val current = _uiState.value.romanizationMode
+        val next = when (current) {
+            RomanizationDisplayMode.ORIGINAL -> RomanizationDisplayMode.DUAL
+            RomanizationDisplayMode.DUAL -> RomanizationDisplayMode.ROMANIZED_ONLY
+            RomanizationDisplayMode.ROMANIZED_ONLY -> RomanizationDisplayMode.ORIGINAL
+        }
+        appPrefs.edit().putInt("lyrics_romanization_mode", next.value).apply()
+        _uiState.update { it.copy(romanizationMode = next) }
     }
 
     fun loadLyricsForTrack(

@@ -55,11 +55,15 @@ class LyricsRepository(private val context: Context) {
             return@withContext LyricsData.empty(cleanVid)
         }
 
-        // Clean up any stale .none markers from past buggy sessions
+        // Clean up any stale .none markers or force-refreshed romaji cache
         if (cleanVid.isNotBlank()) {
             val noneMarker = File(lyricsCacheDir, "$cleanVid.none")
             if (noneMarker.exists()) {
                 noneMarker.delete()
+            }
+            if (forceRefresh) {
+                val staleRom = File(lyricsCacheDir, "${cleanVid}_romaji.json")
+                if (staleRom.exists()) staleRom.delete()
             }
         }
 
@@ -346,6 +350,21 @@ class LyricsRepository(private val context: Context) {
     private fun attachCachedRomanization(videoId: String, data: LyricsData) {
         if (videoId.isBlank() || data.lines.isEmpty()) return
         try {
+            val fullText = data.lines.joinToString(" ") { it.text }
+            val kanaMatches = Pattern.compile("[\u3040-\u309F\u30A0-\u30FF]").matcher(fullText)
+            var kanaCount = 0
+            while (kanaMatches.find()) kanaCount++
+
+            val hanziMatches = Pattern.compile("[\u4E00-\u9FFF]").matcher(fullText)
+            var hanziCount = 0
+            while (hanziMatches.find()) hanziCount++
+
+            data.detectedLanguage = when {
+                kanaCount >= 2 -> "ja"
+                hanziCount >= 4 -> "zh"
+                else -> null
+            }
+
             val romFile = File(lyricsCacheDir, "${videoId}_romaji.json")
             if (romFile.exists()) {
                 val json = romFile.readText(Charsets.UTF_8)
@@ -377,7 +396,13 @@ class LyricsRepository(private val context: Context) {
             kanaCount >= 2 -> "ja"
             hanziCount >= 4 -> "zh-CN"
             else -> null
-        } ?: return
+        }
+        data.detectedLanguage = when (lang) {
+            "ja" -> "ja"
+            "zh-CN" -> "zh"
+            else -> null
+        }
+        if (lang == null) return
 
         try {
             val batchSize = 25
@@ -387,6 +412,8 @@ class LyricsRepository(private val context: Context) {
                 val count = minOf(batchSize, data.lines.size - start)
                 val batchTexts = (0 until count).map { i ->
                     val t = data.lines[start + i].text
+                        .replace("~", " ")
+                        .replace("〜", " ")
                     if (t.isBlank()) "♪" else t.trim()
                 }
 
@@ -402,15 +429,24 @@ class LyricsRepository(private val context: Context) {
                         if (arr.length() > 0) {
                             val items = arr.optJSONArray(0)
                             if (items != null && items.length() > 0) {
-                                val firstItem = items.optJSONArray(0)
-                                val romStr = if (firstItem != null && firstItem.length() > 3) {
-                                    firstItem.optString(3, "")
-                                } else ""
-
+                                val sbRom = StringBuilder()
+                                for (k in 0 until items.length()) {
+                                    val itm = items.optJSONArray(k) ?: continue
+                                    if (itm.length() > 3) {
+                                        val s = itm.optString(3, "")
+                                        if (s.isNotBlank()) sbRom.append(s)
+                                    } else if (itm.length() > 2) {
+                                        val s = itm.optString(2, "")
+                                        if (s.isNotBlank()) sbRom.append(s)
+                                    }
+                                }
+                                val romStr = sbRom.toString()
                                 val parts = romStr.split("~")
                                 for (pIdx in 0 until count) {
-                                    val r = if (pIdx < parts.size) parts[pIdx].trim() else ""
+                                    var r = if (pIdx < parts.size) parts[pIdx].trim() else ""
                                     if (r.isNotBlank() && r != "♪") {
+                                        if (lang == "ja") r = formatAnimeRomaji(r)
+                                        else if (lang == "zh-CN") r = formatChinesePinyin(r)
                                         romanizedLines.add(r)
                                     } else {
                                         romanizedLines.add("")
@@ -434,6 +470,40 @@ class LyricsRepository(private val context: Context) {
                 )
             }
         } catch (_: Exception) {}
+    }
+
+    private fun formatAnimeRomaji(text: String): String {
+        if (text.isBlank()) return ""
+        var s = text
+        s = s.replace("ō", "ou").replace("Ō", "Ou")
+            .replace("ū", "uu").replace("Ū", "Uu")
+            .replace("ā", "aa").replace("Ā", "Aa")
+            .replace("ī", "ii").replace("Ī", "Ii")
+            .replace("ē", "ee").replace("Ē", "Ee")
+
+        // Particle 'o' -> 'wo'
+        s = s.replace(Regex("\\b[Oo]\\b"), "wo")
+
+        // Fix parenthesis spacing: ( wa ) -> (Wa)
+        s = s.replace(Regex("\\(\\s*wa\\s*\\)", RegexOption.IGNORE_CASE), "(Wa)")
+
+        // Clean spacing
+        s = s.replace(Regex("([,!?])([^\\s])"), "$1 $2")
+        s = s.replace(Regex("\\s+"), " ").trim()
+
+        if (s.isNotEmpty() && s[0].isLowerCase()) {
+            s = s[0].uppercaseChar() + s.substring(1)
+        }
+        return s
+    }
+
+    private fun formatChinesePinyin(text: String): String {
+        if (text.isBlank()) return ""
+        var s = text.replace(Regex("\\s+"), " ").trim()
+        if (s.isNotEmpty() && s[0].isLowerCase()) {
+            s = s[0].uppercaseChar() + s.substring(1)
+        }
+        return s
     }
 
     companion object {

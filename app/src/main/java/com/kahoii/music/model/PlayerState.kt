@@ -17,6 +17,17 @@ enum class ActiveQueueSource(val label: String) {
     HISTORY("Lịch sử")
 }
 
+enum class RomanizationDisplayMode(val value: Int) {
+    ORIGINAL(0),       // Chỉ hiển thị chữ gốc (Kanji/Kana/Tiếng Trung)
+    DUAL(1),           // Song ngữ: Chữ gốc ở trên, phiên âm Latinh ở dưới
+    ROMANIZED_ONLY(2); // Chỉ hiển thị phiên âm Latinh (Romaji thuần / Pinyin thuần)
+
+    companion object {
+        fun fromValue(value: Int): RomanizationDisplayMode =
+            values().firstOrNull { it.value == value } ?: DUAL
+    }
+}
+
 data class AppUpdateInfo(
     val versionCode: Int,
     val versionName: String,
@@ -70,7 +81,8 @@ data class PlayerUiState(
     val lyricsData: LyricsData? = null,
     val isLyricsLoading: Boolean = false,
     val currentLyricIndex: Int = -1,
-    val isLyricsVisible: Boolean = false
+    val isLyricsVisible: Boolean = false,
+    val romanizationMode: RomanizationDisplayMode = RomanizationDisplayMode.DUAL
 ) {
     val hasLyrics: Boolean
         get() = lyricsData != null && lyricsData.hasLyrics

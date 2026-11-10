@@ -258,6 +258,8 @@ fun MusicPlayerScreen(
                         isLoading = uiState.isLyricsLoading,
                         currentPositionMs = uiState.currentPositionMs,
                         currentLyricIndex = uiState.currentLyricIndex,
+                        romanizationMode = uiState.romanizationMode,
+                        onCycleRomanizationMode = { viewModel.cycleRomanizationMode() },
                         accentColor = NeonPink,
                         onSeek = { positionMs -> viewModel.seekTo(positionMs) },
                         onClose = { viewModel.toggleLyricsVisibility() },

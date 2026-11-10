@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kahoii.music.model.LyricsData
+import com.kahoii.music.model.RomanizationDisplayMode
 import com.kahoii.music.ui.theme.NeonPink
 import kotlinx.coroutines.launch
 
@@ -66,6 +67,8 @@ fun LyricsView(
     isLoading: Boolean,
     currentPositionMs: Long,
     currentLyricIndex: Int,
+    romanizationMode: RomanizationDisplayMode = RomanizationDisplayMode.DUAL,
+    onCycleRomanizationMode: () -> Unit = {},
     accentColor: Color = NeonPink,
     onSeek: (Long) -> Unit = {},
     onClose: () -> Unit = {},
@@ -158,7 +161,7 @@ fun LyricsView(
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = if (lyricsData.isSynced) "Karaoke đồng bộ" else "Chưa đồng bộ",
+                                text = if (lyricsData.isSynced) "audio synced" else "non-synced",
                                 color = if (lyricsData.isSynced) Color(0xFF34D399) else Color.White.copy(alpha = 0.65f),
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -167,21 +170,69 @@ fun LyricsView(
                     }
                 }
 
-                // Close / Flip back to Vinyl Disc button
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.10f))
-                        .clickable(onClick = onClose),
-                    contentAlignment = Alignment.Center
+                // Top-right: Romanization Mode pill button + Close button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Thu nhỏ lời",
-                        tint = Color.White.copy(alpha = 0.85f),
-                        modifier = Modifier.size(16.dp)
-                    )
+                    val hasRom = lyricsData != null && (lyricsData.hasRomanization || lyricsData.detectedLanguage != null)
+                    if (hasRom) {
+                        val isJa = lyricsData?.detectedLanguage == "ja" || (lyricsData?.detectedLanguage == null)
+                        val btnLabel = when (romanizationMode) {
+                            RomanizationDisplayMode.ORIGINAL -> if (isJa) "Aa Romaji" else "Aa Pinyin"
+                            RomanizationDisplayMode.DUAL -> if (isJa) "Romaji • 2 dòng" else "Pinyin • 2 dòng"
+                            RomanizationDisplayMode.ROMANIZED_ONLY -> if (isJa) "Romaji thuần" else "Pinyin thuần"
+                        }
+                        val btnColor = when (romanizationMode) {
+                            RomanizationDisplayMode.ORIGINAL -> Color.White.copy(alpha = 0.12f)
+                            RomanizationDisplayMode.DUAL -> accentColor.copy(alpha = 0.22f)
+                            RomanizationDisplayMode.ROMANIZED_ONLY -> Color(0xFF00E1FF).copy(alpha = 0.22f)
+                        }
+                        val textColor = when (romanizationMode) {
+                            RomanizationDisplayMode.ORIGINAL -> Color.White.copy(alpha = 0.75f)
+                            RomanizationDisplayMode.DUAL -> Color(0xFFFF70A6)
+                            RomanizationDisplayMode.ROMANIZED_ONLY -> Color(0xFF67E8F9)
+                        }
+                        val borderColor = when (romanizationMode) {
+                            RomanizationDisplayMode.ORIGINAL -> Color.White.copy(alpha = 0.22f)
+                            RomanizationDisplayMode.DUAL -> accentColor.copy(alpha = 0.55f)
+                            RomanizationDisplayMode.ROMANIZED_ONLY -> Color(0xFF00E1FF).copy(alpha = 0.55f)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(percent = 50))
+                                .background(btnColor)
+                                .border(1.dp, borderColor, RoundedCornerShape(percent = 50))
+                                .clickable(onClick = onCycleRomanizationMode)
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = btnLabel,
+                                color = textColor,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Close / Flip back to Vinyl Disc button
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.10f))
+                            .clickable(onClick = onClose),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Thu nhỏ lời",
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -299,8 +350,22 @@ fun LyricsView(
                                         horizontal = 10.dp
                                     )
                             ) {
+                                val mainText = when (romanizationMode) {
+                                    RomanizationDisplayMode.ROMANIZED_ONLY -> {
+                                        line.romanizedText?.takeIf { it.isNotBlank() } ?: line.text
+                                    }
+                                    else -> line.text
+                                }
+
+                                val subText = when (romanizationMode) {
+                                    RomanizationDisplayMode.DUAL -> {
+                                        line.romanizedText?.takeIf { it.isNotBlank() }
+                                    }
+                                    else -> null
+                                }
+
                                 Text(
-                                    text = line.text,
+                                    text = mainText,
                                     color = when {
                                         isActive -> Color.White
                                         isPassed -> Color.White.copy(alpha = 0.55f)
@@ -311,10 +376,9 @@ fun LyricsView(
                                     lineHeight = if (isActive) 25.sp else 21.sp
                                 )
 
-                                val romText = line.romanizedText
-                                if (!romText.isNullOrBlank()) {
+                                if (!subText.isNullOrBlank()) {
                                     Text(
-                                        text = romText,
+                                        text = subText,
                                         color = if (isActive) accentColor.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.28f),
                                         fontSize = if (isActive) 13.5.sp else 11.5.sp,
                                         fontWeight = FontWeight.Medium,
