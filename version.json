@@ -1,14 +1,14 @@
 {
-  "versionCode": 18,
-  "versionName": "1.0.18",
-  "changelog": "• Bổ sung thanh cuộn tương tác (Interactive Scrollbar) cho Bộ sưu tập và Danh sách bài hát trong bộ sưu tập\n• Hỗ trợ kéo thả chuột, click nhảy vị trí nhanh và hiệu ứng hover phát sáng neon tím\n• Tối ưu lề hiển thị chống che khuất chữ bài hát và tên bộ sưu tập khi thanh cuộn xuất hiện\n• Tinh chỉnh giao diện responsive và trải nghiệm điều hướng danh sách",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.18.exe",
+  "versionCode": 19,
+  "versionName": "1.0.19",
+  "changelog": "• Bổ sung cơ chế tự động dịch (Translation) và phiên âm Romaji / Pinyin thời gian thực cho bài hát tiếng Nhật & tiếng Trung\n• Mở rộng từ khóa đa ngữ khi tìm kiếm trên LRCLIB (tìm song song tên tiếng Nhật, tên tiếng Anh dịch, và tên phiên âm Romaji/Pinyin)\n• Khắc phục triệt để lỗi không lấy được lời bài hát hoặc nhầm bài đối với các ca khúc tiếng Nhật quốc tế hóa (ví dụ: ラベンダー - MIMI / Lavender)\n• Tối ưu đối soát chéo ngôn ngữ giữa tên bài hát và ca sĩ (hỗ trợ nhận diện ca sĩ tên Hán tự như 米津玄師 - Kenshi Yonezu)\n• Tự động dọn dẹp cache lời bài hát bị lệch thời lượng",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.19.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {
-    "versionCode": 27,
-    "versionName": "1.4.4",
-    "changelog": "• Khắc phục triệt để lỗi nhận diện sai lời bài hát (nhầm bài hát cùng tên nhưng khác ca sĩ hoặc khác độ dài)\n• Tự động kiểm tra và xóa cache lời bài hát cũ nếu độ dài bài hát không khớp với mốc thời gian lyrics\n• Bổ sung nút Tải lại lời bài hát (Refresh) ngay trên giao diện lyrics\n• Bổ sung thanh cuộn thông minh cho hộp thoại thông tin tài khoản khi xoay ngang điện thoại hoặc màn hình hẹp",
+    "versionCode": 28,
+    "versionName": "1.4.5",
+    "changelog": "• Bổ sung cơ chế tự động dịch (Translation) và phiên âm Romaji / Pinyin thời gian thực cho bài hát tiếng Nhật & tiếng Trung\n• Mở rộng từ khóa đa ngữ khi tìm kiếm trên LRCLIB (tìm song song tên tiếng Nhật, tên tiếng Anh dịch, và tên phiên âm Romaji/Pinyin)\n• Khắc phục triệt để lỗi không lấy được lời bài hát hoặc nhầm bài đối với các ca khúc tiếng Nhật quốc tế hóa (ví dụ: ラベンダー - MIMI / Lavender)\n• Tự động dọn dẹp cache lời bài hát bị lệch thời lượng\n• Bổ sung nút Tải lại lời bài hát (Refresh) ngay trên giao diện lyrics\n• Bổ sung thanh cuộn thông minh cho popup thông tin tài khoản khi xoay ngang điện thoại",
     "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
     "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
     "forceUpdate": false
