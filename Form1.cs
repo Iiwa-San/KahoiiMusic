@@ -224,6 +224,20 @@ namespace KahoiiMusic
 
             if (panelBottomControls != null)
             {
+                panelBottomControls.Paint += (s, e) =>
+                {
+                    // Direct render fallback to 100% guarantee version visibility on all DPIs and Windows environments
+                    string ver = "v" + AppUpdateService.CurrentVersionName;
+                    using (Font f = new Font("Segoe UI", 7.2f, FontStyle.Regular))
+                    using (SolidBrush b = new SolidBrush(Color.FromArgb(200, 185, 235)))
+                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
+                    {
+                        Rectangle r = new Rectangle(panelBottomControls.ClientSize.Width - 96, panelBottomControls.ClientSize.Height - 22, 86, 16);
+                        e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                        e.Graphics.DrawString(ver, f, b, r, sf);
+                    }
+                };
+
                 panelBottomControls.Resize += (s, e) =>
                 {
                     if (lblVersion != null)
@@ -235,6 +249,7 @@ namespace KahoiiMusic
                     {
                         lblCopyright.Location = new Point((panelBottomControls.ClientSize.Width - lblCopyright.Width) / 2, panelBottomControls.ClientSize.Height - lblCopyright.Height - 6);
                     }
+                    panelBottomControls.Invalidate();
                 };
             }
             UpdateUserButtonAppearance();
