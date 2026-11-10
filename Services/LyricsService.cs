@@ -201,12 +201,20 @@ namespace KahoiiMusic.Services
                             var cachedData = ParseLrc(lrcContent, videoId, title, artist);
                             if (cachedData != null && cachedData.HasLyrics)
                             {
-                                AttachCachedRomanization(cachedData, videoId);
-                                if (!cachedData.HasRomanization)
+                                double maxSec = cachedData.Lines != null && cachedData.Lines.Count > 0 ? cachedData.Lines[cachedData.Lines.Count - 1].Timestamp.TotalSeconds : 0;
+                                if (durationSeconds > 0 && maxSec > durationSeconds + 12)
                                 {
-                                    TriggerBackgroundRomanization(videoId, cachedData);
+                                    PurgeDiskCache(videoId);
                                 }
-                                return cachedData;
+                                else
+                                {
+                                    AttachCachedRomanization(cachedData, videoId);
+                                    if (!cachedData.HasRomanization)
+                                    {
+                                        TriggerBackgroundRomanization(videoId, cachedData);
+                                    }
+                                    return cachedData;
+                                }
                             }
                         }
                     }
@@ -247,12 +255,20 @@ namespace KahoiiMusic.Services
                             var cachedData = ParseLrc(lrcContent, videoId, title, artist);
                             if (cachedData != null && cachedData.HasLyrics)
                             {
-                                AttachCachedRomanization(cachedData, videoId);
-                                if (!cachedData.HasRomanization)
+                                double maxSec = cachedData.Lines != null && cachedData.Lines.Count > 0 ? cachedData.Lines[cachedData.Lines.Count - 1].Timestamp.TotalSeconds : 0;
+                                if (durationSeconds > 0 && maxSec > durationSeconds + 12)
                                 {
-                                    TriggerBackgroundRomanization(videoId, cachedData);
+                                    PurgeDiskCache(videoId);
                                 }
-                                return cachedData;
+                                else
+                                {
+                                    AttachCachedRomanization(cachedData, videoId);
+                                    if (!cachedData.HasRomanization)
+                                    {
+                                        TriggerBackgroundRomanization(videoId, cachedData);
+                                    }
+                                    return cachedData;
+                                }
                             }
                         }
                     }
@@ -815,8 +831,9 @@ namespace KahoiiMusic.Services
                                     string itemArtist = item.ContainsKey("artistName") ? item["artistName"] as string : null;
                                     string itemAlbum = item.ContainsKey("albumName") ? item["albumName"] as string : null;
 
+                                    string effectiveTargetArtist = !string.IsNullOrWhiteSpace(artist) ? artist : cand.Artist;
                                     // MANDATORY: Verify title matches to prevent grabbing wrong songs!
-                                    if (!IsTitleMatch(cand.Track, itemTrack, cand.Artist, itemArtist, itemAlbum))
+                                    if (!IsTitleMatch(cand.Track, itemTrack, effectiveTargetArtist, itemArtist, itemAlbum))
                                     {
                                         continue;
                                     }
@@ -883,8 +900,9 @@ namespace KahoiiMusic.Services
                                     string itemArtist = item.ContainsKey("artistName") ? item["artistName"] as string : null;
                                     string itemAlbum = item.ContainsKey("albumName") ? item["albumName"] as string : null;
 
+                                    string effectiveTargetArtist = !string.IsNullOrWhiteSpace(artist) ? artist : cand.Artist;
                                     // MANDATORY: Verify title matches to prevent grabbing wrong songs!
-                                    if (!IsTitleMatch(cand.Track, itemTrack, cand.Artist, itemArtist, itemAlbum))
+                                    if (!IsTitleMatch(cand.Track, itemTrack, effectiveTargetArtist, itemArtist, itemAlbum))
                                     {
                                         continue;
                                     }
