@@ -76,9 +76,95 @@ namespace KahoiiMusic.Services
             _httpClient.Timeout = TimeSpan.FromSeconds(6);
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             _serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+
+            try
+            {
+                CleanCorruptedTestCache();
+            }
+            catch { }
         }
 
-        public async Task<LyricsData> FetchLyricsAsync(string videoId, string title, string artist, int durationSeconds)
+        private static readonly string[] KnownCorruptedSnippets = new string[]
+        {
+            "ちょっと泣いているだけだよ",
+            "風抖落雪霜",
+            "切り分けた命のひとひら"
+        };
+
+        public static bool IsCorruptedTestLyrics(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return false;
+            foreach (var snippet in KnownCorruptedSnippets)
+            {
+                if (content.Contains(snippet)) return true;
+            }
+            return false;
+        }
+
+        public void PurgeDiskCache(string videoId)
+        {
+            if (string.IsNullOrWhiteSpace(videoId)) return;
+            try
+            {
+                string[] paths = new string[]
+                {
+                    Path.Combine(AppPaths.SavedLyricsDir, videoId + ".lrc"),
+                    Path.Combine(AppPaths.SavedLyricsDir, videoId + ".txt"),
+                    Path.Combine(AppPaths.SavedLyricsDir, videoId + "_romaji.json"),
+                    Path.Combine(AppPaths.TempLyricsDir, videoId + ".lrc"),
+                    Path.Combine(AppPaths.TempLyricsDir, videoId + ".txt"),
+                    Path.Combine(AppPaths.TempLyricsDir, videoId + ".none"),
+                    Path.Combine(AppPaths.TempLyricsDir, videoId + "_romaji.json")
+                };
+                foreach (var p in paths)
+                {
+                    try { if (File.Exists(p)) File.Delete(p); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        public void CleanCorruptedTestCache()
+        {
+            try
+            {
+                string[] dirs = new string[] { AppPaths.SavedLyricsDir, AppPaths.TempLyricsDir };
+                foreach (var dir in dirs)
+                {
+                    if (!Directory.Exists(dir)) continue;
+                    var files = Directory.GetFiles(dir, "*.*");
+                    foreach (var file in files)
+                    {
+                        try
+                        {
+                            string ext = Path.GetExtension(file).ToLowerInvariant();
+                            if (ext == ".lrc" || ext == ".txt")
+                            {
+                                string text = File.ReadAllText(file, Encoding.UTF8);
+                                if (IsCorruptedTestLyrics(text))
+                                {
+                                    string baseName = Path.GetFileNameWithoutExtension(file);
+                                    PurgeDiskCache(baseName);
+                                }
+                            }
+                            else if (file.EndsWith("_romaji.json", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string text = File.ReadAllText(file, Encoding.UTF8);
+                                if (text.Contains("Chotto naite iru dakeda yo") || text.Contains("ちょっと泣いているだけだよ"))
+                                {
+                                    string baseName = Path.GetFileName(file).Replace("_romaji.json", "");
+                                    PurgeDiskCache(baseName);
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public async Task<LyricsData> FetchLyricsAsync(string videoId, string title, string artist, int durationSeconds, bool forceRefresh = false)
         {
             videoId = (videoId ?? string.Empty).Trim();
             title = (title ?? string.Empty).Trim();
@@ -91,6 +177,12 @@ namespace KahoiiMusic.Services
 
             AppPaths.EnsureDirectoriesExist();
 
+            // Force refresh: clear any cached files for this video to ensure a 100% clean fetch
+            if (forceRefresh && !string.IsNullOrEmpty(videoId))
+            {
+                PurgeDiskCache(videoId);
+            }
+
             // 0. Check Saved/lyrics/ (Highest priority for Downloaded tracks: 0ms offline support)
             if (!string.IsNullOrEmpty(videoId))
             {
@@ -100,15 +192,22 @@ namespace KahoiiMusic.Services
                     try
                     {
                         string lrcContent = File.ReadAllText(savedLrc, Encoding.UTF8);
-                        var cachedData = ParseLrc(lrcContent, videoId, title, artist);
-                        if (cachedData != null && cachedData.HasLyrics)
+                        if (IsCorruptedTestLyrics(lrcContent))
                         {
-                            AttachCachedRomanization(cachedData, videoId);
-                            if (!cachedData.HasRomanization)
+                            PurgeDiskCache(videoId);
+                        }
+                        else
+                        {
+                            var cachedData = ParseLrc(lrcContent, videoId, title, artist);
+                            if (cachedData != null && cachedData.HasLyrics)
                             {
-                                TriggerBackgroundRomanization(videoId, cachedData);
+                                AttachCachedRomanization(cachedData, videoId);
+                                if (!cachedData.HasRomanization)
+                                {
+                                    TriggerBackgroundRomanization(videoId, cachedData);
+                                }
+                                return cachedData;
                             }
-                            return cachedData;
                         }
                     }
                     catch { }
@@ -116,7 +215,7 @@ namespace KahoiiMusic.Services
 
                 // Check .none marker (only treat as valid if created within last 30 minutes)
                 string noneCache = Path.Combine(AppPaths.TempLyricsDir, videoId + ".none");
-                if (File.Exists(noneCache))
+                if (!forceRefresh && File.Exists(noneCache))
                 {
                     try
                     {
@@ -139,15 +238,22 @@ namespace KahoiiMusic.Services
                     try
                     {
                         string lrcContent = File.ReadAllText(lrcCache, Encoding.UTF8);
-                        var cachedData = ParseLrc(lrcContent, videoId, title, artist);
-                        if (cachedData != null && cachedData.HasLyrics)
+                        if (IsCorruptedTestLyrics(lrcContent))
                         {
-                            AttachCachedRomanization(cachedData, videoId);
-                            if (!cachedData.HasRomanization)
+                            PurgeDiskCache(videoId);
+                        }
+                        else
+                        {
+                            var cachedData = ParseLrc(lrcContent, videoId, title, artist);
+                            if (cachedData != null && cachedData.HasLyrics)
                             {
-                                TriggerBackgroundRomanization(videoId, cachedData);
+                                AttachCachedRomanization(cachedData, videoId);
+                                if (!cachedData.HasRomanization)
+                                {
+                                    TriggerBackgroundRomanization(videoId, cachedData);
+                                }
+                                return cachedData;
                             }
-                            return cachedData;
                         }
                     }
                     catch { }
@@ -173,15 +279,22 @@ namespace KahoiiMusic.Services
                     try
                     {
                         string txtContent = File.ReadAllText(savedTxt, Encoding.UTF8);
-                        var cachedData = ParsePlainText(txtContent, videoId, title, artist);
-                        if (cachedData != null && cachedData.HasLyrics)
+                        if (IsCorruptedTestLyrics(txtContent))
                         {
-                            AttachCachedRomanization(cachedData, videoId);
-                            if (!cachedData.HasRomanization)
+                            PurgeDiskCache(videoId);
+                        }
+                        else
+                        {
+                            var cachedData = ParsePlainText(txtContent, videoId, title, artist);
+                            if (cachedData != null && cachedData.HasLyrics)
                             {
-                                TriggerBackgroundRomanization(videoId, cachedData);
+                                AttachCachedRomanization(cachedData, videoId);
+                                if (!cachedData.HasRomanization)
+                                {
+                                    TriggerBackgroundRomanization(videoId, cachedData);
+                                }
+                                return cachedData;
                             }
-                            return cachedData;
                         }
                     }
                     catch { }
@@ -193,15 +306,22 @@ namespace KahoiiMusic.Services
                     try
                     {
                         string txtContent = File.ReadAllText(txtCache, Encoding.UTF8);
-                        var cachedData = ParsePlainText(txtContent, videoId, title, artist);
-                        if (cachedData != null && cachedData.HasLyrics)
+                        if (IsCorruptedTestLyrics(txtContent))
                         {
-                            AttachCachedRomanization(cachedData, videoId);
-                            if (!cachedData.HasRomanization)
+                            PurgeDiskCache(videoId);
+                        }
+                        else
+                        {
+                            var cachedData = ParsePlainText(txtContent, videoId, title, artist);
+                            if (cachedData != null && cachedData.HasLyrics)
                             {
-                                TriggerBackgroundRomanization(videoId, cachedData);
+                                AttachCachedRomanization(cachedData, videoId);
+                                if (!cachedData.HasRomanization)
+                                {
+                                    TriggerBackgroundRomanization(videoId, cachedData);
+                                }
+                                return cachedData;
                             }
-                            return cachedData;
                         }
                     }
                     catch { }
@@ -461,7 +581,7 @@ namespace KahoiiMusic.Services
 
             // 1. Japanese quotes:
             // "「Track/Artist」"
-            var mSlash = Regex.Match(title, @"^[「『【]([^/」』】]+)/([^」』】]+)[」』】]");
+            var mSlash = Regex.Match(title, @"^[\u300C\u300E\u3010]([^/\u300D\u300F\u3011]+)/([^/\u300D\u300F\u3011]+)[\u300D\u300F\u3011]");
             if (mSlash.Success)
             {
                 list.Add(new SearchCandidate(mSlash.Groups[1].Value.Trim(), mSlash.Groups[2].Value.Trim()));
@@ -469,7 +589,7 @@ namespace KahoiiMusic.Services
             }
 
             // "Artist「Track」" or "Track「Artist」"
-            var mJp = Regex.Match(title, @"([^\s「『]+)\s*[「『]([^」』]+)[」』]");
+            var mJp = Regex.Match(title, @"([^\s\u300C\u300E\u3010]+)\s*[\u300C\u300E\u3010]([^\u300D\u300F\u3011]+)[\u300D\u300F\u3011]");
             if (mJp.Success)
             {
                 list.Add(new SearchCandidate(mJp.Groups[2].Value.Trim(), mJp.Groups[1].Value.Trim()));
@@ -477,7 +597,7 @@ namespace KahoiiMusic.Services
             }
 
             // "「Track」" anywhere in string
-            var mJustTrack = Regex.Match(title, @"[「『]([^」』]+)[」』]");
+            var mJustTrack = Regex.Match(title, @"[\u300C\u300E\u3010]([^\u300D\u300F\u3011]+)[\u300D\u300F\u3011]");
             if (mJustTrack.Success)
             {
                 string inner = mJustTrack.Groups[1].Value.Trim();
@@ -491,7 +611,7 @@ namespace KahoiiMusic.Services
                     }
                     else
                     {
-                        list.Add(new SearchCandidate(inner, cleanA));
+                        list.Insert(0, new SearchCandidate(inner, cleanA));
                     }
                 }
             }
@@ -535,20 +655,44 @@ namespace KahoiiMusic.Services
                 }
             }
 
+            // 3. Featured artist detection (feat. / ft.)
+            var mFeat = Regex.Match(title, @"(?:feat\.|ft\.|featuring)\s*([^/|()\[\]–—]+)", RegexOptions.IgnoreCase);
+            if (mFeat.Success)
+            {
+                string featArtist = mFeat.Groups[1].Value.Trim();
+                if (!string.IsNullOrEmpty(featArtist))
+                {
+                    string baseT = !string.IsNullOrEmpty(cleanT) ? cleanT : title;
+                    if (!string.IsNullOrEmpty(cleanA))
+                    {
+                        list.Add(new SearchCandidate(baseT, $"{cleanA} feat. {featArtist}"));
+                        list.Add(new SearchCandidate(baseT, $"{cleanA} & {featArtist}"));
+                    }
+                    list.Add(new SearchCandidate(baseT, featArtist));
+                }
+            }
+
             // 4. Clean track with clean artist
             if (!string.IsNullOrEmpty(cleanT))
             {
                 if (!string.IsNullOrEmpty(cleanA))
                 {
-                    list.Insert(0, new SearchCandidate(cleanT, cleanA));
-                    // If artist is in title, remove it
+                    // If artist is inside clean title, prioritize title without artist!
                     if (cleanT.ToLower().Contains(cleanA.ToLower()))
                     {
                         string withoutA = Regex.Replace(cleanT, Regex.Escape(cleanA), "", RegexOptions.IgnoreCase).Trim(" -/|–—_".ToCharArray()).Trim();
                         if (!string.IsNullOrEmpty(withoutA))
                         {
-                            list.Insert(1, new SearchCandidate(withoutA, cleanA));
+                            list.Insert(0, new SearchCandidate(withoutA, cleanA));
                         }
+                        else
+                        {
+                            list.Insert(0, new SearchCandidate(cleanT, cleanA));
+                        }
+                    }
+                    else
+                    {
+                        list.Insert(0, new SearchCandidate(cleanT, cleanA));
                     }
                 }
                 list.Add(new SearchCandidate(cleanT, ""));

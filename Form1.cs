@@ -212,11 +212,30 @@ namespace KahoiiMusic
             if (lblVersion != null)
             {
                 lblVersion.Text = "v" + AppUpdateService.CurrentVersionName;
+                lblVersion.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+                lblVersion.ForeColor = Color.FromArgb(200, 185, 235);
+                lblVersion.Location = new Point(panelBottomControls.ClientSize.Width - lblVersion.Width - 10, panelBottomControls.ClientSize.Height - lblVersion.Height - 6);
                 lblVersion.BringToFront();
                 lblVersion.Click += async (s, e) => await CheckForAppUpdatesAsync(manual: true);
-                lblVersion.MouseEnter += (s, e) => lblVersion.ForeColor = Color.FromArgb(220, 200, 255);
-                lblVersion.MouseLeave += (s, e) => lblVersion.ForeColor = Color.FromArgb(160, 135, 205);
+                lblVersion.MouseEnter += (s, e) => lblVersion.ForeColor = Color.FromArgb(255, 240, 255);
+                lblVersion.MouseLeave += (s, e) => lblVersion.ForeColor = Color.FromArgb(200, 185, 235);
                 _userToolTip.SetToolTip(lblVersion, "Phiên bản v" + AppUpdateService.CurrentVersionName + " (Nhấn để kiểm tra cập nhật)");
+            }
+
+            if (panelBottomControls != null)
+            {
+                panelBottomControls.Resize += (s, e) =>
+                {
+                    if (lblVersion != null)
+                    {
+                        lblVersion.Location = new Point(panelBottomControls.ClientSize.Width - lblVersion.Width - 10, panelBottomControls.ClientSize.Height - lblVersion.Height - 6);
+                        lblVersion.BringToFront();
+                    }
+                    if (lblCopyright != null)
+                    {
+                        lblCopyright.Location = new Point((panelBottomControls.ClientSize.Width - lblCopyright.Width) / 2, panelBottomControls.ClientSize.Height - lblCopyright.Height - 6);
+                    }
+                };
             }
             UpdateUserButtonAppearance();
             FirebaseAuthService.Instance.AuthStateChanged += (s, e) =>
@@ -1053,6 +1072,22 @@ namespace KahoiiMusic
                         lyricsPanel.CurrentPosition = targetTime;
                     }
                 };
+
+                lyricsPanel.ReloadRequested += (s, e) =>
+                {
+                    if (_audioPlayer != null && _audioPlayer.HasTrack)
+                    {
+                        string vid = _currentLyricsVideoId ?? _audioPlayer.CurrentVideoId;
+                        string tit = !string.IsNullOrWhiteSpace(_audioPlayer.CurrentTitle) ? _audioPlayer.CurrentTitle : marqueeTitle.Text;
+                        string aut = !string.IsNullOrWhiteSpace(_audioPlayer.CurrentAuthor) ? _audioPlayer.CurrentAuthor : marqueeAuthor.Text;
+                        int dur = (int)(_audioPlayer.TotalDuration.TotalSeconds > 0 ? _audioPlayer.TotalDuration.TotalSeconds : 0);
+                        if (!string.IsNullOrEmpty(vid))
+                        {
+                            _audioPlayer.RaiseStatus("Đang tải lại lời bài hát từ mạng...");
+                            LoadLyricsForTrack(vid, tit, aut, dur, forceRefresh: true);
+                        }
+                    }
+                };
             }
         }
 
@@ -1130,7 +1165,7 @@ namespace KahoiiMusic
             marqueeAuthor.Width = titleW;
         }
 
-        private void LoadLyricsForTrack(string videoId, string title, string author, int durationSeconds)
+        private void LoadLyricsForTrack(string videoId, string title, string author, int durationSeconds, bool forceRefresh = false)
         {
             _currentLyricsVideoId = videoId;
 
@@ -1143,14 +1178,14 @@ namespace KahoiiMusic
             if (lyricsPanel != null)
             {
                 lyricsPanel.IsLoading = true;
-                lyricsPanel.Lyrics = null;
+                if (forceRefresh) lyricsPanel.Lyrics = null;
             }
 
             System.Threading.ThreadPool.QueueUserWorkItem(async delegate
             {
                 try
                 {
-                    var lyricsData = await LyricsService.Instance.FetchLyricsAsync(videoId, title, author, durationSeconds);
+                    var lyricsData = await LyricsService.Instance.FetchLyricsAsync(videoId, title, author, durationSeconds, forceRefresh);
                     if (_currentLyricsVideoId == videoId && !IsDisposed && IsHandleCreated)
                     {
                         BeginInvoke(new Action(delegate

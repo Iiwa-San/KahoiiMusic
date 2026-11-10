@@ -29,12 +29,15 @@ namespace KahoiiMusic.Controls
         private DateTime _lastUserScrollTime = DateTime.MinValue;
         private int _hoveredLineIndex = -1;
         private bool _isRomaziBtnHovered = false;
+        private bool _isReloadBtnHovered = false;
 
         private RomanizationDisplayMode _romanizationMode = RomanizationDisplayMode.Dual;
         private int _delayOffsetMs = 220;
         private Rectangle _romaziBtnRect = Rectangle.Empty;
+        private Rectangle _reloadBtnRect = Rectangle.Empty;
 
         public event Action<TimeSpan> SeekRequested;
+        public event EventHandler ReloadRequested;
 
         private class LayoutLine
         {
@@ -83,6 +86,12 @@ namespace KahoiiMusic.Controls
                 _dotCount++;
                 if (_isLoading) Invalidate();
             };
+
+            var cms = new ContextMenuStrip();
+            var miReload = new ToolStripMenuItem("↻ Tải lại lời bài hát (Làm mới cache)");
+            miReload.Click += (s, e) => ReloadRequested?.Invoke(this, EventArgs.Empty);
+            cms.Items.Add(miReload);
+            ContextMenuStrip = cms;
         }
 
         [Category("Behavior")]
@@ -402,6 +411,14 @@ namespace KahoiiMusic.Controls
                 Invalidate();
             }
 
+            // Check Reload button hover
+            bool overReload = _reloadBtnRect.Width > 0 && _reloadBtnRect.Contains(e.Location);
+            if (overReload != _isReloadBtnHovered)
+            {
+                _isReloadBtnHovered = overReload;
+                Invalidate();
+            }
+
             int hovered = -1;
             float mouseY = e.Y - _currentScrollY;
 
@@ -421,7 +438,7 @@ namespace KahoiiMusic.Controls
                 Invalidate();
             }
 
-            Cursor = (overBtn || (hovered >= 0 && _lyrics != null && _lyrics.HasLyrics)) ? Cursors.Hand : Cursors.Default;
+            Cursor = (overBtn || overReload || (hovered >= 0 && _lyrics != null && _lyrics.HasLyrics)) ? Cursors.Hand : Cursors.Default;
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -429,6 +446,7 @@ namespace KahoiiMusic.Controls
             base.OnMouseLeave(e);
             _hoveredLineIndex = -1;
             _isRomaziBtnHovered = false;
+            _isReloadBtnHovered = false;
             Cursor = Cursors.Default;
             Invalidate();
         }
@@ -437,6 +455,13 @@ namespace KahoiiMusic.Controls
         {
             base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left) return;
+
+            // 0. Click Reload button
+            if (_reloadBtnRect.Width > 0 && _reloadBtnRect.Contains(e.Location))
+            {
+                ReloadRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
 
             // 1. Click Romaji / Pinyin pill button
             if (HasRomanizationSupport && _romaziBtnRect.Contains(e.Location))
@@ -616,6 +641,57 @@ namespace KahoiiMusic.Controls
             if (_lyrics != null && !_lyrics.IsSynced)
             {
                 DrawNonSyncedBadge(g);
+            }
+
+            // Draw Reload / Refresh button "↻" (allows user to re-fetch/clean cache anytime)
+            if (_lyrics != null && _lyrics.HasLyrics)
+            {
+                DrawReloadButton(g);
+            }
+        }
+
+        private void DrawReloadButton(Graphics g)
+        {
+            int btnW = 22;
+            int btnH = 20;
+            int btnY = 6;
+            int rightBoundary = Width - 10;
+
+            if (HasRomanizationSupport && _romaziBtnRect.Width > 0)
+            {
+                rightBoundary = Math.Min(rightBoundary, _romaziBtnRect.Left - 6);
+            }
+            if (_lyrics != null && !_lyrics.IsSynced)
+            {
+                int badgeW = 78;
+                int badgeX = HasRomanizationSupport ? (_romaziBtnRect.Left - badgeW - 6) : (Width - badgeW - 10);
+                rightBoundary = Math.Min(rightBoundary, badgeX - 6);
+            }
+
+            int btnX = rightBoundary - btnW;
+            _reloadBtnRect = new Rectangle(btnX, btnY, btnW, btnH);
+
+            Color borderColor = _isReloadBtnHovered ? Color.FromArgb(220, 200, 240) : Color.FromArgb(100, 160, 140, 200);
+            Color fillColor = _isReloadBtnHovered ? Color.FromArgb(230, 60, 35, 90) : Color.FromArgb(200, 32, 20, 52);
+            Color textCol = _isReloadBtnHovered ? Color.White : Color.FromArgb(210, 215, 235);
+
+            using (GraphicsPath btnPath = CreateRoundedRectanglePath(_reloadBtnRect, 10))
+            {
+                using (SolidBrush fillBrush = new SolidBrush(fillColor))
+                {
+                    g.FillPath(fillBrush, btnPath);
+                }
+                using (Pen borderPen = new Pen(borderColor, 1.0f))
+                {
+                    g.DrawPath(borderPen, btnPath);
+                }
+            }
+
+            using (Font font = new Font("Segoe UI", 9.0f, FontStyle.Bold))
+            using (SolidBrush textBrush = new SolidBrush(textCol))
+            using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                g.DrawString("↻", font, textBrush, _reloadBtnRect, sf);
             }
         }
 
