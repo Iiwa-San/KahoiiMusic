@@ -21,19 +21,14 @@ namespace KahoiiMusic.Controls
                 if (m.Msg == WM_PAINT && string.IsNullOrEmpty(Text) && !string.IsNullOrEmpty(CueBannerText))
                 {
                     using (Graphics g = Graphics.FromHwnd(Handle))
-                    using (SolidBrush brush = new SolidBrush(Focused ? Color.FromArgb(115, 105, 140) : CueColor))
-                    using (StringFormat sf = new StringFormat { LineAlignment = StringAlignment.Center })
                     {
-                        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-                        g.DrawString(CueBannerText, Font, brush, new RectangleF(2, 0, Width - 4, Height), sf);
+                        TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPadding;
+                        Color col = Focused ? Color.FromArgb(115, 105, 140) : CueColor;
+                        TextRenderer.DrawText(g, CueBannerText, Font, new Rectangle(2, 0, Width - 4, Height), col, flags);
                     }
                 }
             }
         }
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern int SendMessage(IntPtr hWnd, int msg, int wParam, [MarshalAs(UnmanagedType.LPWStr)] string lParam);
-        private const int EM_SETCUEBANNER = 0x1501;
 
         private CueTextBox _textBox;
         private string _placeholderText = "Tìm bài hát, nghệ sĩ hoặc dán link...";
@@ -65,7 +60,7 @@ namespace KahoiiMusic.Controls
             DoubleBuffered = true;
 
             _debounceTimer = new System.Windows.Forms.Timer();
-            _debounceTimer.Interval = 750;
+            _debounceTimer.Interval = 260;
             _debounceTimer.Tick += DebounceTimer_Tick;
 
             _textBox = new CueTextBox();
@@ -77,8 +72,8 @@ namespace KahoiiMusic.Controls
             _textBox.CueBannerText = _placeholderText;
 
             _textBox.HandleCreated += (s, e) => UpdateCueBanner();
-            _textBox.GotFocus += (s, e) => Invalidate();
-            _textBox.LostFocus += (s, e) => Invalidate();
+            _textBox.GotFocus += (s, e) => { _textBox.Invalidate(); Invalidate(); };
+            _textBox.LostFocus += (s, e) => { _textBox.Invalidate(); Invalidate(); };
             _textBox.KeyDown += TextBox_KeyDown;
             _textBox.TextChanged += TextBox_TextChanged;
 
@@ -91,14 +86,6 @@ namespace KahoiiMusic.Controls
             if (_textBox != null)
             {
                 _textBox.CueBannerText = _placeholderText ?? string.Empty;
-                if (_textBox.IsHandleCreated)
-                {
-                    try
-                    {
-                        SendMessage(_textBox.Handle, EM_SETCUEBANNER, 1, _placeholderText ?? string.Empty);
-                    }
-                    catch { }
-                }
                 _textBox.Invalidate();
             }
         }
@@ -177,14 +164,14 @@ namespace KahoiiMusic.Controls
             if (raw.EndsWith(" "))
             {
                 _debounceTimer.Stop();
-                _debounceTimer.Interval = 120;
+                _debounceTimer.Interval = 100;
                 _debounceTimer.Start();
             }
             else
             {
-                // In the middle of typing a word: wait for pause (750ms) so we don't query every single character
+                // In the middle of typing a word: wait 260ms before querying suggestions
                 _debounceTimer.Stop();
-                _debounceTimer.Interval = 750;
+                _debounceTimer.Interval = 260;
                 _debounceTimer.Start();
             }
         }

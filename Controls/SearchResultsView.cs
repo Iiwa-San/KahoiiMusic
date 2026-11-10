@@ -23,6 +23,7 @@ namespace KahoiiMusic.Controls
         private Rectangle _bestMatchRect;
         private Rectangle _bestMatchPlayRect;
         private Dictionary<string, Image> _thumbCache = new Dictionary<string, Image>(StringComparer.OrdinalIgnoreCase);
+        private HashSet<string> _loadingThumbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Scrollbar dragging
         private bool _isDraggingScroll = false;
@@ -71,20 +72,31 @@ namespace KahoiiMusic.Controls
 
             UpdateScrollBounds();
 
-            // Load thumbnails in background
-            foreach (var item in _items)
+            // Pre-load thumbnails only for the first visible items (up to 8)
+            int preloadCount = Math.Min(8, _items.Count);
+            for (int i = 0; i < preloadCount; i++)
             {
-                if (item != null && !string.IsNullOrEmpty(item.Id) && !_thumbCache.ContainsKey(item.Id))
+                var item = _items[i];
+                if (item != null && !string.IsNullOrEmpty(item.Id))
                 {
-                    string vid = item.Id;
-                    System.Threading.ThreadPool.QueueUserWorkItem(delegate
-                    {
-                        LoadThumbnailAsync(vid);
-                    });
+                    RequestThumbnail(item.Id);
                 }
             }
 
             Invalidate();
+        }
+
+        private void RequestThumbnail(string videoId)
+        {
+            if (string.IsNullOrEmpty(videoId) || _thumbCache.ContainsKey(videoId)) return;
+            lock (_loadingThumbs)
+            {
+                if (!_loadingThumbs.Add(videoId)) return;
+            }
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                LoadThumbnailAsync(videoId);
+            });
         }
 
         private void LoadThumbnailAsync(string videoId)
@@ -108,6 +120,10 @@ namespace KahoiiMusic.Controls
                         {
                             BeginInvoke(new Action(() =>
                             {
+                                lock (_loadingThumbs)
+                                {
+                                    _loadingThumbs.Remove(videoId);
+                                }
                                 if (!_thumbCache.ContainsKey(videoId))
                                 {
                                     _thumbCache[videoId] = copy;
@@ -118,7 +134,41 @@ namespace KahoiiMusic.Controls
                     }
                 }
             }
-            catch { }
+            catch
+            {
+                lock (_loadingThumbs)
+                {
+                    _loadingThumbs.Remove(videoId);
+                }
+            }
+        }
+
+        private int ScrollTrackX => Width - 14;
+        private int ScrollTrackY => TopHeaderHeight + 4;
+        private int ScrollTrackHeight => Math.Max(10, Height - ScrollTrackY - 6);
+        private int ScrollTrackWidth => 8;
+
+        private Rectangle GetScrollTrackHitRect()
+        {
+            return new Rectangle(ScrollTrackX - 4, ScrollTrackY, ScrollTrackWidth + 8, ScrollTrackHeight);
+        }
+
+        private int GetThumbHeight()
+        {
+            int trackHeight = ScrollTrackHeight;
+            if (Height + _maxScroll <= 0) return 24;
+            return Math.Max(24, (int)((float)Height / (Height + _maxScroll) * trackHeight));
+        }
+
+        private Rectangle GetThumbRect()
+        {
+            if (_maxScroll <= 0) return Rectangle.Empty;
+            int trackY = ScrollTrackY;
+            int trackHeight = ScrollTrackHeight;
+            int thumbHeight = GetThumbHeight();
+            int availTravel = Math.Max(1, trackHeight - thumbHeight);
+            int thumbY = trackY + (int)((float)_scrollOffset / _maxScroll * availTravel);
+            return new Rectangle(ScrollTrackX, thumbY, ScrollTrackWidth, thumbHeight);
         }
 
         private void UpdateScrollBounds()
@@ -141,7 +191,7 @@ namespace KahoiiMusic.Controls
             base.OnMouseWheel(e);
             if (_maxScroll > 0)
             {
-                int delta = (e.Delta / 120) * -ItemRowHeight;
+                int delta = (e.Delta / 120) * -(ItemRowHeight * 2);
                 _scrollOffset = Math.Max(0, Math.Min(_maxScroll, _scrollOffset + delta));
                 Invalidate();
             }
@@ -153,16 +203,12 @@ namespace KahoiiMusic.Controls
 
             if (_isDraggingScroll)
             {
-                int trackHeight = Height - 20;
-                int thumbHeight = Math.Max(24, (int)((float)Height / (Height + _maxScroll) * trackHeight));
-                int availTravel = trackHeight - thumbHeight;
-                if (availTravel > 0)
-                {
-                    int deltaY = e.Y - _dragStartY;
-                    float scrollRatio = (float)deltaY / availTravel;
-                    _scrollOffset = Math.Max(0, Math.Min(_maxScroll, _dragStartScroll + (int)(scrollRatio * _maxScroll)));
-                    Invalidate();
-                }
+                int thumbHeight = GetThumbHeight();
+                int availTravel = Math.Max(1, ScrollTrackHeight - thumbHeight);
+                int deltaY = e.Y - _dragStartY;
+                float scrollRatio = (float)deltaY / availTravel;
+                _scrollOffset = Math.Max(0, Math.Min(_maxScroll, _dragStartScroll + (int)(scrollRatio * _maxScroll)));
+                Invalidate();
                 return;
             }
 
@@ -176,7 +222,7 @@ namespace KahoiiMusic.Controls
 
             int listStartY = TopHeaderHeight + (_items.Count > 0 ? HeroCardHeight + 10 : 0) - _scrollOffset;
 
-            if (e.X < Width - 14 && e.Y >= listStartY)
+            if (e.X < Width - 18 && e.Y >= listStartY)
             {
                 int row = (e.Y - listStartY) / ItemRowHeight;
                 if (row >= 0 && row < _items.Count)
@@ -185,7 +231,8 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            Cursor = (_isHoveringBack || _isHoveringBestMatchPlay || _hoveredIndex >= 0 || _scrollBarThumbRect.Contains(e.Location))
+            bool isOverScrollbar = _maxScroll > 0 && GetScrollTrackHitRect().Contains(e.Location);
+            Cursor = (_isHoveringBack || _isHoveringBestMatchPlay || _hoveredIndex >= 0 || isOverScrollbar)
                 ? Cursors.Hand : Cursors.Default;
 
             if (prevBack != _isHoveringBack || prevBest != _isHoveringBestMatchPlay || prevIdx != _hoveredIndex)
@@ -199,11 +246,27 @@ namespace KahoiiMusic.Controls
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
             {
-                if (_scrollBarThumbRect.Contains(e.Location))
+                if (_maxScroll > 0 && GetScrollTrackHitRect().Contains(e.Location))
                 {
-                    _isDraggingScroll = true;
-                    _dragStartY = e.Y;
-                    _dragStartScroll = _scrollOffset;
+                    _scrollBarThumbRect = GetThumbRect();
+                    if (_scrollBarThumbRect.Contains(e.Location))
+                    {
+                        _isDraggingScroll = true;
+                        _dragStartY = e.Y;
+                        _dragStartScroll = _scrollOffset;
+                    }
+                    else
+                    {
+                        int thumbHeight = GetThumbHeight();
+                        int availTravel = Math.Max(1, ScrollTrackHeight - thumbHeight);
+                        int targetThumbY = e.Y - (thumbHeight / 2) - ScrollTrackY;
+                        float ratio = Math.Max(0f, Math.Min(1f, (float)targetThumbY / availTravel));
+                        _scrollOffset = (int)(ratio * _maxScroll);
+                        _isDraggingScroll = true;
+                        _dragStartY = e.Y;
+                        _dragStartScroll = _scrollOffset;
+                        Invalidate();
+                    }
                     return;
                 }
 
@@ -242,7 +305,11 @@ namespace KahoiiMusic.Controls
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
-            _isDraggingScroll = false;
+            if (_isDraggingScroll)
+            {
+                _isDraggingScroll = false;
+                Invalidate();
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -346,6 +413,7 @@ namespace KahoiiMusic.Controls
                 }
                 else
                 {
+                    RequestThumbnail(hero.Id);
                     using (SolidBrush tb = new SolidBrush(Color.FromArgb(30, 22, 50)))
                     {
                         g.FillRectangle(tb, heroThumbRect);
@@ -424,6 +492,7 @@ namespace KahoiiMusic.Controls
                     }
                     else
                     {
+                        RequestThumbnail(item.Id);
                         using (SolidBrush tb = new SolidBrush(Color.FromArgb(28, 22, 48)))
                         {
                             g.FillRectangle(tb, thumbRect);
@@ -489,18 +558,16 @@ namespace KahoiiMusic.Controls
             // Scrollbar
             if (_maxScroll > 0)
             {
-                int trackX = Width - 7;
-                int trackY = TopHeaderHeight + 2;
-                int trackHeight = Height - trackY - 4;
+                Rectangle trackRect = new Rectangle(ScrollTrackX, ScrollTrackY, ScrollTrackWidth, ScrollTrackHeight);
+                using (GraphicsPath trackPath = CreateRoundedRectPath(trackRect, 3))
+                using (SolidBrush trackBrush = new SolidBrush(Color.FromArgb(24, 20, 42)))
+                {
+                    g.FillPath(trackBrush, trackPath);
+                }
 
-                int thumbHeight = Math.Max(24, (int)((float)Height / (Height + _maxScroll) * trackHeight));
-                int availTravel = trackHeight - thumbHeight;
-                int thumbY = trackY + (int)((float)_scrollOffset / _maxScroll * availTravel);
-
-                _scrollBarThumbRect = new Rectangle(trackX, thumbY, 5, thumbHeight);
-
-                using (GraphicsPath sbPath = CreateRoundedRectPath(_scrollBarThumbRect, 2))
-                using (SolidBrush sbBrush = new SolidBrush(_isDraggingScroll ? Color.FromArgb(255, 45, 133) : Color.FromArgb(70, 55, 105)))
+                _scrollBarThumbRect = GetThumbRect();
+                using (GraphicsPath sbPath = CreateRoundedRectPath(_scrollBarThumbRect, 3))
+                using (SolidBrush sbBrush = new SolidBrush(_isDraggingScroll ? Color.FromArgb(255, 45, 133) : Color.FromArgb(90, 75, 130)))
                 {
                     g.FillPath(sbBrush, sbPath);
                 }
@@ -519,6 +586,7 @@ namespace KahoiiMusic.Controls
         }
 
         private const int WM_NCHITTEST = 0x84;
+        private const int HTCLIENT = 1;
         private const int HTTRANSPARENT = -1;
         private const int ResizeBorder = 8;
 
@@ -526,22 +594,31 @@ namespace KahoiiMusic.Controls
         {
             if (m.Msg == WM_NCHITTEST)
             {
+                Point screenPt;
+                if (m.LParam != IntPtr.Zero)
+                {
+                    int x = unchecked((short)(m.LParam.ToInt64() & 0xFFFF));
+                    int y = unchecked((short)((m.LParam.ToInt64() >> 16) & 0xFFFF));
+                    screenPt = new Point(x, y);
+                }
+                else
+                {
+                    screenPt = Cursor.Position;
+                }
+
+                Point clientPt = PointToClient(screenPt);
+
+                // If hovering over scrollbar, handle as client area so clicks/drags are never hijacked by window resize!
+                if (_maxScroll > 0 && GetScrollTrackHitRect().Contains(clientPt))
+                {
+                    m.Result = (IntPtr)HTCLIENT;
+                    return;
+                }
+
                 Form parent = FindForm();
                 if (parent != null && parent.WindowState == FormWindowState.Normal)
                 {
-                    Point screenPt;
-                    if (m.LParam != IntPtr.Zero)
-                    {
-                        int x = unchecked((short)(m.LParam.ToInt64() & 0xFFFF));
-                        int y = unchecked((short)((m.LParam.ToInt64() >> 16) & 0xFFFF));
-                        screenPt = new Point(x, y);
-                    }
-                    else
-                    {
-                        screenPt = Cursor.Position;
-                    }
                     Point pt = parent.PointToClient(screenPt);
-
                     int w = parent.ClientSize.Width;
                     int h = parent.ClientSize.Height;
 

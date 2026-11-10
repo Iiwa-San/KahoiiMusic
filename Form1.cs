@@ -635,6 +635,10 @@ namespace KahoiiMusic
             _searchResultsView.CloseRequested += (s, e) =>
             {
                 _searchResultsView.Visible = false;
+                if (lyricsPanel != null && _isLyricsOpen)
+                {
+                    lyricsPanel.BringToFront();
+                }
             };
             gradientPanel.Controls.Add(_searchResultsView);
         }
@@ -648,14 +652,25 @@ namespace KahoiiMusic
             _searchResultsView.ShowLoading(query);
             var results = await Services.YouTubeSearchService.SearchAsync(query, 25);
             _searchResultsView.SetResults(query, results);
+            _searchResultsView.BringToFront();
         }
 
         public bool PreFilterMessage(ref Message m)
         {
-            // Forward mouse wheel to playlistPopup if hovering over it, or adjust volume
+            // Forward mouse wheel to searchResultsView, playlistPopup, or lyricsPanel if hovering over them
             if (m.Msg == 0x020A /* WM_MOUSEWHEEL */)
             {
-                if (playlistPopup != null && playlistPopup.Visible && playlistPopup.Bounds.Contains(Cursor.Position))
+                Point cur = Cursor.Position;
+                if (_searchResultsView != null && _searchResultsView.Visible && _searchResultsView.IsHandleCreated)
+                {
+                    Point ptSearch = _searchResultsView.PointToClient(cur);
+                    if (_searchResultsView.ClientRectangle.Contains(ptSearch))
+                    {
+                        SendMessage(_searchResultsView.Handle, m.Msg, (int)m.WParam, (int)m.LParam);
+                        return true;
+                    }
+                }
+                else if (playlistPopup != null && playlistPopup.Visible && playlistPopup.Bounds.Contains(cur))
                 {
                     if (m.HWnd != playlistPopup.Handle)
                     {
@@ -665,7 +680,6 @@ namespace KahoiiMusic
                 }
                 else if (lyricsPanel != null && lyricsPanel.Visible && lyricsPanel.IsHandleCreated)
                 {
-                    Point cur = Cursor.Position;
                     Point ptLyrics = lyricsPanel.PointToClient(cur);
                     if (lyricsPanel.ClientRectangle.Contains(ptLyrics))
                     {
@@ -675,7 +689,6 @@ namespace KahoiiMusic
                 }
                 else
                 {
-                    Point cur = Cursor.Position;
                     bool isOverVolume = (volumePopup != null && volumePopup.Visible && volumePopup.Bounds.Contains(cur)) ||
                                         (panelBottomControls != null && panelBottomControls.RectangleToScreen(btnVolume.Bounds).Contains(cur)) ||
                                         (panelBottomControls != null && panelBottomControls.RectangleToScreen(panelBottomControls.ClientRectangle).Contains(cur));
@@ -1019,7 +1032,8 @@ namespace KahoiiMusic
             {
                 // If no track is loaded yet, check if user has pasted a link into searchPillBox
                 string input = searchPillBox.Text.Trim();
-                if (!string.IsNullOrEmpty(input) && input != "link youtube..." && input != "linkYT")
+                if (!string.IsNullOrEmpty(input) && input != "link youtube..." && input != "linkYT" &&
+                    (searchPillBox == null || (input != searchPillBox.PlaceholderText && !input.StartsWith("Tìm bài hát"))))
                 {
                     // Automatically load and play the link in the search box!
                     SearchPillBox_UrlSubmitted(searchPillBox, input);
@@ -1102,7 +1116,8 @@ namespace KahoiiMusic
         {
             _audioPlayer.IsPlayingFromHistory = false;
             _audioPlayer.CurrentQueueSource = ActiveQueueSource.Playlist;
-            if (string.IsNullOrWhiteSpace(url) || url == "link youtube..." || url == "linkYT")
+            if (string.IsNullOrWhiteSpace(url) || url == "link youtube..." || url == "linkYT" ||
+                (searchPillBox != null && (url == searchPillBox.PlaceholderText || url.StartsWith("Tìm bài hát"))))
             {
                 _audioPlayer.StopAndClear();
                 _audioPlayer.ClearPlaylist();
@@ -1270,6 +1285,10 @@ namespace KahoiiMusic
                     lyricsPanel.TotalDuration = _audioPlayer.TotalDuration;
                     lyricsPanel.CurrentPosition = _audioPlayer.Position;
                 }
+                if (_searchResultsView != null && _searchResultsView.Visible)
+                {
+                    _searchResultsView.BringToFront();
+                }
             }
 
             if (_lyricsSlideTimer != null && !_lyricsSlideTimer.Enabled)
@@ -1305,6 +1324,10 @@ namespace KahoiiMusic
             float ease = (float)(1 - Math.Pow(1 - t, 3));
 
             UpdateCenterAreaLayout(ease);
+            if (_searchResultsView != null && _searchResultsView.Visible)
+            {
+                _searchResultsView.BringToFront();
+            }
         }
 
         private void LoadLyricsForTrack(string videoId, string title, string author, int durationSeconds, bool forceRefresh = false)
@@ -2469,6 +2492,8 @@ namespace KahoiiMusic
 
         private const int WM_NCCALCSIZE = 0x83;
         private const int WM_NCHITTEST = 0x84;
+        private const int WM_NCPAINT = 0x85;
+        private const int WM_NCACTIVATE = 0x86;
         private const int HTCLIENT = 1;
         private const int HTCAPTION = 2;
         private const int HTLEFT = 10;
@@ -2482,9 +2507,50 @@ namespace KahoiiMusic
 
         private const int RESIZE_BORDER = 8;
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr DefWindowProc(IntPtr hWnd, int uMsg, IntPtr wParam, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MARGINS
+        {
+            public int cxLeftWidth;
+            public int cxRightWidth;
+            public int cyTopHeight;
+            public int cyBottomHeight;
+        }
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            try
+            {
+                if (Environment.OSVersion.Platform == PlatformID.Win32NT && Environment.OSVersion.Version.Major >= 6)
+                {
+                    MARGINS margins = new MARGINS { cxLeftWidth = 0, cxRightWidth = 0, cyTopHeight = 0, cyBottomHeight = 1 };
+                    DwmExtendFrameIntoClientArea(this.Handle, ref margins);
+                }
+            }
+            catch { }
+        }
+
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero)
+            if (m.Msg == WM_NCCALCSIZE)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
+            if (m.Msg == WM_NCACTIVATE)
+            {
+                m.Result = DefWindowProc(m.HWnd, WM_NCACTIVATE, m.WParam, new IntPtr(-1));
+                return;
+            }
+
+            if (m.Msg == WM_NCPAINT)
             {
                 m.Result = IntPtr.Zero;
                 return;
@@ -2692,7 +2758,14 @@ namespace KahoiiMusic
                     lyricsPanel.Location = new Point(lyricsLeft, 8);
                     lyricsPanel.Size = new Size(Math.Max(100, lyricsWidth), Math.Max(40, midH - 16));
                     lyricsPanel.Visible = true;
-                    lyricsPanel.BringToFront();
+                    if (_searchResultsView != null && _searchResultsView.Visible)
+                    {
+                        _searchResultsView.BringToFront();
+                    }
+                    else
+                    {
+                        lyricsPanel.BringToFront();
+                    }
                 }
             }
         }

@@ -473,6 +473,16 @@ namespace KahoiiMusic.Services
                     string officialTrackId = await SearchYouTubeMusicTrackIdAsync(title, artist);
                     if (!string.IsNullOrEmpty(officialTrackId) && !string.Equals(officialTrackId, videoId, StringComparison.OrdinalIgnoreCase))
                     {
+                        // 1. Try LRCLIB for synced lyrics using relaxed duration check (duration=0) for official release
+                        LyricsData lrclibOfficial = await TryFetchFromLrclibAsync(videoId, title, artist, 0);
+                        if (lrclibOfficial != null && lrclibOfficial.HasLyrics && lrclibOfficial.IsSynced)
+                        {
+                            CacheLyrics(videoId, lrclibOfficial);
+                            TriggerBackgroundRomanization(videoId, lrclibOfficial);
+                            return lrclibOfficial;
+                        }
+
+                        // 2. Fall back to YouTube Music's lyrics for the official track
                         LyricsData ytmSearchResult = await TryFetchFromYouTubeMusicAsync(officialTrackId, title, artist);
                         if (ytmSearchResult != null && ytmSearchResult.HasLyrics)
                         {
@@ -1014,60 +1024,87 @@ namespace KahoiiMusic.Services
                         req.Headers.Add("User-Agent", "KahoiiMusic/2.0 (https://github.com/kahoii/music)");
 
                         var resp = await _httpClient.SendAsync(req);
-                        if (resp.IsSuccessStatusCode)
+                        string json = resp.IsSuccessStatusCode ? await resp.Content.ReadAsStringAsync() : null;
+                        var list = !string.IsNullOrEmpty(json) ? _serializer.Deserialize<List<Dictionary<string, object>>>(json) : null;
+
+                        // If searching with artist returned empty, retry with track_name alone
+                        if ((list == null || list.Count == 0) && !string.IsNullOrWhiteSpace(cand.Artist))
                         {
-                            string json = await resp.Content.ReadAsStringAsync();
-                            var list = _serializer.Deserialize<List<Dictionary<string, object>>>(json);
-                            if (list != null && list.Count > 0)
+                            try
                             {
-                                foreach (var item in list)
+                                string fUrl = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(cand.Track);
+                                var fReq = new HttpRequestMessage(HttpMethod.Get, fUrl);
+                                fReq.Headers.Add("User-Agent", "KahoiiMusic/2.0 (https://github.com/kahoii/music)");
+                                var fResp = await _httpClient.SendAsync(fReq);
+                                if (fResp.IsSuccessStatusCode)
                                 {
-                                    if (item == null) continue;
-                                    bool isInst = item.ContainsKey("instrumental") && item["instrumental"] is bool bi && bi;
-                                    if (isInst) continue;
+                                    string fJson = await fResp.Content.ReadAsStringAsync();
+                                    list = _serializer.Deserialize<List<Dictionary<string, object>>>(fJson);
+                                }
+                            }
+                            catch { }
+                        }
 
-                                    bool hasSynced = item.ContainsKey("syncedLyrics") && item["syncedLyrics"] is string s && !string.IsNullOrWhiteSpace(s);
-                                    bool hasPlain = item.ContainsKey("plainLyrics") && item["plainLyrics"] is string p && !string.IsNullOrWhiteSpace(p);
-                                    if (!hasSynced && !hasPlain) continue;
+                        if (list != null && list.Count > 0)
+                        {
+                            foreach (var item in list)
+                            {
+                                if (item == null) continue;
+                                bool isInst = item.ContainsKey("instrumental") && item["instrumental"] is bool bi && bi;
+                                if (isInst) continue;
 
-                                    string itemTrack = item.ContainsKey("trackName") ? item["trackName"] as string : null;
-                                    string itemArtist = item.ContainsKey("artistName") ? item["artistName"] as string : null;
-                                    string itemAlbum = item.ContainsKey("albumName") ? item["albumName"] as string : null;
+                                bool hasSynced = item.ContainsKey("syncedLyrics") && item["syncedLyrics"] is string s && !string.IsNullOrWhiteSpace(s);
+                                bool hasPlain = item.ContainsKey("plainLyrics") && item["plainLyrics"] is string p && !string.IsNullOrWhiteSpace(p);
+                                if (!hasSynced && !hasPlain) continue;
 
-                                    string effectiveTargetArtist = !string.IsNullOrWhiteSpace(artist) ? artist : cand.Artist;
-                                    // MANDATORY: Verify title matches to prevent grabbing wrong songs!
-                                    if (!IsTitleMatch(cand.Track, itemTrack, effectiveTargetArtist, itemArtist, itemAlbum))
+                                string itemTrack = item.ContainsKey("trackName") ? item["trackName"] as string : null;
+                                string itemArtist = item.ContainsKey("artistName") ? item["artistName"] as string : null;
+                                string itemAlbum = item.ContainsKey("albumName") ? item["albumName"] as string : null;
+
+                                string effectiveTargetArtist = !string.IsNullOrWhiteSpace(artist) ? artist : cand.Artist;
+                                // MANDATORY: Verify title matches to prevent grabbing wrong songs!
+                                if (!IsTitleMatch(cand.Track, itemTrack, effectiveTargetArtist, itemArtist, itemAlbum))
+                                {
+                                    continue;
+                                }
+
+                                int itemDur = 0;
+                                if (item.ContainsKey("duration") && item["duration"] != null)
+                                {
+                                    double.TryParse(item["duration"].ToString(), out double d);
+                                    itemDur = (int)Math.Round(d);
+                                }
+
+                                // Duration safeguard: Reject if difference is greater than 28 seconds (allows MVs with intros/outros)
+                                if (durationSeconds > 0 && itemDur > 0 && Math.Abs(itemDur - durationSeconds) > 28)
+                                {
+                                    continue;
+                                }
+
+                                if (hasSynced)
+                                {
+                                    if (durationSeconds <= 0 || itemDur <= 0 || Math.Abs(itemDur - durationSeconds) <= 8)
                                     {
-                                        continue;
+                                        string synced = item["syncedLyrics"] as string;
+                                        var data = ParseLrc(synced, videoId, title, artist);
+                                        if (data != null && data.HasLyrics) return data;
                                     }
-
-                                    int itemDur = 0;
-                                    if (item.ContainsKey("duration") && item["duration"] != null)
+                                    if (bestSyncedMatch == null)
                                     {
-                                        double.TryParse(item["duration"].ToString(), out double d);
-                                        itemDur = (int)Math.Round(d);
+                                        bestSyncedMatch = item;
                                     }
-
-                                    // Duration safeguard: Reject if difference is greater than 8 seconds
-                                    if (durationSeconds > 0 && itemDur > 0 && Math.Abs(itemDur - durationSeconds) > 8)
+                                    else
                                     {
-                                        continue;
+                                        int prevDur = 0;
+                                        if (bestSyncedMatch.ContainsKey("duration") && double.TryParse(bestSyncedMatch["duration"]?.ToString(), out double pd))
+                                            prevDur = (int)Math.Round(pd);
+                                        if (durationSeconds > 0 && Math.Abs(itemDur - durationSeconds) < Math.Abs(prevDur - durationSeconds))
+                                            bestSyncedMatch = item;
                                     }
-
-                                    if (hasSynced)
-                                    {
-                                        if (durationSeconds <= 0 || itemDur <= 0 || Math.Abs(itemDur - durationSeconds) <= 6)
-                                        {
-                                            string synced = item["syncedLyrics"] as string;
-                                            var data = ParseLrc(synced, videoId, title, artist);
-                                            if (data != null && data.HasLyrics) return data;
-                                        }
-                                        if (bestSyncedMatch == null) bestSyncedMatch = item;
-                                    }
-                                    else if (bestPlainMatch == null)
-                                    {
-                                        bestPlainMatch = item;
-                                    }
+                                }
+                                else if (bestPlainMatch == null)
+                                {
+                                    bestPlainMatch = item;
                                 }
                             }
                         }
@@ -1083,60 +1120,86 @@ namespace KahoiiMusic.Services
                         req.Headers.Add("User-Agent", "KahoiiMusic/2.0 (https://github.com/kahoii/music)");
 
                         var resp = await _httpClient.SendAsync(req);
-                        if (resp.IsSuccessStatusCode)
+                        string json = resp.IsSuccessStatusCode ? await resp.Content.ReadAsStringAsync() : null;
+                        var list = !string.IsNullOrEmpty(json) ? _serializer.Deserialize<List<Dictionary<string, object>>>(json) : null;
+
+                        if ((list == null || list.Count == 0) && !string.IsNullOrWhiteSpace(cand.Track))
                         {
-                            string json = await resp.Content.ReadAsStringAsync();
-                            var list = _serializer.Deserialize<List<Dictionary<string, object>>>(json);
-                            if (list != null && list.Count > 0)
+                            try
                             {
-                                foreach (var item in list)
+                                string fqUrl = "https://lrclib.net/api/search?q=" + Uri.EscapeDataString(cand.Track);
+                                var fqReq = new HttpRequestMessage(HttpMethod.Get, fqUrl);
+                                fqReq.Headers.Add("User-Agent", "KahoiiMusic/2.0 (https://github.com/kahoii/music)");
+                                var fqResp = await _httpClient.SendAsync(fqReq);
+                                if (fqResp.IsSuccessStatusCode)
                                 {
-                                    if (item == null) continue;
-                                    bool isInst = item.ContainsKey("instrumental") && item["instrumental"] is bool bi && bi;
-                                    if (isInst) continue;
+                                    string fqJson = await fqResp.Content.ReadAsStringAsync();
+                                    list = _serializer.Deserialize<List<Dictionary<string, object>>>(fqJson);
+                                }
+                            }
+                            catch { }
+                        }
 
-                                    bool hasSynced = item.ContainsKey("syncedLyrics") && item["syncedLyrics"] is string s && !string.IsNullOrWhiteSpace(s);
-                                    bool hasPlain = item.ContainsKey("plainLyrics") && item["plainLyrics"] is string p && !string.IsNullOrWhiteSpace(p);
-                                    if (!hasSynced && !hasPlain) continue;
+                        if (list != null && list.Count > 0)
+                        {
+                            foreach (var item in list)
+                            {
+                                if (item == null) continue;
+                                bool isInst = item.ContainsKey("instrumental") && item["instrumental"] is bool bi && bi;
+                                if (isInst) continue;
 
-                                    string itemTrack = item.ContainsKey("trackName") ? item["trackName"] as string : null;
-                                    string itemArtist = item.ContainsKey("artistName") ? item["artistName"] as string : null;
-                                    string itemAlbum = item.ContainsKey("albumName") ? item["albumName"] as string : null;
+                                bool hasSynced = item.ContainsKey("syncedLyrics") && item["syncedLyrics"] is string s && !string.IsNullOrWhiteSpace(s);
+                                bool hasPlain = item.ContainsKey("plainLyrics") && item["plainLyrics"] is string p && !string.IsNullOrWhiteSpace(p);
+                                if (!hasSynced && !hasPlain) continue;
 
-                                    string effectiveTargetArtist = !string.IsNullOrWhiteSpace(artist) ? artist : cand.Artist;
-                                    // MANDATORY: Verify title matches to prevent grabbing wrong songs!
-                                    if (!IsTitleMatch(cand.Track, itemTrack, effectiveTargetArtist, itemArtist, itemAlbum))
+                                string itemTrack = item.ContainsKey("trackName") ? item["trackName"] as string : null;
+                                string itemArtist = item.ContainsKey("artistName") ? item["artistName"] as string : null;
+                                string itemAlbum = item.ContainsKey("albumName") ? item["albumName"] as string : null;
+
+                                string effectiveTargetArtist = !string.IsNullOrWhiteSpace(artist) ? artist : cand.Artist;
+                                // MANDATORY: Verify title matches to prevent grabbing wrong songs!
+                                if (!IsTitleMatch(cand.Track, itemTrack, effectiveTargetArtist, itemArtist, itemAlbum))
+                                {
+                                    continue;
+                                }
+
+                                int itemDur = 0;
+                                if (item.ContainsKey("duration") && item["duration"] != null)
+                                {
+                                    double.TryParse(item["duration"].ToString(), out double d);
+                                    itemDur = (int)Math.Round(d);
+                                }
+
+                                // Duration safeguard: Reject if difference is greater than 28 seconds (allows MVs with intros/outros)
+                                if (durationSeconds > 0 && itemDur > 0 && Math.Abs(itemDur - durationSeconds) > 28)
+                                {
+                                    continue;
+                                }
+
+                                if (hasSynced)
+                                {
+                                    if (durationSeconds <= 0 || itemDur <= 0 || Math.Abs(itemDur - durationSeconds) <= 8)
                                     {
-                                        continue;
+                                        string synced = item["syncedLyrics"] as string;
+                                        var data = ParseLrc(synced, videoId, title, artist);
+                                        if (data != null && data.HasLyrics) return data;
                                     }
-
-                                    int itemDur = 0;
-                                    if (item.ContainsKey("duration") && item["duration"] != null)
+                                    if (bestSyncedMatch == null)
                                     {
-                                        double.TryParse(item["duration"].ToString(), out double d);
-                                        itemDur = (int)Math.Round(d);
+                                        bestSyncedMatch = item;
                                     }
-
-                                    // Duration safeguard: Reject if difference is greater than 8 seconds
-                                    if (durationSeconds > 0 && itemDur > 0 && Math.Abs(itemDur - durationSeconds) > 8)
+                                    else
                                     {
-                                        continue;
+                                        int prevDur = 0;
+                                        if (bestSyncedMatch.ContainsKey("duration") && double.TryParse(bestSyncedMatch["duration"]?.ToString(), out double pd))
+                                            prevDur = (int)Math.Round(pd);
+                                        if (durationSeconds > 0 && Math.Abs(itemDur - durationSeconds) < Math.Abs(prevDur - durationSeconds))
+                                            bestSyncedMatch = item;
                                     }
-
-                                    if (hasSynced)
-                                    {
-                                        if (durationSeconds <= 0 || itemDur <= 0 || Math.Abs(itemDur - durationSeconds) <= 6)
-                                        {
-                                            string synced = item["syncedLyrics"] as string;
-                                            var data = ParseLrc(synced, videoId, title, artist);
-                                            if (data != null && data.HasLyrics) return data;
-                                        }
-                                        if (bestSyncedMatch == null) bestSyncedMatch = item;
-                                    }
-                                    else if (bestPlainMatch == null)
-                                    {
-                                        bestPlainMatch = item;
-                                    }
+                                }
+                                else if (bestPlainMatch == null)
+                                {
+                                    bestPlainMatch = item;
                                 }
                             }
                         }
@@ -1144,7 +1207,7 @@ namespace KahoiiMusic.Services
                     catch { }
                 }
 
-                // Fallback: If any strictly validated synced match within 6 seconds exists
+                // Fallback: If any strictly validated synced match exists (within 28s MV tolerance)
                 if (bestSyncedMatch != null)
                 {
                     int itemDur = 0;
@@ -1153,7 +1216,7 @@ namespace KahoiiMusic.Services
                         double.TryParse(bestSyncedMatch["duration"].ToString(), out double d);
                         itemDur = (int)Math.Round(d);
                     }
-                    if (durationSeconds <= 0 || itemDur <= 0 || Math.Abs(itemDur - durationSeconds) <= 6)
+                    if (durationSeconds <= 0 || itemDur <= 0 || Math.Abs(itemDur - durationSeconds) <= 28)
                     {
                         string synced = bestSyncedMatch["syncedLyrics"] as string;
                         var data = ParseLrc(synced, videoId, title, artist);

@@ -12,6 +12,8 @@ namespace KahoiiMusic.Services
     public static class YouTubeSearchService
     {
         private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly Dictionary<string, (DateTime ExpireAt, List<PlaylistItem> Results)> _cache = new Dictionary<string, (DateTime ExpireAt, List<PlaylistItem> Results)>(StringComparer.OrdinalIgnoreCase);
+        private static readonly object _cacheLock = new object();
 
         static YouTubeSearchService()
         {
@@ -24,6 +26,18 @@ namespace KahoiiMusic.Services
             if (string.IsNullOrWhiteSpace(query)) return new List<PlaylistItem>();
             query = query.Trim();
 
+            lock (_cacheLock)
+            {
+                if (_cache.TryGetValue(query, out var entry) && entry.ExpireAt > DateTime.UtcNow)
+                {
+                    if (entry.Results.Count >= maxResults || entry.Results.Count > 0)
+                    {
+                        int take = Math.Min(maxResults, entry.Results.Count);
+                        return entry.Results.GetRange(0, take);
+                    }
+                }
+            }
+
             try
             {
                 string payload = string.Format(
@@ -35,7 +49,20 @@ namespace KahoiiMusic.Services
                 {
                     if (!response.IsSuccessStatusCode) return new List<PlaylistItem>();
                     string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    return ParseSearchResults(json, maxResults);
+                    int parseCount = Math.Max(30, maxResults);
+                    var parsed = ParseSearchResults(json, parseCount);
+
+                    lock (_cacheLock)
+                    {
+                        if (_cache.Count > 60)
+                        {
+                            _cache.Clear();
+                        }
+                        _cache[query] = (DateTime.UtcNow.AddMinutes(5), parsed);
+                    }
+
+                    int returnCount = Math.Min(maxResults, parsed.Count);
+                    return parsed.GetRange(0, returnCount);
                 }
             }
             catch
