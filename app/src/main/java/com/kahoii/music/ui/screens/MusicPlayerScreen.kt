@@ -53,16 +53,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.kahoii.music.BuildConfig
@@ -152,7 +157,14 @@ fun MusicPlayerScreen(
                             onOpenAccount = { showAccountSheet = true }
                         )
 
-                        Box(modifier = Modifier.fillMaxWidth()) {
+                        var searchBoxWidthPx by remember { mutableIntStateOf(0) }
+                        val density = LocalDensity.current
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onSizeChanged { searchBoxWidthPx = it.width }
+                        ) {
                             SearchPillBox(
                                 onSearchSubmitted = { query ->
                                     viewModel.openFullSearchResults(query)
@@ -166,18 +178,29 @@ fun MusicPlayerScreen(
                             )
 
                             if (uiState.searchSuggestions.isNotEmpty() && !uiState.isFullSearchActive) {
-                                SearchDropdownOverlay(
-                                    query = uiState.currentSearchQuery.ifBlank { "kết quả" },
-                                    suggestions = uiState.searchSuggestions,
-                                    onTrackPlay = { track ->
-                                        viewModel.clearSearchSuggestions()
-                                        viewModel.playTrack(track)
-                                    },
-                                    onViewAll = { q ->
-                                        viewModel.openFullSearchResults(q)
-                                    },
-                                    modifier = Modifier.padding(top = 48.dp)
-                                )
+                                Popup(
+                                    alignment = Alignment.TopStart,
+                                    offset = IntOffset(0, with(density) { 48.dp.roundToPx() }),
+                                    onDismissRequest = { viewModel.clearSearchSuggestions() },
+                                    properties = PopupProperties(
+                                        focusable = false,
+                                        dismissOnBackPress = true,
+                                        dismissOnClickOutside = true
+                                    )
+                                ) {
+                                    SearchDropdownOverlay(
+                                        query = uiState.currentSearchQuery.ifBlank { "kết quả" },
+                                        suggestions = uiState.searchSuggestions,
+                                        onTrackPlay = { track ->
+                                            viewModel.clearSearchSuggestions()
+                                            viewModel.playTrack(track)
+                                        },
+                                        onViewAll = { q ->
+                                            viewModel.openFullSearchResults(q)
+                                        },
+                                        modifier = if (searchBoxWidthPx > 0) Modifier.width(with(density) { searchBoxWidthPx.toDp() }) else Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
                         }
                     }
@@ -382,7 +405,14 @@ fun MusicPlayerScreen(
                             onOpenAccount = { showAccountSheet = true }
                         )
 
-                        Box(modifier = Modifier.fillMaxWidth()) {
+                        var searchBoxWidthPx by remember { mutableIntStateOf(0) }
+                        val density = LocalDensity.current
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onSizeChanged { searchBoxWidthPx = it.width }
+                        ) {
                             SearchPillBox(
                                 onSearchSubmitted = { query ->
                                     viewModel.openFullSearchResults(query)
@@ -396,18 +426,29 @@ fun MusicPlayerScreen(
                             )
 
                             if (uiState.searchSuggestions.isNotEmpty() && !uiState.isFullSearchActive) {
-                                SearchDropdownOverlay(
-                                    query = uiState.currentSearchQuery.ifBlank { "kết quả" },
-                                    suggestions = uiState.searchSuggestions,
-                                    onTrackPlay = { track ->
-                                        viewModel.clearSearchSuggestions()
-                                        viewModel.playTrack(track)
-                                    },
-                                    onViewAll = { q ->
-                                        viewModel.openFullSearchResults(q)
-                                    },
-                                    modifier = Modifier.padding(top = 48.dp)
-                                )
+                                Popup(
+                                    alignment = Alignment.TopStart,
+                                    offset = IntOffset(0, with(density) { 48.dp.roundToPx() }),
+                                    onDismissRequest = { viewModel.clearSearchSuggestions() },
+                                    properties = PopupProperties(
+                                        focusable = false,
+                                        dismissOnBackPress = true,
+                                        dismissOnClickOutside = true
+                                    )
+                                ) {
+                                    SearchDropdownOverlay(
+                                        query = uiState.currentSearchQuery.ifBlank { "kết quả" },
+                                        suggestions = uiState.searchSuggestions,
+                                        onTrackPlay = { track ->
+                                            viewModel.clearSearchSuggestions()
+                                            viewModel.playTrack(track)
+                                        },
+                                        onViewAll = { q ->
+                                            viewModel.openFullSearchResults(q)
+                                        },
+                                        modifier = if (searchBoxWidthPx > 0) Modifier.width(with(density) { searchBoxWidthPx.toDp() }) else Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
                         }
                     }

@@ -1,7 +1,7 @@
 {
-  "versionCode": 30,
-  "versionName": "1.4.7",
-  "changelog": "• Ra mắt tính năng Tìm kiếm YouTube thông minh (Hybrid Search): vừa gợi ý nhanh vừa mở trang kết quả đầy đủ\n• Gợi ý tức thì (Real-time Suggestions): hiển thị top bài hát kèm thumbnail và thời lượng ngay khi đang gõ\n• Trang kết quả tìm kiếm đầy đủ (Full Results View): hiển thị Best Match và danh sách kết quả với nút phát / thêm vào hàng đợi\n• Thanh tìm kiếm cách điệu Cyberpunk Neon hiện đại với huy hiệu YouTube và các phím tắt tiện lợi\n• Tự động phân biệt thông minh giữa từ khóa tìm kiếm và đường link YouTube / Playlist URL",
+  "versionCode": 31,
+  "versionName": "1.4.8",
+  "changelog": "• Khắc phục giao diện gợi ý tìm kiếm không đè lên toàn màn hình\n• Đồng bộ lời bài hát: nới lỏng dung sai thời lượng cho Music Video (MV) lên 28s để lấy đúng lời sync từ LRCLIB\n• Tự động thử lại tìm kiếm lời bài hát theo tên khi không có nghệ sĩ\n• Tối ưu độ mượt và hiệu năng trải nghiệm tìm kiếm",
   "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
   "forceUpdate": false
 }

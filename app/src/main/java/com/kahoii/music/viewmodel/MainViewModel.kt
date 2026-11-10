@@ -737,9 +737,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val trimmed = query.trim()
         if (trimmed.isBlank() || YouTubeRepository.extractVideoId(trimmed) != null || YouTubeRepository.extractPlaylistId(trimmed) != null) {
             searchSuggestionJob?.cancel()
-            _uiState.update { it.copy(searchSuggestions = emptyList()) }
+            _uiState.update { it.copy(currentSearchQuery = trimmed, searchSuggestions = emptyList()) }
             return
         }
+
+        _uiState.update { it.copy(currentSearchQuery = trimmed) }
 
         searchSuggestionJob?.cancel()
         searchSuggestionJob = viewModelScope.launch {
@@ -747,7 +749,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val res = youTubeRepository.search(trimmed)
             res.onSuccess { items ->
                 if (_uiState.value.isFullSearchActive) return@onSuccess
-                _uiState.update { it.copy(searchSuggestions = items.take(4)) }
+                _uiState.update { it.copy(currentSearchQuery = trimmed, searchSuggestions = items.take(4)) }
             }
         }
     }

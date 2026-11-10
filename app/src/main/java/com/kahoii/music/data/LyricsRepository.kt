@@ -256,7 +256,19 @@ class LyricsRepository(private val context: Context) {
 
                 httpClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
-                        val bodyStr = response.body?.string()
+                        var bodyStr = response.body?.string()
+                        if ((bodyStr.isNullOrBlank() || bodyStr.trim() == "[]") && cand.artist.isNotBlank()) {
+                            try {
+                                val fbUrl = "https://lrclib.net/api/search?track_name=" + URLEncoder.encode(cand.track, "UTF-8")
+                                val fbReq = Request.Builder().url(fbUrl).header("User-Agent", "KahoiiMusic/2.0 (Android)").build()
+                                httpClient.newCall(fbReq).execute().use { fbResp ->
+                                    if (fbResp.isSuccessful) {
+                                        bodyStr = fbResp.body?.string()
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
+
                         if (!bodyStr.isNullOrBlank()) {
                             val arr = JSONArray(bodyStr)
                             for (j in 0 until arr.length()) {
@@ -274,7 +286,7 @@ class LyricsRepository(private val context: Context) {
                                     continue
                                 }
 
-                                if (durationSeconds > 0 && itemDur > 0 && abs(itemDur - durationSeconds) > 8) {
+                                if (durationSeconds > 0 && itemDur > 0 && abs(itemDur - durationSeconds) > 28) {
                                     continue
                                 }
 
@@ -282,11 +294,18 @@ class LyricsRepository(private val context: Context) {
                                 val plain = item.optString("plainLyrics", "")
 
                                 if (synced.isNotBlank()) {
-                                    if (durationSeconds <= 0 || itemDur <= 0 || abs(itemDur - durationSeconds) <= 6) {
+                                    if (durationSeconds <= 0 || itemDur <= 0 || abs(itemDur - durationSeconds) <= 8) {
                                         val data = parseLrc(synced, videoId, title, artist)
                                         if (data != null && data.hasLyrics) return data
                                     }
-                                    if (bestSyncedJson == null) bestSyncedJson = item
+                                    if (bestSyncedJson == null) {
+                                        bestSyncedJson = item
+                                    } else {
+                                        val prevDur = bestSyncedJson?.optDouble("duration", 0.0)?.toInt() ?: 0
+                                        if (durationSeconds > 0 && abs(itemDur - durationSeconds) < abs(prevDur - durationSeconds)) {
+                                            bestSyncedJson = item
+                                        }
+                                    }
                                 } else if (plain.isNotBlank() && bestPlainJson == null) {
                                     bestPlainJson = item
                                 }
@@ -303,8 +322,11 @@ class LyricsRepository(private val context: Context) {
         if (bestSyncedJson != null) {
             val synced = bestSyncedJson.optString("syncedLyrics", "")
             if (synced.isNotBlank()) {
-                val data = parseLrc(synced, videoId, title, artist)
-                if (data != null && data.hasLyrics) return data
+                val itemDur = bestSyncedJson.optDouble("duration", 0.0).toInt()
+                if (durationSeconds <= 0 || itemDur <= 0 || abs(itemDur - durationSeconds) <= 28) {
+                    val data = parseLrc(synced, videoId, title, artist)
+                    if (data != null && data.hasLyrics) return data
+                }
             }
         }
 

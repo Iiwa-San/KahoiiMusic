@@ -179,6 +179,7 @@ fun SearchPillBox(
                             .size(17.dp)
                             .clickable {
                                 text = ""
+                                onQueryChanged("")
                                 onDismissSuggestions()
                                 focusManager.clearFocus()
                             }
