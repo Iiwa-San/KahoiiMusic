@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.ui.text.style.TextAlign
 import com.kahoii.music.BuildConfig
+import com.kahoii.music.R
 import com.kahoii.music.ui.components.AccountBottomSheet
 import com.kahoii.music.ui.components.CellularDownloadDialog
 import com.kahoii.music.ui.components.LyricsView
@@ -52,7 +53,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -329,7 +332,12 @@ fun MusicPlayerScreen(
                 // Lyrics Button
                 IconButton(
                     onClick = { viewModel.toggleLyricsVisibility() },
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier
+                        .size(38.dp)
+                        .then(
+                            if (uiState.isLyricsVisible) Modifier.background(NeonPink.copy(alpha = 0.22f), CircleShape)
+                            else Modifier
+                        )
                 ) {
                     if (uiState.isLyricsLoading) {
                         CircularProgressIndicator(
@@ -338,15 +346,18 @@ fun MusicPlayerScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_lyrics),
                             contentDescription = "Lời bài hát",
-                            tint = when {
-                                uiState.isLyricsVisible -> NeonPink
-                                uiState.hasLyrics -> Color.White
-                                else -> Color.White.copy(alpha = 0.45f)
-                            },
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier
+                                .size(23.dp)
+                                .alpha(
+                                    when {
+                                        uiState.isLyricsVisible -> 1.0f
+                                        uiState.hasLyrics -> 0.85f
+                                        else -> 0.40f
+                                    }
+                                )
                         )
                     }
                 }
