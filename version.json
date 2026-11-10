@@ -1,14 +1,14 @@
 {
-  "versionCode": 17,
-  "versionName": "1.0.17",
-  "changelog": "• Bổ sung số phiên bản (Version) hiển thị tinh tế ở góc dưới bên phải ứng dụng\n• Thêm tùy chọn chuyển đổi giao diện: Đĩa xoay Vinyl hoặc Khung Card bo tròn giống Android\n• Sửa triệt để lỗi treo chữ 'Đang kiểm tra bản cập nhật...' sau khi đóng thông báo phiên bản\n• Thêm tab 'non-synced' cạnh Romaji/Pinyin cho lời bài hát chưa đồng bộ audio\n• Cải tiến thuật toán lấy Lyrics: Thêm lọc chính xác theo Tác giả (Artist) chống lấy nhầm lời bài hát khác\n• Tối ưu khử răng cưa text hiển thị số phiên bản trên Windows",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.17.exe",
+  "versionCode": 18,
+  "versionName": "1.0.18",
+  "changelog": "• Bổ sung thanh cuộn tương tác (Interactive Scrollbar) cho Bộ sưu tập và Danh sách bài hát trong bộ sưu tập\n• Hỗ trợ kéo thả chuột, click nhảy vị trí nhanh và hiệu ứng hover phát sáng neon tím\n• Tối ưu lề hiển thị chống che khuất chữ bài hát và tên bộ sưu tập khi thanh cuộn xuất hiện\n• Tinh chỉnh giao diện responsive và trải nghiệm điều hướng danh sách",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.18.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {
-    "versionCode": 25,
-    "versionName": "1.4.2",
-    "changelog": "• Hỗ trợ giao diện Responsive toàn diện cho máy tính bảng (Tablet) và chế độ xoay ngang (Landscape)\n• Chế độ xoay ngang 2 cột thông minh: theo dõi lời bài hát đồng bộ thời gian thực song song với đĩa quay và danh sách phát chờ\n• Nâng cấp tính năng Lời bài hát: hỗ trợ chuyển đổi chế độ phiên âm (Gốc / Song ngữ / Romaji & Pinyin), lưu trạng thái cài đặt\n• Cập nhật huy hiệu 'audio synced' và 'non-synced' theo chuẩn mới\n• Thiết kế mới icon Lời bài hát hiện đại và tối ưu kích thước hộp thoại trên màn hình lớn",
+    "versionCode": 26,
+    "versionName": "1.4.3",
+    "changelog": "• Bổ sung thanh cuộn (Scroll) thông minh cho hộp thoại thông tin tài khoản (User Profile) khi xoay ngang điện thoại hoặc màn hình hẹp\n• Khắc phục hoàn toàn lỗi bị che khuất nút Đăng xuất và nút Cập nhật trên màn hình ngang\n• Tối ưu khoảng đệm chân trang tránh cấn thanh điều hướng hệ thống (navigation bar)",
     "apkUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
     "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
     "forceUpdate": false

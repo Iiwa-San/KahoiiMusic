@@ -111,6 +111,12 @@ namespace KahoiiMusic.Controls
         private int _hoveredCollectionTrackIndex = -1;
         private int _collectionLeftScroll = 0;
         private int _collectionRightScroll = 0;
+        private bool _isDraggingCollectionLeftScroll = false;
+        private bool _isHoveringCollectionLeftScroll = false;
+        private int _dragGrabOffsetCollectionLeftY = 0;
+        private bool _isDraggingCollectionRightScroll = false;
+        private bool _isHoveringCollectionRightScroll = false;
+        private int _dragGrabOffsetCollectionRightY = 0;
         private bool _isHoveringNewPlaylistBtn = false;
         private bool _isHoveringPlayAllBtn = false;
         private bool _isHoveringDownloadAllBtn = false;
@@ -140,6 +146,12 @@ namespace KahoiiMusic.Controls
                     _scrollOffset = 0;
                     _collectionLeftScroll = 0;
                     _collectionRightScroll = 0;
+                    _isDraggingScroll = false;
+                    _isDraggingCollectionLeftScroll = false;
+                    _isDraggingCollectionRightScroll = false;
+                    _isHoveringScroll = false;
+                    _isHoveringCollectionLeftScroll = false;
+                    _isHoveringCollectionRightScroll = false;
                     UpdateSearchBoxesVisibility();
                     ClampScroll();
                     ClampCollectionScroll();
@@ -970,9 +982,123 @@ namespace KahoiiMusic.Controls
             return new Rectangle(thumbX, thumbY, thumbW, thumbH);
         }
 
+        private Rectangle GetCollectionLeftThumbRect()
+        {
+            if (_activeTab != MenuTab.Collection) return Rectangle.Empty;
+
+            int listTop = HeaderHeight + 55;
+            int listH = Height - listTop - 6;
+            int totalContentHeight = FilteredCollectionPlaylists.Count * CollectionRowHeight;
+            if (totalContentHeight <= listH || listH <= 0)
+            {
+                return Rectangle.Empty;
+            }
+
+            int scrollTrackH = listH;
+            int minThumbH = 20;
+            int thumbH = Math.Max(minThumbH, (int)((float)listH / totalContentHeight * scrollTrackH));
+            int maxScroll = totalContentHeight - listH;
+            int thumbY = listTop + (int)((float)_collectionLeftScroll / maxScroll * (scrollTrackH - thumbH));
+
+            int thumbW = (_isDraggingCollectionLeftScroll || _isHoveringCollectionLeftScroll) ? 6 : 5;
+            int leftColRight = 8 + LeftColWidth;
+            int thumbX = leftColRight - thumbW - 2;
+
+            return new Rectangle(thumbX, thumbY, thumbW, thumbH);
+        }
+
+        private Rectangle GetCollectionRightThumbRect()
+        {
+            if (_activeTab != MenuTab.Collection) return Rectangle.Empty;
+
+            UserPlaylist curP = GetSelectedCollectionPlaylist();
+            if (curP == null) return Rectangle.Empty;
+
+            var colTracks = GetFilteredCollectionTracks(curP);
+            int listTop = HeaderHeight + 55;
+            int listH = Height - listTop - 6;
+            int totalContentHeight = colTracks.Count * CollectionTrackRowHeight;
+            if (totalContentHeight <= listH || listH <= 0)
+            {
+                return Rectangle.Empty;
+            }
+
+            int scrollTrackH = listH;
+            int minThumbH = 24;
+            int thumbH = Math.Max(minThumbH, (int)((float)listH / totalContentHeight * scrollTrackH));
+            int maxScroll = totalContentHeight - listH;
+            int thumbY = listTop + (int)((float)_collectionRightScroll / maxScroll * (scrollTrackH - thumbH));
+
+            int thumbW = (_isDraggingCollectionRightScroll || _isHoveringCollectionRightScroll) ? 8 : 6;
+            int thumbX = Width - 8 - (thumbW / 2);
+
+            return new Rectangle(thumbX, thumbY, thumbW, thumbH);
+        }
+
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
+
+            if (_activeTab == MenuTab.Collection)
+            {
+                if (_isDraggingCollectionLeftScroll)
+                {
+                    int listTop = HeaderHeight + 55;
+                    int listH = Height - listTop - 6;
+                    int totalContentHeight = FilteredCollectionPlaylists.Count * CollectionRowHeight;
+                    if (totalContentHeight > listH && listH > 0)
+                    {
+                        int scrollTrackH = listH;
+                        int minThumbH = 20;
+                        int thumbH = Math.Max(minThumbH, (int)((float)listH / totalContentHeight * scrollTrackH));
+                        int maxScroll = totalContentHeight - listH;
+
+                        int targetThumbY = e.Location.Y - _dragGrabOffsetCollectionLeftY;
+                        int minThumbY = listTop;
+                        int maxThumbY = listTop + scrollTrackH - thumbH;
+                        targetThumbY = Math.Max(minThumbY, Math.Min(maxThumbY, targetThumbY));
+
+                        float ratio = (scrollTrackH - thumbH > 0) ? (float)(targetThumbY - minThumbY) / (scrollTrackH - thumbH) : 0f;
+                        _collectionLeftScroll = (int)(ratio * maxScroll);
+                        ClampCollectionScroll();
+                        Invalidate();
+                    }
+                    return;
+                }
+
+                if (_isDraggingCollectionRightScroll)
+                {
+                    UserPlaylist curP = GetSelectedCollectionPlaylist();
+                    if (curP != null)
+                    {
+                        var colTracks = GetFilteredCollectionTracks(curP);
+                        int listTop = HeaderHeight + 55;
+                        int listH = Height - listTop - 6;
+                        int totalContentHeight = colTracks.Count * CollectionTrackRowHeight;
+                        if (totalContentHeight > listH && listH > 0)
+                        {
+                            int scrollTrackH = listH;
+                            int minThumbH = 24;
+                            int thumbH = Math.Max(minThumbH, (int)((float)listH / totalContentHeight * scrollTrackH));
+                            int maxScroll = totalContentHeight - listH;
+
+                            int targetThumbY = e.Location.Y - _dragGrabOffsetCollectionRightY;
+                            int minThumbY = listTop;
+                            int maxThumbY = listTop + scrollTrackH - thumbH;
+                            targetThumbY = Math.Max(minThumbY, Math.Min(maxThumbY, targetThumbY));
+
+                            float ratio = (scrollTrackH - thumbH > 0) ? (float)(targetThumbY - minThumbY) / (scrollTrackH - thumbH) : 0f;
+                            _collectionRightScroll = (int)(ratio * maxScroll);
+                            ClampCollectionScroll();
+                            Invalidate();
+                        }
+                    }
+                    return;
+                }
+
+                UpdateHover(e.Location);
+                return;
+            }
 
             if (_isDraggingScroll && _activeTab != MenuTab.Collection)
             {
@@ -1005,9 +1131,11 @@ namespace KahoiiMusic.Controls
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
-            if (_isDraggingScroll)
+            if (_isDraggingScroll || _isDraggingCollectionLeftScroll || _isDraggingCollectionRightScroll)
             {
                 _isDraggingScroll = false;
+                _isDraggingCollectionLeftScroll = false;
+                _isDraggingCollectionRightScroll = false;
                 Capture = false;
                 UpdateHover(e.Location);
                 Invalidate();
@@ -1041,18 +1169,27 @@ namespace KahoiiMusic.Controls
                 bool oldDlAll = _isHoveringDownloadAllBtn;
                 int oldPlHover = _hoveredPlaylistIndex;
                 int oldTrackHover = _hoveredCollectionTrackIndex;
+                bool oldLeftScrollHover = _isHoveringCollectionLeftScroll;
+                bool oldRightScrollHover = _isHoveringCollectionRightScroll;
 
                 _isHoveringNewPlaylistBtn = GetNewPlaylistBtnRect().Contains(pt);
                 _isHoveringPlayAllBtn = GetPlayAllBtnRect().Contains(pt);
                 _isHoveringDownloadAllBtn = GetDownloadAllBtnRect().Contains(pt);
 
-                // Left column playlist items hover
                 int colListTop = HeaderHeight + 55;
                 int listBottom = Height - 6;
+                int listH = listBottom - colListTop;
                 int leftColRight = 8 + LeftColWidth;
 
+                // Left column scrollbar hover & items hover
                 var filteredPlaylists = FilteredCollectionPlaylists;
-                if (pt.X >= 8 && pt.X <= leftColRight && pt.Y >= colListTop && pt.Y <= listBottom)
+                int leftTotalH = filteredPlaylists.Count * CollectionRowHeight;
+                bool hasLeftScroll = leftTotalH > listH && listH > 0;
+                Rectangle leftScrollHitArea = new Rectangle(leftColRight - 14, colListTop, 14, listH);
+                _isHoveringCollectionLeftScroll = hasLeftScroll && leftScrollHitArea.Contains(pt);
+
+                int leftHoverMaxX = hasLeftScroll ? (leftColRight - 14) : leftColRight;
+                if (!_isHoveringCollectionLeftScroll && pt.X >= 8 && pt.X <= leftHoverMaxX && pt.Y >= colListTop && pt.Y <= listBottom)
                 {
                     int relY = pt.Y - colListTop + _collectionLeftScroll;
                     int idx = relY / CollectionRowHeight;
@@ -1063,13 +1200,18 @@ namespace KahoiiMusic.Controls
                     _hoveredPlaylistIndex = -1;
                 }
 
-                // Right column track items hover
+                // Right column scrollbar hover & items hover
                 UserPlaylist curP = GetSelectedCollectionPlaylist();
                 var filteredTracks = GetFilteredCollectionTracks(curP);
                 int trackCount = filteredTracks.Count;
                 int rightColLeft = leftColRight + 8;
+                int rightTotalH = trackCount * CollectionTrackRowHeight;
+                bool hasRightScroll = rightTotalH > listH && listH > 0;
+                Rectangle rightScrollHitArea = new Rectangle(Width - 18, colListTop, 18, listH);
+                _isHoveringCollectionRightScroll = hasRightScroll && rightScrollHitArea.Contains(pt);
 
-                if (pt.X >= rightColLeft && pt.X <= Width - 8 && pt.Y >= colListTop && pt.Y <= listBottom)
+                int rightHoverMaxX = hasRightScroll ? (Width - 18) : (Width - 8);
+                if (!_isHoveringCollectionRightScroll && pt.X >= rightColLeft && pt.X <= rightHoverMaxX && pt.Y >= colListTop && pt.Y <= listBottom)
                 {
                     int relY = pt.Y - colListTop + _collectionRightScroll;
                     int idx = relY / CollectionTrackRowHeight;
@@ -1083,7 +1225,9 @@ namespace KahoiiMusic.Controls
                 if (oldCloseHover != _isHoveringClose || oldHoverTab != _hoveredTabIndex ||
                     oldNewPl != _isHoveringNewPlaylistBtn || oldPlayAll != _isHoveringPlayAllBtn ||
                     oldDlAll != _isHoveringDownloadAllBtn || oldPlHover != _hoveredPlaylistIndex ||
-                    oldTrackHover != _hoveredCollectionTrackIndex)
+                    oldTrackHover != _hoveredCollectionTrackIndex ||
+                    oldLeftScrollHover != _isHoveringCollectionLeftScroll ||
+                    oldRightScrollHover != _isHoveringCollectionRightScroll)
                 {
                     Invalidate();
                 }
@@ -1119,7 +1263,7 @@ namespace KahoiiMusic.Controls
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            if (!_isDraggingScroll)
+            if (!_isDraggingScroll && !_isDraggingCollectionLeftScroll && !_isDraggingCollectionRightScroll)
             {
                 _hoveredRowIndex = -1;
                 _hoveredTabIndex = -1;
@@ -1127,6 +1271,8 @@ namespace KahoiiMusic.Controls
                 _isHoveringScroll = false;
                 _hoveredPlaylistIndex = -1;
                 _hoveredCollectionTrackIndex = -1;
+                _isHoveringCollectionLeftScroll = false;
+                _isHoveringCollectionRightScroll = false;
                 _isHoveringNewPlaylistBtn = false;
                 _isHoveringPlayAllBtn = false;
                 _isHoveringDownloadAllBtn = false;
@@ -1323,14 +1469,104 @@ namespace KahoiiMusic.Controls
 
                 int colListTop = HeaderHeight + 55;
                 int listBottom = Height - 6;
+                int listH = listBottom - colListTop;
                 int leftColRight = 8 + LeftColWidth;
 
-                // Left column playlist clicked
-                if (e.X >= 8 && e.X <= leftColRight && e.Y >= colListTop && e.Y <= listBottom)
+                // 1. Check Left Column Scrollbar click
+                var filteredPlaylists = FilteredCollectionPlaylists;
+                int leftTotalH = filteredPlaylists.Count * CollectionRowHeight;
+                if (leftTotalH > listH && listH > 0)
+                {
+                    Rectangle leftScrollHitArea = new Rectangle(leftColRight - 14, colListTop, 14, listH);
+                    if (leftScrollHitArea.Contains(e.Location))
+                    {
+                        Rectangle thumbRect = GetCollectionLeftThumbRect();
+                        int scrollTrackH = listH;
+                        int minThumbH = 20;
+                        int thumbH = Math.Max(minThumbH, (int)((float)listH / leftTotalH * scrollTrackH));
+                        int maxScroll = leftTotalH - listH;
+
+                        if (thumbRect.Contains(e.Location))
+                        {
+                            _isDraggingCollectionLeftScroll = true;
+                            _dragGrabOffsetCollectionLeftY = e.Location.Y - thumbRect.Y;
+                            Capture = true;
+                            Invalidate();
+                            return;
+                        }
+                        else
+                        {
+                            // Jump
+                            int targetThumbY = e.Location.Y - (thumbH / 2);
+                            int minThumbY = colListTop;
+                            int maxThumbY = colListTop + scrollTrackH - thumbH;
+                            targetThumbY = Math.Max(minThumbY, Math.Min(maxThumbY, targetThumbY));
+
+                            float ratio = (scrollTrackH - thumbH > 0) ? (float)(targetThumbY - minThumbY) / (scrollTrackH - thumbH) : 0f;
+                            _collectionLeftScroll = (int)(ratio * maxScroll);
+                            ClampCollectionScroll();
+
+                            _isDraggingCollectionLeftScroll = true;
+                            _dragGrabOffsetCollectionLeftY = thumbH / 2;
+                            Capture = true;
+                            Invalidate();
+                            return;
+                        }
+                    }
+                }
+
+                // 2. Check Right Column Scrollbar click
+                if (curP != null)
+                {
+                    var colTracks = GetFilteredCollectionTracks(curP);
+                    int rightTotalH = colTracks.Count * CollectionTrackRowHeight;
+                    if (rightTotalH > listH && listH > 0)
+                    {
+                        Rectangle rightScrollHitArea = new Rectangle(Width - 18, colListTop, 18, listH);
+                        if (rightScrollHitArea.Contains(e.Location))
+                        {
+                            Rectangle thumbRect = GetCollectionRightThumbRect();
+                            int scrollTrackH = listH;
+                            int minThumbH = 24;
+                            int thumbH = Math.Max(minThumbH, (int)((float)listH / rightTotalH * scrollTrackH));
+                            int maxScroll = rightTotalH - listH;
+
+                            if (thumbRect.Contains(e.Location))
+                            {
+                                _isDraggingCollectionRightScroll = true;
+                                _dragGrabOffsetCollectionRightY = e.Location.Y - thumbRect.Y;
+                                Capture = true;
+                                Invalidate();
+                                return;
+                            }
+                            else
+                            {
+                                // Jump
+                                int targetThumbY = e.Location.Y - (thumbH / 2);
+                                int minThumbY = colListTop;
+                                int maxThumbY = colListTop + scrollTrackH - thumbH;
+                                targetThumbY = Math.Max(minThumbY, Math.Min(maxThumbY, targetThumbY));
+
+                                float ratio = (scrollTrackH - thumbH > 0) ? (float)(targetThumbY - minThumbY) / (scrollTrackH - thumbH) : 0f;
+                                _collectionRightScroll = (int)(ratio * maxScroll);
+                                ClampCollectionScroll();
+
+                                _isDraggingCollectionRightScroll = true;
+                                _dragGrabOffsetCollectionRightY = thumbH / 2;
+                                Capture = true;
+                                Invalidate();
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // 3. Left column playlist clicked
+                int leftClickMaxX = (leftTotalH > listH) ? (leftColRight - 14) : leftColRight;
+                if (e.X >= 8 && e.X <= leftClickMaxX && e.Y >= colListTop && e.Y <= listBottom)
                 {
                     int relY = e.Y - colListTop + _collectionLeftScroll;
                     int idx = relY / CollectionRowHeight;
-                    var filteredPlaylists = FilteredCollectionPlaylists;
                     if (idx >= 0 && idx < filteredPlaylists.Count)
                     {
                         UserPlaylist clickedPl = filteredPlaylists[idx];
@@ -1342,15 +1578,17 @@ namespace KahoiiMusic.Controls
                     return;
                 }
 
-                // Right column track clicked -> Play this track from user playlist!
+                // 4. Right column track clicked -> Play this track from user playlist!
                 if (curP != null && curP.Items != null)
                 {
                     int rightColLeft = leftColRight + 8;
-                    if (e.X >= rightColLeft && e.X <= Width - 8 && e.Y >= colListTop && e.Y <= listBottom)
+                    var filteredTracks = GetFilteredCollectionTracks(curP);
+                    int rightTotalH = filteredTracks.Count * CollectionTrackRowHeight;
+                    int rightClickMaxX = (rightTotalH > listH) ? (Width - 18) : (Width - 8);
+                    if (e.X >= rightColLeft && e.X <= rightClickMaxX && e.Y >= colListTop && e.Y <= listBottom)
                     {
                         int relY = e.Y - colListTop + _collectionRightScroll;
                         int idx = relY / CollectionTrackRowHeight;
-                        var filteredTracks = GetFilteredCollectionTracks(curP);
                         if (idx >= 0 && idx < filteredTracks.Count)
                         {
                             PlaylistItem clickedTrack = filteredTracks[idx];
@@ -2477,6 +2715,10 @@ namespace KahoiiMusic.Controls
             g.SetClip(leftListArea);
 
             var filteredPlaylists = FilteredCollectionPlaylists;
+            int leftTotalH = filteredPlaylists.Count * CollectionRowHeight;
+            bool hasLeftScroll = (leftTotalH > listH && listH > 0);
+            int leftItemW = hasLeftScroll ? (leftColW - 14) : (leftColW - 4);
+
             if (filteredPlaylists.Count == 0)
             {
                 using (Font hintF1 = new Font("Segoe UI", 8.25f, FontStyle.Bold))
@@ -2511,7 +2753,7 @@ namespace KahoiiMusic.Controls
                         int rowY = listTop + (i * CollectionRowHeight) - _collectionLeftScroll;
                         if (rowY + CollectionRowHeight < listTop || rowY > listBottom) continue;
 
-                        Rectangle rowRect = new Rectangle(leftColX + 2, rowY, leftColW - 4, CollectionRowHeight - 3);
+                        Rectangle rowRect = new Rectangle(leftColX + 2, rowY, leftItemW, CollectionRowHeight - 3);
                         UserPlaylist p = filteredPlaylists[i];
                         bool isSel = (_selectedPlaylistIndex >= 0 && _selectedPlaylistIndex < _collectionPlaylists.Count && _collectionPlaylists[_selectedPlaylistIndex].Id == p.Id);
                         bool isHov = (i == _hoveredPlaylistIndex);
@@ -2556,6 +2798,30 @@ namespace KahoiiMusic.Controls
                 }
             }
             g.ResetClip();
+
+            // Left column interactive scrollbar
+            if (hasLeftScroll)
+            {
+                int railX = leftColX + leftColW - 5;
+                using (Pen railPen = new Pen(Color.FromArgb(20, 255, 255, 255), 2))
+                {
+                    g.DrawLine(railPen, railX, listTop + 2, railX, listBottom - 2);
+                }
+
+                Rectangle thumbRect = GetCollectionLeftThumbRect();
+                if (!thumbRect.IsEmpty)
+                {
+                    Color thumbColor = _isDraggingCollectionLeftScroll
+                        ? Color.FromArgb(215, 175, 255)
+                        : (_isHoveringCollectionLeftScroll ? Color.FromArgb(192, 132, 252) : Color.FromArgb(100, 255, 255, 255));
+
+                    using (GraphicsPath tp = GetRoundedRect(thumbRect, thumbRect.Width / 2))
+                    using (SolidBrush thumbBrush = new SolidBrush(thumbColor))
+                    {
+                        g.FillPath(thumbBrush, tp);
+                    }
+                }
+            }
 
             // Vertical divider line between left and right column
             using (Pen divPen = new Pen(Color.FromArgb(25, 255, 255, 255), 1))
@@ -2636,6 +2902,10 @@ namespace KahoiiMusic.Controls
             g.SetClip(rightListArea);
 
             var filteredTracks = GetFilteredCollectionTracks(curPlaylist);
+            int rightTotalH = filteredTracks.Count * CollectionTrackRowHeight;
+            bool hasRightScroll = (rightTotalH > listH && listH > 0);
+            int rightTrackItemMargin = hasRightScroll ? 14 : 4;
+
             if (filteredTracks.Count == 0)
             {
                 using (Font hintF1 = new Font("Segoe UI", 8.5f, FontStyle.Bold))
@@ -2667,7 +2937,7 @@ namespace KahoiiMusic.Controls
                         int rowY = listTop + (i * CollectionTrackRowHeight) - _collectionRightScroll;
                         if (rowY + CollectionTrackRowHeight < listTop || rowY > listBottom) continue;
 
-                        Rectangle rowRect = new Rectangle(rightColX + 2, rowY, rightColW - 4, CollectionTrackRowHeight - 2);
+                        Rectangle rowRect = new Rectangle(rightColX + 2, rowY, rightColW - rightTrackItemMargin, CollectionTrackRowHeight - 2);
                         PlaylistItem item = filteredTracks[i];
 
                         bool isActive = (AudioPlayer != null && !string.IsNullOrEmpty(AudioPlayer.CurrentVideoId) && string.Equals(item.Id, AudioPlayer.CurrentVideoId, StringComparison.OrdinalIgnoreCase));
@@ -2778,6 +3048,30 @@ namespace KahoiiMusic.Controls
                 }
             }
             g.ResetClip();
+
+            // Right column interactive scrollbar (Tracks)
+            if (hasRightScroll)
+            {
+                int railX = w - 8;
+                using (Pen railPen = new Pen(Color.FromArgb(20, 255, 255, 255), 2))
+                {
+                    g.DrawLine(railPen, railX, listTop + 2, railX, listBottom - 2);
+                }
+
+                Rectangle thumbRect = GetCollectionRightThumbRect();
+                if (!thumbRect.IsEmpty)
+                {
+                    Color thumbColor = _isDraggingCollectionRightScroll
+                        ? Color.FromArgb(215, 175, 255)
+                        : (_isHoveringCollectionRightScroll ? Color.FromArgb(192, 132, 252) : Color.FromArgb(100, 255, 255, 255));
+
+                    using (GraphicsPath tp = GetRoundedRect(thumbRect, thumbRect.Width / 2))
+                    using (SolidBrush thumbBrush = new SolidBrush(thumbColor))
+                    {
+                        g.FillPath(thumbBrush, tp);
+                    }
+                }
+            }
         }
 
         private void DrawTab(Graphics g, Rectangle rect, string text, int count, bool isActive, bool isHovered, bool isFavoriteTab = false)
