@@ -1,8 +1,8 @@
 {
-  "versionCode": 21,
-  "versionName": "1.0.21",
-  "changelog": "• Ra mắt tính năng Tìm kiếm YouTube thông minh (Hybrid Search): vừa gợi ý nhanh vừa mở trang kết quả đầy đủ\n• Gợi ý tức thì (Real-time Suggestions): hiển thị top bài hát kèm thumbnail và thời lượng ngay khi đang gõ\n• Trang kết quả tìm kiếm đầy đủ (Full Results View): hiển thị Best Match và danh sách kết quả với nút phát / thêm vào hàng đợi\n• Thanh tìm kiếm cách điệu Cyberpunk Neon hiện đại với huy hiệu YouTube và các phím tắt tiện lợi\n• Tự động phân biệt thông minh giữa từ khóa tìm kiếm và đường link YouTube / Playlist URL",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.21.exe",
+  "versionCode": 22,
+  "versionName": "1.0.22",
+  "changelog": "• Nâng cấp giao diện Responsive thông minh & mở rộng kích thước mặc định lên 680x520 cực kỳ thoáng đãng\n• Hỗ trợ kéo dãn kích thước cửa sổ tự do từ 4 góc / 4 cạnh viền (Window Edge Resizing) mượt mà\n• Bổ sung nút Maximize / Restore trên thanh tiêu đề và hỗ trợ nhấn đúp để phóng to / thu nhỏ\n• Nâng cấp thanh tìm kiếm Search Pill lên chiều cao 36px chuẩn Cyberpunk, khắc phục triệt để lỗi viền bị che\n• Đĩa than / Album art tự động co giãn sắc nét và căn giữa hoàn hảo\n• Tối ưu hóa cực đỉnh: Toàn bộ cơ chế Responsive chỉ tốn ~47MB RAM (không tốn thêm tài nguyên)",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.22.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {

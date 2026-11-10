@@ -55,6 +55,7 @@ namespace KahoiiMusic
             this.lblCopyright = new System.Windows.Forms.Label();
             this.lblVersion = new System.Windows.Forms.Label();
             this.btnClose = new System.Windows.Forms.Label();
+            this.btnMaximize = new System.Windows.Forms.Label();
             this.btnMinimize = new System.Windows.Forms.Label();
             this.btnUser = new KahoiiMusic.Controls.UserAccountButton();
             this.playbackTimer = new System.Windows.Forms.Timer(this.components);
@@ -330,7 +331,7 @@ namespace KahoiiMusic
             this.lblVersion.Name = "lblVersion";
             this.lblVersion.Size = new System.Drawing.Size(86, 15);
             this.lblVersion.TabIndex = 10;
-            this.lblVersion.Text = "v1.0.21";
+            this.lblVersion.Text = "v1.0.22";
             this.lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
             // musicTrackBar
@@ -367,13 +368,26 @@ namespace KahoiiMusic
             this.btnUser.TabIndex = 2;
             this.btnUser.Click += new System.EventHandler(this.btnUser_Click);
             // 
+            // btnMaximize
+            // 
+            this.btnMaximize.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnMaximize.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnMaximize.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnMaximize.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
+            this.btnMaximize.Location = new System.Drawing.Point(430, 3);
+            this.btnMaximize.Name = "btnMaximize";
+            this.btnMaximize.Size = new System.Drawing.Size(22, 18);
+            this.btnMaximize.TabIndex = 3;
+            this.btnMaximize.Text = "▢";
+            this.btnMaximize.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            // 
             // btnMinimize
             // 
             this.btnMinimize.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.btnMinimize.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnMinimize.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnMinimize.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
-            this.btnMinimize.Location = new System.Drawing.Point(430, 3);
+            this.btnMinimize.Location = new System.Drawing.Point(406, 3);
             this.btnMinimize.Name = "btnMinimize";
             this.btnMinimize.Size = new System.Drawing.Size(22, 18);
             this.btnMinimize.TabIndex = 1;
@@ -389,8 +403,10 @@ namespace KahoiiMusic
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
-            this.ClientSize = new System.Drawing.Size(480, 362);
+            this.ClientSize = new System.Drawing.Size(680, 520);
+            this.MinimumSize = new System.Drawing.Size(480, 380);
             this.Controls.Add(this.btnMinimize);
+            this.Controls.Add(this.btnMaximize);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.panelPlayerCard);
             this.Controls.Add(this.picLogo);
@@ -417,6 +433,7 @@ namespace KahoiiMusic
         private KahoiiMusic.Controls.MarqueeLabel marqueeAuthor;
         private KahoiiMusic.Controls.FavoriteButton btnFavorite;
         private System.Windows.Forms.Label btnClose;
+        private System.Windows.Forms.Label btnMaximize;
         private System.Windows.Forms.Label btnMinimize;
         private KahoiiMusic.Controls.UserAccountButton btnUser;
         private System.Windows.Forms.Panel panelPlayerCard;

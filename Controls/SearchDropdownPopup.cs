@@ -40,7 +40,7 @@ namespace KahoiiMusic.Controls
             DoubleBuffered = true;
         }
 
-        public void SetResults(string query, List<PlaylistItem> items)
+        public void SetResults(string query, List<PlaylistItem> items, int targetWidth = 0)
         {
             _currentQuery = query ?? string.Empty;
             _items = items != null ? items.GetRange(0, Math.Min(items.Count, 5)) : new List<PlaylistItem>();
@@ -48,7 +48,8 @@ namespace KahoiiMusic.Controls
             _hoveringViewAll = false;
 
             int targetHeight = HeaderHeight + (_items.Count * ItemHeight) + FooterHeight;
-            Size = new Size(Width, targetHeight);
+            int w = targetWidth > 100 ? targetWidth : Width;
+            Size = new Size(w, targetHeight);
             UpdateRegion();
 
             // Fetch thumbnails in background

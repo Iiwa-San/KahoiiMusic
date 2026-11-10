@@ -467,17 +467,19 @@ namespace KahoiiMusic.Controls
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             int cx = Width / 2;
-            int cy = 72;
-            int R = 66; // Vinyl record radius & half-width of card (diameter = 132)
-            int rLabel = 29; // Center artwork sticker radius (diameter = 58)
+            int textSpace = 22;
+            int availableH = Height - textSpace;
+            int R = Math.Max(50, Math.Min(cx - 10, (availableH - 8) / 2));
+            int cy = 4 + R;
+            int rLabel = (int)(R * 0.44f); // Center artwork sticker radius
 
             if (_displayMode == ArtworkDisplayMode.RoundedCard)
             {
-                int cardW = 132;
-                int cardH = 132;
-                int cardX = cx - cardW / 2;
-                int cardY = cy - cardH / 2;
-                DrawRoundedCard(g, cardX, cardY, cardW, cardH, 16f);
+                int cardSize = R * 2;
+                int cardX = cx - cardSize / 2;
+                int cardY = cy - cardSize / 2;
+                float corner = Math.Max(12f, cardSize * 0.12f);
+                DrawRoundedCard(g, cardX, cardY, cardSize, cardSize, corner);
             }
             else
             {

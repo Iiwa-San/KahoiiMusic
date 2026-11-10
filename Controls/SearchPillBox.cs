@@ -38,7 +38,7 @@ namespace KahoiiMusic.Controls
                      ControlStyles.ResizeRedraw |
                      ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
-            Size = new Size(380, 24);
+            Size = new Size(380, 36);
             DoubleBuffered = true;
 
             _debounceTimer = new System.Windows.Forms.Timer();
@@ -49,7 +49,7 @@ namespace KahoiiMusic.Controls
             _textBox.BorderStyle = BorderStyle.None;
             _textBox.BackColor = _pillBgColor;
             _textBox.ForeColor = _placeholderColor;
-            _textBox.Font = new Font("Segoe UI", 9.0f, FontStyle.Regular);
+            _textBox.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
             _textBox.Text = _placeholderText;
             _textBox.TextAlign = HorizontalAlignment.Left;
 
@@ -125,6 +125,7 @@ namespace KahoiiMusic.Controls
 
         private void TextBox_TextChanged(object sender, EventArgs e)
         {
+            UpdateLayoutPositions();
             Invalidate();
             if (_isPlaceholderActive) return;
 
@@ -285,35 +286,37 @@ namespace KahoiiMusic.Controls
         {
             if (_textBox == null) return;
 
-            int leftPadding = 30; // space for magnifying glass
-            int rightControlsWidth = 26; // space for submit arrow
+            int leftPadding = 34; // space for magnifying glass
+            int rightControlsWidth = 28; // space for submit arrow
 
             if (HasRealText)
             {
-                rightControlsWidth += 22; // space for clear button
+                rightControlsWidth += 24; // space for clear button
             }
 
-            if (Width >= 300)
+            if (Width >= 280)
             {
-                rightControlsWidth += 56; // space for "YouTube" badge
+                rightControlsWidth += 60; // space for "YouTube" badge
             }
 
             int tbHeight = _textBox.PreferredHeight;
-            int tbY = (Height - tbHeight) / 2;
+            int tbY = Math.Max(2, (Height - tbHeight) / 2);
             _textBox.Location = new Point(leftPadding, tbY);
             _textBox.Width = Math.Max(10, Width - leftPadding - rightControlsWidth);
 
             int curX = Width - 8;
 
             // Submit arrow button (7px right margin)
-            curX -= 20;
-            _submitBtnRect = new Rectangle(curX, (Height - 18) / 2, 18, 18);
+            int btnH = Math.Min(22, Height - 8);
+            curX -= (btnH + 2);
+            _submitBtnRect = new Rectangle(curX, (Height - btnH) / 2, btnH, btnH);
 
             // YouTube badge
-            if (Width >= 300)
+            if (Width >= 280)
             {
-                curX -= 52;
-                _ytBadgeRect = new Rectangle(curX, (Height - 16) / 2, 48, 16);
+                int bdgeH = Math.Min(18, Height - 10);
+                curX -= 56;
+                _ytBadgeRect = new Rectangle(curX, (Height - bdgeH) / 2, 52, bdgeH);
             }
             else
             {
@@ -323,8 +326,9 @@ namespace KahoiiMusic.Controls
             // Clear button
             if (HasRealText)
             {
-                curX -= 20;
-                _clearBtnRect = new Rectangle(curX, (Height - 16) / 2, 16, 16);
+                int clrH = Math.Min(18, Height - 10);
+                curX -= (clrH + 4);
+                _clearBtnRect = new Rectangle(curX, (Height - clrH) / 2, clrH, clrH);
             }
             else
             {
@@ -397,15 +401,15 @@ namespace KahoiiMusic.Controls
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            int radius = Height;
-            Rectangle rect = new Rectangle(1, 1, Width - 2, Height - 2);
+            Rectangle rect = new Rectangle(1, 1, Width - 3, Height - 3);
+            int d = Math.Max(4, rect.Height);
 
             bool isFocused = _textBox.Focused;
 
             using (GraphicsPath path = new GraphicsPath())
             {
-                path.AddArc(rect.X, rect.Y, radius, radius, 90, 180);
-                path.AddArc(rect.Right - radius, rect.Y, radius, radius, 270, 180);
+                path.AddArc(rect.X, rect.Y, d, d, 90, 180);
+                path.AddArc(rect.Right - d, rect.Y, d, d, 270, 180);
                 path.CloseFigure();
 
                 // Fill pill background
@@ -424,16 +428,16 @@ namespace KahoiiMusic.Controls
             }
 
             // Draw Magnifying Glass Icon (Vector)
-            DrawMagnifyingGlass(g, 11, (Height - 12) / 2, isFocused || HasRealText);
+            DrawMagnifyingGlass(g, 13, (Height - 12) / 2, isFocused || HasRealText);
 
             // Draw "YouTube" Badge
             if (!_ytBadgeRect.IsEmpty)
             {
                 using (GraphicsPath bPath = new GraphicsPath())
                 {
-                    int bRadius = _ytBadgeRect.Height;
-                    bPath.AddArc(_ytBadgeRect.X, _ytBadgeRect.Y, bRadius, bRadius, 90, 180);
-                    bPath.AddArc(_ytBadgeRect.Right - bRadius, _ytBadgeRect.Y, bRadius, bRadius, 270, 180);
+                    int bD = _ytBadgeRect.Height;
+                    bPath.AddArc(_ytBadgeRect.X, _ytBadgeRect.Y, bD, bD, 90, 180);
+                    bPath.AddArc(_ytBadgeRect.Right - bD, _ytBadgeRect.Y, bD, bD, 270, 180);
                     bPath.CloseFigure();
 
                     using (SolidBrush bBrush = new SolidBrush(Color.FromArgb(40, 255, 45, 133)))

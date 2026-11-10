@@ -117,6 +117,8 @@ namespace KahoiiMusic
                     catch { }
                 });
             };
+
+            ApplyResponsiveLayout();
         }
 
         private void LoadAppLogo()
@@ -172,12 +174,16 @@ namespace KahoiiMusic
 
             InitializeLyrics();
 
-            // Window Dragging
+            // Window Dragging & Double Click Maximize
             MouseDown += Window_MouseDown;
             picLogo.MouseDown += Window_MouseDown;
             lblLogo.MouseDown += Window_MouseDown;
             panelTopBar.MouseDown += Window_MouseDown;
             lblCopyright.MouseDown += Window_MouseDown;
+
+            picLogo.DoubleClick += (s, e) => ToggleMaximize();
+            lblLogo.DoubleClick += (s, e) => ToggleMaximize();
+            panelTopBar.DoubleClick += (s, e) => ToggleMaximize();
 
             // Title logo gradient matching logo_icon (violet to magenta/pink)
             lblLogo.Paint += (s, e) =>
@@ -201,10 +207,17 @@ namespace KahoiiMusic
                 }
             };
 
-            // Window Controls (Close & Minimize)
+            // Window Controls (Close & Minimize & Maximize)
             btnClose.Click += (s, e) => Close();
             btnClose.MouseEnter += (s, e) => btnClose.ForeColor = Color.FromArgb(255, 100, 100);
             btnClose.MouseLeave += (s, e) => btnClose.ForeColor = Color.FromArgb(140, 140, 140);
+
+            if (btnMaximize != null)
+            {
+                btnMaximize.Click += (s, e) => ToggleMaximize();
+                btnMaximize.MouseEnter += (s, e) => btnMaximize.ForeColor = Color.White;
+                btnMaximize.MouseLeave += (s, e) => btnMaximize.ForeColor = Color.FromArgb(140, 140, 140);
+            }
 
             btnMinimize.Click += (s, e) => MinimizeToTray();
             btnMinimize.MouseEnter += (s, e) => btnMinimize.ForeColor = Color.White;
@@ -445,7 +458,8 @@ namespace KahoiiMusic
                 }
                 if (_searchDropdown != null && _searchDropdown.Visible)
                 {
-                    _searchDropdown.Location = panelTopBar.PointToScreen(new Point(Math.Max(10, searchPillBox.Left - 10), searchPillBox.Bottom + 4));
+                    _searchDropdown.Location = panelTopBar.PointToScreen(new Point(searchPillBox.Left, searchPillBox.Bottom + 4));
+                    _searchDropdown.Width = searchPillBox.Width;
                 }
             };
 
@@ -574,9 +588,9 @@ namespace KahoiiMusic
                 var results = await Services.YouTubeSearchService.SearchAsync(query, 5);
                 if (results != null && results.Count > 0 && searchPillBox.HasRealText && string.Equals(searchPillBox.Text.Trim(), query, StringComparison.OrdinalIgnoreCase))
                 {
-                    Point pt = panelTopBar.PointToScreen(new Point(Math.Max(10, searchPillBox.Left - 10), searchPillBox.Bottom + 4));
+                    Point pt = panelTopBar.PointToScreen(new Point(searchPillBox.Left, searchPillBox.Bottom + 4));
                     _searchDropdown.Location = pt;
-                    _searchDropdown.SetResults(query, results);
+                    _searchDropdown.SetResults(query, results, searchPillBox.Width);
                     if (!_searchDropdown.Visible)
                     {
                         _searchDropdown.Show(this);
@@ -2443,13 +2457,195 @@ namespace KahoiiMusic
             });
         }
 
+        private void ToggleMaximize()
+        {
+            if (WindowState == FormWindowState.Maximized)
+            {
+                WindowState = FormWindowState.Normal;
+                if (btnMaximize != null) btnMaximize.Text = "▢";
+            }
+            else
+            {
+                Screen scr = Screen.FromHandle(Handle);
+                MaximizedBounds = scr.WorkingArea;
+                WindowState = FormWindowState.Maximized;
+                if (btnMaximize != null) btnMaximize.Text = "❐";
+            }
+        }
+
+        private const int WM_NCHITTEST = 0x84;
+        private const int HTCLIENT = 1;
+        private const int HTCAPTION = 2;
+        private const int HTLEFT = 10;
+        private const int HTRIGHT = 11;
+        private const int HTTOP = 12;
+        private const int HTTOPLEFT = 13;
+        private const int HTTOPRIGHT = 14;
+        private const int HTBOTTOM = 15;
+        private const int HTBOTTOMLEFT = 16;
+        private const int HTBOTTOMRIGHT = 17;
+
+        private const int RESIZE_BORDER = 8;
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
+            {
+                base.WndProc(ref m);
+                int x = (short)(m.LParam.ToInt32() & 0xFFFF);
+                int y = (short)((m.LParam.ToInt32() >> 16) & 0xFFFF);
+                Point pt = PointToClient(new Point(x, y));
+                int w = ClientSize.Width;
+                int h = ClientSize.Height;
+
+                bool left = pt.X <= RESIZE_BORDER;
+                bool right = pt.X >= w - RESIZE_BORDER;
+                bool top = pt.Y <= RESIZE_BORDER;
+                bool bottom = pt.Y >= h - RESIZE_BORDER;
+
+                if (top && left) { m.Result = (IntPtr)HTTOPLEFT; return; }
+                if (top && right) { m.Result = (IntPtr)HTTOPRIGHT; return; }
+                if (bottom && left) { m.Result = (IntPtr)HTBOTTOMLEFT; return; }
+                if (bottom && right) { m.Result = (IntPtr)HTBOTTOMRIGHT; return; }
+                if (left) { m.Result = (IntPtr)HTLEFT; return; }
+                if (right) { m.Result = (IntPtr)HTRIGHT; return; }
+                if (top) { m.Result = (IntPtr)HTTOP; return; }
+                if (bottom) { m.Result = (IntPtr)HTBOTTOM; return; }
+
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
             if (WindowState == FormWindowState.Minimized)
             {
                 MinimizeToTray();
+                return;
             }
+            if (WindowState == FormWindowState.Maximized)
+            {
+                if (btnMaximize != null) btnMaximize.Text = "❐";
+            }
+            else if (WindowState == FormWindowState.Normal)
+            {
+                if (btnMaximize != null) btnMaximize.Text = "▢";
+            }
+            ApplyResponsiveLayout();
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            int clientW = ClientSize.Width;
+            int clientH = ClientSize.Height;
+            if (clientW < 300 || clientH < 250) return;
+
+            // 1. Title bar controls
+            if (btnClose != null && btnMaximize != null && btnMinimize != null)
+            {
+                btnClose.Location = new Point(clientW - 26, 3);
+                btnMaximize.Location = new Point(clientW - 50, 3);
+                btnMinimize.Location = new Point(clientW - 74, 3);
+            }
+
+            // 2. panelPlayerCard fills the rest of the form below title bar (24px)
+            int cardW = clientW - 4;
+            int cardH = clientH - 26;
+            panelPlayerCard.Location = new Point(2, 24);
+            panelPlayerCard.Size = new Size(cardW, cardH);
+
+            // 3. panelTopBar at the top of panelPlayerCard (height 46px)
+            int topBarH = 46;
+            panelTopBar.Location = new Point(0, 0);
+            panelTopBar.Size = new Size(cardW, topBarH);
+
+            btnPlaylist.Location = new Point(12, (topBarH - btnPlaylist.Height) / 2);
+            btnUser.Location = new Point(cardW - 12 - btnUser.Width, (topBarH - btnUser.Height) / 2);
+
+            int searchLeft = btnPlaylist.Right + 12;
+            int searchRight = btnUser.Left - 12;
+            int searchW = Math.Max(100, searchRight - searchLeft);
+            searchPillBox.Location = new Point(searchLeft, (topBarH - 36) / 2);
+            searchPillBox.Size = new Size(searchW, 36);
+
+            // 4. panelBottomControls docked at the bottom of panelPlayerCard
+            int bottomH = 104;
+            panelBottomControls.Location = new Point(0, cardH - bottomH);
+            panelBottomControls.Size = new Size(cardW, bottomH);
+
+            // musicTrackBar spans full width with margins
+            musicTrackBar.Location = new Point(24, 14);
+            musicTrackBar.Size = new Size(Math.Max(100, cardW - 48), 20);
+
+            // Center the 9 control buttons cluster horizontally
+            int btnY = 47;
+            int btnPlayY = 44;
+            int totalBtnWidth = (8 * 28) + 34; // 258
+            int buttonGap = Math.Max(6, Math.Min(22, (cardW - 60 - totalBtnWidth) / 8));
+            int clusterWidth = totalBtnWidth + (8 * buttonGap);
+            int startX = Math.Max(10, (cardW - clusterWidth) / 2);
+
+            btnFavorite.Location = new Point(startX, btnY);
+            btnQuickDownload.Location = new Point(btnFavorite.Right + buttonGap, btnY);
+            btnVolume.Location = new Point(btnQuickDownload.Right + buttonGap, btnY);
+            btnPrevious.Location = new Point(btnVolume.Right + buttonGap, btnY);
+            btnPlayPause.Location = new Point(btnPrevious.Right + buttonGap, btnPlayY);
+            btnNext.Location = new Point(btnPlayPause.Right + buttonGap, btnY);
+            btnLoop.Location = new Point(btnNext.Right + buttonGap, btnY);
+            btnTimer.Location = new Point(btnLoop.Right + buttonGap, btnY);
+            btnLyrics.Location = new Point(btnTimer.Right + buttonGap, btnY);
+
+            // Copyright and Version
+            lblCopyright.Location = new Point((cardW - lblCopyright.Width) / 2, bottomH - lblCopyright.Height - 6);
+            lblVersion.Location = new Point(cardW - lblVersion.Width - 12, bottomH - lblVersion.Height - 6);
+
+            // 5. gradientPanel fills between panelTopBar and panelBottomControls
+            int midY = topBarH;
+            int midH = Math.Max(50, panelBottomControls.Top - midY);
+            gradientPanel.Location = new Point(0, midY);
+            gradientPanel.Size = new Size(cardW, midH);
+
+            // Artwork Box inside gradientPanel
+            int maxArtByHeight = midH - 60;
+            int maxArtByWidth = cardW - 60;
+            int artSize = Math.Max(150, Math.Min(240, Math.Min(maxArtByHeight, maxArtByWidth)));
+            artworkBox.Size = new Size(artSize, artSize);
+            artworkBox.Location = new Point((cardW - artSize) / 2, Math.Max(6, (midH - artSize - 50) / 2));
+
+            // Marquee Title and Author below artworkBox
+            marqueeTitle.Location = new Point(24, artworkBox.Bottom + 6);
+            marqueeTitle.Size = new Size(Math.Max(100, cardW - 48), 22);
+
+            marqueeAuthor.Location = new Point(24, marqueeTitle.Bottom + 2);
+            marqueeAuthor.Size = new Size(Math.Max(100, cardW - 48), 18);
+
+            // LyricsPanel
+            lyricsPanel.Location = new Point(16, 8);
+            lyricsPanel.Size = new Size(Math.Max(100, cardW - 32), Math.Max(40, midH - 16));
+
+            // VolumePopup position above btnVolume
+            if (volumePopup != null && btnVolume != null)
+            {
+                try
+                {
+                    Point btnScreen = panelBottomControls.PointToScreen(btnVolume.Location);
+                    Point btnInGrad = gradientPanel.PointToClient(btnScreen);
+                    volumePopup.Location = new Point(btnInGrad.X + (btnVolume.Width - volumePopup.Width) / 2, Math.Max(0, gradientPanel.Height - volumePopup.Height - 4));
+                }
+                catch { }
+            }
+
+            // 6. _searchDropdown position and width if visible
+            if (_searchDropdown != null && _searchDropdown.Visible)
+            {
+                Point dropPt = panelTopBar.PointToScreen(new Point(searchPillBox.Left, searchPillBox.Bottom + 4));
+                _searchDropdown.Location = dropPt;
+                _searchDropdown.Width = searchPillBox.Width;
+            }
+
+            panelPlayerCard.Invalidate();
         }
 
         internal class DarkMenuRenderer : ToolStripProfessionalRenderer
