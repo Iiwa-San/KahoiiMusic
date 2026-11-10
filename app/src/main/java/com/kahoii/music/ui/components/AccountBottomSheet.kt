@@ -2,6 +2,8 @@ package com.kahoii.music.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -192,6 +194,7 @@ fun AccountBottomSheet(
         containerColor = Color(0xFF140F24),
         dragHandle = null
     ) {
+        val scrollState = rememberScrollState()
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
@@ -200,6 +203,7 @@ fun AccountBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 540.dp)
+                    .verticalScroll(scrollState)
                     .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
             // Drag Indicator
@@ -688,7 +692,7 @@ fun AccountBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
