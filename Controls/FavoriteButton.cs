@@ -316,7 +316,7 @@ namespace KahoiiMusic.Controls
             int h = Height;
 
             // Target heart size (scales naturally whether button is 24x24 or 56x56)
-            float baseW = Math.Min(w * 0.70f, 22f);
+            float baseW = Math.Min(w * 0.72f, 25f);
             float baseH = baseW * 0.90f;
             float heartW = baseW * _bounceScale;
             float heartH = baseH * _bounceScale;

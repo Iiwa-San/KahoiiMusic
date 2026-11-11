@@ -56,6 +56,7 @@ namespace KahoiiMusic
         private Controls.RoundedCardPanel _lyricsCard;
         private Controls.ThumbnailMenuButton btnThumbnailMenu;
         private Controls.ThumbnailActionPopup thumbnailActionPopup;
+        private Controls.CollectionPickerPopup _collectionPickerPopup;
         private bool _isMaximizedMode = false;
         private bool _isSideMenuUserClosed = false;
         private volatile bool _isFormClosed = false;
@@ -241,10 +242,14 @@ namespace KahoiiMusic
             {
                 if (thumbnailActionPopup != null)
                 {
-                    thumbnailActionPopup.Visible = !thumbnailActionPopup.Visible;
-                    btnThumbnailMenu.IsOpen = thumbnailActionPopup.Visible;
                     if (thumbnailActionPopup.Visible)
                     {
+                        HideThumbnailPopups();
+                    }
+                    else
+                    {
+                        thumbnailActionPopup.Visible = true;
+                        btnThumbnailMenu.IsOpen = true;
                         thumbnailActionPopup.BringToFront();
                     }
                 }
@@ -255,17 +260,10 @@ namespace KahoiiMusic
             thumbnailActionPopup.Visible = false;
             thumbnailActionPopup.SaveLibraryClicked += (s, e) =>
             {
-                if (btnThumbnailMenu != null) btnThumbnailMenu.IsOpen = false;
-                if (_audioPlayer != null && _audioPlayer.HasTrack && !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                HideThumbnailPopups();
+                var item = GetCurrentPlaylistItem();
+                if (item != null)
                 {
-                    string tit = _audioPlayer.CurrentTitle;
-                    var item = new PlaylistItem
-                    {
-                        Id = _audioPlayer.CurrentVideoId,
-                        Title = !string.IsNullOrEmpty(tit) ? AudioPlayerService.CleanDisplayTitle(tit) : "Bài hát YouTube",
-                        Author = _audioPlayer.CurrentAuthor ?? "YouTube",
-                        DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
-                    };
                     FavoritesService.AddTrack(item);
                     _audioPlayer.RaiseStatus("✓ Đã lưu bài hát vào Thư viện!");
                     _sideMenuPanel?.RefreshData();
@@ -273,17 +271,10 @@ namespace KahoiiMusic
             };
             thumbnailActionPopup.DownloadClicked += (s, e) =>
             {
-                if (btnThumbnailMenu != null) btnThumbnailMenu.IsOpen = false;
-                if (_audioPlayer != null && _audioPlayer.HasTrack && !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                HideThumbnailPopups();
+                var item = GetCurrentPlaylistItem();
+                if (item != null)
                 {
-                    string tit = _audioPlayer.CurrentTitle;
-                    var item = new PlaylistItem
-                    {
-                        Id = _audioPlayer.CurrentVideoId,
-                        Title = !string.IsNullOrEmpty(tit) ? AudioPlayerService.CleanDisplayTitle(tit) : "Bài hát YouTube",
-                        Author = _audioPlayer.CurrentAuthor ?? "YouTube",
-                        DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
-                    };
                     if (SavedTracksService.Instance.IsTrackSaved(item.Id))
                     {
                         _audioPlayer.RaiseStatus("✓ Bài hát đã có sẵn trong mục Đã tải!");
@@ -300,7 +291,78 @@ namespace KahoiiMusic
                     });
                 }
             };
+            thumbnailActionPopup.LibraryHoverTimerElapsed += (s, e) =>
+            {
+                if (thumbnailActionPopup != null && thumbnailActionPopup.Visible && _collectionPickerPopup != null)
+                {
+                    _collectionPickerPopup.LoadCollections();
+                    int popupX = thumbnailActionPopup.Right + 4;
+                    int popupY = thumbnailActionPopup.Top;
+                    if (popupX + _collectionPickerPopup.Width > artworkBox.Width)
+                    {
+                        popupX = Math.Max(2, thumbnailActionPopup.Left - _collectionPickerPopup.Width - 4);
+                    }
+                    _collectionPickerPopup.Location = new Point(popupX, popupY);
+                    thumbnailActionPopup.IsSubmenuOpen = true;
+                    _collectionPickerPopup.Visible = true;
+                    _collectionPickerPopup.BringToFront();
+                }
+            };
+            thumbnailActionPopup.CloseSubmenuRequested += (s, e) =>
+            {
+                if (_collectionPickerPopup != null)
+                {
+                    _collectionPickerPopup.Visible = false;
+                }
+                if (thumbnailActionPopup != null)
+                {
+                    thumbnailActionPopup.IsSubmenuOpen = false;
+                }
+            };
             artworkBox.Controls.Add(thumbnailActionPopup);
+
+            // Submenu side popup showing user collections
+            _collectionPickerPopup = new Controls.CollectionPickerPopup();
+            _collectionPickerPopup.Visible = false;
+            _collectionPickerPopup.PlaylistSelected += (s, playlist) =>
+            {
+                HideThumbnailPopups();
+                var item = GetCurrentPlaylistItem();
+                if (item != null && playlist != null)
+                {
+                    bool added = PlaylistCollectionService.Instance.AddTrackToPlaylist(playlist.Id, item);
+                    if (added)
+                    {
+                        _audioPlayer.RaiseStatus(string.Format("✓ Đã thêm vào bộ sưu tập: {0}", playlist.Name));
+                        _sideMenuPanel?.RefreshData();
+                    }
+                    else
+                    {
+                        _audioPlayer.RaiseStatus(string.Format("Bài hát đã có trong bộ sưu tập: {0}", playlist.Name));
+                    }
+                }
+            };
+            _collectionPickerPopup.CreateNewPlaylistClicked += (s, e) =>
+            {
+                HideThumbnailPopups();
+                string name = InputDialog.Show(this, "Tạo bộ sưu tập mới", "Nhập tên bộ sưu tập:");
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    var item = GetCurrentPlaylistItem();
+                    var pl = PlaylistCollectionService.Instance.CreatePlaylist(name.Trim());
+                    if (item != null)
+                    {
+                        PlaylistCollectionService.Instance.AddTrackToPlaylist(pl.Id, item);
+                        _audioPlayer.RaiseStatus(string.Format("✓ Đã tạo và thêm bài hát vào: {0}", pl.Name));
+                    }
+                    else
+                    {
+                        _audioPlayer.RaiseStatus(string.Format("✓ Đã tạo bộ sưu tập: {0}", pl.Name));
+                    }
+                    _sideMenuPanel?.RefreshData();
+                }
+            };
+            artworkBox.Controls.Add(_collectionPickerPopup);
 
             accountPopup = new AccountForm();
             accountPopup.Owner = this;
@@ -334,10 +396,16 @@ namespace KahoiiMusic
 
             // panelTopBar remains transparent to seamlessly inherit the continuous Cyber gradient
 
-            // Title logo gradient matching logo_icon (violet to magenta/pink)
+            // Title logo gradient matching logo_icon (violet to magenta/pink) - Crisp ClearType
+            lblLogo.ForeColor = Color.Transparent;
             lblLogo.Paint += (s, e) =>
             {
                 if (lblLogo.Width <= 0 || lblLogo.Height <= 0) return;
+                Color bgCol = GetTitleBarBackgroundColor();
+                using (SolidBrush bg = new SolidBrush(bgCol))
+                {
+                    e.Graphics.FillRectangle(bg, 0, 0, lblLogo.Width, lblLogo.Height);
+                }
                 SizeF sz = e.Graphics.MeasureString(lblLogo.Text, lblLogo.Font);
                 float gradWidth = Math.Max(sz.Width, 10f);
                 using (LinearGradientBrush lgb = new LinearGradientBrush(
@@ -348,12 +416,16 @@ namespace KahoiiMusic
                 {
                     e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
                     e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-                    e.Graphics.DrawString(lblLogo.Text, lblLogo.Font, lgb, 0, 0);
+                    using (StringFormat sf = new StringFormat { LineAlignment = StringAlignment.Center })
+                    {
+                        e.Graphics.DrawString(lblLogo.Text, lblLogo.Font, lgb, new RectangleF(0, 0, lblLogo.Width, lblLogo.Height), sf);
+                    }
                 }
             };
 
-            // Window Controls (Close & Minimize & Maximize) - Vector drawn, sleek hover states
+            // Window Controls (Close & Minimize & Maximize) - Vector crisp, NO dark box blocks
             btnClose.Text = string.Empty;
+            btnClose.Cursor = Cursors.Hand;
             btnClose.Click += (s, e) => Close();
             btnClose.MouseEnter += (s, e) => { _isCloseHovered = true; btnClose.Invalidate(); };
             btnClose.MouseLeave += (s, e) => { _isCloseHovered = false; btnClose.Invalidate(); };
@@ -361,27 +433,34 @@ namespace KahoiiMusic
             {
                 Graphics g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
+                Color bgCol = GetTitleBarBackgroundColor();
+                using (SolidBrush bg = new SolidBrush(bgCol))
+                {
+                    g.FillRectangle(bg, 0, 0, btnClose.Width, btnClose.Height);
+                }
                 if (_isCloseHovered)
                 {
-                    using (GraphicsPath path = FormRoundedRect(new Rectangle(0, 0, btnClose.Width, btnClose.Height), 6))
-                    using (SolidBrush b = new SolidBrush(Color.FromArgb(220, 235, 35, 75)))
+                    using (SolidBrush hoverBg = new SolidBrush(Color.FromArgb(210, 230, 45, 80)))
+                    using (GraphicsPath path = FormRoundedRect(new Rectangle(1, 1, btnClose.Width - 2, btnClose.Height - 2), 4))
                     {
-                        g.FillPath(b, path);
+                        g.FillPath(hoverBg, path);
                     }
                 }
-                Color c = _isCloseHovered ? Color.White : Color.FromArgb(190, 190, 215);
-                using (Pen p = new Pen(c, 1.6f))
+                Color c = _isCloseHovered ? Color.White : Color.FromArgb(160, 160, 175);
+                using (Pen p = new Pen(c, 1.35f))
                 {
                     int cx = btnClose.Width / 2;
                     int cy = btnClose.Height / 2;
-                    g.DrawLine(p, cx - 5, cy - 5, cx + 5, cy + 5);
-                    g.DrawLine(p, cx + 5, cy - 5, cx - 5, cy + 5);
+                    int r = 4;
+                    g.DrawLine(p, cx - r, cy - r, cx + r, cy + r);
+                    g.DrawLine(p, cx + r, cy - r, cx - r, cy + r);
                 }
             };
 
             if (btnMaximize != null)
             {
                 btnMaximize.Text = string.Empty;
+                btnMaximize.Cursor = Cursors.Hand;
                 btnMaximize.Click += (s, e) => ToggleMaximize();
                 btnMaximize.MouseEnter += (s, e) => { _isMaxHovered = true; btnMaximize.Invalidate(); };
                 btnMaximize.MouseLeave += (s, e) => { _isMaxHovered = false; btnMaximize.Invalidate(); };
@@ -389,33 +468,45 @@ namespace KahoiiMusic
                 {
                     Graphics g = e.Graphics;
                     g.SmoothingMode = SmoothingMode.AntiAlias;
+                    Color bgCol = GetTitleBarBackgroundColor();
+                    using (SolidBrush bg = new SolidBrush(bgCol))
+                    {
+                        g.FillRectangle(bg, 0, 0, btnMaximize.Width, btnMaximize.Height);
+                    }
                     if (_isMaxHovered)
                     {
-                        using (GraphicsPath path = FormRoundedRect(new Rectangle(0, 0, btnMaximize.Width, btnMaximize.Height), 6))
-                        using (SolidBrush b = new SolidBrush(Color.FromArgb(40, 255, 255, 255)))
+                        using (SolidBrush hoverBg = new SolidBrush(Color.FromArgb(35, 255, 255, 255)))
+                        using (GraphicsPath path = FormRoundedRect(new Rectangle(1, 1, btnMaximize.Width - 2, btnMaximize.Height - 2), 4))
                         {
-                            g.FillPath(b, path);
+                            g.FillPath(hoverBg, path);
                         }
                     }
-                    Color c = _isMaxHovered ? Color.White : Color.FromArgb(190, 190, 215);
-                    using (Pen p = new Pen(c, 1.5f))
+                    Color c = _isMaxHovered ? Color.White : Color.FromArgb(160, 160, 175);
+                    using (Pen p = new Pen(c, 1.25f))
                     {
                         int cx = btnMaximize.Width / 2;
                         int cy = btnMaximize.Height / 2;
                         if (WindowState == FormWindowState.Maximized)
                         {
-                            g.DrawRectangle(p, cx - 3, cy - 6, 8, 8);
-                            g.DrawRectangle(p, cx - 6, cy - 3, 8, 8);
+                            // Restore overlapping squares
+                            g.DrawRectangle(p, cx - 2, cy - 5, 7, 7);
+                            using (SolidBrush clearBrush = new SolidBrush(bgCol))
+                            {
+                                g.FillRectangle(clearBrush, cx - 5, cy - 2, 7, 7);
+                            }
+                            g.DrawRectangle(p, cx - 5, cy - 2, 7, 7);
                         }
                         else
                         {
-                            g.DrawRectangle(p, cx - 5, cy - 5, 10, 10);
+                            // Single clean square
+                            g.DrawRectangle(p, cx - 4, cy - 4, 8, 8);
                         }
                     }
                 };
             }
 
             btnMinimize.Text = string.Empty;
+            btnMinimize.Cursor = Cursors.Hand;
             btnMinimize.Click += (s, e) => MinimizeToTray();
             btnMinimize.MouseEnter += (s, e) => { _isMinHovered = true; btnMinimize.Invalidate(); };
             btnMinimize.MouseLeave += (s, e) => { _isMinHovered = false; btnMinimize.Invalidate(); };
@@ -423,19 +514,24 @@ namespace KahoiiMusic
             {
                 Graphics g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
+                Color bgCol = GetTitleBarBackgroundColor();
+                using (SolidBrush bg = new SolidBrush(bgCol))
+                {
+                    g.FillRectangle(bg, 0, 0, btnMinimize.Width, btnMinimize.Height);
+                }
                 if (_isMinHovered)
                 {
-                    using (GraphicsPath path = FormRoundedRect(new Rectangle(0, 0, btnMinimize.Width, btnMinimize.Height), 6))
-                    using (SolidBrush b = new SolidBrush(Color.FromArgb(40, 255, 255, 255)))
+                    using (SolidBrush hoverBg = new SolidBrush(Color.FromArgb(35, 255, 255, 255)))
+                    using (GraphicsPath path = FormRoundedRect(new Rectangle(1, 1, btnMinimize.Width - 2, btnMinimize.Height - 2), 4))
                     {
-                        g.FillPath(b, path);
+                        g.FillPath(hoverBg, path);
                     }
                 }
-                Color c = _isMinHovered ? Color.White : Color.FromArgb(190, 190, 215);
-                using (Pen p = new Pen(c, 1.6f))
+                Color c = _isMinHovered ? Color.White : Color.FromArgb(160, 160, 175);
+                using (Pen p = new Pen(c, 1.35f))
                 {
                     int cx = btnMinimize.Width / 2;
-                    int cy = btnMinimize.Height / 2;
+                    int cy = btnMinimize.Height / 2 + 3;
                     g.DrawLine(p, cx - 5, cy, cx + 5, cy);
                 }
             };
@@ -786,6 +882,37 @@ namespace KahoiiMusic
             SetupHybridSearch();
         }
 
+        private void HideThumbnailPopups()
+        {
+            if (thumbnailActionPopup != null)
+            {
+                thumbnailActionPopup.Visible = false;
+                thumbnailActionPopup.IsSubmenuOpen = false;
+            }
+            if (_collectionPickerPopup != null)
+            {
+                _collectionPickerPopup.Visible = false;
+            }
+            if (btnThumbnailMenu != null)
+            {
+                btnThumbnailMenu.IsOpen = false;
+            }
+        }
+
+        private PlaylistItem GetCurrentPlaylistItem()
+        {
+            if (_audioPlayer == null || !_audioPlayer.HasTrack || string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
+                return null;
+            string tit = _audioPlayer.CurrentTitle;
+            return new PlaylistItem
+            {
+                Id = _audioPlayer.CurrentVideoId,
+                Title = !string.IsNullOrEmpty(tit) ? AudioPlayerService.CleanDisplayTitle(tit) : "Bài hát YouTube",
+                Author = _audioPlayer.CurrentAuthor ?? "YouTube",
+                DurationSeconds = (int)_audioPlayer.TotalDuration.TotalSeconds
+            };
+        }
+
         private void SetupHybridSearch()
         {
             _searchDropdown = new Controls.SearchDropdownPopup();
@@ -814,18 +941,23 @@ namespace KahoiiMusic
 
             searchPillBox.SearchQueryDebounced += async (s, query) =>
             {
-                if (string.IsNullOrWhiteSpace(query))
+                if (!searchPillBox.IsSearchFocused || string.IsNullOrWhiteSpace(query))
                 {
                     _searchDropdown.Hide();
                     return;
                 }
                 var results = await Services.YouTubeSearchService.SearchAsync(query, 5);
+                if (!searchPillBox.IsSearchFocused)
+                {
+                    _searchDropdown.Hide();
+                    return;
+                }
                 if (results != null && results.Count > 0 && searchPillBox.HasRealText && string.Equals(searchPillBox.Text.Trim(), query, StringComparison.OrdinalIgnoreCase))
                 {
                     Point pt = panelTopBar.PointToScreen(new Point(searchPillBox.Left, searchPillBox.Bottom + 4));
                     _searchDropdown.Location = pt;
                     _searchDropdown.SetResults(query, results, searchPillBox.Width);
-                    if (!_searchDropdown.Visible)
+                    if (!_searchDropdown.Visible && searchPillBox.IsSearchFocused)
                     {
                         _searchDropdown.Show(this);
                     }
@@ -888,8 +1020,70 @@ namespace KahoiiMusic
             _searchResultsView.BringToFront();
         }
 
+        private bool _isMaximizedDragTracking = false;
+        private Point _maximizedDragStartPos;
+
         public bool PreFilterMessage(ref Message m)
         {
+            // Support dragging header to quickly unmaximize/restore when maximized
+            if (m.Msg == 0x0201 /* WM_LBUTTONDOWN */)
+            {
+                if (WindowState == FormWindowState.Maximized && panelTopBar != null && panelTopBar.IsHandleCreated)
+                {
+                    Point cur = Cursor.Position;
+                    Rectangle barScreen = panelTopBar.RectangleToScreen(panelTopBar.ClientRectangle);
+                    if (barScreen.Contains(cur))
+                    {
+                        bool onSearch = searchPillBox != null && searchPillBox.Visible && searchPillBox.RectangleToScreen(searchPillBox.ClientRectangle).Contains(cur);
+                        bool onControls = (btnClose != null && btnClose.RectangleToScreen(btnClose.ClientRectangle).Contains(cur)) ||
+                                          (btnMaximize != null && btnMaximize.RectangleToScreen(btnMaximize.ClientRectangle).Contains(cur)) ||
+                                          (btnMinimize != null && btnMinimize.RectangleToScreen(btnMinimize.ClientRectangle).Contains(cur)) ||
+                                          (btnUser != null && btnUser.RectangleToScreen(btnUser.ClientRectangle).Contains(cur));
+                        if (!onSearch && !onControls)
+                        {
+                            _isMaximizedDragTracking = true;
+                            _maximizedDragStartPos = cur;
+                        }
+                    }
+                }
+            }
+            else if (m.Msg == 0x0200 /* WM_MOUSEMOVE */)
+            {
+                if (_isMaximizedDragTracking)
+                {
+                    if ((Control.MouseButtons & MouseButtons.Left) != 0 && WindowState == FormWindowState.Maximized)
+                    {
+                        Point cur = Cursor.Position;
+                        int dx = Math.Abs(cur.X - _maximizedDragStartPos.X);
+                        int dy = Math.Abs(cur.Y - _maximizedDragStartPos.Y);
+                        if (dx > 4 || dy > 4)
+                        {
+                            _isMaximizedDragTracking = false;
+                            float ratio = (float)_maximizedDragStartPos.X / Math.Max(1, Width);
+                            WindowState = FormWindowState.Normal;
+                            if (btnMaximize != null) btnMaximize.Invalidate();
+
+                            int restoredW = Width;
+                            int targetX = cur.X - (int)(restoredW * ratio);
+                            int targetY = Math.Max(0, cur.Y - 18);
+                            Location = new Point(targetX, targetY);
+
+                            ReleaseCapture();
+                            SendMessage(Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
+                            return true;
+                        }
+                    }
+                    else if ((Control.MouseButtons & MouseButtons.Left) == 0)
+                    {
+                        _isMaximizedDragTracking = false;
+                    }
+                }
+            }
+            else if (m.Msg == 0x0202 /* WM_LBUTTONUP */)
+            {
+                _isMaximizedDragTracking = false;
+            }
+
             // Forward mouse wheel to searchResultsView, playlistPopup, or lyricsPanel if hovering over them
             if (m.Msg == 0x020A /* WM_MOUSEWHEEL */)
             {
@@ -966,16 +1160,20 @@ namespace KahoiiMusic
                         volumePopup.Visible = false;
                     }
                 }
-                if (thumbnailActionPopup != null && thumbnailActionPopup.Visible)
+                if ((thumbnailActionPopup != null && thumbnailActionPopup.Visible) || (_collectionPickerPopup != null && _collectionPickerPopup.Visible))
                 {
-                    Rectangle popupScreenRect = thumbnailActionPopup.RectangleToScreen(thumbnailActionPopup.ClientRectangle);
+                    Rectangle popupScreenRect = (thumbnailActionPopup != null && thumbnailActionPopup.Visible)
+                        ? thumbnailActionPopup.RectangleToScreen(thumbnailActionPopup.ClientRectangle)
+                        : Rectangle.Empty;
+                    Rectangle subPopupScreenRect = (_collectionPickerPopup != null && _collectionPickerPopup.Visible)
+                        ? _collectionPickerPopup.RectangleToScreen(_collectionPickerPopup.ClientRectangle)
+                        : Rectangle.Empty;
                     Rectangle btnScreenRect = (btnThumbnailMenu != null && btnThumbnailMenu.Visible)
                         ? btnThumbnailMenu.RectangleToScreen(btnThumbnailMenu.ClientRectangle)
                         : Rectangle.Empty;
-                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur))
+                    if (!popupScreenRect.Contains(cur) && !subPopupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur))
                     {
-                        thumbnailActionPopup.Visible = false;
-                        if (btnThumbnailMenu != null) btnThumbnailMenu.IsOpen = false;
+                        HideThumbnailPopups();
                     }
                 }
                 if (playlistPopup != null && playlistPopup.Visible)
@@ -1074,6 +1272,14 @@ namespace KahoiiMusic
                 case Keys.MediaPreviousTrack:
                 case (Keys.Control | Keys.Left):
                     BtnPrevious_Click(this, EventArgs.Empty);
+                    return true;
+
+                case Keys.Right:
+                    SeekRelative(5.0);
+                    return true;
+
+                case Keys.Left:
+                    SeekRelative(-5.0);
                     return true;
 
                 case Keys.Up:
@@ -1199,10 +1405,33 @@ namespace KahoiiMusic
             volumePopup.Volume = newVol;
         }
 
+        private void SeekRelative(double seconds)
+        {
+            if (_audioPlayer != null && _audioPlayer.HasTrack && _audioPlayer.TotalDuration > TimeSpan.Zero)
+            {
+                double currentSec = _audioPlayer.Position.TotalSeconds;
+                double targetSec = Math.Max(0, Math.Min(_audioPlayer.TotalDuration.TotalSeconds, currentSec + seconds));
+                _audioPlayer.Position = TimeSpan.FromSeconds(targetSec);
+                artworkBox.TimeText = FormatTimeSpan(_audioPlayer.Position, _audioPlayer.TotalDuration);
+                if (lyricsPanel != null && lyricsPanel.Visible)
+                {
+                    lyricsPanel.CurrentPosition = _audioPlayer.Position;
+                }
+                musicTrackBar.Value = (float)(targetSec / _audioPlayer.TotalDuration.TotalSeconds);
+            }
+        }
+
         private void Window_MouseDown(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left)
             {
+                if (WindowState == FormWindowState.Maximized)
+                {
+                    _isMaximizedDragTracking = true;
+                    _maximizedDragStartPos = Cursor.Position;
+                    return;
+                }
+
                 ReleaseCapture();
                 SendMessage(Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
             }
@@ -1843,26 +2072,12 @@ namespace KahoiiMusic
                 Color topColor = gradientPanel.TopColor;
                 Color bottomColor = gradientPanel.BottomColor;
 
-                // Soft darkened tones for top and bottom ("làm mờ tự nhiên")
-                Color darkTop = Color.FromArgb(
-                    Math.Max(14, (int)(topColor.R * 0.28f)),
-                    Math.Max(12, (int)(topColor.G * 0.28f)),
-                    Math.Max(22, (int)(topColor.B * 0.28f)));
-
-                Color darkBottom = Color.FromArgb(
-                    Math.Max(18, (int)(bottomColor.R * 0.12f)),
-                    Math.Max(10, (int)(bottomColor.G * 0.12f)),
-                    Math.Max(18, (int)(bottomColor.B * 0.12f)));
-
                 using (LinearGradientBrush lgb = new LinearGradientBrush(
                     new Rectangle(0, 0, w, h),
-                    Color.Black, Color.Black,
+                    topColor,
+                    bottomColor,
                     LinearGradientMode.Vertical))
                 {
-                    ColorBlend cb = new ColorBlend(4);
-                    cb.Colors = new Color[] { darkTop, topColor, bottomColor, darkBottom };
-                    cb.Positions = new float[] { 0.0f, 0.18f, 0.58f, 1.0f };
-                    lgb.InterpolationColors = cb;
                     e.Graphics.FillRectangle(lgb, 0, 0, w, h);
                 }
             }
@@ -2783,14 +2998,14 @@ namespace KahoiiMusic
             if (WindowState == FormWindowState.Maximized)
             {
                 WindowState = FormWindowState.Normal;
-                if (btnMaximize != null) { btnMaximize.Text = string.Empty; btnMaximize.Invalidate(); }
+                if (btnMaximize != null) { btnMaximize.Invalidate(); }
             }
             else
             {
                 Screen scr = Screen.FromHandle(Handle);
                 MaximizedBounds = scr.WorkingArea;
                 WindowState = FormWindowState.Maximized;
-                if (btnMaximize != null) { btnMaximize.Text = string.Empty; btnMaximize.Invalidate(); }
+                if (btnMaximize != null) { btnMaximize.Invalidate(); }
             }
         }
 
@@ -2962,7 +3177,7 @@ namespace KahoiiMusic
                 return;
             }
 
-            if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
+            if (m.Msg == WM_NCHITTEST)
             {
                 Point screenPt;
                 if (m.LParam != IntPtr.Zero)
@@ -3007,11 +3222,11 @@ namespace KahoiiMusic
             }
             if (WindowState == FormWindowState.Maximized)
             {
-                if (btnMaximize != null) { btnMaximize.Text = string.Empty; btnMaximize.Invalidate(); }
+                if (btnMaximize != null) { btnMaximize.Invalidate(); }
             }
             else if (WindowState == FormWindowState.Normal)
             {
-                if (btnMaximize != null) { btnMaximize.Text = string.Empty; btnMaximize.Invalidate(); }
+                if (btnMaximize != null) { btnMaximize.Invalidate(); }
                 if (ClientSize.Width != 480 || ClientSize.Height != 362)
                 {
                     ClientSize = new Size(480, 362);
@@ -3093,19 +3308,22 @@ namespace KahoiiMusic
             if (btnMaximize != null && btnMaximize.Parent != panelTopBar) panelTopBar.Controls.Add(btnMaximize);
             if (btnMinimize != null && btnMinimize.Parent != panelTopBar) panelTopBar.Controls.Add(btnMinimize);
 
-            // Left: Logo & App Name
-            picLogo.Location = new Point(14, (topBarH - 22) / 2);
-            picLogo.Size = new Size(22, 22);
+            // Left: Logo & App Name (Enlarged)
+            int logoSize = 30;
+            picLogo.Size = new Size(logoSize, logoSize);
+            picLogo.Location = new Point(14, (topBarH - logoSize) / 2);
             picLogo.BackColor = Color.Transparent;
             picLogo.Visible = true;
             picLogo.BringToFront();
 
-            lblLogo.Location = new Point(42, (topBarH - 22) / 2);
-            lblLogo.Size = new Size(130, 22);
+            int lblH = 30;
+            lblLogo.Size = new Size(180, lblH);
+            lblLogo.Location = new Point(picLogo.Right + 10, (topBarH - lblH) / 2);
             lblLogo.BackColor = Color.Transparent;
-            lblLogo.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+            lblLogo.Font = new Font("Segoe UI", 13.5f, FontStyle.Bold);
             lblLogo.Visible = true;
             lblLogo.BringToFront();
+            lblLogo.Invalidate();
 
             // Far Right: Stylized window controls (Close, Maximize, Minimize)
             int btnH = 30;
@@ -3190,6 +3408,7 @@ namespace KahoiiMusic
             // Controls on artworkBox
             if (btnThumbnailMenu != null && btnThumbnailMenu.Parent != artworkBox) artworkBox.Controls.Add(btnThumbnailMenu);
             if (thumbnailActionPopup != null && thumbnailActionPopup.Parent != artworkBox) artworkBox.Controls.Add(thumbnailActionPopup);
+            if (_collectionPickerPopup != null && _collectionPickerPopup.Parent != artworkBox) artworkBox.Controls.Add(_collectionPickerPopup);
             if (btnFavorite.Parent != artworkBox) artworkBox.Controls.Add(btnFavorite);
             if (musicTrackBar.Parent != artworkBox) artworkBox.Controls.Add(musicTrackBar);
             if (btnLoop.Parent != artworkBox) artworkBox.Controls.Add(btnLoop);
@@ -3253,18 +3472,18 @@ namespace KahoiiMusic
                 artworkBox.Visible = true;
                 artworkBox.BringToFront();
 
-                // 1. Menu button & popup top-left inside thumbnail (neatly padded)
+                // 1. Menu button & popup top-left inside thumbnail (+10% larger)
                 if (btnThumbnailMenu != null)
                 {
                     btnThumbnailMenu.Location = new Point(12, 12);
-                    btnThumbnailMenu.Size = new Size(24, 24);
+                    btnThumbnailMenu.Size = new Size(28, 28);
                     btnThumbnailMenu.Visible = true;
                     btnThumbnailMenu.BringToFront();
                 }
 
                 if (thumbnailActionPopup != null)
                 {
-                    thumbnailActionPopup.Location = new Point(38, 10);
+                    thumbnailActionPopup.Location = new Point(44, 10);
                     if (thumbnailActionPopup.Visible) thumbnailActionPopup.BringToFront();
                 }
 
@@ -3298,9 +3517,9 @@ namespace KahoiiMusic
                 btnVolume.Visible = true;
                 btnVolume.BringToFront();
 
-                // 5. Playback control buttons under trackbar inside thumbnail (larger + 70% opacity)
-                int playBtnSize = 56;
-                int smallBtnW = 40;
+                // 5. Playback control buttons under trackbar inside thumbnail (equal sized, 70% opacity)
+                int playBtnSize = 36;
+                int smallBtnW = 36;
                 int smallBtnH = 36;
                 int loopBtnSize = 32;
                 int timerBtnSize = 32;
@@ -3309,22 +3528,22 @@ namespace KahoiiMusic
                 int playY = trackY + 8 + (artH - (trackY + 8) - playBtnSize) / 2;
                 int smallBtnY = playY + (playBtnSize - smallBtnH) / 2;
 
-                // Center: Play/Pause circle button (56px, theme gradient purple to hot pink)
+                // Center: Play/Pause circle button (36px, matched size with controls, 70% translucent theme gradient)
                 btnPlayPause.Location = new Point(cx - playBtnSize / 2, playY);
                 btnPlayPause.Size = new Size(playBtnSize, playBtnSize);
                 btnPlayPause.UseThemeGradient = true;
                 btnPlayPause.Visible = true;
                 btnPlayPause.BringToFront();
 
-                // Left of Play: Previous button (40x36, theme gradient equilateral rounded triangle)
-                btnPrevious.Location = new Point(btnPlayPause.Left - smallBtnW - 14, smallBtnY);
+                // Left of Play: Previous button (36x36, equilateral rounded triangle, 70% translucent theme gradient)
+                btnPrevious.Location = new Point(btnPlayPause.Left - smallBtnW - 16, smallBtnY);
                 btnPrevious.Size = new Size(smallBtnW, smallBtnH);
                 btnPrevious.UseThemeGradient = true;
                 btnPrevious.Visible = true;
                 btnPrevious.BringToFront();
 
-                // Right of Play: Next button (40x36, theme gradient equilateral rounded triangle)
-                btnNext.Location = new Point(btnPlayPause.Right + 14, smallBtnY);
+                // Right of Play: Next button (36x36, equilateral rounded triangle, 70% translucent theme gradient)
+                btnNext.Location = new Point(btnPlayPause.Right + 16, smallBtnY);
                 btnNext.Size = new Size(smallBtnW, smallBtnH);
                 btnNext.UseThemeGradient = true;
                 btnNext.Visible = true;
@@ -3451,16 +3670,19 @@ namespace KahoiiMusic
             if (btnMaximize != null && btnMaximize.Parent != this) this.Controls.Add(btnMaximize);
             if (btnMinimize != null && btnMinimize.Parent != this) this.Controls.Add(btnMinimize);
 
-            picLogo.Location = new Point(6, 3);
-            picLogo.Size = new Size(18, 18);
+            int normLogoSize = 20;
+            picLogo.Size = new Size(normLogoSize, normLogoSize);
+            picLogo.Location = new Point(6, (24 - normLogoSize) / 2);
             picLogo.Visible = true;
             picLogo.BringToFront();
 
-            lblLogo.Location = new Point(28, 3);
-            lblLogo.Size = new Size(120, 18);
-            lblLogo.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            int normLblH = 20;
+            lblLogo.Size = new Size(140, normLblH);
+            lblLogo.Location = new Point(picLogo.Right + 6, (24 - normLblH) / 2);
+            lblLogo.Font = new Font("Segoe UI", 9.75f, FontStyle.Bold);
             lblLogo.Visible = true;
             lblLogo.BringToFront();
+            lblLogo.Invalidate();
 
             // 1. Title bar controls
             if (btnClose != null && btnMaximize != null && btnMinimize != null)
@@ -3518,7 +3740,7 @@ namespace KahoiiMusic
             if (lyricsPanel.Parent != gradientPanel) gradientPanel.Controls.Add(lyricsPanel);
 
             if (musicTrackBar.Parent != panelBottomControls) panelBottomControls.Controls.Add(musicTrackBar);
-            if (btnFavorite.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnFavorite);
+            if (btnFavorite.Parent != artworkBox) artworkBox.Controls.Add(btnFavorite);
             if (btnQuickDownload.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnQuickDownload);
             if (btnPrevious.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnPrevious);
             if (btnPlayPause.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnPlayPause);
@@ -3534,6 +3756,7 @@ namespace KahoiiMusic
             if (_sideMenuPanel != null) _sideMenuPanel.Visible = false;
             if (btnThumbnailMenu != null) btnThumbnailMenu.Visible = false;
             if (thumbnailActionPopup != null) thumbnailActionPopup.Visible = false;
+            if (_collectionPickerPopup != null) _collectionPickerPopup.Visible = false;
 
             // Restore Artwork Box properties
             artworkBox.EnableModeToggleOnClick = true;
@@ -3546,42 +3769,59 @@ namespace KahoiiMusic
             musicTrackBar.Size = new Size(Math.Max(100, cardW - 48), 20);
             musicTrackBar.Visible = true;
 
-            int btnY = 47;
+            // Bottom controls layout: 7 buttons perfectly centered and evenly spaced
+            // Left to right: [Download] [Volume] [Previous] [Play/Pause] [Next] [Loop] [Timer]
+            int subBtnSize = 24;
+            int playBtnSize = 34;
             int btnPlayY = 44;
-            int playX = (cardW - 34) / 2;
-            int gap = Math.Max(8, Math.Min(22, (cardW - 320) / 10));
+            int subBtnY = btnPlayY + (playBtnSize - subBtnSize) / 2; // = 49 (vertically centered with Play/Pause)
 
+            // Set all sizes FIRST so Width/Height are guaranteed exact
+            btnPlayPause.Size = new Size(playBtnSize, playBtnSize);
+            btnPrevious.Size = new Size(subBtnSize, subBtnSize);
+            btnVolume.Size = new Size(subBtnSize, subBtnSize);
+            btnQuickDownload.Size = new Size(subBtnSize, subBtnSize);
+            btnNext.Size = new Size(subBtnSize, subBtnSize);
+            btnLoop.Size = new Size(subBtnSize, subBtnSize);
+            btnTimer.Size = new Size(subBtnSize, subBtnSize);
+
+            // 6 gaps between 7 buttons. Span of buttons = 34 + 6 * 24 = 178px.
+            // On a 480px card, remaining space = 302px. Ideal gap = 14px to 18px.
+            int gap = Math.Max(10, Math.Min(18, (cardW - 178) / 14));
+            int playX = (cardW - playBtnSize) / 2;
+
+            // Center Play/Pause button
             btnPlayPause.Location = new Point(playX, btnPlayY);
-            btnPlayPause.Size = new Size(34, 34);
             btnPlayPause.Visible = true;
 
-            btnPrevious.Location = new Point(playX - gap - btnPrevious.Width, btnY);
-            btnPrevious.Size = new Size(24, 24);
+            // Left side (Previous -> Volume -> Download)
+            btnPrevious.Location = new Point(playX - gap - subBtnSize, subBtnY);
             btnPrevious.Visible = true;
 
-            btnQuickDownload.Location = new Point(btnPrevious.Left - gap - btnQuickDownload.Width, btnY);
-            btnQuickDownload.Size = new Size(24, 24);
+            btnVolume.Location = new Point(btnPrevious.Left - gap - subBtnSize, subBtnY);
+            btnVolume.Visible = true;
+
+            btnQuickDownload.Location = new Point(btnVolume.Left - gap - subBtnSize, subBtnY);
             btnQuickDownload.Visible = true;
 
-            btnFavorite.Location = new Point(btnQuickDownload.Left - gap - btnFavorite.Width, btnY);
-            btnFavorite.Size = new Size(24, 24);
-            btnFavorite.Visible = true;
-
-            btnNext.Location = new Point(playX + 34 + gap, btnY);
-            btnNext.Size = new Size(24, 24);
+            // Right side (Next -> Loop -> Timer)
+            btnNext.Location = new Point(playX + playBtnSize + gap, subBtnY);
             btnNext.Visible = true;
 
-            btnLoop.Location = new Point(btnNext.Right + gap, btnY);
-            btnLoop.Size = new Size(24, 24);
+            btnLoop.Location = new Point(btnNext.Right + gap, subBtnY);
             btnLoop.Visible = true;
 
-            btnTimer.Location = new Point(btnLoop.Right + gap, btnY);
-            btnTimer.Size = new Size(24, 24);
+            btnTimer.Location = new Point(btnLoop.Right + gap, subBtnY);
             btnTimer.Visible = true;
 
-            btnVolume.Location = new Point(Math.Max(btnTimer.Right + gap + 10, cardW - 38 - btnVolume.Width), btnY);
-            btnVolume.Size = new Size(24, 24);
-            btnVolume.Visible = true;
+            // Favorite Button placed on top-right of thumbnail card inside artworkBox (+10% larger)
+            if (btnFavorite.Parent != artworkBox) artworkBox.Controls.Add(btnFavorite);
+            int favSize = 27;
+            btnFavorite.Size = new Size(favSize, favSize);
+            Rectangle cardBounds = artworkBox.GetThumbnailCardBounds();
+            btnFavorite.Location = new Point(cardBounds.Right - favSize - 6, cardBounds.Top + 6);
+            btnFavorite.Visible = true;
+            btnFavorite.BringToFront();
 
             lblCopyright.Location = new Point((cardW - lblCopyright.Width) / 2, bottomH - lblCopyright.Height - 6);
             lblVersion.Location = new Point(cardW - lblVersion.Width - 12, bottomH - lblVersion.Height - 6);
@@ -3591,6 +3831,19 @@ namespace KahoiiMusic
             int midH = Math.Max(50, panelBottomControls.Top - midY);
             gradientPanel.Location = new Point(0, midY);
             gradientPanel.Size = new Size(cardW, midH);
+
+            // Lyrics Button placed in the same column as User Avatar, directly above trackbar
+            if (btnLyrics != null)
+            {
+                if (btnLyrics.Parent != gradientPanel) gradientPanel.Controls.Add(btnLyrics);
+                int lyricsBtnSize = 24;
+                int lyricsX = btnUser.Left + (btnUser.Width - lyricsBtnSize) / 2;
+                int lyricsY = Math.Max(10, gradientPanel.Height - lyricsBtnSize - 6);
+                btnLyrics.Size = new Size(lyricsBtnSize, lyricsBtnSize);
+                btnLyrics.Location = new Point(lyricsX, lyricsY);
+                btnLyrics.Visible = true;
+                btnLyrics.BringToFront();
+            }
 
             UpdateCenterAreaLayout(_isLyricsOpen ? 1f : 0f);
 
@@ -3662,26 +3915,30 @@ namespace KahoiiMusic
             artworkBox.Size = new Size(currentArtSize, currentArtSize);
             artworkBox.Location = new Point(currentArtX, currentArtY);
 
-            int lyricsBtnW = (btnLyrics != null) ? 28 : 0;
-            int availableTitleW = Math.Max(60, currentTitleW - lyricsBtnW - 4);
-
             marqueeTitle.Font = _titleFontNormal;
             marqueeAuthor.Font = _authorFontNormal;
             marqueeTitle.TextAlignment = (ease > 0.5f) ? StringAlignment.Near : StringAlignment.Center;
             marqueeAuthor.TextAlignment = (ease > 0.5f) ? StringAlignment.Near : StringAlignment.Center;
             marqueeTitle.Location = new Point(currentTitleX, artworkBox.Bottom + 6);
-            marqueeTitle.Size = new Size(availableTitleW, 22);
-
-            if (btnLyrics != null)
-            {
-                btnLyrics.Location = new Point(marqueeTitle.Right + 4, marqueeTitle.Top - 1);
-                btnLyrics.Size = new Size(24, 24);
-                btnLyrics.Visible = true;
-                btnLyrics.BringToFront();
-            }
+            marqueeTitle.Size = new Size(currentTitleW, 22);
 
             marqueeAuthor.Location = new Point(currentTitleX, marqueeTitle.Bottom + 2);
             marqueeAuthor.Size = new Size(currentTitleW, 18);
+
+            // Keep Favorite button at top-right of thumbnail card inside artworkBox
+            Rectangle cardBounds = artworkBox.GetThumbnailCardBounds();
+            btnFavorite.Location = new Point(cardBounds.Right - btnFavorite.Width - 6, cardBounds.Top + 6);
+            btnFavorite.BringToFront();
+
+            // Keep Lyrics button at fixed column aligned with avatar above trackbar (never moves when lyrics open!)
+            if (btnLyrics != null)
+            {
+                int lyricsBtnSize = 24;
+                int lyricsX = btnUser.Left + (btnUser.Width - lyricsBtnSize) / 2;
+                int lyricsY = Math.Max(10, gradientPanel.Height - lyricsBtnSize - 6);
+                btnLyrics.Location = new Point(lyricsX, lyricsY);
+                btnLyrics.BringToFront();
+            }
 
             if (lyricsPanel != null)
             {
@@ -3692,7 +3949,8 @@ namespace KahoiiMusic
                 else
                 {
                     int lyricsLeft = artworkBox.Right + 14;
-                    int lyricsWidth = cardW - lyricsLeft - 12;
+                    int lyricsRightBound = (btnLyrics != null) ? btnLyrics.Left - 8 : cardW - 12;
+                    int lyricsWidth = lyricsRightBound - lyricsLeft;
                     lyricsPanel.Location = new Point(lyricsLeft, 8);
                     lyricsPanel.Size = new Size(Math.Max(80, lyricsWidth), Math.Max(40, midH - 16));
                     lyricsPanel.Visible = true;
@@ -3704,8 +3962,14 @@ namespace KahoiiMusic
                     {
                         lyricsPanel.BringToFront();
                     }
+                    if (btnLyrics != null) btnLyrics.BringToFront();
                 }
             }
+        }
+
+        private Color GetTitleBarBackgroundColor()
+        {
+            return _isMaximizedMode ? Color.FromArgb(32, 12, 75) : Color.FromArgb(20, 16, 38);
         }
 
         private static GraphicsPath FormRoundedRect(Rectangle bounds, int radius)

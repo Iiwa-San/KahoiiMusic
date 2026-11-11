@@ -346,11 +346,26 @@ namespace KahoiiMusic.Services
                     {
                         using (WebClient wc = new WebClient())
                         {
-                            byte[] bytes = wc.DownloadData("https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg");
-                            if (bytes != null && bytes.Length > 1000)
+                            string[] urls = new string[]
                             {
-                                File.WriteAllBytes(destThumb, bytes);
-                                thumbSaved = true;
+                                "https://img.youtube.com/vi/" + videoId + "/maxresdefault.jpg",
+                                "https://i.ytimg.com/vi/" + videoId + "/hq720.jpg",
+                                "https://img.youtube.com/vi/" + videoId + "/sddefault.jpg",
+                                "https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg"
+                            };
+                            foreach (string u in urls)
+                            {
+                                try
+                                {
+                                    byte[] bytes = wc.DownloadData(u);
+                                    if (bytes != null && bytes.Length > 2000)
+                                    {
+                                        File.WriteAllBytes(destThumb, bytes);
+                                        thumbSaved = true;
+                                        break;
+                                    }
+                                }
+                                catch { }
                             }
                         }
                     }

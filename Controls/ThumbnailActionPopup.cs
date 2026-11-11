@@ -9,9 +9,14 @@ namespace KahoiiMusic.Controls
     {
         private const int WM_ERASEBKGND = 0x0014;
         private int _hoveredIndex = -1;
+        private System.Windows.Forms.Timer _hoverTimer;
 
         public event EventHandler SaveLibraryClicked;
         public event EventHandler DownloadClicked;
+        public event EventHandler LibraryHoverTimerElapsed;
+        public event EventHandler CloseSubmenuRequested;
+
+        public bool IsSubmenuOpen { get; set; } = false;
 
         public ThumbnailActionPopup()
         {
@@ -22,10 +27,31 @@ namespace KahoiiMusic.Controls
                      ControlStyles.SupportsTransparentBackColor, true);
 
             BackColor = Color.Transparent;
-            Size = new Size(106, 44);
+            Size = new Size(142, 58);
             Visible = false;
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
+
+            _hoverTimer = new System.Windows.Forms.Timer();
+            _hoverTimer.Interval = 1000; // 1 second hover threshold
+            _hoverTimer.Tick += (s, e) =>
+            {
+                _hoverTimer.Stop();
+                if (_hoveredIndex == 0 && Visible)
+                {
+                    LibraryHoverTimerElapsed?.Invoke(this, EventArgs.Empty);
+                }
+            };
+
+            VisibleChanged += (s, e) =>
+            {
+                if (!Visible)
+                {
+                    _hoverTimer.Stop();
+                    _hoveredIndex = -1;
+                    IsSubmenuOpen = false;
+                }
+            };
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -36,14 +62,29 @@ namespace KahoiiMusic.Controls
             {
                 _hoveredIndex = newIdx;
                 Invalidate();
+
+                if (_hoveredIndex == 0)
+                {
+                    _hoverTimer.Stop();
+                    _hoverTimer.Start();
+                }
+                else
+                {
+                    _hoverTimer.Stop();
+                    CloseSubmenuRequested?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            _hoveredIndex = -1;
-            Invalidate();
+            _hoverTimer.Stop();
+            if (!IsSubmenuOpen)
+            {
+                _hoveredIndex = -1;
+                Invalidate();
+            }
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -112,10 +153,10 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            // Text (left aligned matching Figma)
-            Rectangle textRect0 = new Rectangle(8, 2, Width - 12, itemH - 2);
-            Rectangle textRect1 = new Rectangle(8, itemH, Width - 12, itemH - 2);
-            using (Font f = new Font("Segoe UI", 8.25f, FontStyle.Regular))
+            // Text (left aligned, comfortable padding and +30% larger font)
+            Rectangle textRect0 = new Rectangle(12, 2, Width - 16, itemH - 2);
+            Rectangle textRect1 = new Rectangle(12, itemH, Width - 16, itemH - 2);
+            using (Font f = new Font("Segoe UI", 10.5f, FontStyle.Regular))
             using (SolidBrush b0 = new SolidBrush(_hoveredIndex == 0 ? Color.White : Color.FromArgb(240, 240, 245)))
             using (SolidBrush b1 = new SolidBrush(_hoveredIndex == 1 ? Color.White : Color.FromArgb(240, 240, 245)))
             using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center })

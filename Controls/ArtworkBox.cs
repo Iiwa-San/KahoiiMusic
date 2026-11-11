@@ -112,11 +112,12 @@ namespace KahoiiMusic.Controls
 
         private void UpdateToolTip()
         {
-            if (_toolTip == null)
+            if (_toolTip != null)
             {
-                _toolTip = new ToolTip { InitialDelay = 500, ReshowDelay = 200 };
+                _toolTip.RemoveAll();
+                _toolTip.Dispose();
+                _toolTip = null;
             }
-            _toolTip.SetToolTip(this, "Ảnh bài hát");
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -260,55 +261,81 @@ namespace KahoiiMusic.Controls
                         return;
                     }
 
-                    // 5. If not found on disk, attempt online download from YouTube
-                    string downloadUrl = urlOrVideoId;
-                    if (!downloadUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-                        !downloadUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
-                        !string.IsNullOrEmpty(videoId))
+                    // 5. If not found on disk, attempt online download from YouTube (prefer HD / maxres)
+                    byte[] data = null;
+                    if (!string.IsNullOrEmpty(videoId))
                     {
-                        downloadUrl = string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", videoId);
-                    }
+                        string[] candidateUrls = new string[]
+                        {
+                            string.Format("https://img.youtube.com/vi/{0}/maxresdefault.jpg", videoId),
+                            string.Format("https://i.ytimg.com/vi/{0}/hq720.jpg", videoId),
+                            string.Format("https://img.youtube.com/vi/{0}/sddefault.jpg", videoId),
+                            string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", videoId)
+                        };
 
-                    try
-                    {
                         using (WebClient wc = new WebClient())
                         {
-                            byte[] data = wc.DownloadData(downloadUrl);
-                            if (data != null && data.Length > 200)
+                            foreach (string u in candidateUrls)
                             {
-                                // Cache thumbnail in TempThumbDir for future offline plays
-                                if (!string.IsNullOrEmpty(videoId))
+                                try
                                 {
-                                    try
+                                    byte[] candidateData = wc.DownloadData(u);
+                                    if (candidateData != null && candidateData.Length > 2000)
                                     {
-                                        string cacheFile = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
-                                        File.WriteAllBytes(cacheFile, data);
+                                        data = candidateData;
+                                        break;
                                     }
-                                    catch { }
                                 }
-
-                                using (MemoryStream ms = new MemoryStream(data))
-                                using (Image loaded = Image.FromStream(ms))
-                                {
-                                    resultThumb = CreateArtworkBitmap(loaded);
-                                }
-
-                                if (resultThumb != null)
-                                {
-                                    if (IsHandleCreated)
-                                    {
-                                        BeginInvoke(new Action(delegate { Image = resultThumb; }));
-                                    }
-                                    else
-                                    {
-                                        resultThumb.Dispose();
-                                    }
-                                    return;
-                                }
+                                catch { }
                             }
                         }
                     }
-                    catch { }
+                    else if (!string.IsNullOrEmpty(urlOrVideoId) &&
+                             (urlOrVideoId.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                              urlOrVideoId.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        try
+                        {
+                            using (WebClient wc = new WebClient())
+                            {
+                                data = wc.DownloadData(urlOrVideoId);
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (data != null && data.Length > 200)
+                    {
+                        // Cache thumbnail in TempThumbDir for future offline plays
+                        if (!string.IsNullOrEmpty(videoId))
+                        {
+                            try
+                            {
+                                string cacheFile = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
+                                File.WriteAllBytes(cacheFile, data);
+                            }
+                            catch { }
+                        }
+
+                        using (MemoryStream ms = new MemoryStream(data))
+                        using (Image loaded = Image.FromStream(ms))
+                        {
+                            resultThumb = CreateArtworkBitmap(loaded);
+                        }
+
+                        if (resultThumb != null)
+                        {
+                            if (IsHandleCreated)
+                            {
+                                BeginInvoke(new Action(delegate { Image = resultThumb; }));
+                            }
+                            else
+                            {
+                                resultThumb.Dispose();
+                            }
+                            return;
+                        }
+                    }
 
                     // If all failed (e.g. offline with no cached image), reset image so old track thumbnail does not linger
                     if (IsHandleCreated)
@@ -332,12 +359,17 @@ namespace KahoiiMusic.Controls
             try
             {
                 FileInfo fi = new FileInfo(filePath);
-                if (fi.Length > 100)
+                if (fi.Length > 200)
                 {
                     byte[] data = File.ReadAllBytes(filePath);
                     using (MemoryStream ms = new MemoryStream(data))
                     using (Image loaded = Image.FromStream(ms))
                     {
+                        // Reject tiny micro thumbnails (< 200px or < 5000 bytes) so we don't display blurry thumbnails as full artwork
+                        if (loaded.Width < 220 || loaded.Height < 150)
+                        {
+                            return null;
+                        }
                         return CreateArtworkBitmap(loaded);
                     }
                 }
@@ -346,38 +378,186 @@ namespace KahoiiMusic.Controls
             return null;
         }
 
+        /// <summary>
+        /// Automatically detects and crops thick black borders (letterboxing/pillarboxing)
+        /// commonly found on YouTube's 480x360 hqdefault.jpg and letterboxed music videos.
+        /// </summary>
+        private static Bitmap CropBlackBorders(Image rawImg)
+        {
+            if (rawImg == null) return null;
+            Bitmap bmp = rawImg as Bitmap;
+            bool disposeBmp = false;
+            if (bmp == null)
+            {
+                bmp = new Bitmap(rawImg);
+                disposeBmp = true;
+            }
+
+            try
+            {
+                int w = bmp.Width;
+                int h = bmp.Height;
+                if (w < 20 || h < 20) return new Bitmap(bmp);
+
+                // Near-black threshold (covers true #000000 and slight compression noise #0a0a0a..#1c1c1c)
+                int threshold = 28;
+
+                // 1. Scan Top: up to 35% of image height
+                int maxTop = (int)(h * 0.35f);
+                int top = 0;
+                int stepX = Math.Max(1, w / 25);
+
+                for (int y = 0; y < maxTop; y++)
+                {
+                    int blackCount = 0;
+                    int samples = 0;
+                    for (int x = stepX / 2; x < w; x += stepX)
+                    {
+                        Color c = bmp.GetPixel(x, y);
+                        if (c.R <= threshold && c.G <= threshold && c.B <= threshold)
+                            blackCount++;
+                        samples++;
+                    }
+                    if (samples > 0 && (float)blackCount / samples >= 0.90f)
+                    {
+                        top = y + 1;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // 2. Scan Bottom: down to 65% of image height
+                int minBottom = (int)(h * 0.65f);
+                int bottom = h - 1;
+                for (int y = h - 1; y >= minBottom; y--)
+                {
+                    int blackCount = 0;
+                    int samples = 0;
+                    for (int x = stepX / 2; x < w; x += stepX)
+                    {
+                        Color c = bmp.GetPixel(x, y);
+                        if (c.R <= threshold && c.G <= threshold && c.B <= threshold)
+                            blackCount++;
+                        samples++;
+                    }
+                    if (samples > 0 && (float)blackCount / samples >= 0.90f)
+                    {
+                        bottom = y - 1;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // 3. Scan Left: up to 30% of image width
+                int maxLeft = (int)(w * 0.30f);
+                int left = 0;
+                int stepY = Math.Max(1, h / 25);
+
+                for (int x = 0; x < maxLeft; x++)
+                {
+                    int blackCount = 0;
+                    int samples = 0;
+                    for (int y = top + (stepY / 2); y <= bottom; y += stepY)
+                    {
+                        Color c = bmp.GetPixel(x, y);
+                        if (c.R <= threshold && c.G <= threshold && c.B <= threshold)
+                            blackCount++;
+                        samples++;
+                    }
+                    if (samples > 0 && (float)blackCount / samples >= 0.90f)
+                    {
+                        left = x + 1;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // 4. Scan Right: down to 70% of image width
+                int minRight = (int)(w * 0.70f);
+                int right = w - 1;
+                for (int x = w - 1; x >= minRight; x--)
+                {
+                    int blackCount = 0;
+                    int samples = 0;
+                    for (int y = top + (stepY / 2); y <= bottom; y += stepY)
+                    {
+                        Color c = bmp.GetPixel(x, y);
+                        if (c.R <= threshold && c.G <= threshold && c.B <= threshold)
+                            blackCount++;
+                        samples++;
+                    }
+                    if (samples > 0 && (float)blackCount / samples >= 0.90f)
+                    {
+                        right = x - 1;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                int cropW = right - left + 1;
+                int cropH = bottom - top + 1;
+
+                if (cropW >= 20 && cropH >= 20 && (top > 0 || bottom < h - 1 || left > 0 || right < w - 1))
+                {
+                    Rectangle srcRect = new Rectangle(left, top, cropW, cropH);
+                    Bitmap cropped = new Bitmap(cropW, cropH, PixelFormat.Format32bppPArgb);
+                    using (Graphics g = Graphics.FromImage(cropped))
+                    {
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                        g.SmoothingMode = SmoothingMode.AntiAlias;
+                        g.DrawImage(bmp, new Rectangle(0, 0, cropW, cropH), srcRect, GraphicsUnit.Pixel);
+                    }
+                    return cropped;
+                }
+
+                return new Bitmap(bmp);
+            }
+            catch
+            {
+                return new Bitmap(bmp);
+            }
+            finally
+            {
+                if (disposeBmp) bmp.Dispose();
+            }
+        }
+
         private Bitmap CreateArtworkBitmap(Image loaded)
         {
             if (loaded == null) return null;
             try
             {
-                int thumbDim = 256;
-                Bitmap thumb = new Bitmap(thumbDim, thumbDim, PixelFormat.Format32bppPArgb);
-                using (Graphics g = Graphics.FromImage(thumb))
+                using (Bitmap cleaned = CropBlackBorders(loaded))
                 {
-                    g.SmoothingMode = SmoothingMode.AntiAlias;
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    if (cleaned == null) return null;
 
-                    int cropSize;
-                    if (Math.Abs(loaded.Width - loaded.Height) <= 2 || loaded.Width <= 64)
+                    int thumbDim = 512;
+                    Bitmap thumb = new Bitmap(thumbDim, thumbDim, PixelFormat.Format32bppPArgb);
+                    using (Graphics g = Graphics.FromImage(thumb))
                     {
-                        // Already square or micro-thumbnail: preserve entire image
-                        cropSize = Math.Min(loaded.Width, loaded.Height);
-                    }
-                    else
-                    {
-                        // Standard 16:9 YouTube thumbnail: crop center 85% focused area
-                        cropSize = (int)(Math.Min(loaded.Width, loaded.Height) * 0.85f);
-                    }
-                    int srcX = (loaded.Width - cropSize) / 2;
-                    int srcY = (loaded.Height - cropSize) / 2;
-                    Rectangle srcRect = new Rectangle(srcX, srcY, cropSize, cropSize);
-                    Rectangle destRect = new Rectangle(0, 0, thumbDim, thumbDim);
+                        g.SmoothingMode = SmoothingMode.AntiAlias;
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-                    g.DrawImage(loaded, destRect, srcRect, GraphicsUnit.Pixel);
+                        int cropSize = Math.Min(cleaned.Width, cleaned.Height);
+                        int srcX = (cleaned.Width - cropSize) / 2;
+                        int srcY = (cleaned.Height - cropSize) / 2;
+                        Rectangle srcRect = new Rectangle(srcX, srcY, cropSize, cropSize);
+                        Rectangle destRect = new Rectangle(0, 0, thumbDim, thumbDim);
+
+                        g.DrawImage(cleaned, destRect, srcRect, GraphicsUnit.Pixel);
+                    }
+                    return thumb;
                 }
-                return thumb;
             }
             catch
             {
@@ -420,6 +600,48 @@ namespace KahoiiMusic.Controls
                 }
             }
             base.Dispose(disposing);
+        }
+
+        public Rectangle GetThumbnailCardBounds()
+        {
+            if (!ShowBottomTimeText)
+            {
+                return new Rectangle(0, 0, Width, Height);
+            }
+            int cx = Width / 2;
+            int textSpace = 22;
+            int availableH = Height - textSpace;
+            int R = Math.Max(50, Math.Min(cx - 10, (availableH - 8) / 2));
+            int cy = 4 + R;
+            int cardSize = R * 2;
+            int cardX = (Width - cardSize) / 2;
+            int cardY = (cy - cardSize / 2);
+            return new Rectangle(cardX, cardY, cardSize, cardSize);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            UpdateChildControlLayout();
+        }
+
+        protected override void OnControlAdded(ControlEventArgs e)
+        {
+            base.OnControlAdded(e);
+            UpdateChildControlLayout();
+        }
+
+        public void UpdateChildControlLayout()
+        {
+            Rectangle cardBounds = GetThumbnailCardBounds();
+            foreach (Control c in Controls)
+            {
+                if (c is FavoriteButton)
+                {
+                    c.Location = new Point(cardBounds.Right - c.Width - 6, cardBounds.Top + 6);
+                    c.BringToFront();
+                }
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)

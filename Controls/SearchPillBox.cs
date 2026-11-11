@@ -75,7 +75,12 @@ namespace KahoiiMusic.Controls
 
             _textBox.HandleCreated += (s, e) => UpdateCueBanner();
             _textBox.GotFocus += (s, e) => { _textBox.Invalidate(); Invalidate(); };
-            _textBox.LostFocus += (s, e) => { _textBox.Invalidate(); Invalidate(); };
+            _textBox.LostFocus += (s, e) =>
+            {
+                _debounceTimer?.Stop();
+                _textBox.Invalidate();
+                Invalidate();
+            };
             _textBox.KeyDown += TextBox_KeyDown;
             _textBox.TextChanged += TextBox_TextChanged;
 
@@ -121,6 +126,7 @@ namespace KahoiiMusic.Controls
         }
 
         public bool HasRealText => !string.IsNullOrWhiteSpace(_textBox?.Text);
+        public bool IsSearchFocused => _textBox != null && _textBox.Focused;
 
         private bool IsUrl(string text)
         {
@@ -136,6 +142,14 @@ namespace KahoiiMusic.Controls
         {
             UpdateLayoutPositions();
             Invalidate();
+
+            // Strict: only trigger debounce/API if the user is actively focused on the input!
+            // If text was set programmatically, restored, or user tabbed away, NEVER call API.
+            if (_textBox == null || !_textBox.Focused)
+            {
+                _debounceTimer?.Stop();
+                return;
+            }
 
             string raw = _textBox.Text;
             string query = raw.Trim();
@@ -181,6 +195,9 @@ namespace KahoiiMusic.Controls
         private void DebounceTimer_Tick(object sender, EventArgs e)
         {
             _debounceTimer.Stop();
+            // Strict guard: abort immediately if user is no longer focused
+            if (_textBox == null || !_textBox.Focused) return;
+
             if (HasRealText && !IsUrl(_textBox.Text))
             {
                 string query = _textBox.Text.Trim();
@@ -398,10 +415,12 @@ namespace KahoiiMusic.Controls
                     g.FillPath(brush, path);
                 }
 
-                // Draw glowing or subtle border
-                Color borderColor = isFocused ? _borderColorFocused : _borderColorIdle;
-                float penWidth = isFocused ? 1.8f : 1.0f;
-                using (Pen pen = new Pen(borderColor, penWidth))
+                // Draw glowing or subtle cyber gradient border
+                Color gradStart = isFocused ? Color.FromArgb(180, 110, 255) : Color.FromArgb(120, 150, 95, 230);
+                Color gradEnd = isFocused ? Color.FromArgb(255, 45, 133) : Color.FromArgb(160, 245, 45, 125);
+                float penWidth = isFocused ? 1.8f : 1.2f;
+                using (LinearGradientBrush gradBrush = new LinearGradientBrush(rect, gradStart, gradEnd, LinearGradientMode.Horizontal))
+                using (Pen pen = new Pen(gradBrush, penWidth))
                 {
                     g.DrawPath(pen, path);
                 }

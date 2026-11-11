@@ -348,6 +348,7 @@ namespace KahoiiMusic
             // btnClose
             // 
             this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnClose.BackColor = System.Drawing.Color.Transparent;
             this.btnClose.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnClose.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnClose.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
@@ -355,7 +356,7 @@ namespace KahoiiMusic
             this.btnClose.Name = "btnClose";
             this.btnClose.Size = new System.Drawing.Size(22, 18);
             this.btnClose.TabIndex = 2;
-            this.btnClose.Text = "✕";
+            this.btnClose.Text = "";
             this.btnClose.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // btnUser
@@ -371,6 +372,7 @@ namespace KahoiiMusic
             // btnMaximize
             // 
             this.btnMaximize.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnMaximize.BackColor = System.Drawing.Color.Transparent;
             this.btnMaximize.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnMaximize.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnMaximize.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
@@ -378,12 +380,13 @@ namespace KahoiiMusic
             this.btnMaximize.Name = "btnMaximize";
             this.btnMaximize.Size = new System.Drawing.Size(22, 18);
             this.btnMaximize.TabIndex = 3;
-            this.btnMaximize.Text = "▢";
+            this.btnMaximize.Text = "";
             this.btnMaximize.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // btnMinimize
             // 
             this.btnMinimize.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnMinimize.BackColor = System.Drawing.Color.Transparent;
             this.btnMinimize.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnMinimize.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.btnMinimize.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(140)))), ((int)(((byte)(140)))));
@@ -391,7 +394,7 @@ namespace KahoiiMusic
             this.btnMinimize.Name = "btnMinimize";
             this.btnMinimize.Size = new System.Drawing.Size(22, 18);
             this.btnMinimize.TabIndex = 1;
-            this.btnMinimize.Text = "─";
+            this.btnMinimize.Text = "";
             this.btnMinimize.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // playbackTimer
@@ -402,9 +405,9 @@ namespace KahoiiMusic
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(30)))), ((int)(((byte)(30)))), ((int)(((byte)(30)))));
-            this.ClientSize = new System.Drawing.Size(680, 520);
-            this.MinimumSize = new System.Drawing.Size(480, 380);
+            this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(20)))), ((int)(((byte)(16)))), ((int)(((byte)(38)))));
+            this.ClientSize = new System.Drawing.Size(480, 362);
+            this.MinimumSize = new System.Drawing.Size(480, 362);
             this.Controls.Add(this.btnMinimize);
             this.Controls.Add(this.btnMaximize);
             this.Controls.Add(this.btnClose);

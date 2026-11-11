@@ -22,7 +22,7 @@ namespace KahoiiMusic.Controls
                      ControlStyles.SupportsTransparentBackColor, true);
 
             BackColor = Color.Transparent;
-            Size = new Size(26, 26);
+            Size = new Size(28, 28);
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
         }

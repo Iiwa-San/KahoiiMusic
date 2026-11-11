@@ -169,15 +169,16 @@ namespace KahoiiMusic.Controls
 
                 if (UseThemeGradient)
                 {
-                    Color topColor = _isHovered ? Color.FromArgb(145, 25, 185) : Color.FromArgb(105, 12, 150);
-                    Color bottomColor = _isHovered ? Color.FromArgb(255, 50, 155) : Color.FromArgb(235, 0, 130);
+                    // 70% opacity (alpha 178) for cyber translucent aesthetic, brightens on hover
+                    Color topColor = _isHovered ? Color.FromArgb(230, 145, 25, 185) : Color.FromArgb(178, 105, 12, 150);
+                    Color bottomColor = _isHovered ? Color.FromArgb(255, 50, 155) : Color.FromArgb(178, 235, 0, 130);
 
                     using (LinearGradientBrush grad = new LinearGradientBrush(bounds, topColor, bottomColor, LinearGradientMode.Vertical))
                     {
                         g.FillPath(grad, path);
                     }
 
-                    using (Pen borderPen = new Pen(Color.FromArgb(100, 255, 180, 225), 1.0f))
+                    using (Pen borderPen = new Pen(Color.FromArgb(70, 255, 180, 225), 1.0f))
                     {
                         borderPen.LineJoin = LineJoin.Round;
                         g.DrawPath(borderPen, path);

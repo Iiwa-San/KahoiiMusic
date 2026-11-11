@@ -136,15 +136,16 @@ namespace KahoiiMusic.Controls
 
             if (UseThemeGradient)
             {
-                Color topColor = _isHovered ? Color.FromArgb(145, 25, 185) : Color.FromArgb(105, 12, 150);
-                Color bottomColor = _isHovered ? Color.FromArgb(255, 50, 155) : Color.FromArgb(235, 0, 130);
+                // 70% opacity (alpha 178) for cyber translucent aesthetic, brightens on hover
+                Color topColor = _isHovered ? Color.FromArgb(230, 145, 25, 185) : Color.FromArgb(178, 105, 12, 150);
+                Color bottomColor = _isHovered ? Color.FromArgb(255, 50, 155) : Color.FromArgb(178, 235, 0, 130);
 
                 using (LinearGradientBrush grad = new LinearGradientBrush(circleRect, topColor, bottomColor, LinearGradientMode.Vertical))
                 {
                     g.FillEllipse(grad, circleRect);
                 }
 
-                using (Pen borderPen = new Pen(Color.FromArgb(120, 255, 180, 225), 1.0f))
+                using (Pen borderPen = new Pen(Color.FromArgb(85, 255, 180, 225), 1.0f))
                 {
                     g.DrawEllipse(borderPen, circleRect);
                 }
@@ -164,7 +165,9 @@ namespace KahoiiMusic.Controls
             // 2. Draw Icon (White triangle or Pause bars when using theme gradient)
             float cx = circleRect.X + circleRect.Width / 2.0f;
             float cy = circleRect.Y + circleRect.Height / 2.0f;
-            Color currentIconColor = UseThemeGradient ? Color.White : _iconColor;
+            Color currentIconColor = UseThemeGradient 
+                ? (_isHovered ? Color.White : Color.FromArgb(220, 255, 255, 255)) 
+                : _iconColor;
 
             using (SolidBrush iconBrush = new SolidBrush(currentIconColor))
             {

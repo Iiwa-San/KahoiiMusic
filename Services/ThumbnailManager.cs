@@ -11,8 +11,8 @@ namespace KahoiiMusic.Services
 {
     public static class ThumbnailManager
     {
-        private const int ThumbSize = 26;
-        private const int MaxMemoryCache = 35; // Strict LRU limit: 35 * ~2.7KB = ~95KB RAM
+        private const int ThumbSize = 48;
+        private const int MaxMemoryCache = 45; // Strict LRU limit: 45 * ~9KB = ~400KB RAM
         private static readonly object _lock = new object();
         private static readonly Dictionary<string, Bitmap> _memCache = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
         private static readonly LinkedList<string> _lruOrder = new LinkedList<string>();
@@ -90,10 +90,10 @@ namespace KahoiiMusic.Services
                         catch { }
                     }
 
-                    // 3. Download tiny default.jpg (120x90, ~3KB payload) from YouTube
+                    // 3. Download sharp mqdefault.jpg (320x180, ~8KB payload) from YouTube
                     if (result == null)
                     {
-                        string url = string.Format("https://img.youtube.com/vi/{0}/default.jpg", videoId);
+                        string url = string.Format("https://img.youtube.com/vi/{0}/mqdefault.jpg", videoId);
                         using (WebClient wc = new WebClient())
                         {
                             byte[] data = wc.DownloadData(url);
@@ -104,8 +104,8 @@ namespace KahoiiMusic.Services
                                 {
                                     result = ResizeToMicro(img, ThumbSize, ThumbSize);
 
-                                    // Persist full-quality thumbnail on disk for future instant offline loads
-                                    if (data != null)
+                                    // Persist thumbnail on disk only if no high-res thumbnail already exists
+                                    if (data != null && !File.Exists(tempThumbFile))
                                     {
                                         try
                                         {

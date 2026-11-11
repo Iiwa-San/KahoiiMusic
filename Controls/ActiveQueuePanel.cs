@@ -465,7 +465,7 @@ namespace KahoiiMusic.Controls
                     {
                         if (bmp != null)
                         {
-                            g.SetClip(tp);
+                            g.SetClip(tp, CombineMode.Intersect);
                             g.DrawImage(bmp, thumbRect);
                             g.SetClip(listBounds);
                         }
