@@ -19,9 +19,9 @@ namespace KahoiiMusic.Controls
     public class SideMenuPanel : Panel
     {
         private const int WM_ERASEBKGND = 0x0014;
-        private const int HeaderH = 38;
-        private const int TabsH = 30;
-        private const int SearchBoxH = 26;
+        private const int HeaderH = 0;
+        private const int TabsH = 32;
+        private const int SearchBoxH = 28;
         private const int RowH = 42;
         private const int ScrollBarW = 7;
 
@@ -235,7 +235,7 @@ namespace KahoiiMusic.Controls
             });
         }
 
-        private int ListTop => HeaderH + TabsH + SearchBoxH + 12;
+        private int ListTop => 10 + TabsH + 8 + SearchBoxH + 10;
         private int ListHeight => Math.Max(10, Height - ListTop - 8);
         private int TotalListContentHeight => _filteredItems.Count * RowH;
 
@@ -249,10 +249,10 @@ namespace KahoiiMusic.Controls
         {
             base.OnResize(e);
 
-            _closeBtnRect = new Rectangle(Width - 32, 8, 22, 22);
+            _closeBtnRect = Rectangle.Empty;
 
-            // 4 tabs layout
-            int tabY = HeaderH;
+            // 4 tabs layout directly at top
+            int tabY = 10;
             int tabMargin = 8;
             int availTabW = Width - (tabMargin * 2);
             int tabSpacing = 4;
@@ -262,10 +262,10 @@ namespace KahoiiMusic.Controls
                 _tabRects[i] = new Rectangle(tabMargin + i * (tabW + tabSpacing), tabY, tabW, TabsH);
             }
 
-            // Search box position
+            // Search box position below tabs
             if (_searchBox != null)
             {
-                _searchBox.Location = new Point(10, HeaderH + TabsH + 6);
+                _searchBox.Location = new Point(10, tabY + TabsH + 8);
                 _searchBox.Size = new Size(Math.Max(100, Width - 20), SearchBoxH);
             }
 
@@ -520,35 +520,7 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            // 2. Header
-            string headerTitle = "Hàng đợi phát nhạc";
-            if (_activeTab == SideTab.Favorites) headerTitle = "Bộ sưu tập bài hát";
-            else if (_activeTab == SideTab.History) headerTitle = "Lịch sử đã nghe";
-            else if (_activeTab == SideTab.Saved) headerTitle = "Bài hát đã tải";
-
-            using (Font titleFont = new Font("Segoe UI", 11.0f, FontStyle.Bold))
-            using (SolidBrush titleBrush = new SolidBrush(Color.FromArgb(245, 245, 255)))
-            {
-                g.DrawString(headerTitle, titleFont, titleBrush, new PointF(14, 10));
-            }
-
-            // Close button [✕]
-            if (_isHoveringClose)
-            {
-                using (GraphicsPath closePath = RoundedRect(_closeBtnRect, 5))
-                using (SolidBrush closeHover = new SolidBrush(Color.FromArgb(70, 255, 60, 90)))
-                {
-                    g.FillPath(closeHover, closePath);
-                }
-            }
-            using (Font closeFont = new Font("Segoe UI", 9.5f, FontStyle.Bold))
-            using (SolidBrush closeBrush = new SolidBrush(_isHoveringClose ? Color.White : Color.FromArgb(160, 160, 185)))
-            using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            {
-                g.DrawString("✕", closeFont, closeBrush, _closeBtnRect, sf);
-            }
-
-            // 3. Tabs (Pill Buttons)
+            // 2. Tabs (Pill Buttons directly at top)
             string[] tabLabels = { "Hàng đợi", "Bộ sưu tập", "Lịch sử", "Đã tải" };
             for (int i = 0; i < 4; i++)
             {

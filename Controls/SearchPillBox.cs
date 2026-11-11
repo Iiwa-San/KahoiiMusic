@@ -461,19 +461,6 @@ namespace KahoiiMusic.Controls
             }
         }
 
-        private static GraphicsPath GetRoundedRect(Rectangle r, int radius)
-        {
-            GraphicsPath path = new GraphicsPath();
-            int d = Math.Min(radius * 2, Math.Min(r.Width, r.Height));
-            if (d <= 0) { path.AddRectangle(r); return path; }
-            path.AddArc(r.X, r.Y, d, d, 180, 90);
-            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
-
         private void DrawMagnifyingGlass(Graphics g, int x, int y, bool active)
         {
             Color iconColor = active ? Color.FromArgb(255, 45, 133) : Color.FromArgb(130, 120, 155);
@@ -484,6 +471,20 @@ namespace KahoiiMusic.Controls
                 // Handle
                 g.DrawLine(pen, x + 6.2f, y + 6.2f, x + 10.5f, y + 10.5f);
             }
+        }
+
+        private static GraphicsPath GetRoundedRect(Rectangle rect, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            int d = radius * 2;
+            if (d > rect.Width) d = rect.Width;
+            if (d > rect.Height) d = rect.Height;
+            path.AddArc(rect.X, rect.Y, d, d, 180, 90);
+            path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);
+            path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
+            path.AddArc(rect.X, rect.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         protected override void Dispose(bool disposing)

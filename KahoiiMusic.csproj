@@ -124,7 +124,8 @@
     <Compile Include="Controls\SideMenuPanel.cs" />
     <Compile Include="Controls\ActiveQueuePanel.cs" />
     <Compile Include="Controls\RoundedCardPanel.cs" />
-    <Compile Include="Controls\TranslucentPillButton.cs" />
+    <Compile Include="Controls\ThumbnailActionPopup.cs" />
+    <Compile Include="Controls\ThumbnailMenuButton.cs" />
     <Compile Include="Controls\PlaylistPopup.cs">
       <SubType>Form</SubType>
     </Compile>

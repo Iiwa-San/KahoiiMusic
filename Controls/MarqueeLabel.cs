@@ -86,6 +86,22 @@ namespace KahoiiMusic.Controls
             }
         }
 
+        private StringAlignment _textAlignment = StringAlignment.Center;
+        [Category("Appearance")]
+        [DefaultValue(StringAlignment.Center)]
+        public StringAlignment TextAlignment
+        {
+            get { return _textAlignment; }
+            set
+            {
+                if (_textAlignment != value)
+                {
+                    _textAlignment = value;
+                    Invalidate();
+                }
+            }
+        }
+
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
@@ -176,7 +192,7 @@ namespace KahoiiMusic.Controls
                 {
                     using (StringFormat sfCenter = new StringFormat()
                     {
-                        Alignment = StringAlignment.Center,
+                        Alignment = _textAlignment,
                         LineAlignment = StringAlignment.Center,
                         FormatFlags = StringFormatFlags.NoWrap
                     })

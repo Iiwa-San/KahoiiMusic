@@ -90,7 +90,6 @@ namespace KahoiiMusic
             // 
             // panelPlayerCard
             // 
-            this.panelPlayerCard.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(20)))), ((int)(((byte)(16)))), ((int)(((byte)(38)))));
             this.panelPlayerCard.Controls.Add(this.panelTopBar);
             this.panelPlayerCard.Controls.Add(this.gradientPanel);
             this.panelPlayerCard.Controls.Add(this.panelBottomControls);
@@ -130,7 +129,6 @@ namespace KahoiiMusic
             // 
             // gradientPanel
             // 
-            this.gradientPanel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(38)))), ((int)(((byte)(16)))), ((int)(((byte)(92)))));
             this.gradientPanel.BottomColor = System.Drawing.Color.FromArgb(((int)(((byte)(168)))), ((int)(((byte)(26)))), ((int)(((byte)(94)))));
             this.gradientPanel.Controls.Add(this.volumePopup);
             this.gradientPanel.Controls.Add(this.artworkBox);
@@ -333,7 +331,7 @@ namespace KahoiiMusic
             this.lblVersion.Name = "lblVersion";
             this.lblVersion.Size = new System.Drawing.Size(86, 15);
             this.lblVersion.TabIndex = 10;
-            this.lblVersion.Text = "v1.0.25";
+            this.lblVersion.Text = "v1.0.24";
             this.lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
             // musicTrackBar

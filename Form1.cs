@@ -52,11 +52,10 @@ namespace KahoiiMusic
         private Controls.SearchResultsView _searchResultsView;
         private Controls.SideMenuPanel _sideMenuPanel;
         private Controls.ActiveQueuePanel _activeQueuePanel;
-        private Controls.RoundedCardPanel _nowPlayingCard;
+        private Controls.RoundedCardPanel _topSectionCard;
         private Controls.RoundedCardPanel _lyricsCard;
-        private Controls.TranslucentPillButton btnSaveLibrary;
-        private Controls.TranslucentPillButton btnDownloadTrack;
-        private Label lblMaximizedTime;
+        private Controls.ThumbnailMenuButton btnThumbnailMenu;
+        private Controls.ThumbnailActionPopup thumbnailActionPopup;
         private bool _isMaximizedMode = false;
         private bool _isSideMenuUserClosed = false;
         private volatile bool _isFormClosed = false;
@@ -214,26 +213,41 @@ namespace KahoiiMusic
             };
             gradientPanel.Controls.Add(_activeQueuePanel);
 
-            _nowPlayingCard = new Controls.RoundedCardPanel();
-            _nowPlayingCard.CornerRadius = 14;
-            _nowPlayingCard.CardBackColor = Color.FromArgb(235, 20, 14, 36);
-            _nowPlayingCard.CardBorderColor = Color.FromArgb(70, 180, 80, 220);
-            _nowPlayingCard.Visible = false;
-            gradientPanel.Controls.Add(_nowPlayingCard);
+            _topSectionCard = new Controls.RoundedCardPanel();
+            _topSectionCard.CornerRadius = 14;
+            _topSectionCard.CardBackColor = Color.FromArgb(235, 20, 14, 38);
+            _topSectionCard.CardBorderColor = Color.FromArgb(80, 168, 85, 247);
+            _topSectionCard.Visible = false;
+            gradientPanel.Controls.Add(_topSectionCard);
 
             _lyricsCard = new Controls.RoundedCardPanel();
-            _lyricsCard.CornerRadius = 14;
-            _lyricsCard.CardBackColor = Color.FromArgb(235, 20, 14, 36);
-            _lyricsCard.CardBorderColor = Color.FromArgb(70, 180, 80, 220);
+            _lyricsCard.CornerRadius = 12;
+            _lyricsCard.CardBackColor = Color.FromArgb(210, 16, 10, 32);
+            _lyricsCard.CardBorderColor = Color.FromArgb(70, 168, 85, 247);
             _lyricsCard.Visible = false;
-            gradientPanel.Controls.Add(_lyricsCard);
+            _topSectionCard.Controls.Add(_lyricsCard);
 
-            btnSaveLibrary = new Controls.TranslucentPillButton();
-            btnSaveLibrary.Text = "+ Lưu vào Library";
-            btnSaveLibrary.Size = new Size(116, 22);
-            btnSaveLibrary.Visible = false;
-            btnSaveLibrary.Click += (s, e) =>
+            btnThumbnailMenu = new Controls.ThumbnailMenuButton();
+            btnThumbnailMenu.Visible = false;
+            btnThumbnailMenu.Click += (s, e) =>
             {
+                if (thumbnailActionPopup != null)
+                {
+                    thumbnailActionPopup.Visible = !thumbnailActionPopup.Visible;
+                    btnThumbnailMenu.IsOpen = thumbnailActionPopup.Visible;
+                    if (thumbnailActionPopup.Visible)
+                    {
+                        thumbnailActionPopup.BringToFront();
+                    }
+                }
+            };
+            artworkBox.Controls.Add(btnThumbnailMenu);
+
+            thumbnailActionPopup = new Controls.ThumbnailActionPopup();
+            thumbnailActionPopup.Visible = false;
+            thumbnailActionPopup.SaveLibraryClicked += (s, e) =>
+            {
+                if (btnThumbnailMenu != null) btnThumbnailMenu.IsOpen = false;
                 if (_audioPlayer != null && _audioPlayer.HasTrack && !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
                 {
                     string tit = _audioPlayer.CurrentTitle;
@@ -249,13 +263,9 @@ namespace KahoiiMusic
                     _sideMenuPanel?.RefreshData();
                 }
             };
-
-            btnDownloadTrack = new Controls.TranslucentPillButton();
-            btnDownloadTrack.Text = "↓ Tải xuống";
-            btnDownloadTrack.Size = new Size(88, 22);
-            btnDownloadTrack.Visible = false;
-            btnDownloadTrack.Click += (s, e) =>
+            thumbnailActionPopup.DownloadClicked += (s, e) =>
             {
+                if (btnThumbnailMenu != null) btnThumbnailMenu.IsOpen = false;
                 if (_audioPlayer != null && _audioPlayer.HasTrack && !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId))
                 {
                     string tit = _audioPlayer.CurrentTitle;
@@ -282,15 +292,7 @@ namespace KahoiiMusic
                     });
                 }
             };
-
-            lblMaximizedTime = new Label();
-            lblMaximizedTime.AutoSize = false;
-            lblMaximizedTime.BackColor = Color.Transparent;
-            lblMaximizedTime.ForeColor = Color.FromArgb(170, 160, 195);
-            lblMaximizedTime.Font = new Font("Segoe UI", 9.0f, FontStyle.Regular);
-            lblMaximizedTime.Text = "00:00 / 00:00";
-            lblMaximizedTime.Visible = false;
-            gradientPanel.Controls.Add(lblMaximizedTime);
+            artworkBox.Controls.Add(thumbnailActionPopup);
 
             accountPopup = new AccountForm();
             accountPopup.Owner = this;
@@ -885,6 +887,18 @@ namespace KahoiiMusic
                     if (!volumePopup.ClientRectangle.Contains(ptPopup) && !btnVolume.ClientRectangle.Contains(ptBtn))
                     {
                         volumePopup.Visible = false;
+                    }
+                }
+                if (thumbnailActionPopup != null && thumbnailActionPopup.Visible)
+                {
+                    Rectangle popupScreenRect = thumbnailActionPopup.RectangleToScreen(thumbnailActionPopup.ClientRectangle);
+                    Rectangle btnScreenRect = (btnThumbnailMenu != null && btnThumbnailMenu.Visible)
+                        ? btnThumbnailMenu.RectangleToScreen(btnThumbnailMenu.ClientRectangle)
+                        : Rectangle.Empty;
+                    if (!popupScreenRect.Contains(cur) && !btnScreenRect.Contains(cur))
+                    {
+                        thumbnailActionPopup.Visible = false;
+                        if (btnThumbnailMenu != null) btnThumbnailMenu.IsOpen = false;
                     }
                 }
                 if (playlistPopup != null && playlistPopup.Visible)
@@ -1650,7 +1664,7 @@ namespace KahoiiMusic
             get
             {
                 CreateParams cp = base.CreateParams;
-                // WS_THICKFRAME (0x40000) omitted to eliminate free-form edge resizing
+                cp.Style |= 0x40000; // WS_THICKFRAME (WS_SIZEBOX - enables native Windows window edge resizing)
                 cp.Style |= 0x20000; // WS_MINIMIZEBOX (enables minimize from taskbar)
                 cp.Style |= 0x80000; // WS_SYSMENU (enables Alt+F4 and standard close signals)
                 cp.Style |= 0x02000000; // WS_CLIPCHILDREN (prevents white flashing during resize)
@@ -2860,7 +2874,7 @@ namespace KahoiiMusic
                 return;
             }
 
-            if (m.Msg == WM_NCHITTEST)
+            if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
             {
                 Point screenPt;
                 if (m.LParam != IntPtr.Zero)
@@ -2874,8 +2888,8 @@ namespace KahoiiMusic
                     screenPt = Cursor.Position;
                 }
                 Point pt = PointToClient(screenPt);
-                // Allow caption dragging on top 26px of the form (excluding window action buttons on right)
-                if (pt.Y >= 0 && pt.Y <= 26 && pt.X < ClientSize.Width - 85)
+                // Allow dragging window from top caption bar (y <= 24, avoiding window controls on right)
+                if (pt.Y <= 24 && pt.X < ClientSize.Width - 85)
                 {
                     m.Result = (IntPtr)HTCAPTION;
                     return;
@@ -2896,12 +2910,10 @@ namespace KahoiiMusic
             }
             if (WindowState == FormWindowState.Maximized)
             {
-                _isMaximizedMode = true;
                 if (btnMaximize != null) btnMaximize.Text = "❐";
             }
             else if (WindowState == FormWindowState.Normal)
             {
-                _isMaximizedMode = false;
                 if (btnMaximize != null) btnMaximize.Text = "▢";
                 if (ClientSize.Width != 480 || ClientSize.Height != 362)
                 {
@@ -2915,8 +2927,7 @@ namespace KahoiiMusic
         {
             int clientW = ClientSize.Width;
             int clientH = ClientSize.Height;
-            if (clientW < 200 || clientH < 200) return;
-            if (panelPlayerCard == null || panelTopBar == null || gradientPanel == null || panelBottomControls == null || artworkBox == null) return;
+            if (clientW < 300 || clientH < 250) return;
 
             this.SuspendLayout();
             panelPlayerCard.SuspendLayout();
@@ -2935,7 +2946,7 @@ namespace KahoiiMusic
                     ApplyCompactTemplate(clientW, clientH);
                 }
 
-                // _searchDropdown position and width if visible
+                // Search dropdown popup position if visible
                 if (_searchDropdown != null && _searchDropdown.Visible)
                 {
                     Point dropPt = panelTopBar.PointToScreen(new Point(searchPillBox.Left, searchPillBox.Bottom + 4));
@@ -2955,81 +2966,315 @@ namespace KahoiiMusic
             panelPlayerCard.Invalidate();
         }
 
-        private void ApplyCompactTemplate(int clientW, int clientH)
+        private void ApplyMaximizedTemplate(int clientW, int clientH)
         {
-            // 1. Title bar buttons
+            _isMaximizedMode = true;
+
+            // Auto-close playlist popup in maximized mode
+            if (playlistPopup != null && playlistPopup.Visible)
+            {
+                playlistPopup.Hide();
+                btnPlaylist.IsOpen = false;
+            }
+
+            // 1. Title bar controls
             if (btnClose != null && btnMaximize != null && btnMinimize != null)
             {
                 btnClose.Location = new Point(clientW - 26, 3);
                 btnMaximize.Location = new Point(clientW - 50, 3);
                 btnMinimize.Location = new Point(clientW - 74, 3);
+                btnMaximize.Text = "❐";
             }
 
-            // 2. Main card
+            // 2. panelPlayerCard fills form below title bar (24px)
             int cardW = clientW - 4;
             int cardH = clientH - 26;
             panelPlayerCard.Location = new Point(2, 24);
             panelPlayerCard.Size = new Size(cardW, cardH);
 
-            // 3. Top bar
+            // 3. panelTopBar at top (height 48px)
+            int topBarH = 48;
+            panelTopBar.Location = new Point(0, 0);
+            panelTopBar.Size = new Size(cardW, topBarH);
+
+            btnPlaylist.Visible = false;
+            btnUser.Visible = true;
+            btnUser.Location = new Point(cardW - 14 - btnUser.Width, (topBarH - btnUser.Height) / 2);
+
+            int searchW = Math.Min(560, cardW - 180);
+            searchPillBox.Location = new Point((cardW - searchW) / 2, (topBarH - 36) / 2);
+            searchPillBox.Size = new Size(Math.Max(180, searchW), 36);
+
+            // 4. panelBottomControls hidden in Maximized mode
+            panelBottomControls.Visible = false;
+
+            // 5. gradientPanel fills rest of space
+            int midY = topBarH;
+            int midH = cardH - midY;
+            gradientPanel.Location = new Point(0, midY);
+            gradientPanel.Size = new Size(cardW, midH);
+
+            // Reparent controls for Maximized template
+            if (_sideMenuPanel != null && _sideMenuPanel.Parent != gradientPanel) gradientPanel.Controls.Add(_sideMenuPanel);
+            if (_topSectionCard != null && _topSectionCard.Parent != gradientPanel) gradientPanel.Controls.Add(_topSectionCard);
+            if (_activeQueuePanel != null && _activeQueuePanel.Parent != gradientPanel) gradientPanel.Controls.Add(_activeQueuePanel);
+
+            if (_topSectionCard != null)
+            {
+                if (artworkBox.Parent != _topSectionCard) _topSectionCard.Controls.Add(artworkBox);
+                if (marqueeTitle.Parent != _topSectionCard) _topSectionCard.Controls.Add(marqueeTitle);
+                if (marqueeAuthor.Parent != _topSectionCard) _topSectionCard.Controls.Add(marqueeAuthor);
+                if (_lyricsCard != null && _lyricsCard.Parent != _topSectionCard) _topSectionCard.Controls.Add(_lyricsCard);
+            }
+
+            if (_lyricsCard != null && lyricsPanel.Parent != _lyricsCard)
+            {
+                _lyricsCard.Controls.Add(lyricsPanel);
+            }
+
+            // Controls on artworkBox
+            if (btnThumbnailMenu != null && btnThumbnailMenu.Parent != artworkBox) artworkBox.Controls.Add(btnThumbnailMenu);
+            if (thumbnailActionPopup != null && thumbnailActionPopup.Parent != artworkBox) artworkBox.Controls.Add(thumbnailActionPopup);
+            if (btnFavorite.Parent != artworkBox) artworkBox.Controls.Add(btnFavorite);
+            if (musicTrackBar.Parent != artworkBox) artworkBox.Controls.Add(musicTrackBar);
+            if (btnLoop.Parent != artworkBox) artworkBox.Controls.Add(btnLoop);
+            if (btnPrevious.Parent != artworkBox) artworkBox.Controls.Add(btnPrevious);
+            if (btnPlayPause.Parent != artworkBox) artworkBox.Controls.Add(btnPlayPause);
+            if (btnNext.Parent != artworkBox) artworkBox.Controls.Add(btnNext);
+            if (btnVolume.Parent != artworkBox) artworkBox.Controls.Add(btnVolume);
+
+            // Artwork styling for Maximized template
+            artworkBox.EnableModeToggleOnClick = false;
+            artworkBox.ShowBottomTimeText = false;
+            artworkBox.SetDisplayMode(ArtworkDisplayMode.RoundedCard);
+            artworkBox.Cursor = Cursors.Default;
+            if (btnLyrics != null) btnLyrics.Visible = false;
+
+            int pad = 12;
+            int totalW = gradientPanel.Width;
+            int totalH = gradientPanel.Height;
+
+            // Left Session: SideMenuPanel
+            int sideW = Math.Min(380, Math.Max(280, (int)(totalW * 0.31f)));
+            int sideH = totalH - 12 - pad;
+            if (_sideMenuPanel != null)
+            {
+                _sideMenuPanel.Location = new Point(pad, 10);
+                _sideMenuPanel.Size = new Size(sideW, sideH);
+                _sideMenuPanel.Visible = true;
+                _sideMenuPanel.BringToFront();
+                _sideMenuPanel.RefreshData();
+            }
+
+            // Right Session
+            int rightX = (pad + sideW) + pad;
+            int rightW = totalW - rightX - pad;
+            int rightH = totalH - 10 - pad;
+
+            // Top Card: _topSectionCard
+            int topH = Math.Max(210, Math.Min(270, (int)(rightH * 0.44f)));
+            if (_topSectionCard != null)
+            {
+                _topSectionCard.Location = new Point(rightX, 10);
+                _topSectionCard.Size = new Size(rightW, topH);
+                _topSectionCard.Visible = true;
+                _topSectionCard.BringToFront();
+
+                // Artwork inside top card
+                int artSize = topH - 24;
+                artworkBox.Location = new Point(14, 12);
+                artworkBox.Size = new Size(artSize, artSize);
+                artworkBox.Visible = true;
+                artworkBox.BringToFront();
+
+                // Controls overlaid on artworkBox
+                if (btnThumbnailMenu != null)
+                {
+                    btnThumbnailMenu.Location = new Point(8, 8);
+                    btnThumbnailMenu.Size = new Size(24, 24);
+                    btnThumbnailMenu.Visible = true;
+                    btnThumbnailMenu.BringToFront();
+                }
+
+                if (thumbnailActionPopup != null)
+                {
+                    thumbnailActionPopup.Location = new Point(36, 8);
+                    if (thumbnailActionPopup.Visible) thumbnailActionPopup.BringToFront();
+                }
+
+                btnFavorite.Location = new Point(artSize - 32, 8);
+                btnFavorite.Size = new Size(24, 24);
+                btnFavorite.Visible = true;
+                btnFavorite.BringToFront();
+
+                musicTrackBar.Location = new Point(10, artSize - 44);
+                musicTrackBar.Size = new Size(artSize - 20, 14);
+                musicTrackBar.Visible = true;
+                musicTrackBar.BringToFront();
+
+                // 5 buttons under trackbar
+                int cx = artSize / 2;
+                int playBtnSize = 24;
+                int smallBtnSize = 20;
+                int btnY = artSize - 27;
+
+                btnPlayPause.Location = new Point(cx - playBtnSize / 2, btnY - 2);
+                btnPlayPause.Size = new Size(playBtnSize, playBtnSize);
+                btnPlayPause.Visible = true;
+                btnPlayPause.BringToFront();
+
+                btnPrevious.Location = new Point(btnPlayPause.Left - smallBtnSize - 10, btnY);
+                btnPrevious.Size = new Size(smallBtnSize, smallBtnSize);
+                btnPrevious.Visible = true;
+                btnPrevious.BringToFront();
+
+                btnLoop.Location = new Point(12, btnY);
+                btnLoop.Size = new Size(smallBtnSize, smallBtnSize);
+                btnLoop.Visible = true;
+                btnLoop.BringToFront();
+
+                btnNext.Location = new Point(btnPlayPause.Right + 10, btnY);
+                btnNext.Size = new Size(smallBtnSize, smallBtnSize);
+                btnNext.Visible = true;
+                btnNext.BringToFront();
+
+                btnVolume.Location = new Point(artSize - smallBtnSize - 12, btnY);
+                btnVolume.Size = new Size(smallBtnSize, smallBtnSize);
+                btnVolume.Visible = true;
+                btnVolume.BringToFront();
+
+                // Typography beside artworkBox
+                int midX = artworkBox.Right + 14;
+                int midW = _topSectionCard.Width - midX - 14;
+
+                marqueeTitle.Font = new Font("Segoe UI", 14f, FontStyle.Bold);
+                marqueeTitle.TextAlignment = StringAlignment.Near;
+                marqueeTitle.Location = new Point(midX, 10);
+                marqueeTitle.Size = new Size(midW, 26);
+                marqueeTitle.Visible = true;
+                marqueeTitle.BringToFront();
+
+                marqueeAuthor.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+                marqueeAuthor.TextAlignment = StringAlignment.Near;
+                marqueeAuthor.Location = new Point(midX, marqueeTitle.Bottom + 2);
+                marqueeAuthor.Size = new Size(midW, 18);
+                marqueeAuthor.Visible = true;
+                marqueeAuthor.BringToFront();
+
+                // Lyrics box inside top card
+                if (_lyricsCard != null)
+                {
+                    int lyricsCardY = marqueeAuthor.Bottom + 6;
+                    int lyricsCardH = topH - lyricsCardY - 10;
+                    _lyricsCard.Location = new Point(midX, lyricsCardY);
+                    _lyricsCard.Size = new Size(midW, lyricsCardH);
+                    _lyricsCard.Visible = true;
+                    _lyricsCard.BringToFront();
+
+                    lyricsPanel.Location = new Point(4, 4);
+                    lyricsPanel.Size = new Size(_lyricsCard.Width - 8, _lyricsCard.Height - 8);
+                    lyricsPanel.Visible = true;
+                    lyricsPanel.BringToFront();
+                    lyricsPanel.Invalidate();
+                }
+            }
+
+            // Bottom Card: _activeQueuePanel
+            if (_activeQueuePanel != null)
+            {
+                int bottomY = (topH + 10) + pad;
+                int bottomH = totalH - bottomY - pad;
+                _activeQueuePanel.Location = new Point(rightX, bottomY);
+                _activeQueuePanel.Size = new Size(rightW, bottomH);
+                _activeQueuePanel.Visible = true;
+                _activeQueuePanel.BringToFront();
+                _activeQueuePanel.RefreshData();
+            }
+
+            if (_searchResultsView != null && _searchResultsView.Visible)
+            {
+                _searchResultsView.BringToFront();
+            }
+        }
+
+        private void ApplyCompactTemplate(int clientW, int clientH)
+        {
+            _isMaximizedMode = false;
+
+            // 1. Title bar controls
+            if (btnClose != null && btnMaximize != null && btnMinimize != null)
+            {
+                btnClose.Location = new Point(clientW - 26, 3);
+                btnMaximize.Location = new Point(clientW - 50, 3);
+                btnMinimize.Location = new Point(clientW - 74, 3);
+                btnMaximize.Text = "▢";
+            }
+
+            // 2. panelPlayerCard fills the rest of the form below title bar (24px)
+            int cardW = clientW - 4;
+            int cardH = clientH - 26;
+            panelPlayerCard.Location = new Point(2, 24);
+            panelPlayerCard.Size = new Size(cardW, cardH);
+
+            // 3. panelTopBar at top (height 46px)
             int topBarH = 46;
             panelTopBar.Location = new Point(0, 0);
             panelTopBar.Size = new Size(cardW, topBarH);
 
             btnPlaylist.Visible = true;
             btnPlaylist.Location = new Point(12, (topBarH - btnPlaylist.Height) / 2);
+            btnUser.Visible = true;
             btnUser.Location = new Point(cardW - 12 - btnUser.Width, (topBarH - btnUser.Height) / 2);
 
             int searchLeft = btnPlaylist.Right + 12;
             int searchRight = btnUser.Left - 12;
-            int maxSearchW = 340;
+            int maxSearchW = 560;
             int availSearchW = searchRight - searchLeft;
             int searchW = Math.Min(maxSearchW, availSearchW);
             int searchX = (cardW - searchW) / 2;
             if (searchX < searchLeft) searchX = searchLeft;
             if (searchX + searchW > searchRight) searchW = searchRight - searchX;
+
             searchPillBox.Location = new Point(searchX, (topBarH - 36) / 2);
             searchPillBox.Size = new Size(Math.Max(120, searchW), 36);
 
-            // 4. Reparent controls back to panelBottomControls and gradientPanel
-            if (musicTrackBar.Parent != panelBottomControls) musicTrackBar.Parent = panelBottomControls;
-            if (btnPlayPause.Parent != panelBottomControls) btnPlayPause.Parent = panelBottomControls;
-            if (btnPrevious.Parent != panelBottomControls) btnPrevious.Parent = panelBottomControls;
-            if (btnNext.Parent != panelBottomControls) btnNext.Parent = panelBottomControls;
-            if (btnFavorite.Parent != panelBottomControls) btnFavorite.Parent = panelBottomControls;
-            if (btnQuickDownload.Parent != panelBottomControls) btnQuickDownload.Parent = panelBottomControls;
-            if (btnLoop.Parent != panelBottomControls) btnLoop.Parent = panelBottomControls;
-            if (btnTimer.Parent != panelBottomControls) btnTimer.Parent = panelBottomControls;
-            if (btnVolume.Parent != panelBottomControls) btnVolume.Parent = panelBottomControls;
-
-            if (artworkBox.Parent != gradientPanel) artworkBox.Parent = gradientPanel;
-            if (marqueeTitle.Parent != gradientPanel) marqueeTitle.Parent = gradientPanel;
-            if (marqueeAuthor.Parent != gradientPanel) marqueeAuthor.Parent = gradientPanel;
-            if (btnLyrics != null && btnLyrics.Parent != gradientPanel) btnLyrics.Parent = gradientPanel;
-            if (lyricsPanel != null && lyricsPanel.Parent != gradientPanel) lyricsPanel.Parent = gradientPanel;
-
-            // Clear child controls from artworkBox
-            artworkBox.Controls.Clear();
-            artworkBox.EnableModeToggleOnClick = true;
-            artworkBox.ShowBottomTimeText = true;
-            artworkBox.DisplayMode = HistoryService.ArtworkMode;
-
-            if (btnSaveLibrary != null) btnSaveLibrary.Visible = false;
-            if (btnDownloadTrack != null) btnDownloadTrack.Visible = false;
-            if (lblMaximizedTime != null) lblMaximizedTime.Visible = false;
-
-            // Hide maximized template panels
-            if (_sideMenuPanel != null) _sideMenuPanel.Visible = false;
-            if (_nowPlayingCard != null) _nowPlayingCard.Visible = false;
-            if (_lyricsCard != null) _lyricsCard.Visible = false;
-            if (_activeQueuePanel != null) _activeQueuePanel.Visible = false;
-
-            // Bottom controls bar
+            // 4. panelBottomControls docked at bottom (height 104px)
             int bottomH = 104;
-            panelBottomControls.Visible = true;
             panelBottomControls.Location = new Point(0, cardH - bottomH);
             panelBottomControls.Size = new Size(cardW, bottomH);
+            panelBottomControls.Visible = true;
 
+            // Reparent controls back to compact containers
+            if (artworkBox.Parent != gradientPanel) gradientPanel.Controls.Add(artworkBox);
+            if (marqueeTitle.Parent != gradientPanel) gradientPanel.Controls.Add(marqueeTitle);
+            if (marqueeAuthor.Parent != gradientPanel) gradientPanel.Controls.Add(marqueeAuthor);
+            if (lyricsPanel.Parent != gradientPanel) gradientPanel.Controls.Add(lyricsPanel);
+
+            if (musicTrackBar.Parent != panelBottomControls) panelBottomControls.Controls.Add(musicTrackBar);
+            if (btnFavorite.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnFavorite);
+            if (btnQuickDownload.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnQuickDownload);
+            if (btnPrevious.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnPrevious);
+            if (btnPlayPause.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnPlayPause);
+            if (btnNext.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnNext);
+            if (btnLoop.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnLoop);
+            if (btnTimer.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnTimer);
+            if (btnVolume.Parent != panelBottomControls) panelBottomControls.Controls.Add(btnVolume);
+
+            // Hide Maximized-only controls
+            if (_topSectionCard != null) _topSectionCard.Visible = false;
+            if (_lyricsCard != null) _lyricsCard.Visible = false;
+            if (_activeQueuePanel != null) _activeQueuePanel.Visible = false;
+            if (_sideMenuPanel != null) _sideMenuPanel.Visible = false;
+            if (btnThumbnailMenu != null) btnThumbnailMenu.Visible = false;
+            if (thumbnailActionPopup != null) thumbnailActionPopup.Visible = false;
+
+            // Restore Artwork Box properties
+            artworkBox.EnableModeToggleOnClick = true;
+            artworkBox.ShowBottomTimeText = true;
+            artworkBox.Cursor = Cursors.Hand;
+            if (btnLyrics != null) btnLyrics.Visible = true;
+
+            // Bottom controls layout
             musicTrackBar.Location = new Point(24, 14);
             musicTrackBar.Size = new Size(Math.Max(100, cardW - 48), 20);
             musicTrackBar.Visible = true;
@@ -3040,36 +3285,49 @@ namespace KahoiiMusic
             int gap = Math.Max(8, Math.Min(22, (cardW - 320) / 10));
 
             btnPlayPause.Location = new Point(playX, btnPlayY);
+            btnPlayPause.Size = new Size(34, 34);
             btnPlayPause.Visible = true;
 
             btnPrevious.Location = new Point(playX - gap - btnPrevious.Width, btnY);
+            btnPrevious.Size = new Size(24, 24);
             btnPrevious.Visible = true;
+
             btnQuickDownload.Location = new Point(btnPrevious.Left - gap - btnQuickDownload.Width, btnY);
+            btnQuickDownload.Size = new Size(24, 24);
             btnQuickDownload.Visible = true;
+
             btnFavorite.Location = new Point(btnQuickDownload.Left - gap - btnFavorite.Width, btnY);
+            btnFavorite.Size = new Size(24, 24);
             btnFavorite.Visible = true;
 
             btnNext.Location = new Point(playX + 34 + gap, btnY);
+            btnNext.Size = new Size(24, 24);
             btnNext.Visible = true;
+
             btnLoop.Location = new Point(btnNext.Right + gap, btnY);
+            btnLoop.Size = new Size(24, 24);
             btnLoop.Visible = true;
+
             btnTimer.Location = new Point(btnLoop.Right + gap, btnY);
+            btnTimer.Size = new Size(24, 24);
             btnTimer.Visible = true;
+
             btnVolume.Location = new Point(Math.Max(btnTimer.Right + gap + 10, cardW - 38 - btnVolume.Width), btnY);
+            btnVolume.Size = new Size(24, 24);
             btnVolume.Visible = true;
 
             lblCopyright.Location = new Point((cardW - lblCopyright.Width) / 2, bottomH - lblCopyright.Height - 6);
             lblVersion.Location = new Point(cardW - lblVersion.Width - 12, bottomH - lblVersion.Height - 6);
 
-            // Gradient panel in middle
+            // 5. gradientPanel fills between panelTopBar and panelBottomControls
             int midY = topBarH;
             int midH = Math.Max(50, panelBottomControls.Top - midY);
             gradientPanel.Location = new Point(0, midY);
             gradientPanel.Size = new Size(cardW, midH);
 
-            // Update Center Area Layout
             UpdateCenterAreaLayout(_isLyricsOpen ? 1f : 0f);
 
+            // VolumePopup position above btnVolume
             if (volumePopup != null && btnVolume != null)
             {
                 try
@@ -3082,246 +3340,31 @@ namespace KahoiiMusic
             }
         }
 
-        private void ApplyMaximizedTemplate(int clientW, int clientH)
-        {
-            // 1. Title bar buttons
-            if (btnClose != null && btnMaximize != null && btnMinimize != null)
-            {
-                btnClose.Location = new Point(clientW - 26, 3);
-                btnMaximize.Location = new Point(clientW - 50, 3);
-                btnMinimize.Location = new Point(clientW - 74, 3);
-            }
-
-            // 2. Main card fills form below title bar
-            int cardW = clientW - 4;
-            int cardH = clientH - 26;
-            panelPlayerCard.Location = new Point(2, 24);
-            panelPlayerCard.Size = new Size(cardW, cardH);
-
-            // 3. Top bar
-            int topBarH = 46;
-            panelTopBar.Location = new Point(0, 0);
-            panelTopBar.Size = new Size(cardW, topBarH);
-
-            btnPlaylist.Visible = false; // Left session is always open in maximized template
-            btnUser.Location = new Point(cardW - 14 - btnUser.Width, (topBarH - btnUser.Height) / 2);
-
-            int maxSearchW = 580;
-            int searchW = Math.Min(maxSearchW, cardW - 160);
-            int searchX = (cardW - searchW) / 2;
-            searchPillBox.Location = new Point(searchX, (topBarH - 36) / 2);
-            searchPillBox.Size = new Size(searchW, 36);
-
-            // 4. Hide compact bottom controls
-            panelBottomControls.Visible = false;
-
-            // 5. gradientPanel fills the rest below top bar
-            gradientPanel.Location = new Point(0, topBarH);
-            gradientPanel.Size = new Size(cardW, cardH - topBarH);
-
-            int bodyW = gradientPanel.Width;
-            int bodyH = gradientPanel.Height;
-
-            // LEFT SESSION (Session 1: SideMenuPanel)
-            int sideW = Math.Min(380, Math.Max(280, (int)(bodyW * 0.25f)));
-            if (_sideMenuPanel != null)
-            {
-                _sideMenuPanel.Location = new Point(12, 10);
-                _sideMenuPanel.Size = new Size(sideW, bodyH - 20);
-                _sideMenuPanel.Visible = true;
-                _sideMenuPanel.BringToFront();
-            }
-
-            // RIGHT SESSION (Session 2: Top Half = NowPlaying + Lyrics, Bottom Half = ActiveQueue)
-            int rightX = (sideW > 0 && _sideMenuPanel != null && _sideMenuPanel.Visible) ? (_sideMenuPanel.Right + 12) : 12;
-            int rightW = bodyW - rightX - 12;
-
-            int topH = Math.Min(260, Math.Max(210, (int)(bodyH * 0.35f)));
-
-            // Top Section: Now Playing Card (left) and Lyrics Card (right)
-            int nowPlayingW = Math.Min(560, Math.Max(400, (int)(rightW * 0.46f)));
-            int lyricsX = rightX + nowPlayingW + 12;
-            int lyricsW = rightW - nowPlayingW - 12;
-
-            if (_nowPlayingCard != null)
-            {
-                _nowPlayingCard.Location = new Point(rightX, 10);
-                _nowPlayingCard.Size = new Size(nowPlayingW, topH);
-                _nowPlayingCard.Visible = true;
-                _nowPlayingCard.BringToFront();
-
-                // 1. Square Artwork inside _nowPlayingCard
-                int artSize = Math.Min(190, topH - 24);
-                artworkBox.Parent = _nowPlayingCard;
-                artworkBox.DisplayMode = ArtworkDisplayMode.RoundedCard;
-                artworkBox.EnableModeToggleOnClick = false;
-                artworkBox.ShowBottomTimeText = false;
-                artworkBox.Location = new Point(12, (topH - artSize) / 2);
-                artworkBox.Size = new Size(artSize, artSize);
-                artworkBox.Visible = true;
-
-                // Overlay controls inside artworkBox:
-                // Top-left: btnSaveLibrary and btnDownloadTrack
-                if (btnSaveLibrary != null)
-                {
-                    btnSaveLibrary.Parent = artworkBox;
-                    btnSaveLibrary.Location = new Point(8, 8);
-                    btnSaveLibrary.Size = new Size(116, 22);
-                    btnSaveLibrary.Visible = true;
-                    btnSaveLibrary.BringToFront();
-                }
-
-                if (btnDownloadTrack != null)
-                {
-                    btnDownloadTrack.Parent = artworkBox;
-                    btnDownloadTrack.Location = new Point(8, 34);
-                    btnDownloadTrack.Size = new Size(88, 22);
-                    btnDownloadTrack.Visible = true;
-                    btnDownloadTrack.BringToFront();
-                }
-
-                // Top-right: Heart icon (btnFavorite)
-                btnFavorite.Parent = artworkBox;
-                btnFavorite.Location = new Point(artSize - 32, 8);
-                btnFavorite.Size = new Size(24, 24);
-                btnFavorite.Visible = true;
-                btnFavorite.BringToFront();
-
-                // Bottom of artwork: Trackbar and Playback buttons
-                int playY = artSize - 38;
-                int trackY = playY - 18;
-
-                musicTrackBar.Parent = artworkBox;
-                musicTrackBar.Location = new Point(8, trackY);
-                musicTrackBar.Size = new Size(artSize - 16, 16);
-                musicTrackBar.Visible = true;
-                musicTrackBar.BringToFront();
-
-                btnPlayPause.Parent = artworkBox;
-                btnPrevious.Parent = artworkBox;
-                btnNext.Parent = artworkBox;
-
-                btnPlayPause.Location = new Point((artSize - btnPlayPause.Width) / 2, playY);
-                btnPlayPause.Visible = true;
-                btnPlayPause.BringToFront();
-
-                btnPrevious.Location = new Point(btnPlayPause.Left - 8 - btnPrevious.Width, playY + 4);
-                btnPrevious.Visible = true;
-                btnPrevious.BringToFront();
-
-                btnNext.Location = new Point(btnPlayPause.Right + 8, playY + 4);
-                btnNext.Visible = true;
-                btnNext.BringToFront();
-
-                // 2. Info area beside artwork (Song Name, Author, Loop, Timer, Volume)
-                int infoX = artworkBox.Right + 14;
-                int infoW = nowPlayingW - infoX - 12;
-
-                marqueeTitle.Parent = _nowPlayingCard;
-                marqueeTitle.Font = new Font("Segoe UI", 13.0f, FontStyle.Bold);
-                marqueeTitle.Location = new Point(infoX, 22);
-                marqueeTitle.Size = new Size(Math.Max(80, infoW), 32);
-                marqueeTitle.Visible = true;
-
-                marqueeAuthor.Parent = _nowPlayingCard;
-                marqueeAuthor.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
-                marqueeAuthor.Location = new Point(infoX, marqueeTitle.Bottom + 4);
-                marqueeAuthor.Size = new Size(Math.Max(80, infoW), 22);
-                marqueeAuthor.Visible = true;
-
-                if (lblMaximizedTime != null)
-                {
-                    lblMaximizedTime.Parent = _nowPlayingCard;
-                    lblMaximizedTime.Location = new Point(infoX, marqueeAuthor.Bottom + 4);
-                    lblMaximizedTime.Size = new Size(Math.Max(80, infoW), 18);
-                    if (_audioPlayer != null && _audioPlayer.HasTrack)
-                    {
-                        lblMaximizedTime.Text = FormatTimeSpan(_audioPlayer.Position, _audioPlayer.TotalDuration);
-                    }
-                    lblMaximizedTime.Visible = true;
-                }
-
-                if (btnLyrics != null) btnLyrics.Visible = false; // Always displayed in _lyricsCard
-
-                int ctrlY = (lblMaximizedTime != null) ? (lblMaximizedTime.Bottom + 12) : (marqueeAuthor.Bottom + 18);
-                btnLoop.Parent = _nowPlayingCard;
-                btnTimer.Parent = _nowPlayingCard;
-                btnVolume.Parent = _nowPlayingCard;
-
-                btnLoop.Location = new Point(infoX, ctrlY);
-                btnLoop.Visible = true;
-                btnTimer.Location = new Point(btnLoop.Right + 12, ctrlY);
-                btnTimer.Visible = true;
-                btnVolume.Location = new Point(btnTimer.Right + 12, ctrlY);
-                btnVolume.Visible = true;
-            }
-
-            // Top Right: Lyrics Card
-            if (_lyricsCard != null)
-            {
-                _lyricsCard.Location = new Point(lyricsX, 10);
-                _lyricsCard.Size = new Size(lyricsW, topH);
-                _lyricsCard.Visible = true;
-                _lyricsCard.BringToFront();
-
-                if (lyricsPanel != null)
-                {
-                    lyricsPanel.Parent = _lyricsCard;
-                    lyricsPanel.Location = new Point(6, 6);
-                    lyricsPanel.Size = new Size(lyricsW - 12, topH - 12);
-                    lyricsPanel.Visible = true;
-                    lyricsPanel.BringToFront();
-                }
-            }
-
-            // Bottom Half: ActiveQueuePanel ("Danh sách đang phát(phát từ đâu cũng sẽ hiện ở đây)")
-            int queueY = 10 + topH + 12;
-            int queueH = bodyH - queueY - 10;
-            if (_activeQueuePanel != null)
-            {
-                _activeQueuePanel.Location = new Point(rightX, queueY);
-                _activeQueuePanel.Size = new Size(rightW, queueH);
-                _activeQueuePanel.Visible = true;
-                _activeQueuePanel.BringToFront();
-                _activeQueuePanel.RefreshData();
-            }
-
-            if (volumePopup != null && btnVolume != null)
-            {
-                try
-                {
-                    Point btnScreen = btnVolume.Parent.PointToScreen(btnVolume.Location);
-                    Point btnInGrad = gradientPanel.PointToClient(btnScreen);
-                    volumePopup.Location = new Point(btnInGrad.X + (btnVolume.Width - volumePopup.Width) / 2, Math.Max(0, btnInGrad.Y - volumePopup.Height - 4));
-                }
-                catch { }
-            }
-        }
-
         private void UpdateCenterAreaLayout(float ease)
         {
+            if (WindowState == FormWindowState.Maximized)
+            {
+                ApplyMaximizedTemplate(ClientSize.Width, ClientSize.Height);
+                return;
+            }
+
             if (gradientPanel == null || artworkBox == null) return;
             int cardW = gradientPanel.Width;
             int midH = gradientPanel.Height;
             if (cardW <= 0 || midH <= 0) return;
 
-            // When lyrics are CLOSED (ease = 0):
-            // Center artwork and title inside gradientPanel:
-            int closedArtSize = Math.Max(140, Math.Min(480, Math.Min(midH - 70, cardW - 60)));
+            int closedArtSize = Math.Max(120, Math.Min(160, midH - 65));
             int closedArtX = (cardW - closedArtSize) / 2;
-            int closedArtY = Math.Max(6, (midH - closedArtSize - 56) / 2);
-            int closedTitleW = Math.Min(cardW - 40, closedArtSize + 60);
+            int closedArtY = Math.Max(6, (midH - closedArtSize - 50) / 2);
+            int closedTitleW = Math.Min(cardW - 40, closedArtSize + 80);
             int closedTitleX = (cardW - closedTitleW) / 2;
 
-            // When lyrics are OPEN (ease = 1):
-            // Responsive thumbnail on the left, lyrics on the right:
-            int openArtSize = Math.Max(120, Math.Min(160, midH - 85));
+            int openArtSize = Math.Max(110, Math.Min(140, midH - 75));
             int openArtX = 14;
-            int openArtY = Math.Max(8, (midH - openArtSize - 55) / 2);
+            int openArtY = Math.Max(8, (midH - openArtSize - 50) / 2);
             int openTitleX = openArtX;
             int openTitleW = openArtSize;
 
-            // Interpolate smoothly with ease:
             int currentArtSize = (int)Math.Round(closedArtSize - (closedArtSize - openArtSize) * ease);
             int currentArtX = (int)Math.Round(closedArtX - (closedArtX - openArtX) * ease);
             int currentArtY = (int)Math.Round(closedArtY - (closedArtY - openArtY) * ease);
@@ -3331,12 +3374,13 @@ namespace KahoiiMusic
             artworkBox.Size = new Size(currentArtSize, currentArtSize);
             artworkBox.Location = new Point(currentArtX, currentArtY);
 
-            // Responsive typography and layout for marquee labels and btnLyrics on title row:
             int lyricsBtnW = (btnLyrics != null) ? 28 : 0;
             int availableTitleW = Math.Max(60, currentTitleW - lyricsBtnW - 4);
 
             marqueeTitle.Font = _titleFontNormal;
             marqueeAuthor.Font = _authorFontNormal;
+            marqueeTitle.TextAlignment = (ease > 0.5f) ? StringAlignment.Near : StringAlignment.Center;
+            marqueeAuthor.TextAlignment = (ease > 0.5f) ? StringAlignment.Near : StringAlignment.Center;
             marqueeTitle.Location = new Point(currentTitleX, artworkBox.Bottom + 6);
             marqueeTitle.Size = new Size(availableTitleW, 22);
 
@@ -3351,7 +3395,6 @@ namespace KahoiiMusic
             marqueeAuthor.Location = new Point(currentTitleX, marqueeTitle.Bottom + 2);
             marqueeAuthor.Size = new Size(currentTitleW, 18);
 
-            // LyricsPanel on the RIGHT of Player Area:
             if (lyricsPanel != null)
             {
                 if (ease <= 0.01f)
@@ -3360,7 +3403,7 @@ namespace KahoiiMusic
                 }
                 else
                 {
-                    int lyricsLeft = artworkBox.Right + 16;
+                    int lyricsLeft = artworkBox.Right + 14;
                     int lyricsWidth = cardW - lyricsLeft - 12;
                     lyricsPanel.Location = new Point(lyricsLeft, 8);
                     lyricsPanel.Size = new Size(Math.Max(80, lyricsWidth), Math.Max(40, midH - 16));
