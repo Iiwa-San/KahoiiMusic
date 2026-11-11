@@ -1,8 +1,8 @@
 {
-  "versionCode": 24,
-  "versionName": "1.0.24",
-  "changelog": "• Sửa lỗi hiển thị chữ bóng mờ (ghosting) trên thanh tìm kiếm\n• Tối ưu tốc độ tìm kiếm: giảm độ trễ phím và thêm cache tức thì (0ms)\n• Đồng bộ lời bài hát: nới lỏng dung sai thời lượng cho Music Video (MV) lên 28s để lấy đúng lời sync từ LRCLIB\n• Sửa thanh cuộn và hỗ trợ cuộn con lăn chuột trên danh sách tìm kiếm\n• Sửa lỗi viền trắng thanh tiêu đề khi Alt+Tab",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.24.exe",
+  "versionCode": 25,
+  "versionName": "1.0.25",
+  "changelog": "• Giao diện Responsive Thông minh 2 Session: Tự động chia session Menu (bên trái) và session Player UI (bên phải) khi độ rộng >= 1/3 màn hình\n• Responsive linh hoạt khi bật Lyrics: Thu nhỏ đĩa nhạc và mở rộng khung lời bài hát toàn bộ chiều rộng còn lại, tự động phóng to cỡ chữ theo kích thước màn hình\n• Chuyển nút Lyrics lên cạnh tên bài hát để cân bằng thanh điều khiển phát nhạc phía dưới\n• Loại bỏ hoàn toàn vệt chớp trắng khi kéo giãn viền cửa sổ ứng dụng\n• Khắc phục hoàn toàn lỗi menu và thanh cuộn không phản hồi chuột khi mở rộng\n• Tối ưu phím tắt: Tab ra vào ứng dụng nhận diện ngay lập tức phím điều khiển (Space, Mũi tên, Media keys) mà không cần click chuột",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.25.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {

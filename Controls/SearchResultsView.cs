@@ -585,6 +585,7 @@ namespace KahoiiMusic.Controls
             return path;
         }
 
+        private const int WM_ERASEBKGND = 0x0014;
         private const int WM_NCHITTEST = 0x84;
         private const int HTCLIENT = 1;
         private const int HTTRANSPARENT = -1;
@@ -592,6 +593,12 @@ namespace KahoiiMusic.Controls
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_ERASEBKGND)
+            {
+                m.Result = (IntPtr)1;
+                return;
+            }
+
             if (m.Msg == WM_NCHITTEST)
             {
                 Point screenPt;

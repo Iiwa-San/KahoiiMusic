@@ -158,6 +158,21 @@ namespace KahoiiMusic.Controls
         }
 
         [Category("Data")]
+        public int CurrentIndex
+        {
+            get => _currentIndex;
+            set
+            {
+                if (_currentIndex != value)
+                {
+                    _currentIndex = value;
+                    RecalculateTargetScroll();
+                    Invalidate();
+                }
+            }
+        }
+
+        [Category("Data")]
         public LyricsData Lyrics
         {
             get { return _lyrics; }
@@ -318,10 +333,11 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
+            float fontScale = GetFontScale();
             using (Bitmap dummyBmp = new Bitmap(1, 1))
             using (Graphics g = Graphics.FromImage(dummyBmp))
-            using (Font activeFont = new Font("Segoe UI", 11.5f, FontStyle.Bold))
-            using (Font subFont = new Font("Segoe UI", 8.5f, FontStyle.Italic))
+            using (Font activeFont = new Font("Segoe UI", 11.5f * fontScale, FontStyle.Bold))
+            using (Font subFont = new Font("Segoe UI", 8.5f * fontScale, FontStyle.Italic))
             {
                 float curY = 12f;
                 int maxTextWidth = Math.Max(100, Width - 24);
@@ -342,12 +358,12 @@ namespace KahoiiMusic.Controls
                     }
 
                     SizeF mainSize = g.MeasureString(mainText, activeFont, maxTextWidth);
-                    float h = Math.Max(32f, mainSize.Height + 8f);
+                    float h = Math.Max(32f * fontScale, mainSize.Height + 8f * fontScale);
 
                     if (!string.IsNullOrEmpty(subText))
                     {
                         SizeF subSize = g.MeasureString(subText, subFont, maxTextWidth);
-                        h += subSize.Height + 4f;
+                        h += subSize.Height + 4f * fontScale;
                     }
 
                     _layoutLines.Add(new LayoutLine
@@ -375,6 +391,8 @@ namespace KahoiiMusic.Controls
             base.OnResize(e);
             _romaziBtnRect = new Rectangle(Width - 94, 6, 88, 20);
             RebuildLayout();
+            RecalculateTargetScroll();
+            Invalidate();
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)
@@ -509,10 +527,12 @@ namespace KahoiiMusic.Controls
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
+            float fontScale = GetFontScale();
+
             // Loading state
             if (_isLoading)
             {
-                using (Font font = new Font("Segoe UI", 10.0f, FontStyle.Regular))
+                using (Font font = new Font("Segoe UI", 10.0f * fontScale, FontStyle.Regular))
                 using (SolidBrush brush = new SolidBrush(Color.FromArgb(210, 245, 220, 255)))
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
@@ -525,7 +545,7 @@ namespace KahoiiMusic.Controls
             // Empty state
             if (_lyrics == null || !_lyrics.HasLyrics || _layoutLines.Count == 0)
             {
-                using (Font font = new Font("Segoe UI", 9.5f, FontStyle.Italic))
+                using (Font font = new Font("Segoe UI", 9.5f * fontScale, FontStyle.Italic))
                 using (SolidBrush brush = new SolidBrush(Color.FromArgb(140, 220, 215, 235)))
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
@@ -538,11 +558,11 @@ namespace KahoiiMusic.Controls
             int panelW = Width;
 
             // Draw Lyrics Lines
-            using (Font activeFont = new Font("Segoe UI", 11.5f, FontStyle.Bold))
-            using (Font nearFont = new Font("Segoe UI", 10.0f, FontStyle.Regular))
-            using (Font farFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
-            using (Font activeSubFont = new Font("Segoe UI", 8.5f, FontStyle.Italic))
-            using (Font inactiveSubFont = new Font("Segoe UI", 8.0f, FontStyle.Italic))
+            using (Font activeFont = new Font("Segoe UI", 11.5f * fontScale, FontStyle.Bold))
+            using (Font nearFont = new Font("Segoe UI", 10.0f * fontScale, FontStyle.Regular))
+            using (Font farFont = new Font("Segoe UI", 9.0f * fontScale, FontStyle.Regular))
+            using (Font activeSubFont = new Font("Segoe UI", 8.5f * fontScale, FontStyle.Italic))
+            using (Font inactiveSubFont = new Font("Segoe UI", 8.0f * fontScale, FontStyle.Italic))
             using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near })
             {
                 for (int i = 0; i < _layoutLines.Count; i++)
@@ -608,7 +628,7 @@ namespace KahoiiMusic.Controls
                         // Left vertical active accent pill
                         using (SolidBrush pillBrush = new SolidBrush(Color.FromArgb(255, 65, 150)))
                         {
-                            FillRoundedRect(g, pillBrush, 2, renderY + 4, 3, 14, 1.5f);
+                            FillRoundedRect(g, pillBrush, 2, renderY + 4 * fontScale, 3 * fontScale, 14 * fontScale, 1.5f);
                         }
                     }
 
@@ -795,6 +815,25 @@ namespace KahoiiMusic.Controls
             path.AddArc(rect.X, rect.Bottom - d, d, d, 90, 90);
             path.CloseFigure();
             return path;
+        }
+
+        private const int WM_ERASEBKGND = 0x0014;
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_ERASEBKGND)
+            {
+                m.Result = (IntPtr)1;
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        private float GetFontScale()
+        {
+            float scaleH = 1.0f + Math.Max(0f, (Height - 200f) / 450f) * 0.70f;
+            float scaleW = 1.0f + Math.Max(0f, (Width - 280f) / 500f) * 0.70f;
+            float scale = Math.Min(scaleH, scaleW);
+            return Math.Max(1.0f, Math.Min(1.80f, scale));
         }
 
         protected override void Dispose(bool disposing)

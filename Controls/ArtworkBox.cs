@@ -717,36 +717,23 @@ namespace KahoiiMusic.Controls
 
         private void DrawBottomTimeText(Graphics g, int textY)
         {
-            if (_image == null)
+            if (string.IsNullOrEmpty(_timeText))
             {
-                using (Font textFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
-                using (SolidBrush textShadow = new SolidBrush(Color.FromArgb(120, 0, 0, 0)))
-                using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(235, 235, 235)))
-                using (StringFormat sf = new StringFormat())
-                {
-                    sf.Alignment = StringAlignment.Center;
-                    sf.LineAlignment = StringAlignment.Center;
-                    Rectangle textRectShadow = new Rectangle(0, textY + 1, Width, 18);
-                    Rectangle textRect = new Rectangle(0, textY, Width, 18);
-                    g.DrawString("Chưa phát hiện Audio", textFont, textShadow, textRectShadow, sf);
-                    g.DrawString("Chưa phát hiện Audio", textFont, textBrush, textRect, sf);
-                }
+                return;
             }
-            else
+
+            string displayTime = _timeText;
+            using (Font textFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
+            using (SolidBrush textShadow = new SolidBrush(Color.FromArgb(140, 0, 0, 0)))
+            using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(240, 240, 240)))
+            using (StringFormat sf = new StringFormat())
             {
-                string displayTime = !string.IsNullOrEmpty(_timeText) ? _timeText : "00:00 / 00:00";
-                using (Font textFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
-                using (SolidBrush textShadow = new SolidBrush(Color.FromArgb(140, 0, 0, 0)))
-                using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(240, 240, 240)))
-                using (StringFormat sf = new StringFormat())
-                {
-                    sf.Alignment = StringAlignment.Center;
-                    sf.LineAlignment = StringAlignment.Center;
-                    Rectangle textRectShadow = new Rectangle(0, textY + 1, Width, 18);
-                    Rectangle textRect = new Rectangle(0, textY, Width, 18);
-                    g.DrawString(displayTime, textFont, textShadow, textRectShadow, sf);
-                    g.DrawString(displayTime, textFont, textBrush, textRect, sf);
-                }
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                Rectangle textRectShadow = new Rectangle(0, textY + 1, Width, 18);
+                Rectangle textRect = new Rectangle(0, textY, Width, 18);
+                g.DrawString(displayTime, textFont, textShadow, textRectShadow, sf);
+                g.DrawString(displayTime, textFont, textBrush, textRect, sf);
             }
         }
 

@@ -121,6 +121,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Controls\PlaylistSearchBox.cs" />
+    <Compile Include="Controls\SideMenuPanel.cs" />
     <Compile Include="Controls\PlaylistPopup.cs">
       <SubType>Form</SubType>
     </Compile>

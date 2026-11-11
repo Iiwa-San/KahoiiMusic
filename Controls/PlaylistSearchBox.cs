@@ -104,6 +104,15 @@ namespace KahoiiMusic.Controls
             UpdateCueBanner();
         }
 
+        public void RemoveFocus()
+        {
+            if (_textBox != null && _textBox.Focused)
+            {
+                Form f = this.FindForm();
+                if (f != null) f.ActiveControl = null;
+            }
+        }
+
         private void UpdateCueBanner()
         {
             if (_textBox != null && _textBox.IsHandleCreated && !string.IsNullOrEmpty(_cueBanner))
