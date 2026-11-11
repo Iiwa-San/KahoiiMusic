@@ -74,11 +74,7 @@ namespace KahoiiMusic.Controls
 
         private void UpdateToolTip()
         {
-            try
-            {
-                _toolTip.SetToolTip(this, SleepTimerService.Instance.GetStatusString());
-            }
-            catch { }
+            if (_toolTip != null) _toolTip.RemoveAll();
         }
 
         protected override void OnMouseEnter(EventArgs e)

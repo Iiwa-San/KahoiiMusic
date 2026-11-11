@@ -853,7 +853,6 @@ namespace KahoiiMusic
                 BackColor = Color.Transparent;
                 Size = new Size(76, 76);
                 Cursor = Cursors.Hand;
-                _tip.SetToolTip(this, "Nhấp để đổi ảnh đại diện");
             }
 
             protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _isHovered = true; Invalidate(); }

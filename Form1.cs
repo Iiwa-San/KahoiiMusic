@@ -58,6 +58,8 @@ namespace KahoiiMusic
         private Controls.ThumbnailActionPopup thumbnailActionPopup;
         private Controls.CollectionPickerPopup _collectionPickerPopup;
         private bool _isMaximizedMode = false;
+        private bool _wasMaximizedBeforeMinimize = false;
+        private FormWindowState _lastNonMinimizedState = FormWindowState.Normal;
         private bool _isSideMenuUserClosed = false;
         private volatile bool _isFormClosed = false;
         public bool IsFormClosed => _isFormClosed;
@@ -124,6 +126,16 @@ namespace KahoiiMusic
 
             Shown += (s, e) =>
             {
+                if (HistoryService.IsMaximizedMode && WindowState != FormWindowState.Maximized)
+                {
+                    Screen scr = Screen.FromHandle(Handle);
+                    MaximizedBounds = scr.WorkingArea;
+                    WindowState = FormWindowState.Maximized;
+                    _lastNonMinimizedState = FormWindowState.Maximized;
+                    _wasMaximizedBeforeMinimize = true;
+                    ApplyResponsiveLayout();
+                }
+
                 Task.Run(async () =>
                 {
                     try
@@ -135,6 +147,12 @@ namespace KahoiiMusic
                 });
             };
 
+            if (HistoryService.IsMaximizedMode)
+            {
+                _wasMaximizedBeforeMinimize = true;
+                _lastNonMinimizedState = FormWindowState.Maximized;
+                WindowState = FormWindowState.Maximized;
+            }
             ApplyResponsiveLayout();
         }
 
@@ -248,6 +266,8 @@ namespace KahoiiMusic
                     }
                     else
                     {
+                        var curItem = GetCurrentPlaylistItem();
+                        thumbnailActionPopup.IsTrackDownloaded = (curItem != null && SavedTracksService.Instance.IsTrackSaved(curItem.Id));
                         thumbnailActionPopup.Visible = true;
                         btnThumbnailMenu.IsOpen = true;
                         thumbnailActionPopup.BringToFront();
@@ -258,56 +278,83 @@ namespace KahoiiMusic
 
             thumbnailActionPopup = new Controls.ThumbnailActionPopup();
             thumbnailActionPopup.Visible = false;
-            thumbnailActionPopup.SaveLibraryClicked += (s, e) =>
-            {
-                HideThumbnailPopups();
-                var item = GetCurrentPlaylistItem();
-                if (item != null)
-                {
-                    FavoritesService.AddTrack(item);
-                    _audioPlayer.RaiseStatus("✓ Đã lưu bài hát vào Thư viện!");
-                    _sideMenuPanel?.RefreshData();
-                }
-            };
-            thumbnailActionPopup.DownloadClicked += (s, e) =>
-            {
-                HideThumbnailPopups();
-                var item = GetCurrentPlaylistItem();
-                if (item != null)
-                {
-                    if (SavedTracksService.Instance.IsTrackSaved(item.Id))
-                    {
-                        _audioPlayer.RaiseStatus("✓ Bài hát đã có sẵn trong mục Đã tải!");
-                        return;
-                    }
-                    _audioPlayer.RaiseStatus(string.Format("Đang bắt đầu tải '{0}'...", item.Title));
-                    SavedTracksService.Instance.SaveTrackAsync(item, (success, msg) =>
-                    {
-                        BeginInvoke(new Action(delegate
-                        {
-                            _audioPlayer?.RaiseStatus(success ? ("✓ Đã tải xong: " + item.Title) : ("Lỗi tải: " + msg));
-                            _sideMenuPanel?.RefreshData();
-                        }));
-                    });
-                }
-            };
-            thumbnailActionPopup.LibraryHoverTimerElapsed += (s, e) =>
+
+            // Submenu side popup showing user collections
+            _collectionPickerPopup = new Controls.CollectionPickerPopup();
+            _collectionPickerPopup.Visible = false;
+
+            Action showCollectionPicker = () =>
             {
                 if (thumbnailActionPopup != null && thumbnailActionPopup.Visible && _collectionPickerPopup != null)
                 {
-                    _collectionPickerPopup.LoadCollections();
-                    int popupX = thumbnailActionPopup.Right + 4;
-                    int popupY = thumbnailActionPopup.Top;
-                    if (popupX + _collectionPickerPopup.Width > artworkBox.Width)
+                    var item = GetCurrentPlaylistItem();
+                    string curTrackId = item?.Id;
+                    _collectionPickerPopup.LoadCollections(curTrackId);
+
+                    Control targetParent = (_topSectionCard != null && _topSectionCard.Visible) ? _topSectionCard : (Control)gradientPanel;
+                    if (_collectionPickerPopup.Parent != targetParent)
                     {
-                        popupX = Math.Max(2, thumbnailActionPopup.Left - _collectionPickerPopup.Width - 4);
+                        targetParent.Controls.Add(_collectionPickerPopup);
                     }
-                    _collectionPickerPopup.Location = new Point(popupX, popupY);
+
+                    // Convert thumbnailActionPopup's top-right corner to screen, then to targetParent client coords
+                    Point screenPt = thumbnailActionPopup.PointToScreen(new Point(thumbnailActionPopup.Width + 6, 0));
+                    Point localPt = targetParent.PointToClient(screenPt);
+
+                    // Ensure it stays within parent bounds without overlapping thumbnailActionPopup
+                    int maxRight = targetParent.Width - 10;
+                    if (localPt.X + _collectionPickerPopup.Width > maxRight)
+                    {
+                        Point screenLeftPt = thumbnailActionPopup.PointToScreen(new Point(-_collectionPickerPopup.Width - 6, 0));
+                        localPt = targetParent.PointToClient(screenLeftPt);
+                    }
+
+                    _collectionPickerPopup.Location = localPt;
                     thumbnailActionPopup.IsSubmenuOpen = true;
                     _collectionPickerPopup.Visible = true;
                     _collectionPickerPopup.BringToFront();
                 }
             };
+
+            thumbnailActionPopup.SaveLibraryClicked += (s, e) => showCollectionPicker();
+            thumbnailActionPopup.LibraryHoverTimerElapsed += (s, e) => showCollectionPicker();
+
+            thumbnailActionPopup.DownloadClicked += (s, e) =>
+            {
+                var item = GetCurrentPlaylistItem();
+                if (item != null)
+                {
+                    if (thumbnailActionPopup.IsTrackDownloaded || SavedTracksService.Instance.IsTrackSaved(item.Id))
+                    {
+                        SavedTracksService.Instance.DeleteSavedTrack(item.Id);
+                        thumbnailActionPopup.IsTrackDownloaded = false;
+                        thumbnailActionPopup.Invalidate();
+                        _audioPlayer?.RaiseStatus(string.Format("✓ Đã gỡ '{0}' khỏi mục Đã tải!", item.Title));
+                        _sideMenuPanel?.RefreshData();
+                        return;
+                    }
+
+                    _audioPlayer.RaiseStatus(string.Format("Đang bắt đầu tải '{0}'...", item.Title));
+                    SavedTracksService.Instance.SaveTrackAsync(item, (success, msg) =>
+                    {
+                        BeginInvoke(new Action(delegate
+                        {
+                            if (success)
+                            {
+                                thumbnailActionPopup.IsTrackDownloaded = true;
+                                thumbnailActionPopup.Invalidate();
+                                _audioPlayer?.RaiseStatus("✓ Đã tải xong: " + item.Title);
+                            }
+                            else
+                            {
+                                _audioPlayer?.RaiseStatus("Lỗi tải: " + msg);
+                            }
+                            _sideMenuPanel?.RefreshData();
+                        }));
+                    });
+                }
+            };
+
             thumbnailActionPopup.CloseSubmenuRequested += (s, e) =>
             {
                 if (_collectionPickerPopup != null)
@@ -321,30 +368,55 @@ namespace KahoiiMusic
             };
             artworkBox.Controls.Add(thumbnailActionPopup);
 
-            // Submenu side popup showing user collections
-            _collectionPickerPopup = new Controls.CollectionPickerPopup();
-            _collectionPickerPopup.Visible = false;
             _collectionPickerPopup.PlaylistSelected += (s, playlist) =>
             {
-                HideThumbnailPopups();
                 var item = GetCurrentPlaylistItem();
                 if (item != null && playlist != null)
                 {
-                    bool added = PlaylistCollectionService.Instance.AddTrackToPlaylist(playlist.Id, item);
-                    if (added)
+                    bool wasInPlaylist = _collectionPickerPopup.PlaylistContainsTrack(playlist);
+                    if (wasInPlaylist)
                     {
-                        _audioPlayer.RaiseStatus(string.Format("✓ Đã thêm vào bộ sưu tập: {0}", playlist.Name));
-                        _sideMenuPanel?.RefreshData();
+                        // Gỡ bài hát khỏi bộ sưu tập và mất tick xanh
+                        if (playlist.Id == "__FAVORITES__")
+                        {
+                            FavoritesService.RemoveFavorite(item.Id);
+                            if (playlist.Items != null) playlist.Items.RemoveAll(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
+                            _audioPlayer.RaiseStatus("✓ Đã gỡ khỏi Yêu thích!");
+                        }
+                        else
+                        {
+                            PlaylistCollectionService.Instance.RemoveTrackFromPlaylist(playlist.Id, item.Id);
+                            if (playlist.Items != null) playlist.Items.RemoveAll(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
+                            _audioPlayer.RaiseStatus(string.Format("✓ Đã gỡ khỏi bộ sưu tập: {0}", playlist.Name));
+                        }
                     }
                     else
                     {
-                        _audioPlayer.RaiseStatus(string.Format("Bài hát đã có trong bộ sưu tập: {0}", playlist.Name));
+                        // Thêm bài hát vào bộ sưu tập và có tick xanh
+                        if (playlist.Id == "__FAVORITES__")
+                        {
+                            FavoritesService.AddTrack(item);
+                            if (playlist.Items == null) playlist.Items = new List<PlaylistItem>();
+                            if (!playlist.Items.Exists(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase)))
+                                playlist.Items.Insert(0, item);
+                            _audioPlayer.RaiseStatus("✓ Đã thêm vào Yêu thích!");
+                        }
+                        else
+                        {
+                            PlaylistCollectionService.Instance.AddTrackToPlaylist(playlist.Id, item);
+                            if (playlist.Items == null) playlist.Items = new List<PlaylistItem>();
+                            if (!playlist.Items.Exists(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase)))
+                                playlist.Items.Insert(0, item);
+                            _audioPlayer.RaiseStatus(string.Format("✓ Đã thêm vào bộ sưu tập: {0}", playlist.Name));
+                        }
                     }
+                    _collectionPickerPopup.Invalidate();
+                    _sideMenuPanel?.RefreshData();
                 }
             };
+
             _collectionPickerPopup.CreateNewPlaylistClicked += (s, e) =>
             {
-                HideThumbnailPopups();
                 string name = InputDialog.Show(this, "Tạo bộ sưu tập mới", "Nhập tên bộ sưu tập:");
                 if (!string.IsNullOrWhiteSpace(name))
                 {
@@ -360,6 +432,7 @@ namespace KahoiiMusic
                         _audioPlayer.RaiseStatus(string.Format("✓ Đã tạo bộ sưu tập: {0}", pl.Name));
                     }
                     _sideMenuPanel?.RefreshData();
+                    _collectionPickerPopup.LoadCollections(item?.Id);
                 }
             };
             artworkBox.Controls.Add(_collectionPickerPopup);
@@ -367,11 +440,8 @@ namespace KahoiiMusic
             accountPopup = new AccountForm();
             accountPopup.Owner = this;
 
-            ToolTip menuTip = new ToolTip();
-            menuTip.SetToolTip(btnPlaylist, "Menu (Danh sách phát, Lịch sử, Đã tải)");
             if (btnLyrics != null)
             {
-                menuTip.SetToolTip(btnLyrics, "Lời bài hát (Lyrics)");
                 btnLyrics.Click += (s, e) =>
                 {
                     if (btnLyrics.Enabled)
@@ -548,7 +618,6 @@ namespace KahoiiMusic
                 lblVersion.Click += async (s, e) => await CheckForAppUpdatesAsync(manual: true);
                 lblVersion.MouseEnter += (s, e) => lblVersion.ForeColor = Color.FromArgb(255, 240, 255);
                 lblVersion.MouseLeave += (s, e) => lblVersion.ForeColor = Color.FromArgb(200, 185, 235);
-                _userToolTip.SetToolTip(lblVersion, "Phiên bản v" + AppUpdateService.CurrentVersionName + " (Nhấn để kiểm tra cập nhật)");
             }
 
             if (panelBottomControls != null)
@@ -2291,6 +2360,10 @@ namespace KahoiiMusic
 
         private void MinimizeToTray()
         {
+            _wasMaximizedBeforeMinimize = _isMaximizedMode || (WindowState == FormWindowState.Maximized);
+            HistoryService.IsMaximizedMode = _wasMaximizedBeforeMinimize;
+
+            HideThumbnailPopups();
             if (playlistPopup != null && playlistPopup.Visible)
             {
                 playlistPopup.Hide();
@@ -2310,6 +2383,9 @@ namespace KahoiiMusic
             {
                 _trayIcon.Visible = true;
             }
+
+            // Immediately flush RAM to minimal working set
+            MemoryOptimizer.TrimMemory(true);
             MemoryOptimizer.TrimMemoryAsync(50, true);
         }
 
@@ -2323,17 +2399,32 @@ namespace KahoiiMusic
 
             try
             {
+                bool shouldBeMaximized = _wasMaximizedBeforeMinimize || HistoryService.IsMaximizedMode;
+
                 Show();
-                if (WindowState == FormWindowState.Minimized)
+                if (shouldBeMaximized)
+                {
+                    Screen scr = Screen.FromHandle(Handle);
+                    MaximizedBounds = scr.WorkingArea;
+                    WindowState = FormWindowState.Maximized;
+                    _lastNonMinimizedState = FormWindowState.Maximized;
+                    _wasMaximizedBeforeMinimize = true;
+                    HistoryService.IsMaximizedMode = true;
+                    if (btnMaximize != null) { btnMaximize.Invalidate(); }
+                    ShowWindow(this.Handle, 3); // SW_MAXIMIZE
+                }
+                else
                 {
                     WindowState = FormWindowState.Normal;
+                    _lastNonMinimizedState = FormWindowState.Normal;
+                    _wasMaximizedBeforeMinimize = false;
+                    HistoryService.IsMaximizedMode = false;
+                    ShowWindow(this.Handle, 9); // SW_RESTORE
                 }
-                ShowWindow(this.Handle, SW_RESTORE);
                 BringToFront();
                 Activate();
                 SetForegroundWindow(this.Handle);
-                TopMost = true;
-                TopMost = false;
+                ApplyResponsiveLayout();
             }
             catch { }
         }
@@ -2998,6 +3089,9 @@ namespace KahoiiMusic
             if (WindowState == FormWindowState.Maximized)
             {
                 WindowState = FormWindowState.Normal;
+                _lastNonMinimizedState = FormWindowState.Normal;
+                _wasMaximizedBeforeMinimize = false;
+                HistoryService.IsMaximizedMode = false;
                 if (btnMaximize != null) { btnMaximize.Invalidate(); }
             }
             else
@@ -3005,6 +3099,9 @@ namespace KahoiiMusic
                 Screen scr = Screen.FromHandle(Handle);
                 MaximizedBounds = scr.WorkingArea;
                 WindowState = FormWindowState.Maximized;
+                _lastNonMinimizedState = FormWindowState.Maximized;
+                _wasMaximizedBeforeMinimize = true;
+                HistoryService.IsMaximizedMode = true;
                 if (btnMaximize != null) { btnMaximize.Invalidate(); }
             }
         }
@@ -3220,12 +3317,17 @@ namespace KahoiiMusic
                 MinimizeToTray();
                 return;
             }
+            _lastNonMinimizedState = WindowState;
             if (WindowState == FormWindowState.Maximized)
             {
+                _wasMaximizedBeforeMinimize = true;
+                HistoryService.IsMaximizedMode = true;
                 if (btnMaximize != null) { btnMaximize.Invalidate(); }
             }
             else if (WindowState == FormWindowState.Normal)
             {
+                _wasMaximizedBeforeMinimize = false;
+                HistoryService.IsMaximizedMode = false;
                 if (btnMaximize != null) { btnMaximize.Invalidate(); }
                 if (ClientSize.Width != 480 || ClientSize.Height != 362)
                 {
@@ -4144,26 +4246,8 @@ namespace KahoiiMusic
 
         private void UpdateLoopTooltip()
         {
-            if (btnLoop == null) return;
-            if (_loopToolTip == null) _loopToolTip = new ToolTip();
-            string tip;
-            switch (btnLoop.Mode)
-            {
-                case LoopMode.All:
-                    tip = "Chế độ: Lặp lại danh sách (Bấm để đổi)";
-                    break;
-                case LoopMode.One:
-                    tip = "Chế độ: Lặp lại 1 bài (Bấm để đổi)";
-                    break;
-                case LoopMode.Shuffle:
-                    tip = "Chế độ: Phát ngẫu nhiên & Lặp lại khi hết (Bấm để đổi)";
-                    break;
-                case LoopMode.Off:
-                default:
-                    tip = "Chế độ: Phát tuần tự / Tắt lặp (Bấm để đổi)";
-                    break;
-            }
-            _loopToolTip.SetToolTip(btnLoop, tip);
+            // Hover tooltips disabled as requested
+            if (_loopToolTip != null) _loopToolTip.RemoveAll();
         }
 
         private string GetLoopMenuText(LoopMode mode)
@@ -4180,14 +4264,7 @@ namespace KahoiiMusic
 
         private void UpdateUserButtonAppearance()
         {
-            if (FirebaseAuthService.Instance.IsLoggedIn)
-            {
-                _userToolTip?.SetToolTip(btnUser, "Tài khoản: " + FirebaseAuthService.Instance.CurrentUser.email);
-            }
-            else
-            {
-                _userToolTip?.SetToolTip(btnUser, "Đăng nhập / Đăng ký tài khoản Kahoii");
-            }
+            if (_userToolTip != null) _userToolTip.RemoveAll();
             btnUser.Invalidate();
         }
 

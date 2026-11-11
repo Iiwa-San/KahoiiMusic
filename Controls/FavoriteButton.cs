@@ -250,18 +250,7 @@ namespace KahoiiMusic.Controls
 
         private void UpdateToolTip()
         {
-            if (_currentTrack == null || string.IsNullOrWhiteSpace(_currentTrack.Id))
-            {
-                _toolTip.SetToolTip(this, "Yêu thích (Chưa phát bài hát)");
-            }
-            else if (_isFavorite)
-            {
-                _toolTip.SetToolTip(this, "Bỏ yêu thích (Phím tắt: F)");
-            }
-            else
-            {
-                _toolTip.SetToolTip(this, "Thêm vào Yêu thích (Phím tắt: F)");
-            }
+            if (_toolTip != null) _toolTip.RemoveAll();
         }
 
         protected override void OnMouseEnter(EventArgs e)

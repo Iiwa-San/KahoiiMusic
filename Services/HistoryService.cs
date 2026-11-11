@@ -27,7 +27,24 @@ namespace KahoiiMusic.Services
         private static int _lyricsDelayOffsetMs = 0; // Default: 0ms true audio synchronization
         private static int _lyricsRomanizationMode = 1; // Default: Dual mode (Song ngữ)
         private static int _artworkDisplayMode = 0; // 0 = VinylRecord, 1 = RoundedCard
+        private static bool _isMaximizedMode = false;
         private static bool _initialized = false;
+
+        public static bool IsMaximizedMode
+        {
+            get { lock (_lock) { return _isMaximizedMode; } }
+            set
+            {
+                lock (_lock)
+                {
+                    if (_isMaximizedMode != value)
+                    {
+                        _isMaximizedMode = value;
+                        SaveSettings();
+                    }
+                }
+            }
+        }
 
         public static int LyricsDelayOffsetMs
         {
@@ -643,6 +660,12 @@ namespace KahoiiMusic.Services
                     {
                         int.TryParse(mArt.Groups[1].Value, out _artworkDisplayMode);
                     }
+
+                    Match mMax = Regex.Match(text, "\"isMaximizedMode\"\\s*:\\s*(true|false)", RegexOptions.IgnoreCase);
+                    if (mMax.Success)
+                    {
+                        _isMaximizedMode = bool.Parse(mMax.Groups[1].Value);
+                    }
                     return;
                 }
             }
@@ -651,17 +674,19 @@ namespace KahoiiMusic.Services
             _lyricsDelayOffsetMs = 0;
             _lyricsRomanizationMode = 1;
             _artworkDisplayMode = 0;
+            _isMaximizedMode = false;
         }
 
         private static void SaveSettings()
         {
             try
             {
-                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2},\r\n  \"artworkDisplayMode\": {3}\r\n}}",
+                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2},\r\n  \"artworkDisplayMode\": {3},\r\n  \"isMaximizedMode\": {4}\r\n}}",
                     _autoCleanTempOnExit ? "true" : "false",
                     _lyricsDelayOffsetMs,
                     _lyricsRomanizationMode,
-                    _artworkDisplayMode);
+                    _artworkDisplayMode,
+                    _isMaximizedMode ? "true" : "false");
                 File.WriteAllText(SettingsFile, json, Encoding.UTF8);
             }
             catch { }

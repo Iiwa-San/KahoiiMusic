@@ -17,6 +17,7 @@ namespace KahoiiMusic.Controls
         private const int ScrollBarW = 5;
 
         private List<UserPlaylist> _playlists = new List<UserPlaylist>();
+        private string _currentTrackId = null;
         private int _hoveredRow = -1;
         private bool _isHoveringNewBtn = false;
         private int _scrollOffset = 0;
@@ -35,18 +36,41 @@ namespace KahoiiMusic.Controls
                      ControlStyles.SupportsTransparentBackColor, true);
 
             BackColor = Color.Transparent;
-            Size = new Size(196, 180);
+            Size = new Size(218, 180);
             Visible = false;
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
         }
 
-        public void LoadCollections()
+        public string CurrentTrackId => _currentTrackId;
+
+        public bool PlaylistContainsTrack(UserPlaylist pl)
         {
+            if (pl == null || string.IsNullOrWhiteSpace(_currentTrackId)) return false;
+            if (pl.Id == "__FAVORITES__")
+            {
+                return FavoritesService.IsFavorite(_currentTrackId);
+            }
+            return pl.Items != null && pl.Items.Exists(x => string.Equals(x.Id, _currentTrackId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public void LoadCollections(string currentTrackId)
+        {
+            _currentTrackId = currentTrackId;
             try
             {
+                _playlists = new List<UserPlaylist>();
+
+                // 1. Built-in "Yêu thích"
+                var favList = FavoritesService.GetFavorites() ?? new List<PlaylistItem>();
+                _playlists.Add(new UserPlaylist("Yêu thích", favList) { Id = "__FAVORITES__" });
+
+                // 2. Custom user-created playlists
                 var all = PlaylistCollectionService.Instance.GetPlaylists();
-                _playlists = all ?? new List<UserPlaylist>();
+                if (all != null)
+                {
+                    _playlists.AddRange(all);
+                }
             }
             catch
             {
@@ -55,7 +79,7 @@ namespace KahoiiMusic.Controls
 
             int count = Math.Max(1, _playlists.Count);
             int targetH = HeaderH + (count * ItemH) + 6;
-            targetH = Math.Max(70, Math.Min(250, targetH));
+            targetH = Math.Max(70, Math.Min(260, targetH));
             Height = targetH;
 
             _scrollOffset = 0;
@@ -258,6 +282,8 @@ namespace KahoiiMusic.Controls
             {
                 using (Font pf = new Font("Segoe UI", 9.0f, FontStyle.Regular))
                 using (Font cf = new Font("Segoe UI", 7.5f, FontStyle.Regular))
+                using (Font tickF = new Font("Segoe UI", 9.5f, FontStyle.Bold))
+                using (SolidBrush tickB = new SolidBrush(Color.FromArgb(60, 245, 140)))
                 using (StringFormat sfNear = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
                 using (StringFormat sfFar = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
                 {
@@ -268,6 +294,7 @@ namespace KahoiiMusic.Controls
 
                         UserPlaylist pl = _playlists[i];
                         bool isHover = (i == _hoveredRow);
+                        bool isSavedHere = PlaylistContainsTrack(pl);
 
                         Rectangle rowRect = new Rectangle(4, rowY + 1, itemW, ItemH - 2);
 
@@ -285,16 +312,27 @@ namespace KahoiiMusic.Controls
                         Color textColor = isHover ? Color.White : Color.FromArgb(235, 230, 245);
                         Color countColor = isHover ? Color.FromArgb(255, 140, 195) : Color.FromArgb(145, 135, 165);
 
+                        int tickWidth = isSavedHere ? 18 : 0;
+                        int countWidth = 44;
+                        int rightReserved = countWidth + tickWidth + 6;
+
                         using (SolidBrush tb = new SolidBrush(textColor))
                         {
-                            RectangleF nameRect = new RectangleF(rowRect.X + 6, rowRect.Y, rowRect.Width - 52, rowRect.Height);
+                            RectangleF nameRect = new RectangleF(rowRect.X + 6, rowRect.Y, Math.Max(20, rowRect.Width - rightReserved), rowRect.Height);
                             g.DrawString(icon + pl.Name, pf, tb, nameRect, sfNear);
+                        }
+
+                        // Green Checkmark
+                        if (isSavedHere)
+                        {
+                            RectangleF tickRect = new RectangleF(rowRect.Right - rightReserved, rowRect.Y, 16, rowRect.Height);
+                            g.DrawString("✓", tickF, tickB, tickRect, sfFar);
                         }
 
                         // Count
                         using (SolidBrush cb = new SolidBrush(countColor))
                         {
-                            RectangleF cntRect = new RectangleF(rowRect.Right - 46, rowRect.Y, 42, rowRect.Height);
+                            RectangleF cntRect = new RectangleF(rowRect.Right - countWidth - 2, rowRect.Y, countWidth, rowRect.Height);
                             string cnt = string.Format("{0} bài", pl.Items?.Count ?? 0);
                             g.DrawString(cnt, cf, cb, cntRect, sfFar);
                         }
@@ -349,4 +387,3 @@ namespace KahoiiMusic.Controls
         }
     }
 }
-

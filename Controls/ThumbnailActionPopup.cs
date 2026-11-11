@@ -17,6 +17,7 @@ namespace KahoiiMusic.Controls
         public event EventHandler CloseSubmenuRequested;
 
         public bool IsSubmenuOpen { get; set; } = false;
+        public bool IsTrackDownloaded { get; set; } = false;
 
         public ThumbnailActionPopup()
         {
@@ -27,13 +28,13 @@ namespace KahoiiMusic.Controls
                      ControlStyles.SupportsTransparentBackColor, true);
 
             BackColor = Color.Transparent;
-            Size = new Size(142, 58);
+            Size = new Size(148, 58);
             Visible = false;
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
 
             _hoverTimer = new System.Windows.Forms.Timer();
-            _hoverTimer.Interval = 1000; // 1 second hover threshold
+            _hoverTimer.Interval = 500; // 0.5s hover threshold
             _hoverTimer.Tick += (s, e) =>
             {
                 _hoverTimer.Stop();
@@ -93,7 +94,6 @@ namespace KahoiiMusic.Controls
             if (e.Button == MouseButtons.Left)
             {
                 int clickedIdx = (e.Y < Height / 2) ? 0 : 1;
-                Visible = false;
                 if (clickedIdx == 0)
                 {
                     SaveLibraryClicked?.Invoke(this, EventArgs.Empty);
@@ -155,7 +155,7 @@ namespace KahoiiMusic.Controls
 
             // Text (left aligned, comfortable padding and +30% larger font)
             Rectangle textRect0 = new Rectangle(12, 2, Width - 16, itemH - 2);
-            Rectangle textRect1 = new Rectangle(12, itemH, Width - 16, itemH - 2);
+            Rectangle textRect1 = new Rectangle(12, itemH, Width - (IsTrackDownloaded ? 34 : 16), itemH - 2);
             using (Font f = new Font("Segoe UI", 10.5f, FontStyle.Regular))
             using (SolidBrush b0 = new SolidBrush(_hoveredIndex == 0 ? Color.White : Color.FromArgb(240, 240, 245)))
             using (SolidBrush b1 = new SolidBrush(_hoveredIndex == 1 ? Color.White : Color.FromArgb(240, 240, 245)))
@@ -163,6 +163,16 @@ namespace KahoiiMusic.Controls
             {
                 g.DrawString("Lưu vào Library", f, b0, textRect0, sf);
                 g.DrawString("Tải xuống", f, b1, textRect1, sf);
+            }
+
+            if (IsTrackDownloaded)
+            {
+                using (Font tickF = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+                using (SolidBrush tickB = new SolidBrush(Color.FromArgb(60, 245, 140)))
+                using (StringFormat sfFar = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
+                {
+                    g.DrawString("✓", tickF, tickB, new Rectangle(Width - 26, itemH, 18, itemH - 2), sfFar);
+                }
             }
         }
 

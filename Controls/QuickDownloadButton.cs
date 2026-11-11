@@ -137,23 +137,7 @@ namespace KahoiiMusic.Controls
 
         private void UpdateToolTip()
         {
-            if (_toolTip == null) return;
-            if (_isDownloading)
-            {
-                _toolTip.SetToolTip(this, "Đang tải bài hát về máy (Offline)...");
-            }
-            else if (_isSaved)
-            {
-                _toolTip.SetToolTip(this, "✓ Đã lưu bài hát này offline (Click để tùy chọn)");
-            }
-            else if (_currentTrack != null && !string.IsNullOrWhiteSpace(_currentTrack.Id))
-            {
-                _toolTip.SetToolTip(this, "Tải nhanh bài hát này về máy (Offline)");
-            }
-            else
-            {
-                _toolTip.SetToolTip(this, "Tải về nhanh (Chưa phát bài nào)");
-            }
+            if (_toolTip != null) _toolTip.RemoveAll();
         }
 
         private void StartAnimation()
