@@ -19,7 +19,7 @@ namespace KahoiiMusic.Controls
         private readonly System.Diagnostics.Stopwatch _stopwatch = new System.Diagnostics.Stopwatch();
         private const float DegreesPerSecond = 36f; // Exactly 10 seconds per revolution (smooth, natural, relaxing)
         private System.Windows.Forms.Timer _spinTimer;
-        private ArtworkDisplayMode _displayMode = ArtworkDisplayMode.VinylRecord;
+        private ArtworkDisplayMode _displayMode = ArtworkDisplayMode.RoundedCard;
         private ContextMenuStrip _contextMenu;
         private ToolStripMenuItem _miVinyl;
         private ToolStripMenuItem _miCard;
@@ -102,42 +102,12 @@ namespace KahoiiMusic.Controls
 
         private void InitializeContextMenu()
         {
-            _contextMenu = new ContextMenuStrip();
-            try
-            {
-                _contextMenu.Renderer = new Form1.DarkMenuRenderer();
-            }
-            catch { }
-            _contextMenu.BackColor = Color.FromArgb(24, 20, 32);
-            _contextMenu.ForeColor = Color.FromArgb(235, 235, 245);
-            _contextMenu.ShowImageMargin = false;
-
-            var header = new ToolStripMenuItem("Kiểu hiển thị ảnh bìa:")
-            {
-                Enabled = false,
-                ForeColor = Color.FromArgb(160, 140, 195),
-                Font = new Font("Segoe UI", 8.2f, FontStyle.Bold)
-            };
-
-            _miVinyl = new ToolStripMenuItem("💿 Đĩa than quay (Vinyl Record)");
-            _miVinyl.Click += (s, e) => SetDisplayMode(ArtworkDisplayMode.VinylRecord);
-
-            _miCard = new ToolStripMenuItem("🔲 Khung vuông bo góc (Card Android)");
-            _miCard.Click += (s, e) => SetDisplayMode(ArtworkDisplayMode.RoundedCard);
-
-            _contextMenu.Items.Add(header);
-            _contextMenu.Items.Add(new ToolStripSeparator());
-            _contextMenu.Items.Add(_miVinyl);
-            _contextMenu.Items.Add(_miCard);
-
-            this.ContextMenuStrip = _contextMenu;
-            UpdateContextMenuCheckedStates();
+            _contextMenu = null;
+            this.ContextMenuStrip = null;
         }
 
         private void UpdateContextMenuCheckedStates()
         {
-            if (_miVinyl != null) _miVinyl.Checked = (_displayMode == ArtworkDisplayMode.VinylRecord);
-            if (_miCard != null) _miCard.Checked = (_displayMode == ArtworkDisplayMode.RoundedCard);
         }
 
         private void UpdateToolTip()
@@ -146,23 +116,12 @@ namespace KahoiiMusic.Controls
             {
                 _toolTip = new ToolTip { InitialDelay = 500, ReshowDelay = 200 };
             }
-            string msg = (_displayMode == ArtworkDisplayMode.VinylRecord)
-                ? "Đĩa than quay (Nhấn chuột trái để đổi sang Khung vuông bo góc, chuột phải để chọn)"
-                : "Khung vuông bo góc (Nhấn chuột trái để đổi sang Đĩa than quay, chuột phải để chọn)";
-            _toolTip.SetToolTip(this, msg);
+            _toolTip.SetToolTip(this, "Ảnh bài hát");
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            if (e.Button == MouseButtons.Left && EnableModeToggleOnClick)
-            {
-                // Left click toggles between the two artwork styles
-                var next = (_displayMode == ArtworkDisplayMode.VinylRecord)
-                    ? ArtworkDisplayMode.RoundedCard
-                    : ArtworkDisplayMode.VinylRecord;
-                SetDisplayMode(next);
-            }
         }
 
         [Category("Behavior")]
@@ -476,17 +435,19 @@ namespace KahoiiMusic.Controls
             int cy = 4 + R;
             int rLabel = (int)(R * 0.44f); // Center artwork sticker radius
 
-            if (_displayMode == ArtworkDisplayMode.RoundedCard)
+            // Permanently rounded card thumbnail (no vinyl record mode)
+            if (!ShowBottomTimeText)
             {
-                int cardSize = ShowBottomTimeText ? (R * 2) : Math.Min(Width - 8, Height - 8);
-                int cardX = (Width - cardSize) / 2;
-                int cardY = ShowBottomTimeText ? (cy - cardSize / 2) : ((Height - cardSize) / 2);
-                float corner = Math.Max(12f, cardSize * 0.10f);
-                DrawRoundedCard(g, cardX, cardY, cardSize, cardSize, corner);
+                // Maximized template: rounded card fills the full bounds of ArtworkBox neatly
+                DrawRoundedCard(g, 0, 0, Width, Height, 14f);
             }
             else
             {
-                DrawVinylRecord(g, cx, cy, R, rLabel);
+                int cardSize = R * 2;
+                int cardX = (Width - cardSize) / 2;
+                int cardY = (cy - cardSize / 2);
+                float corner = Math.Max(12f, cardSize * 0.10f);
+                DrawRoundedCard(g, cardX, cardY, cardSize, cardSize, corner);
             }
 
             // Text below the artwork (Time display or "Chưa phát hiện Audio")
@@ -494,6 +455,8 @@ namespace KahoiiMusic.Controls
             {
                 DrawBottomTimeText(g, cy + R + 3);
             }
+
+            base.OnPaint(e);
         }
 
         private void DrawVinylRecord(Graphics g, int cx, int cy, int R, int rLabel)
@@ -603,12 +566,15 @@ namespace KahoiiMusic.Controls
         {
             Rectangle cardRect = new Rectangle(cardX, cardY, cardW, cardH);
 
-            // 1. Soft Ambient Drop Shadow under the card
-            Rectangle shadowRect = new Rectangle(cardX + 2, cardY + 5, cardW - 4, cardH - 2);
-            using (GraphicsPath shadowPath = CreateRoundedRectanglePath(shadowRect, radius))
-            using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
+            // 1. Soft Ambient Drop Shadow under the card (compact mode)
+            if (ShowBottomTimeText)
             {
-                g.FillPath(shadowBrush, shadowPath);
+                Rectangle shadowRect = new Rectangle(cardX + 2, cardY + 5, cardW - 4, cardH - 2);
+                using (GraphicsPath shadowPath = CreateRoundedRectanglePath(shadowRect, radius))
+                using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
+                {
+                    g.FillPath(shadowBrush, shadowPath);
+                }
             }
 
             // 2. Main Rounded Card Body
@@ -635,17 +601,31 @@ namespace KahoiiMusic.Controls
                         g.FillRectangle(sheenBrush, sheenRect);
                     }
 
+                    if (!ShowBottomTimeText)
+                    {
+                        // Dark gradient scrim at the bottom to ensure seekbar & controls pop over bright album art
+                        int scrimH = (int)(cardH * 0.44f);
+                        Rectangle scrimRect = new Rectangle(cardX, cardY + cardH - scrimH, cardW, scrimH);
+                        using (LinearGradientBrush scrimBrush = new LinearGradientBrush(
+                            scrimRect,
+                            Color.FromArgb(0, 10, 5, 25),
+                            Color.FromArgb(170, 10, 5, 25),
+                            LinearGradientMode.Vertical))
+                        {
+                            g.FillRectangle(scrimBrush, scrimRect);
+                        }
+                    }
+
                     g.Clip = oldClip;
                     g.Restore(state);
                 }
                 else
                 {
-                    // Empty state: matches Android ArtworkView background gradient
-                    // Brush.verticalGradient(listOf(Color(0xFF221A36), Color(0xFF140F22)))
+                    // Empty state (no song): 70% opacity background gradient matching user requirement
                     using (LinearGradientBrush bgBrush = new LinearGradientBrush(
                         cardRect,
-                        Color.FromArgb(0x22, 0x1A, 0x36),
-                        Color.FromArgb(0x14, 0x0F, 0x22),
+                        Color.FromArgb(178, 0x22, 0x1A, 0x36),
+                        Color.FromArgb(178, 0x14, 0x0F, 0x22),
                         LinearGradientMode.Vertical))
                     {
                         g.FillPath(bgBrush, cardPath);
@@ -658,10 +638,12 @@ namespace KahoiiMusic.Controls
                 }
 
                 // 1px Glass border around the card (matching Android: White 22% to White 5%)
+                int borderAlpha1 = (_image == null) ? 40 : 56;
+                int borderAlpha2 = (_image == null) ? 12 : 16;
                 using (LinearGradientBrush borderBrush = new LinearGradientBrush(
                     cardRect,
-                    Color.FromArgb(56, 255, 255, 255),
-                    Color.FromArgb(16, 255, 255, 255),
+                    Color.FromArgb(borderAlpha1, 255, 255, 255),
+                    Color.FromArgb(borderAlpha2, 255, 255, 255),
                     LinearGradientMode.Vertical))
                 using (Pen borderPen = new Pen(borderBrush, 1.2f))
                 {

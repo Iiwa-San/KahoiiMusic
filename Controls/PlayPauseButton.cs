@@ -59,6 +59,20 @@ namespace KahoiiMusic.Controls
         }
 
         [Category("Appearance")]
+        public Color CircleHoverColor
+        {
+            get { return _circleHoverColor; }
+            set { _circleHoverColor = value; Invalidate(); }
+        }
+
+        [Category("Appearance")]
+        public Color CirclePressedColor
+        {
+            get { return _circlePressedColor; }
+            set { _circlePressedColor = value; Invalidate(); }
+        }
+
+        [Category("Appearance")]
         public Color IconColor
         {
             get { return _iconColor; }
@@ -106,6 +120,10 @@ namespace KahoiiMusic.Controls
             IsPlaying = !IsPlaying;
         }
 
+        [Category("Appearance")]
+        [DefaultValue(false)]
+        public bool UseThemeGradient { get; set; } = false;
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -116,28 +134,46 @@ namespace KahoiiMusic.Controls
             int y = (Height - diameter) / 2;
             Rectangle circleRect = new Rectangle(x, y, diameter, diameter);
 
-            Color currentBg = _circleColor;
-            if (_isPressed) currentBg = _circlePressedColor;
-            else if (_isHovered) currentBg = _circleHoverColor;
-
-            // 1. Draw circle background
-            using (SolidBrush brush = new SolidBrush(currentBg))
+            if (UseThemeGradient)
             {
-                g.FillEllipse(brush, circleRect);
+                Color topColor = _isHovered ? Color.FromArgb(145, 25, 185) : Color.FromArgb(105, 12, 150);
+                Color bottomColor = _isHovered ? Color.FromArgb(255, 50, 155) : Color.FromArgb(235, 0, 130);
+
+                using (LinearGradientBrush grad = new LinearGradientBrush(circleRect, topColor, bottomColor, LinearGradientMode.Vertical))
+                {
+                    g.FillEllipse(grad, circleRect);
+                }
+
+                using (Pen borderPen = new Pen(Color.FromArgb(120, 255, 180, 225), 1.0f))
+                {
+                    g.DrawEllipse(borderPen, circleRect);
+                }
+            }
+            else
+            {
+                Color currentBg = _circleColor;
+                if (_isPressed) currentBg = _circlePressedColor;
+                else if (_isHovered) currentBg = _circleHoverColor;
+
+                using (SolidBrush brush = new SolidBrush(currentBg))
+                {
+                    g.FillEllipse(brush, circleRect);
+                }
             }
 
-            // 2. Draw Icon (Purple Play triangle or Pause bars)
+            // 2. Draw Icon (White triangle or Pause bars when using theme gradient)
             float cx = circleRect.X + circleRect.Width / 2.0f;
             float cy = circleRect.Y + circleRect.Height / 2.0f;
+            Color currentIconColor = UseThemeGradient ? Color.White : _iconColor;
 
-            using (SolidBrush iconBrush = new SolidBrush(_iconColor))
+            using (SolidBrush iconBrush = new SolidBrush(currentIconColor))
             {
                 if (!_isPlaying)
                 {
-                    // Triangle height 11px, width 10px, nudged +1px right for optical balance
-                    float triW = 10f;
-                    float triH = 11.5f;
-                    float tx = cx - triW * 0.40f + 0.8f;
+                    // Scale triangle proportionally with circle diameter
+                    float triW = Math.Max(12f, diameter * 0.38f);
+                    float triH = Math.Max(13f, diameter * 0.42f);
+                    float tx = cx - triW * 0.36f;
                     float ty = cy;
 
                     PointF[] points = new PointF[]
@@ -150,10 +186,10 @@ namespace KahoiiMusic.Controls
                 }
                 else
                 {
-                    // Pause bars
-                    float barW = 3.5f;
-                    float barH = 12f;
-                    float gap = 3.5f;
+                    // Scale pause bars proportionally with circle diameter
+                    float barW = Math.Max(4f, diameter * 0.12f);
+                    float barH = Math.Max(14f, diameter * 0.42f);
+                    float gap = Math.Max(4f, diameter * 0.12f);
 
                     float b1X = cx - gap / 2.0f - barW;
                     float b2X = cx + gap / 2.0f;

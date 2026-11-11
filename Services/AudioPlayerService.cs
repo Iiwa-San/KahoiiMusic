@@ -1521,6 +1521,12 @@ namespace KahoiiMusic.Services
                 if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
 
+            _syncContext?.Post(delegate
+            {
+                PlaylistLoaded?.Invoke(this, _playlist);
+                PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
+            }, null);
+
             PlayTrackAtIndex(_currentPlaylistIndex);
         }
 
@@ -1541,6 +1547,12 @@ namespace KahoiiMusic.Services
                 _shufflePlayedIndices.Clear();
                 if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
+
+            _syncContext?.Post(delegate
+            {
+                PlaylistLoaded?.Invoke(this, _playlist);
+                PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
+            }, null);
 
             PlayTrackAtIndex(_currentPlaylistIndex);
         }
@@ -1563,6 +1575,12 @@ namespace KahoiiMusic.Services
                 if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
 
+            _syncContext?.Post(delegate
+            {
+                PlaylistLoaded?.Invoke(this, _playlist);
+                PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
+            }, null);
+
             PlayTrackAtIndex(_currentPlaylistIndex);
         }
 
@@ -1584,6 +1602,12 @@ namespace KahoiiMusic.Services
                 if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
 
+            _syncContext?.Post(delegate
+            {
+                PlaylistLoaded?.Invoke(this, _playlist);
+                PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
+            }, null);
+
             PlayTrackAtIndex(_currentPlaylistIndex);
         }
 
@@ -1600,6 +1624,12 @@ namespace KahoiiMusic.Services
                 _shufflePlayedIndices.Clear();
                 if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
             }
+
+            _syncContext?.Post(delegate
+            {
+                PlaylistLoaded?.Invoke(this, _playlist);
+                PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
+            }, null);
 
             PlayTrackAtIndex(_currentPlaylistIndex);
         }

@@ -26,7 +26,7 @@ namespace KahoiiMusic.Controls
                      ControlStyles.SupportsTransparentBackColor, true);
 
             BackColor = Color.Transparent;
-            Size = new Size(26, 26);
+            Size = new Size(36, 36);
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
 
@@ -155,14 +155,15 @@ namespace KahoiiMusic.Controls
                         g.DrawEllipse(gradPen, rCircle);
                     }
 
-                    // 4. Chấm online xanh mint nhỏ ở góc trên phải
+                    // 4. Chấm online xanh mint ở góc trên phải
                     using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(52, 211, 153)))
-                    using (Pen dotBorder = new Pen(Color.FromArgb(24, 21, 32), 1f))
+                    using (Pen dotBorder = new Pen(Color.FromArgb(24, 21, 32), 1.2f))
                     {
-                        int dotX = Width - 6;
-                        int dotY = 1;
-                        g.FillEllipse(dotBrush, dotX, dotY, 5, 5);
-                        g.DrawEllipse(dotBorder, dotX, dotY, 5, 5);
+                        int dotSize = Math.Max(6, (int)(size * 0.22f));
+                        int dotX = Width - dotSize - 2;
+                        int dotY = 2;
+                        g.FillEllipse(dotBrush, dotX, dotY, dotSize, dotSize);
+                        g.DrawEllipse(dotBorder, dotX, dotY, dotSize, dotSize);
                     }
                 }
                 else
@@ -180,21 +181,21 @@ namespace KahoiiMusic.Controls
                     }
 
                     Color iconColor = _isHovered ? _hoverColor : _defaultColor;
-                    using (Pen pen = new Pen(iconColor, 1.8f))
+                    using (Pen pen = new Pen(iconColor, 2f))
                     {
                         pen.StartCap = LineCap.Round;
                         pen.EndCap = LineCap.Round;
 
                         // Head
-                        int headR = 3;
+                        int headR = Math.Max(4, (int)(size * 0.16f));
                         int headY = cy - 4;
                         g.DrawEllipse(pen, cx - headR, headY - headR, headR * 2, headR * 2);
 
                         // Shoulders arc
-                        int bodyW = 12;
-                        int bodyH = 7;
+                        int bodyW = Math.Max(14, (int)(size * 0.52f));
+                        int bodyH = Math.Max(8, (int)(size * 0.32f));
                         int bodyX = cx - bodyW / 2;
-                        int bodyY = cy + 1;
+                        int bodyY = cy + 2;
                         g.DrawArc(pen, bodyX, bodyY, bodyW, bodyH * 2, 195, 150);
                     }
                 }

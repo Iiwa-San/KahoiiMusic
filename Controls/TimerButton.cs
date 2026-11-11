@@ -192,11 +192,13 @@ namespace KahoiiMusic.Controls
                                            Math.Max(0, drawColor.B - 30));
             }
 
+            float scale = Math.Min(Width / 24f, Height / 24f);
             float cx = Width / 2f;
             float cy = Height / 2f + 1f;
-            float r = 6.2f;
+            float r = 6.5f * scale;
+            float penW = Math.Max(1.6f, 1.6f * scale);
 
-            using (Pen pen = new Pen(drawColor, 1.6f))
+            using (Pen pen = new Pen(drawColor, penW))
             {
                 pen.StartCap = LineCap.Round;
                 pen.EndCap = LineCap.Round;
@@ -205,14 +207,14 @@ namespace KahoiiMusic.Controls
                 g.DrawEllipse(pen, cx - r, cy - r, r * 2f, r * 2f);
 
                 // 2. Stopwatch top knob / crown
-                g.DrawLine(pen, cx, cy - r, cx, cy - r - 2.2f);
-                g.DrawLine(pen, cx - 1.8f, cy - r - 2.2f, cx + 1.8f, cy - r - 2.2f);
+                g.DrawLine(pen, cx, cy - r, cx, cy - r - 2.4f * scale);
+                g.DrawLine(pen, cx - 2.0f * scale, cy - r - 2.4f * scale, cx + 2.0f * scale, cy - r - 2.4f * scale);
 
                 // 3. Hands inside clock:
                 // Hour hand pointing to 12
-                g.DrawLine(pen, cx, cy, cx, cy - 3.5f);
+                g.DrawLine(pen, cx, cy, cx, cy - 3.8f * scale);
                 // Minute hand pointing to 3 (or 2:15)
-                g.DrawLine(pen, cx, cy, cx + 3.0f, cy + 0.5f);
+                g.DrawLine(pen, cx, cy, cx + 3.2f * scale, cy + 0.5f * scale);
             }
 
             // If active, draw small accent dot in center and small glowing status badge

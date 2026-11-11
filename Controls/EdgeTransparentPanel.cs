@@ -52,11 +52,6 @@ namespace KahoiiMusic.Controls
         {
             if (m.Msg == WM_ERASEBKGND)
             {
-                if (m.WParam != IntPtr.Zero && _darkBrush != IntPtr.Zero)
-                {
-                    RECT rc = new RECT { Left = 0, Top = 0, Right = Width, Bottom = Height };
-                    FillRect(m.WParam, ref rc, _darkBrush);
-                }
                 m.Result = (IntPtr)1;
                 return;
             }

@@ -47,6 +47,13 @@ namespace KahoiiMusic.Controls
         }
 
         [Category("Appearance")]
+        [DefaultValue(false)]
+        public bool FillShape { get; set; } = false;
+
+        [Category("Appearance")]
+        public Color FillColor { get; set; } = Color.Transparent;
+
+        [Category("Appearance")]
         public Color OutlineColor
         {
             get { return _outlineColor; }
@@ -104,72 +111,106 @@ namespace KahoiiMusic.Controls
             }
         }
 
+        [Category("Appearance")]
+        [DefaultValue(false)]
+        public bool UseThemeGradient { get; set; } = false;
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-
-            float padX = 3.5f;
-            float padY = 3.5f;
-            float w = Width - 2 * padX;
-            float h = Height - 2 * padY;
 
             if (_isPressed)
             {
                 g.TranslateTransform(0, 1);
             }
 
+            // Equilateral triangle dimensions
+            float maxH = Height - 8f;
+            float maxW = Width - 8f;
+            float s = Math.Min(maxH, maxW / 0.866f); // Side length
+            float hAlt = s * 0.866f;                 // Altitude
+
+            float cx = Width / 2f;
+            float cy = Height / 2f;
+
             using (GraphicsPath path = new GraphicsPath())
             {
-                float r = 3.5f; // corner radius
+                float r = Math.Max(3f, s * 0.16f); // Rounded corner radius
 
                 if (_direction == DirectionType.Previous)
                 {
-                    float leftX = padX + 1.0f;
-                    float rightX = padX + w - 1.0f;
-                    float topY = padY + 1.0f;
-                    float bottomY = padY + h - 1.0f;
-                    float midY = padY + h / 2.0f;
+                    float leftX = cx - hAlt * 0.52f;
+                    float rightX = cx + hAlt * 0.48f;
+                    float topY = cy - s * 0.5f;
+                    float bottomY = cy + s * 0.5f;
+                    float midY = cy;
 
-                    // Top-right corner arc
                     path.AddArc(rightX - 2 * r, topY, 2 * r, 2 * r, 270, 90);
-                    // Bottom-right corner arc
                     path.AddArc(rightX - 2 * r, bottomY - 2 * r, 2 * r, 2 * r, 0, 90);
-                    // Left apex arc
                     path.AddArc(leftX, midY - r, 2 * r, 2 * r, 90, 180);
                     path.CloseFigure();
                 }
                 else
                 {
-                    float leftX = padX + 1.0f;
-                    float rightX = padX + w - 1.0f;
-                    float topY = padY + 1.0f;
-                    float bottomY = padY + h - 1.0f;
-                    float midY = padY + h / 2.0f;
+                    float leftX = cx - hAlt * 0.48f;
+                    float rightX = cx + hAlt * 0.52f;
+                    float topY = cy - s * 0.5f;
+                    float bottomY = cy + s * 0.5f;
+                    float midY = cy;
 
-                    // Top-left corner arc
                     path.AddArc(leftX, topY, 2 * r, 2 * r, 180, 90);
-                    // Right apex arc
                     path.AddArc(rightX - 2 * r, midY - r, 2 * r, 2 * r, 270, 180);
-                    // Bottom-left corner arc
                     path.AddArc(leftX, bottomY - 2 * r, 2 * r, 2 * r, 90, 90);
                     path.CloseFigure();
                 }
 
-                if (_isHovered)
+                RectangleF bounds = path.GetBounds();
+
+                if (UseThemeGradient)
                 {
-                    using (SolidBrush hoverBrush = new SolidBrush(Color.FromArgb(40, 255, 255, 255)))
+                    Color topColor = _isHovered ? Color.FromArgb(145, 25, 185) : Color.FromArgb(105, 12, 150);
+                    Color bottomColor = _isHovered ? Color.FromArgb(255, 50, 155) : Color.FromArgb(235, 0, 130);
+
+                    using (LinearGradientBrush grad = new LinearGradientBrush(bounds, topColor, bottomColor, LinearGradientMode.Vertical))
                     {
-                        g.FillPath(hoverBrush, path);
+                        g.FillPath(grad, path);
+                    }
+
+                    using (Pen borderPen = new Pen(Color.FromArgb(100, 255, 180, 225), 1.0f))
+                    {
+                        borderPen.LineJoin = LineJoin.Round;
+                        g.DrawPath(borderPen, path);
                     }
                 }
-
-                using (Pen pen = new Pen(_outlineColor, _lineWidth))
+                else
                 {
-                    pen.LineJoin = LineJoin.Round;
-                    pen.StartCap = LineCap.Round;
-                    pen.EndCap = LineCap.Round;
-                    g.DrawPath(pen, path);
+                    if (FillShape && FillColor != Color.Transparent)
+                    {
+                        using (SolidBrush fillBrush = new SolidBrush(FillColor))
+                        {
+                            g.FillPath(fillBrush, path);
+                        }
+                    }
+
+                    if (_isHovered)
+                    {
+                        using (SolidBrush hoverBrush = new SolidBrush(Color.FromArgb(60, 255, 45, 135)))
+                        {
+                            g.FillPath(hoverBrush, path);
+                        }
+                    }
+
+                    if (!FillShape || _outlineColor != Color.Transparent)
+                    {
+                        using (Pen pen = new Pen(_outlineColor, _lineWidth))
+                        {
+                            pen.LineJoin = LineJoin.Round;
+                            pen.StartCap = LineCap.Round;
+                            pen.EndCap = LineCap.Round;
+                            g.DrawPath(pen, path);
+                        }
+                    }
                 }
             }
         }

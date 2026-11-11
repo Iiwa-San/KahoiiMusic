@@ -16,6 +16,22 @@ namespace KahoiiMusic.Controls
         private Color _unplayedColor = Color.FromArgb(255, 255, 255); // Crisp White
         private int _trackHeight = 3;
         private int _thumbSize = 8;
+        private bool _showThumb = true;
+
+        [Category("Appearance")]
+        [DefaultValue(true)]
+        public bool ShowThumb
+        {
+            get => _showThumb;
+            set
+            {
+                if (_showThumb != value)
+                {
+                    _showThumb = value;
+                    Invalidate();
+                }
+            }
+        }
 
         public event EventHandler<float> ValueChanged;
         public event EventHandler<float> SeekCommitted;
@@ -75,7 +91,7 @@ namespace KahoiiMusic.Controls
 
         private int TrackMargin
         {
-            get { return _thumbSize / 2 + 1; }
+            get { return _showThumb ? (_thumbSize / 2 + 1) : 0; }
         }
 
         private int UsableWidth
@@ -176,25 +192,28 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            // 3. Draw thumb knob (white circle with small dark center dot)
-            int currentThumbSize = (_isHovered || _isDragging) ? _thumbSize + 2 : _thumbSize;
-            int thumbRadius = currentThumbSize / 2;
-            int thumbCenterY = Height / 2;
-            Rectangle thumbRect = new Rectangle(thumbX - thumbRadius, thumbCenterY - thumbRadius, currentThumbSize, currentThumbSize);
-
-            // Outer white fill
-            using (SolidBrush brush = new SolidBrush(Color.White))
+            if (_showThumb)
             {
-                g.FillEllipse(brush, thumbRect);
-            }
+                // 3. Draw thumb knob (white circle with small dark center dot)
+                int currentThumbSize = (_isHovered || _isDragging) ? _thumbSize + 2 : _thumbSize;
+                int thumbRadius = currentThumbSize / 2;
+                int thumbCenterY = Height / 2;
+                Rectangle thumbRect = new Rectangle(thumbX - thumbRadius, thumbCenterY - thumbRadius, currentThumbSize, currentThumbSize);
 
-            // Small center dot
-            int dotSize = Math.Max(2, currentThumbSize / 3);
-            int dotRadius = dotSize / 2;
-            Rectangle dotRect = new Rectangle(thumbX - dotRadius, thumbCenterY - dotRadius, dotSize, dotSize);
-            using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(40, 40, 40)))
-            {
-                g.FillEllipse(dotBrush, dotRect);
+                // Outer white fill
+                using (SolidBrush brush = new SolidBrush(Color.White))
+                {
+                    g.FillEllipse(brush, thumbRect);
+                }
+
+                // Small center dot
+                int dotSize = Math.Max(2, currentThumbSize / 3);
+                int dotRadius = dotSize / 2;
+                Rectangle dotRect = new Rectangle(thumbX - dotRadius, thumbCenterY - dotRadius, dotSize, dotSize);
+                using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(40, 40, 40)))
+                {
+                    g.FillEllipse(dotBrush, dotRect);
+                }
             }
         }
     }

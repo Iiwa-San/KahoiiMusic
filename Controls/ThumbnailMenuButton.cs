@@ -80,51 +80,47 @@ namespace KahoiiMusic.Controls
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            Rectangle rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath path = GetRoundedRect(rect, 6))
+            if (_isPressed)
             {
-                // Background
-                Color bg = _isOpen || _isPressed
-                    ? Color.FromArgb(220, 45, 20, 65)
-                    : (_isHovered ? Color.FromArgb(190, 35, 18, 55) : Color.FromArgb(150, 18, 12, 30));
-                using (SolidBrush b = new SolidBrush(bg))
-                {
-                    g.FillPath(b, path);
-                }
-
-                // Border
-                Color borderColor = _isOpen || _isHovered
-                    ? Color.FromArgb(230, 255, 60, 140)
-                    : Color.FromArgb(120, 168, 85, 247);
-                using (Pen p = new Pen(borderColor, 1.2f))
-                {
-                    g.DrawPath(p, path);
-                }
+                g.TranslateTransform(0, 1);
             }
 
-            Color iconColor = _isOpen || _isHovered ? Color.White : Color.FromArgb(230, 220, 245);
+            Color iconColor = _isOpen || _isHovered 
+                ? Color.FromArgb(255, 60, 160) 
+                : Color.FromArgb(235, 0, 130); // Vibrant hot pink matching Figma
 
-            // Draw 3 horizontal lines and a small play triangle
-            // Lines on left: x = 6..13
-            using (Pen linePen = new Pen(iconColor, 1.6f))
+            float w = Width;
+            float h = Height;
+            float padX = 2f;
+            float midY = h / 2f;
+
+            // 1. Top full-width horizontal line
+            using (Pen linePen = new Pen(iconColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
             {
-                linePen.StartCap = LineCap.Round;
-                linePen.EndCap = LineCap.Round;
-                g.DrawLine(linePen, 6, 8, 13, 8);
-                g.DrawLine(linePen, 6, 13, 13, 13);
-                g.DrawLine(linePen, 6, 18, 13, 18);
+                g.DrawLine(linePen, padX, 4f, w - padX, 4f);
             }
 
-            // Small play triangle on right: x = 16..20, y = 9..17
+            // 2. Middle row: Play triangle on left, horizontal line on right
             using (SolidBrush triBrush = new SolidBrush(iconColor))
             {
                 PointF[] tri = new PointF[]
                 {
-                    new PointF(16f, 9.5f),
-                    new PointF(20.5f, 13f),
-                    new PointF(16f, 16.5f)
+                    new PointF(padX, midY - 4f),
+                    new PointF(padX + 7.5f, midY),
+                    new PointF(padX, midY + 4f)
                 };
                 g.FillPolygon(triBrush, tri);
+            }
+
+            using (Pen midLinePen = new Pen(iconColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            {
+                g.DrawLine(midLinePen, padX + 11f, midY, w - padX, midY);
+            }
+
+            // 3. Bottom full-width horizontal line
+            using (Pen bottomLinePen = new Pen(iconColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            {
+                g.DrawLine(bottomLinePen, padX, h - 4.5f, w - padX, h - 4.5f);
             }
         }
 
@@ -153,3 +149,4 @@ namespace KahoiiMusic.Controls
         }
     }
 }
+

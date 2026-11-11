@@ -22,7 +22,7 @@ namespace KahoiiMusic.Controls
                      ControlStyles.SupportsTransparentBackColor, true);
 
             BackColor = Color.Transparent;
-            Size = new Size(118, 54);
+            Size = new Size(106, 44);
             Visible = false;
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
@@ -74,12 +74,17 @@ namespace KahoiiMusic.Controls
             using (GraphicsPath path = CreateRoundedRect(rect, 8))
             {
                 // Background dark glass
-                using (SolidBrush bg = new SolidBrush(Color.FromArgb(245, 18, 12, 34)))
+                using (SolidBrush bg = new SolidBrush(Color.FromArgb(235, 20, 8, 38)))
                 {
                     g.FillPath(bg, path);
                 }
-                // Neon border matching the mockup
-                using (Pen borderPen = new Pen(Color.FromArgb(200, 140, 60, 210), 1.2f))
+                // Neon gradient border matching theme
+                using (LinearGradientBrush borderGrad = new LinearGradientBrush(
+                    rect,
+                    Color.FromArgb(140, 30, 180),
+                    Color.FromArgb(255, 40, 140),
+                    LinearGradientMode.ForwardDiagonal))
+                using (Pen borderPen = new Pen(borderGrad, 1.4f))
                 {
                     g.DrawPath(borderPen, path);
                 }
@@ -93,7 +98,7 @@ namespace KahoiiMusic.Controls
             if (_hoveredIndex == 0)
             {
                 using (GraphicsPath ip = CreateRoundedRect(item0, 6))
-                using (SolidBrush hb = new SolidBrush(Color.FromArgb(70, 255, 45, 135)))
+                using (SolidBrush hb = new SolidBrush(Color.FromArgb(70, 235, 0, 130)))
                 {
                     g.FillPath(hb, ip);
                 }
@@ -101,26 +106,22 @@ namespace KahoiiMusic.Controls
             else if (_hoveredIndex == 1)
             {
                 using (GraphicsPath ip = CreateRoundedRect(item1, 6))
-                using (SolidBrush hb = new SolidBrush(Color.FromArgb(70, 255, 45, 135)))
+                using (SolidBrush hb = new SolidBrush(Color.FromArgb(70, 235, 0, 130)))
                 {
                     g.FillPath(hb, ip);
                 }
             }
 
-            // Divider line
-            using (Pen divPen = new Pen(Color.FromArgb(40, 255, 255, 255), 1f))
+            // Text (left aligned matching Figma)
+            Rectangle textRect0 = new Rectangle(8, 2, Width - 12, itemH - 2);
+            Rectangle textRect1 = new Rectangle(8, itemH, Width - 12, itemH - 2);
+            using (Font f = new Font("Segoe UI", 8.25f, FontStyle.Regular))
+            using (SolidBrush b0 = new SolidBrush(_hoveredIndex == 0 ? Color.White : Color.FromArgb(240, 240, 245)))
+            using (SolidBrush b1 = new SolidBrush(_hoveredIndex == 1 ? Color.White : Color.FromArgb(240, 240, 245)))
+            using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center })
             {
-                g.DrawLine(divPen, 6, itemH, Width - 6, itemH);
-            }
-
-            // Text
-            using (Font f = new Font("Segoe UI", 8.25f, FontStyle.Bold))
-            using (SolidBrush b0 = new SolidBrush(_hoveredIndex == 0 ? Color.White : Color.FromArgb(235, 230, 245)))
-            using (SolidBrush b1 = new SolidBrush(_hoveredIndex == 1 ? Color.White : Color.FromArgb(235, 230, 245)))
-            using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            {
-                g.DrawString("Lưu vào Library", f, b0, item0, sf);
-                g.DrawString("Tải xuống", f, b1, item1, sf);
+                g.DrawString("Lưu vào Library", f, b0, textRect0, sf);
+                g.DrawString("Tải xuống", f, b1, textRect1, sf);
             }
         }
 
@@ -149,3 +150,4 @@ namespace KahoiiMusic.Controls
         }
     }
 }
+

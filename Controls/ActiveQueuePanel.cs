@@ -12,7 +12,7 @@ namespace KahoiiMusic.Controls
     {
         private const int WM_ERASEBKGND = 0x0014;
         private const int HeaderH = 42;
-        private const int RowH = 46;
+        private const int RowH = 56;
         private const int ScrollBarW = 6;
 
         private AudioPlayerService _audioPlayer;
@@ -23,7 +23,24 @@ namespace KahoiiMusic.Controls
         private int _dragGrabOffsetY = 0;
         private bool _isHoveringScroll = false;
 
+        private bool _isLoading = false;
+        private Timer _dotsTimer;
+        private int _dotCount = 1;
+
         public event EventHandler<PlaylistItem> TrackSelected;
+
+        public bool IsLoading
+        {
+            get => _isLoading;
+            set
+            {
+                if (_isLoading != value)
+                {
+                    _isLoading = value;
+                    Invalidate();
+                }
+            }
+        }
 
         public AudioPlayerService AudioPlayer
         {
@@ -37,6 +54,7 @@ namespace KahoiiMusic.Controls
                     {
                         _audioPlayer.PlaylistLoaded += (s, list) =>
                         {
+                            _isLoading = false;
                             try { BeginInvoke(new Action(RefreshData)); } catch { }
                         };
                         _audioPlayer.TrackLoaded += (s, e) =>
@@ -58,9 +76,22 @@ namespace KahoiiMusic.Controls
             SetStyle(ControlStyles.AllPaintingInWmPaint |
                      ControlStyles.UserPaint |
                      ControlStyles.OptimizedDoubleBuffer |
-                     ControlStyles.ResizeRedraw, true);
+                     ControlStyles.ResizeRedraw |
+                     ControlStyles.SupportsTransparentBackColor, true);
             DoubleBuffered = true;
-            BackColor = Color.FromArgb(24, 16, 42);
+            BackColor = Color.Transparent;
+
+            _dotsTimer = new Timer { Interval = 350 };
+            _dotsTimer.Tick += (s, e) =>
+            {
+                _dotCount = (_dotCount % 3) + 1;
+                bool isFetching = _isLoading || (_items.Count == 0 && _audioPlayer != null && (_audioPlayer.IsLoading || _audioPlayer.IsDownloadingOrPreloading));
+                if (isFetching && Visible)
+                {
+                    Invalidate();
+                }
+            };
+            _dotsTimer.Start();
         }
 
         public void RefreshData()
@@ -269,29 +300,25 @@ namespace KahoiiMusic.Controls
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            // 1. Card Background & Border
+            // 1. Card Background & Border (Translucent glassmorphism, opacity < 100%)
             Rectangle cardRect = new Rectangle(0, 0, Width - 1, Height - 1);
             using (GraphicsPath path = RoundedRect(cardRect, 14))
             {
-                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(235, 22, 14, 38)))
+                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(150, 22, 10, 42)))
                 {
                     g.FillPath(bgBrush, path);
                 }
-                using (Pen borderPen = new Pen(Color.FromArgb(60, 180, 80, 220), 1.2f))
+                using (Pen borderPen = new Pen(Color.FromArgb(140, 180, 50, 220), 1.2f))
                 {
                     g.DrawPath(borderPen, path);
                 }
             }
 
             // 2. Header
-            using (Font titleFont = new Font("Segoe UI", 11.5f, FontStyle.Bold))
-            using (Font subFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
+            using (Font titleFont = new Font("Segoe UI", 12.0f, FontStyle.Bold))
             using (SolidBrush titleBrush = new SolidBrush(Color.FromArgb(250, 245, 255)))
-            using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(160, 145, 185)))
             {
-                g.DrawString("Danh sách đang phát", titleFont, titleBrush, new PointF(18, 10));
-                SizeF titleSize = g.MeasureString("Danh sách đang phát", titleFont);
-                g.DrawString("(phát từ đâu cũng sẽ hiện ở đây)", subFont, subBrush, new PointF(18 + titleSize.Width + 8, 14));
+                g.DrawString("Hàng đợi", titleFont, titleBrush, new PointF(18, 10));
             }
 
             // Track count pill badge on the right of header
@@ -331,13 +358,25 @@ namespace KahoiiMusic.Controls
 
             string currentId = _audioPlayer?.CurrentVideoId;
 
-            if (_items.Count == 0)
+            bool isFetching = _isLoading || (_items.Count == 0 && _audioPlayer != null && (_audioPlayer.IsLoading || _audioPlayer.IsDownloadingOrPreloading));
+            if (isFetching)
             {
-                using (Font emptyFont = new Font("Segoe UI", 9.5f, FontStyle.Italic))
+                using (Font loadingFont = new Font("Segoe UI", 12.0f, FontStyle.Bold))
+                using (SolidBrush loadBrush = new SolidBrush(Color.FromArgb(255, 60, 160)))
+                using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    string dots = new string('.', _dotCount);
+                    string loadingText = "Đang tải danh sách" + dots;
+                    g.DrawString(loadingText, loadingFont, loadBrush, listBounds, sf);
+                }
+            }
+            else if (_items.Count == 0)
+            {
+                using (Font emptyFont = new Font("Segoe UI", 10.0f, FontStyle.Italic))
                 using (SolidBrush emptyBrush = new SolidBrush(Color.FromArgb(135, 130, 160)))
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
-                    g.DrawString("Chưa có bài hát nào trong danh sách phát", emptyFont, emptyBrush, listBounds, sf);
+                    g.DrawString("Hàng đợi trống", emptyFont, emptyBrush, listBounds, sf);
                 }
             }
             else
@@ -405,7 +444,7 @@ namespace KahoiiMusic.Controls
 
                     // 2. Thumbnail
                     int thumbX = indexX + 28;
-                    int thumbSize = 34;
+                    int thumbSize = 38;
                     int thumbY = rowRect.Y + (rowRect.Height - thumbSize) / 2;
                     Rectangle thumbRect = new Rectangle(thumbX, thumbY, thumbSize, thumbSize);
 
@@ -455,19 +494,19 @@ namespace KahoiiMusic.Controls
                         g.DrawString(item.FormattedDuration, durFont, durBrush, new Rectangle(durX, rowRect.Y, durW, rowRect.Height), sf);
                     }
 
-                    // 4. Title and Author
+                    // 4. Title and Author (Font 15 Bold for title)
                     int textLeft = thumbRect.Right + 12;
                     int textWidth = Math.Max(40, durX - textLeft - 8);
 
                     Color titleColor = isPlaying ? Color.FromArgb(255, 75, 175) : Color.FromArgb(245, 245, 255);
-                    using (Font tFont = new Font("Segoe UI", 9.25f, isPlaying ? FontStyle.Bold : FontStyle.Regular))
-                    using (Font aFont = new Font("Segoe UI", 8.0f, FontStyle.Regular))
+                    using (Font tFont = new Font("Segoe UI", 15.0f, FontStyle.Bold))
+                    using (Font aFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
                     using (SolidBrush tBrush = new SolidBrush(titleColor))
                     using (SolidBrush aBrush = new SolidBrush(Color.FromArgb(155, 150, 180)))
                     using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near, FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter })
                     {
-                        RectangleF tRect = new RectangleF(textLeft, rowRect.Y + 4, textWidth, 18);
-                        RectangleF aRect = new RectangleF(textLeft, rowRect.Y + 22, textWidth, 16);
+                        RectangleF tRect = new RectangleF(textLeft, rowRect.Y + 4, textWidth, 24);
+                        RectangleF aRect = new RectangleF(textLeft, rowRect.Y + 29, textWidth, 18);
                         g.DrawString(item.Title ?? string.Empty, tFont, tBrush, tRect, sf);
                         g.DrawString(item.Author ?? string.Empty, aFont, aBrush, aRect, sf);
                     }
@@ -496,6 +535,16 @@ namespace KahoiiMusic.Controls
                     g.FillPath(thumbBrush, thumbPath);
                 }
             }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _dotsTimer?.Stop();
+                _dotsTimer?.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         protected override void WndProc(ref Message m)

@@ -23,6 +23,25 @@ namespace KahoiiMusic.Controls
 
         public event EventHandler<bool> FavoriteChanged;
 
+        private class StarParticle
+        {
+            public float X;
+            public float Y;
+            public float Vx;
+            public float Vy;
+            public float Size;
+            public float Rotation;
+            public float RotationSpeed;
+            public Color Color;
+            public int Life;
+            public int MaxLife;
+        }
+
+        private readonly System.Collections.Generic.List<StarParticle> _particles = new System.Collections.Generic.List<StarParticle>();
+        private readonly Timer _particleTimer = new Timer();
+        private float _bounceScale = 1.0f;
+        private int _bounceAnim = 0;
+
         public FavoriteButton()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint |
@@ -35,6 +54,53 @@ namespace KahoiiMusic.Controls
             Size = new Size(28, 24);
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
+
+            _particleTimer.Interval = 16;
+            _particleTimer.Tick += (s, e) =>
+            {
+                bool needInvalidate = false;
+                if (_particles.Count > 0)
+                {
+                    for (int i = _particles.Count - 1; i >= 0; i--)
+                    {
+                        var p = _particles[i];
+                        p.X += p.Vx;
+                        p.Y += p.Vy;
+                        p.Vy += 0.08f; // Light gravity
+                        p.Vx *= 0.94f; // Drag
+                        p.Vy *= 0.94f;
+                        p.Rotation += p.RotationSpeed;
+                        p.Life++;
+                        if (p.Life >= p.MaxLife)
+                        {
+                            _particles.RemoveAt(i);
+                        }
+                    }
+                    needInvalidate = true;
+                }
+
+                if (_bounceAnim > 0)
+                {
+                    _bounceAnim--;
+                    if (_bounceAnim > 10) _bounceScale = 1.0f + (20 - _bounceAnim) * 0.025f;
+                    else _bounceScale = 1.0f + _bounceAnim * 0.025f;
+                    needInvalidate = true;
+                }
+                else
+                {
+                    _bounceScale = 1.0f;
+                }
+
+                if (_particles.Count == 0 && _bounceAnim == 0)
+                {
+                    _particleTimer.Stop();
+                }
+
+                if (needInvalidate)
+                {
+                    Invalidate();
+                }
+            };
 
             _toolTip = new ToolTip
             {
@@ -58,6 +124,72 @@ namespace KahoiiMusic.Controls
 
             UpdateToolTip();
         }
+
+        public void TriggerStarBurst()
+        {
+            _particles.Clear();
+            _bounceAnim = 20;
+
+            float cx = Width / 2f;
+            float cy = Height / 2f;
+            Random rnd = new Random();
+
+            Color[] starPalette = new Color[]
+            {
+                Color.FromArgb(255, 240, 75),   // Sparkling Gold
+                Color.FromArgb(255, 60, 160),   // Hot Pink
+                Color.FromArgb(255, 255, 255),  // Pure White
+                Color.FromArgb(255, 130, 210),  // Light Pink
+                Color.FromArgb(255, 195, 45),   // Amber
+                Color.FromArgb(140, 230, 255)   // Cyan Sparkle
+            };
+
+            int count = 18;
+            for (int i = 0; i < count; i++)
+            {
+                float angle = (float)(i * (2.0 * Math.PI / count) + (rnd.NextDouble() - 0.5) * 0.5);
+                float speed = (float)(2.2 + rnd.NextDouble() * 3.6);
+                _particles.Add(new StarParticle
+                {
+                    X = cx + (float)(Math.Cos(angle) * 4.0),
+                    Y = cy + (float)(Math.Sin(angle) * 4.0),
+                    Vx = (float)(Math.Cos(angle) * speed),
+                    Vy = (float)(Math.Sin(angle) * speed) - 1.2f, // upward arc
+                    Size = (float)(3.5 + rnd.NextDouble() * 4.5),
+                    Rotation = (float)(rnd.NextDouble() * 360.0),
+                    RotationSpeed = (float)((rnd.NextDouble() - 0.5) * 22.0),
+                    Color = starPalette[rnd.Next(starPalette.Length)],
+                    Life = 0,
+                    MaxLife = 26 + rnd.Next(12)
+                });
+            }
+
+            if (!_particleTimer.Enabled)
+            {
+                _particleTimer.Start();
+            }
+            Invalidate();
+        }
+
+        private bool _forceFilledHeart = false;
+        [Category("Appearance")]
+        [DefaultValue(false)]
+        public bool ForceFilledHeart
+        {
+            get => _forceFilledHeart;
+            set
+            {
+                if (_forceFilledHeart != value)
+                {
+                    _forceFilledHeart = value;
+                    Invalidate();
+                }
+            }
+        }
+
+        [Category("Appearance")]
+        [DefaultValue(true)]
+        public bool ShowCheckmark { get; set; } = true;
 
         [Category("Appearance")]
         [DefaultValue(false)]
@@ -106,6 +238,10 @@ namespace KahoiiMusic.Controls
 
             bool newState = FavoritesService.ToggleFavorite(_currentTrack);
             _isFavorite = newState;
+            if (newState)
+            {
+                TriggerStarBurst();
+            }
             UpdateToolTip();
             Invalidate();
             FavoriteChanged?.Invoke(this, newState);
@@ -179,20 +315,11 @@ namespace KahoiiMusic.Controls
             int w = Width;
             int h = Height;
 
-            // Optional hover glass pill background matching other buttons
-            if (_isHovered)
-            {
-                Color bg = _isPressed ? Color.FromArgb(50, 255, 255, 255) : Color.FromArgb(28, 255, 255, 255);
-                using (SolidBrush hoverBg = new SolidBrush(bg))
-                using (GraphicsPath pill = GetRoundedRect(new Rectangle(1, 1, w - 2, h - 2), 6))
-                {
-                    g.FillPath(hoverBg, pill);
-                }
-            }
-
-            // Target heart size scaled for 28x24
-            float heartW = 16f;
-            float heartH = 14.5f;
+            // Target heart size (scales naturally whether button is 24x24 or 56x56)
+            float baseW = Math.Min(w * 0.70f, 22f);
+            float baseH = baseW * 0.90f;
+            float heartW = baseW * _bounceScale;
+            float heartH = baseH * _bounceScale;
 
             if (_isPressed)
             {
@@ -201,30 +328,29 @@ namespace KahoiiMusic.Controls
             }
             else if (_isHovered)
             {
-                heartW *= 1.06f;
-                heartH *= 1.06f;
+                heartW *= 1.08f;
+                heartH *= 1.08f;
             }
 
             float heartX = (w - heartW) / 2f;
             float heartY = (h - heartH) / 2f;
-
             RectangleF heartBounds = new RectangleF(heartX, heartY, heartW, heartH);
 
             using (GraphicsPath heartPath = CreateHeartPath(heartBounds))
             {
-                if (_isFavorite)
+                if (_isFavorite || _forceFilledHeart)
                 {
                     // 1. Radiant Soft Neon Glow Halo behind heart
-                    RectangleF glowBounds = new RectangleF(heartX - 3f, heartY - 3f, heartW + 6f, heartH + 6f);
+                    RectangleF glowBounds = new RectangleF(heartX - 3.0f, heartY - 3.0f, heartW + 6.0f, heartH + 6.0f);
                     using (GraphicsPath glowPath = CreateHeartPath(glowBounds))
-                    using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(60, 255, 23, 68)))
+                    using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(60, 255, 30, 110)))
                     {
                         g.FillPath(glowBrush, glowPath);
                     }
 
-                    // 2. Rich Ruby Red Gradient Fill (bright neon coral-ruby to deep radiant ruby)
-                    Color topRuby = _isHovered ? Color.FromArgb(255, 95, 130) : Color.FromArgb(255, 68, 108);
-                    Color bottomRuby = _isHovered ? Color.FromArgb(255, 30, 80) : Color.FromArgb(235, 15, 65);
+                    // 2. Hot Pink to Bright Crimson Red Gradient Fill matching Figma
+                    Color topRuby = _isHovered ? Color.FromArgb(255, 60, 160) : Color.FromArgb(255, 20, 130);
+                    Color bottomRuby = _isHovered ? Color.FromArgb(255, 30, 60) : Color.FromArgb(245, 0, 35);
                     using (LinearGradientBrush fillBrush = new LinearGradientBrush(
                         heartBounds,
                         topRuby,
@@ -234,67 +360,101 @@ namespace KahoiiMusic.Controls
                         g.FillPath(fillBrush, heartPath);
                     }
 
-                    // 3. Specular highlight at top lobes for 3D depth and glass glow
-                    RectangleF highlightRect = new RectangleF(heartX + 2f, heartY + 1.2f, heartW - 4f, (heartH / 2f) - 1f);
-                    using (GraphicsPath hlPath = new GraphicsPath())
-                    {
-                        hlPath.AddEllipse(highlightRect);
-                        using (PathGradientBrush pgb = new PathGradientBrush(hlPath))
-                        {
-                            pgb.CenterColor = Color.FromArgb(170, 255, 220, 235);
-                            pgb.SurroundColors = new Color[] { Color.FromArgb(0, 255, 220, 235) };
-                            g.FillPath(pgb, hlPath);
-                        }
-                    }
-
-                    // 4. Crisp high-contrast border
-                    using (Pen borderPen = new Pen(Color.FromArgb(220, 255, 160, 190), 1.0f))
+                    // 3. Crisp delicate high-contrast border
+                    using (Pen borderPen = new Pen(Color.FromArgb(160, 255, 180, 210), 0.9f))
                     {
                         g.DrawPath(borderPen, heartPath);
                     }
 
-                    // 5. Vibrant Green Checkmark on Red Heart
-                    PointF p1 = new PointF(heartX + heartW * 0.28f, heartY + heartH * 0.50f);
-                    PointF p2 = new PointF(heartX + heartW * 0.44f, heartY + heartH * 0.67f);
-                    PointF p3 = new PointF(heartX + heartW * 0.72f, heartY + heartH * 0.35f);
+                    // 4. Optional Green Checkmark (only when enabled and not force filled)
+                    if (ShowCheckmark && !_forceFilledHeart)
+                    {
+                        PointF p1 = new PointF(heartX + heartW * 0.28f, heartY + heartH * 0.50f);
+                        PointF p2 = new PointF(heartX + heartW * 0.44f, heartY + heartH * 0.67f);
+                        PointF p3 = new PointF(heartX + heartW * 0.72f, heartY + heartH * 0.35f);
 
-                    // Drop shadow for crisp contrast
-                    using (Pen shadowPen = new Pen(Color.FromArgb(120, 0, 0, 0), 2.2f)
-                    {
-                        StartCap = LineCap.Round,
-                        EndCap = LineCap.Round,
-                        LineJoin = LineJoin.Round
-                    })
-                    {
-                        g.DrawLines(shadowPen, new PointF[] {
-                            new PointF(p1.X, p1.Y + 0.6f),
-                            new PointF(p2.X, p2.Y + 0.6f),
-                            new PointF(p3.X, p3.Y + 0.6f)
-                        });
-                    }
+                        using (Pen shadowPen = new Pen(Color.FromArgb(120, 0, 0, 0), 2.2f)
+                        {
+                            StartCap = LineCap.Round,
+                            EndCap = LineCap.Round,
+                            LineJoin = LineJoin.Round
+                        })
+                        {
+                            g.DrawLines(shadowPen, new PointF[] {
+                                new PointF(p1.X, p1.Y + 0.6f),
+                                new PointF(p2.X, p2.Y + 0.6f),
+                                new PointF(p3.X, p3.Y + 0.6f)
+                            });
+                        }
 
-                    // Green tick
-                    Color tickColor = _isHovered ? Color.FromArgb(74, 255, 140) : Color.FromArgb(34, 220, 94);
-                    using (Pen tickPen = new Pen(tickColor, 2.0f)
-                    {
-                        StartCap = LineCap.Round,
-                        EndCap = LineCap.Round,
-                        LineJoin = LineJoin.Round
-                    })
-                    {
-                        g.DrawLines(tickPen, new PointF[] { p1, p2, p3 });
+                        Color tickColor = _isHovered ? Color.FromArgb(74, 255, 140) : Color.FromArgb(34, 220, 94);
+                        using (Pen tickPen = new Pen(tickColor, 2.0f)
+                        {
+                            StartCap = LineCap.Round,
+                            EndCap = LineCap.Round,
+                            LineJoin = LineJoin.Round
+                        })
+                        {
+                            g.DrawLines(tickPen, new PointF[] { p1, p2, p3 });
+                        }
                     }
                 }
                 else
                 {
-                    // Subtle elegant inactive outline
-                    Color strokeColor = _isHovered ? _inactiveHoverColor : _inactiveColor;
-                    using (Pen strokePen = new Pen(strokeColor, 1.8f) { LineJoin = LineJoin.Round })
+                    // Solid filled purple heart with 70% opacity matching other control buttons (#32124B)
+                    Color purpleFill = _isHovered ? Color.FromArgb(220, 70, 25, 105) : Color.FromArgb(178, 50, 18, 75);
+                    using (SolidBrush fillBrush = new SolidBrush(purpleFill))
+                    {
+                        g.FillPath(fillBrush, heartPath);
+                    }
+
+                    // Subtle outline to maintain definition over dark album art
+                    Color strokeColor = _isHovered ? Color.FromArgb(180, 120, 50, 160) : Color.FromArgb(100, 80, 35, 115);
+                    using (Pen strokePen = new Pen(strokeColor, 1.0f) { LineJoin = LineJoin.Round })
                     {
                         g.DrawPath(strokePen, heartPath);
                     }
                 }
             }
+
+            // 5. Render Sparkle Star Particles
+            if (_particles.Count > 0)
+            {
+                for (int i = 0; i < _particles.Count; i++)
+                {
+                    var p = _particles[i];
+                    float lifeRatio = (float)p.Life / (float)p.MaxLife;
+                    int alpha = (int)(255 * (1.0f - lifeRatio));
+                    if (alpha < 0) alpha = 0;
+                    if (alpha > 255) alpha = 255;
+                    Color pColor = Color.FromArgb(alpha, p.Color.R, p.Color.G, p.Color.B);
+                    float currentSize = p.Size * (1.0f - lifeRatio * 0.3f);
+                    DrawSparkleStar(g, p.X, p.Y, currentSize, p.Rotation, pColor);
+                }
+            }
+        }
+
+        private static void DrawSparkleStar(Graphics g, float cx, float cy, float radius, float angle, Color color)
+        {
+            if (radius <= 0.5f) return;
+            GraphicsState state = g.Save();
+            g.TranslateTransform(cx, cy);
+            g.RotateTransform(angle);
+
+            float rInner = radius * 0.28f;
+            PointF[] pts = new PointF[8];
+            for (int i = 0; i < 8; i++)
+            {
+                float r = (i % 2 == 0) ? radius : rInner;
+                double a = i * Math.PI / 4.0;
+                pts[i] = new PointF((float)(r * Math.Cos(a)), (float)(r * Math.Sin(a)));
+            }
+
+            using (SolidBrush brush = new SolidBrush(color))
+            {
+                g.FillPolygon(brush, pts);
+            }
+            g.Restore(state);
         }
 
         private static GraphicsPath GetRoundedRect(Rectangle rect, int radius)
@@ -359,6 +519,8 @@ namespace KahoiiMusic.Controls
         {
             if (disposing)
             {
+                _particleTimer?.Stop();
+                _particleTimer?.Dispose();
                 _toolTip?.Dispose();
             }
             base.Dispose(disposing);

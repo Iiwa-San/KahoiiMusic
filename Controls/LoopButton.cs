@@ -186,13 +186,16 @@ namespace KahoiiMusic.Controls
 
         private void DrawLoopIcon(Graphics g, Color drawColor, bool isRepeatOne)
         {
-            float left = 6.5f;
-            float right = 19.5f;
-            float top = 4.5f;
-            float bottom = 15.5f;
-            float radius = 4.0f;
+            float sx = Width / 26f;
+            float sy = Height / 24f;
+            float left = 6.0f * sx;
+            float right = 20.0f * sx;
+            float top = 4.5f * sy;
+            float bottom = 16.5f * sy;
+            float radius = 4.0f * sy;
+            float penW = Math.Max(1.8f, 1.8f * sy);
 
-            using (Pen pen = new Pen(drawColor, 1.8f))
+            using (Pen pen = new Pen(drawColor, penW))
             {
                 pen.StartCap = LineCap.Round;
                 pen.EndCap = LineCap.Round;
@@ -212,25 +215,25 @@ namespace KahoiiMusic.Controls
                 // Top-right arrowhead pointing right
                 PointF[] arrow1 = new PointF[]
                 {
-                    new PointF(right + 2.5f, top),
-                    new PointF(right - 1.5f, top - 3.2f),
-                    new PointF(right - 1.5f, top + 3.2f)
+                    new PointF(right + 2.5f * sx, top),
+                    new PointF(right - 1.5f * sx, top - 3.2f * sy),
+                    new PointF(right - 1.5f * sx, top + 3.2f * sy)
                 };
                 g.FillPolygon(brush, arrow1);
 
                 // Bottom-left arrowhead pointing left
                 PointF[] arrow2 = new PointF[]
                 {
-                    new PointF(left - 2.5f, bottom),
-                    new PointF(left + 1.5f, bottom - 3.2f),
-                    new PointF(left + 1.5f, bottom + 3.2f)
+                    new PointF(left - 2.5f * sx, bottom),
+                    new PointF(left + 1.5f * sx, bottom - 3.2f * sy),
+                    new PointF(left + 1.5f * sx, bottom + 3.2f * sy)
                 };
                 g.FillPolygon(brush, arrow2);
 
                 // If Repeat One, draw "1" in the center
                 if (isRepeatOne)
                 {
-                    using (Font font = new Font("Segoe UI", 7.0f, FontStyle.Bold))
+                    using (Font font = new Font("Segoe UI", Math.Max(6.5f, 7.0f * sy), FontStyle.Bold))
                     {
                         using (StringFormat sf = new StringFormat
                         {
@@ -238,7 +241,7 @@ namespace KahoiiMusic.Controls
                             LineAlignment = StringAlignment.Center
                         })
                         {
-                            RectangleF textRect = new RectangleF(left - 2f, top - 2f, (right - left) + 4f, (bottom - top) + 4f);
+                            RectangleF textRect = new RectangleF(left - 2f * sx, top - 2f * sy, (right - left) + 4f * sx, (bottom - top) + 4f * sy);
                             g.DrawString("1", font, brush, textRect, sf);
                         }
                     }
