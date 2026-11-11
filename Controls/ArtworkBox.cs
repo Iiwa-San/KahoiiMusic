@@ -25,6 +25,9 @@ namespace KahoiiMusic.Controls
         private ToolStripMenuItem _miCard;
         private ToolTip _toolTip;
 
+        public bool EnableModeToggleOnClick { get; set; } = true;
+        public bool ShowBottomTimeText { get; set; } = true;
+
         public ArtworkBox()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint |
@@ -152,7 +155,7 @@ namespace KahoiiMusic.Controls
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            if (e.Button == MouseButtons.Left)
+            if (e.Button == MouseButtons.Left && EnableModeToggleOnClick)
             {
                 // Left click toggles between the two artwork styles
                 var next = (_displayMode == ArtworkDisplayMode.VinylRecord)
@@ -467,7 +470,7 @@ namespace KahoiiMusic.Controls
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             int cx = Width / 2;
-            int textSpace = 22;
+            int textSpace = ShowBottomTimeText ? 22 : 0;
             int availableH = Height - textSpace;
             int R = Math.Max(50, Math.Min(cx - 10, (availableH - 8) / 2));
             int cy = 4 + R;
@@ -475,10 +478,10 @@ namespace KahoiiMusic.Controls
 
             if (_displayMode == ArtworkDisplayMode.RoundedCard)
             {
-                int cardSize = R * 2;
-                int cardX = cx - cardSize / 2;
-                int cardY = cy - cardSize / 2;
-                float corner = Math.Max(12f, cardSize * 0.12f);
+                int cardSize = ShowBottomTimeText ? (R * 2) : Math.Min(Width - 8, Height - 8);
+                int cardX = (Width - cardSize) / 2;
+                int cardY = ShowBottomTimeText ? (cy - cardSize / 2) : ((Height - cardSize) / 2);
+                float corner = Math.Max(12f, cardSize * 0.10f);
                 DrawRoundedCard(g, cardX, cardY, cardSize, cardSize, corner);
             }
             else
@@ -487,7 +490,10 @@ namespace KahoiiMusic.Controls
             }
 
             // Text below the artwork (Time display or "Chưa phát hiện Audio")
-            DrawBottomTimeText(g, cy + R + 3);
+            if (ShowBottomTimeText)
+            {
+                DrawBottomTimeText(g, cy + R + 3);
+            }
         }
 
         private void DrawVinylRecord(Graphics g, int cx, int cy, int R, int rLabel)

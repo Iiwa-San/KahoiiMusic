@@ -255,10 +255,11 @@ namespace KahoiiMusic.Controls
             int tabY = HeaderH;
             int tabMargin = 8;
             int availTabW = Width - (tabMargin * 2);
-            int tabW = availTabW / 4;
+            int tabSpacing = 4;
+            int tabW = Math.Max(20, (availTabW - 3 * tabSpacing) / 4);
             for (int i = 0; i < 4; i++)
             {
-                _tabRects[i] = new Rectangle(tabMargin + i * tabW, tabY, tabW, TabsH);
+                _tabRects[i] = new Rectangle(tabMargin + i * (tabW + tabSpacing), tabY, tabW, TabsH);
             }
 
             // Search box position
@@ -507,13 +508,13 @@ namespace KahoiiMusic.Controls
 
             // 1. Panel Background (Glassmorphism dark card)
             Rectangle cardRect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath path = RoundedRect(cardRect, 12))
+            using (GraphicsPath path = RoundedRect(cardRect, 14))
             {
-                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(215, 18, 14, 30)))
+                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(235, 22, 14, 38)))
                 {
                     g.FillPath(bgBrush, path);
                 }
-                using (Pen borderPen = new Pen(Color.FromArgb(55, 255, 75, 175), 1.2f))
+                using (Pen borderPen = new Pen(Color.FromArgb(60, 180, 80, 220), 1.2f))
                 {
                     g.DrawPath(borderPen, path);
                 }
@@ -521,11 +522,11 @@ namespace KahoiiMusic.Controls
 
             // 2. Header
             string headerTitle = "Hàng đợi phát nhạc";
-            if (_activeTab == SideTab.Favorites) headerTitle = "Bài hát yêu thích";
+            if (_activeTab == SideTab.Favorites) headerTitle = "Bộ sưu tập bài hát";
             else if (_activeTab == SideTab.History) headerTitle = "Lịch sử đã nghe";
             else if (_activeTab == SideTab.Saved) headerTitle = "Bài hát đã tải";
 
-            using (Font titleFont = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+            using (Font titleFont = new Font("Segoe UI", 11.0f, FontStyle.Bold))
             using (SolidBrush titleBrush = new SolidBrush(Color.FromArgb(245, 245, 255)))
             {
                 g.DrawString(headerTitle, titleFont, titleBrush, new PointF(14, 10));
@@ -547,33 +548,36 @@ namespace KahoiiMusic.Controls
                 g.DrawString("✕", closeFont, closeBrush, _closeBtnRect, sf);
             }
 
-            // 3. Tabs
-            string[] tabLabels = { "Hàng đợi", "Yêu thích", "Lịch sử", "Đã tải" };
+            // 3. Tabs (Pill Buttons)
+            string[] tabLabels = { "Hàng đợi", "Bộ sưu tập", "Lịch sử", "Đã tải" };
             for (int i = 0; i < 4; i++)
             {
                 Rectangle tr = _tabRects[i];
                 bool isCurTab = ((int)_activeTab == i);
                 bool isHover = (_hoveredTab == i);
 
-                Color textColor = isCurTab ? Color.FromArgb(255, 255, 255) : (isHover ? Color.FromArgb(230, 230, 245) : Color.FromArgb(150, 150, 175));
+                Color bgColor = isCurTab ? Color.FromArgb(220, 75, 22, 105) : (isHover ? Color.FromArgb(180, 45, 28, 76) : Color.FromArgb(120, 30, 18, 54));
+                Color borderColor = isCurTab ? Color.FromArgb(255, 45, 135) : (isHover ? Color.FromArgb(120, 180, 80, 220) : Color.FromArgb(60, 100, 50, 140));
+                Color textColor = isCurTab ? Color.White : (isHover ? Color.FromArgb(240, 235, 250) : Color.FromArgb(160, 150, 180));
                 FontStyle fs = isCurTab ? FontStyle.Bold : FontStyle.Regular;
 
-                using (Font tabFont = new Font("Segoe UI", 8.25f, fs))
+                using (GraphicsPath tp = RoundedRect(tr, 8))
+                {
+                    using (SolidBrush tbBrush = new SolidBrush(bgColor))
+                    {
+                        g.FillPath(tbBrush, tp);
+                    }
+                    using (Pen tbPen = new Pen(borderColor, isCurTab ? 1.2f : 1f))
+                    {
+                        g.DrawPath(tbPen, tp);
+                    }
+                }
+
+                using (Font tabFont = new Font("Segoe UI", 8.0f, fs))
                 using (SolidBrush tabBrush = new SolidBrush(textColor))
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
-                    g.DrawString(tabLabels[i], tabFont, tabBrush, new Rectangle(tr.X, tr.Y, tr.Width, tr.Height - 4), sf);
-                }
-
-                // Active underline pill
-                if (isCurTab)
-                {
-                    int underW = Math.Max(24, tr.Width - 16);
-                    int underX = tr.X + (tr.Width - underW) / 2;
-                    using (SolidBrush lineBrush = new SolidBrush(Color.FromArgb(255, 65, 160)))
-                    {
-                        g.FillRectangle(lineBrush, underX, tr.Bottom - 3, underW, 2);
-                    }
+                    g.DrawString(tabLabels[i], tabFont, tabBrush, tr, sf);
                 }
             }
 

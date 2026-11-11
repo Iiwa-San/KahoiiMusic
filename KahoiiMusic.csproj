@@ -122,6 +122,9 @@
     </Compile>
     <Compile Include="Controls\PlaylistSearchBox.cs" />
     <Compile Include="Controls\SideMenuPanel.cs" />
+    <Compile Include="Controls\ActiveQueuePanel.cs" />
+    <Compile Include="Controls\RoundedCardPanel.cs" />
+    <Compile Include="Controls\TranslucentPillButton.cs" />
     <Compile Include="Controls\PlaylistPopup.cs">
       <SubType>Form</SubType>
     </Compile>

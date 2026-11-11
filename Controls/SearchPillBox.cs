@@ -40,8 +40,10 @@ namespace KahoiiMusic.Controls
         private System.Windows.Forms.Timer _debounceTimer;
         private Rectangle _clearBtnRect = Rectangle.Empty;
         private Rectangle _submitBtnRect = Rectangle.Empty;
+        private Rectangle _pasteBtnRect = Rectangle.Empty;
         private bool _isHoveringClear = false;
         private bool _isHoveringSubmit = false;
+        private bool _isHoveringPaste = false;
 
         public event EventHandler<string> UrlSubmitted;
         public event EventHandler<string> SearchSubmitted;
@@ -240,7 +242,8 @@ namespace KahoiiMusic.Controls
             if (_textBox == null) return;
 
             int leftPadding = 34; // space for magnifying glass
-            int rightControlsWidth = 28; // space for submit arrow (➔)
+            int pasteW = (Width >= 280) ? 44 : 0;
+            int rightControlsWidth = 28 + (pasteW > 0 ? pasteW + 6 : 0); // space for submit arrow (➔) and paste pill
 
             if (HasRealText)
             {
@@ -253,6 +256,19 @@ namespace KahoiiMusic.Controls
             _textBox.Width = Math.Max(10, Width - leftPadding - rightControlsWidth);
 
             int curX = Width - 8;
+
+            // Paste button ("Dán") on the far right if width >= 280
+            if (pasteW > 0)
+            {
+                int pasteH = Math.Min(22, Height - 8);
+                curX -= pasteW;
+                _pasteBtnRect = new Rectangle(curX, (Height - pasteH) / 2, pasteW, pasteH);
+                curX -= 6;
+            }
+            else
+            {
+                _pasteBtnRect = Rectangle.Empty;
+            }
 
             // Submit arrow button (7px right margin)
             int btnH = Math.Min(22, Height - 8);
@@ -277,12 +293,14 @@ namespace KahoiiMusic.Controls
             base.OnMouseMove(e);
             bool hoverClear = _clearBtnRect.Contains(e.Location);
             bool hoverSubmit = _submitBtnRect.Contains(e.Location);
+            bool hoverPaste = _pasteBtnRect.Contains(e.Location);
 
-            if (hoverClear != _isHoveringClear || hoverSubmit != _isHoveringSubmit)
+            if (hoverClear != _isHoveringClear || hoverSubmit != _isHoveringSubmit || hoverPaste != _isHoveringPaste)
             {
                 _isHoveringClear = hoverClear;
                 _isHoveringSubmit = hoverSubmit;
-                Cursor = (hoverClear || hoverSubmit) ? Cursors.Hand : Cursors.IBeam;
+                _isHoveringPaste = hoverPaste;
+                Cursor = (hoverClear || hoverSubmit || hoverPaste) ? Cursors.Hand : Cursors.IBeam;
                 Invalidate();
             }
         }
@@ -290,10 +308,11 @@ namespace KahoiiMusic.Controls
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            if (_isHoveringClear || _isHoveringSubmit)
+            if (_isHoveringClear || _isHoveringSubmit || _isHoveringPaste)
             {
                 _isHoveringClear = false;
                 _isHoveringSubmit = false;
+                _isHoveringPaste = false;
                 Cursor = Cursors.Default;
                 Invalidate();
             }
@@ -304,6 +323,31 @@ namespace KahoiiMusic.Controls
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
             {
+                if (_pasteBtnRect.Contains(e.Location))
+                {
+                    try
+                    {
+                        if (Clipboard.ContainsText())
+                        {
+                            string clip = Clipboard.GetText().Trim();
+                            if (!string.IsNullOrEmpty(clip))
+                            {
+                                Text = clip;
+                                RemoveFocus();
+                                if (IsUrl(clip))
+                                {
+                                    UrlSubmitted?.Invoke(this, clip);
+                                }
+                                else
+                                {
+                                    SearchSubmitted?.Invoke(this, clip);
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                    return;
+                }
                 if (_clearBtnRect.Contains(e.Location) && HasRealText)
                 {
                     Text = string.Empty;
@@ -391,6 +435,43 @@ namespace KahoiiMusic.Controls
                     g.DrawString("➔", aFont, brush, _submitBtnRect, sf);
                 }
             }
+
+            // Draw Paste Button ("Dán")
+            if (!_pasteBtnRect.IsEmpty)
+            {
+                using (GraphicsPath pastePath = GetRoundedRect(_pasteBtnRect, _pasteBtnRect.Height / 2))
+                {
+                    Color bgCol = _isHoveringPaste ? Color.FromArgb(220, 255, 45, 133) : Color.FromArgb(70, 160, 60, 200);
+                    Color borderCol = _isHoveringPaste ? Color.FromArgb(255, 80, 180) : Color.FromArgb(90, 180, 90, 220);
+                    using (SolidBrush bgBrush = new SolidBrush(bgCol))
+                    {
+                        g.FillPath(bgBrush, pastePath);
+                    }
+                    using (Pen bPen = new Pen(borderCol, 1f))
+                    {
+                        g.DrawPath(bPen, pastePath);
+                    }
+                    using (Font pFont = new Font("Segoe UI", 7.5f, FontStyle.Bold))
+                    using (SolidBrush pBrush = new SolidBrush(Color.White))
+                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                    {
+                        g.DrawString("Dán", pFont, pBrush, _pasteBtnRect, sf);
+                    }
+                }
+            }
+        }
+
+        private static GraphicsPath GetRoundedRect(Rectangle r, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            int d = Math.Min(radius * 2, Math.Min(r.Width, r.Height));
+            if (d <= 0) { path.AddRectangle(r); return path; }
+            path.AddArc(r.X, r.Y, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private void DrawMagnifyingGlass(Graphics g, int x, int y, bool active)
