@@ -45,7 +45,7 @@ Tiện ích mở rộng trình duyệt (Chrome, Edge, Cốc Cốc, Brave) dành 
 * Bấm vào nút **Tải tiện ích đã giải nén** (hoặc **Load unpacked**).
 * Chọn đúng thư mục:
   ```
-  D:\KahoiiProjects\MusicApp\KahoiiMusic-Extension
+  ...\KahoiiMusic-Extension
   ```
 * Bấm **Select Folder** (Chọn thư mục).
 
