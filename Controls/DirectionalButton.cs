@@ -124,6 +124,12 @@ namespace KahoiiMusic.Controls
         [DefaultValue(false)]
         public bool UseThemeGradient { get; set; } = false;
 
+        [Category("Appearance")]
+        public Color ThemeGradientTop { get; set; } = Color.FromArgb(105, 12, 150);
+
+        [Category("Appearance")]
+        public Color ThemeGradientBottom { get; set; } = Color.FromArgb(235, 0, 130);
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -206,8 +212,14 @@ namespace KahoiiMusic.Controls
                 if (UseThemeGradient)
                 {
                     // 70% opacity (alpha 178) for cyber translucent aesthetic, brightens on hover
-                    Color topColor = _isHovered ? Color.FromArgb(230, 145, 25, 185) : Color.FromArgb(178, 105, 12, 150);
-                    Color bottomColor = _isHovered ? Color.FromArgb(255, 50, 155) : Color.FromArgb(178, 235, 0, 130);
+                    Color topBase = ThemeGradientTop;
+                    Color botBase = ThemeGradientBottom;
+                    Color topColor = _isHovered
+                        ? Color.FromArgb(230, Math.Min(255, topBase.R + 40), Math.Min(255, topBase.G + 40), Math.Min(255, topBase.B + 40))
+                        : Color.FromArgb(178, topBase);
+                    Color bottomColor = _isHovered
+                        ? Color.FromArgb(255, Math.Min(255, botBase.R + 30), Math.Min(255, botBase.G + 30), Math.Min(255, botBase.B + 30))
+                        : Color.FromArgb(178, botBase);
 
                     using (LinearGradientBrush grad = new LinearGradientBrush(bounds, topColor, bottomColor, LinearGradientMode.Vertical))
                     {

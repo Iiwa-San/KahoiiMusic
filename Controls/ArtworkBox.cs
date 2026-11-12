@@ -28,6 +28,8 @@ namespace KahoiiMusic.Controls
         public bool EnableModeToggleOnClick { get; set; } = true;
         public bool ShowBottomTimeText { get; set; } = true;
 
+        public event EventHandler<Image> ArtworkChanged;
+
         public ArtworkBox()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint |
@@ -184,6 +186,7 @@ namespace KahoiiMusic.Controls
                     }
                     _image = value;
                     Invalidate();
+                    ArtworkChanged?.Invoke(this, _image);
                 }
             }
         }
@@ -575,6 +578,7 @@ namespace KahoiiMusic.Controls
             {
                 try { _image.Dispose(); } catch { }
                 _image = null;
+                ArtworkChanged?.Invoke(this, null);
             }
             Invalidate();
         }

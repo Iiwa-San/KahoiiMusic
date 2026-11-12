@@ -64,6 +64,13 @@ namespace KahoiiMusic
         private volatile bool _isFormClosed = false;
         public bool IsFormClosed => _isFormClosed;
 
+        private DynamicThemePalette _currentPalette = ColorExtractorService.GetDefaultTheme();
+        private DynamicThemePalette _targetPalette = ColorExtractorService.GetDefaultTheme();
+        private DynamicThemePalette _sourcePalette = ColorExtractorService.GetDefaultTheme();
+        private System.Windows.Forms.Timer _themeTransitionTimer;
+        private int _themeTransitionStep = 0;
+        private const int ThemeTransitionTotalSteps = 16;
+
         private bool _isCloseHovered = false;
         private bool _isMaxHovered = false;
         private bool _isMinHovered = false;
@@ -82,6 +89,10 @@ namespace KahoiiMusic
             UpdateThemePanels();
             gradientPanel.TopColorChanged += (s, e) => UpdateThemePanels();
             gradientPanel.BottomColorChanged += (s, e) => UpdateThemePanels();
+
+            // Wire dynamic theme from song thumbnail
+            artworkBox.ArtworkChanged += ArtworkBox_ArtworkChanged;
+            ApplyCurrentPaletteToUI();
 
             // Enable double buffering on the Form to prevent any flicker
             SetStyle(ControlStyles.AllPaintingInWmPaint |
@@ -2152,6 +2163,11 @@ namespace KahoiiMusic
                 _audioPlayer.Dispose();
                 _audioPlayer = null;
             }
+            if (_themeTransitionTimer != null)
+            {
+                try { _themeTransitionTimer.Stop(); _themeTransitionTimer.Dispose(); } catch { }
+                _themeTransitionTimer = null;
+            }
         }
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
@@ -2175,22 +2191,17 @@ namespace KahoiiMusic
                     Color.Black, Color.Black,
                     LinearGradientMode.Vertical))
                 {
-                    ColorBlend cb = new ColorBlend(4);
-                    cb.Colors = new Color[] {
-                        Color.FromArgb(32, 12, 75),       // Dark rich indigo top
-                        Color.FromArgb(52, 20, 135),      // Vibrant purple
-                        Color.FromArgb(185, 15, 140),     // Magenta transition
-                        Color.FromArgb(250, 0, 145)       // Bright radiant hot pink at bottom!
-                    };
-                    cb.Positions = new float[] { 0.0f, 0.28f, 0.70f, 1.0f };
+                    ColorBlend cb = new ColorBlend(_currentPalette.MaximizedColors.Length);
+                    cb.Colors = _currentPalette.MaximizedColors;
+                    cb.Positions = _currentPalette.MaximizedPositions;
                     lgb.InterpolationColors = cb;
                     e.Graphics.FillRectangle(lgb, 0, 0, w, h);
                 }
             }
             else
             {
-                Color topColor = gradientPanel.TopColor;
-                Color bottomColor = gradientPanel.BottomColor;
+                Color topColor = _currentPalette.CompactTop;
+                Color bottomColor = _currentPalette.CompactBottom;
 
                 using (LinearGradientBrush lgb = new LinearGradientBrush(
                     new Rectangle(0, 0, w, h),
@@ -2201,6 +2212,158 @@ namespace KahoiiMusic
                     e.Graphics.FillRectangle(lgb, 0, 0, w, h);
                 }
             }
+        }
+
+        private void ArtworkBox_ArtworkChanged(object sender, Image image)
+        {
+            if (image == null)
+            {
+                TransitionToTheme(ColorExtractorService.GetDefaultTheme());
+                return;
+            }
+
+            // Downscale safely on the UI thread to a tiny 24x24 bitmap (instant: ~0.15ms)
+            Bitmap tinySample = null;
+            try
+            {
+                tinySample = new Bitmap(24, 24, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (Graphics g = Graphics.FromImage(tinySample))
+                {
+                    g.InterpolationMode = InterpolationMode.Bilinear;
+                    g.PixelOffsetMode = PixelOffsetMode.HighSpeed;
+                    g.DrawImage(image, 0, 0, 24, 24);
+                }
+            }
+            catch
+            {
+                if (tinySample != null)
+                {
+                    try { tinySample.Dispose(); } catch { }
+                    tinySample = null;
+                }
+            }
+
+            if (tinySample == null)
+            {
+                TransitionToTheme(ColorExtractorService.GetDefaultTheme());
+                return;
+            }
+
+            // Extract theme asynchronously in background (takes ~0.05ms) so UI never hitches
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                DynamicThemePalette palette = null;
+                try
+                {
+                    palette = ColorExtractorService.ExtractThemeFromBitmap(tinySample);
+                }
+                catch { }
+                finally
+                {
+                    try { tinySample.Dispose(); } catch { }
+                }
+
+                if (palette != null && IsHandleCreated && !_isFormClosed)
+                {
+                    try
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            if (!_isFormClosed)
+                            {
+                                TransitionToTheme(palette);
+                            }
+                        }));
+                    }
+                    catch { }
+                }
+            });
+        }
+
+        private void TransitionToTheme(DynamicThemePalette newPalette)
+        {
+            if (newPalette == null) newPalette = ColorExtractorService.GetDefaultTheme();
+            _targetPalette = newPalette;
+            _sourcePalette = _currentPalette.Clone();
+            _themeTransitionStep = 0;
+
+            if (_themeTransitionTimer == null)
+            {
+                _themeTransitionTimer = new System.Windows.Forms.Timer();
+                _themeTransitionTimer.Interval = 16;
+                _themeTransitionTimer.Tick += ThemeTransitionTimer_Tick;
+            }
+
+            _themeTransitionTimer.Stop();
+            _themeTransitionTimer.Start();
+        }
+
+        private void ThemeTransitionTimer_Tick(object sender, EventArgs e)
+        {
+            _themeTransitionStep++;
+            float t = (float)_themeTransitionStep / ThemeTransitionTotalSteps;
+
+            if (t >= 1.0f)
+            {
+                t = 1.0f;
+                _themeTransitionTimer.Stop();
+                _currentPalette = _targetPalette.Clone();
+            }
+            else
+            {
+                float smoothT = t * t * (3f - 2f * t); // Smoothstep curve
+                _currentPalette = ColorExtractorService.LerpPalette(_sourcePalette, _targetPalette, smoothT);
+            }
+
+            ApplyCurrentPaletteToUI();
+        }
+
+        private void ApplyCurrentPaletteToUI()
+        {
+            if (_currentPalette == null) return;
+
+            // Compact mode colors
+            gradientPanel.TopColor = _currentPalette.CompactTop;
+            gradientPanel.BottomColor = _currentPalette.CompactBottom;
+
+            // Maximized card borders
+            if (_topSectionCard != null)
+            {
+                _topSectionCard.CardBorderColor = Color.FromArgb(140, _currentPalette.SecondaryAccentColor);
+            }
+            if (_lyricsCard != null)
+            {
+                _lyricsCard.BorderGradientColor1 = _currentPalette.SecondaryAccentColor;
+                _lyricsCard.BorderGradientColor2 = _currentPalette.AccentColor;
+            }
+
+            // Buttons theme gradient
+            btnPlayPause.ThemeGradientTop = _currentPalette.ButtonGradientTop;
+            btnPlayPause.ThemeGradientBottom = _currentPalette.ButtonGradientBottom;
+            btnPrevious.ThemeGradientTop = _currentPalette.ButtonGradientTop;
+            btnPrevious.ThemeGradientBottom = _currentPalette.ButtonGradientBottom;
+            btnNext.ThemeGradientTop = _currentPalette.ButtonGradientTop;
+            btnNext.ThemeGradientBottom = _currentPalette.ButtonGradientBottom;
+
+            if (_isMaximizedMode)
+            {
+                musicTrackBar.PlayedColor = _currentPalette.AccentColor;
+                btnVolume.IconColor = _currentPalette.AccentColor;
+                btnVolume.HoverColor = ColorExtractorService.Lerp(_currentPalette.AccentColor, Color.White, 0.4f);
+                btnLoop.InactiveColor = _currentPalette.AccentColor;
+                btnLoop.ActiveColor = ColorExtractorService.Lerp(_currentPalette.AccentColor, Color.White, 0.2f);
+                if (btnTimer != null)
+                {
+                    btnTimer.InactiveColor = _currentPalette.AccentColor;
+                    btnTimer.ActiveColor = ColorExtractorService.Lerp(_currentPalette.AccentColor, Color.White, 0.2f);
+                }
+            }
+            else
+            {
+                musicTrackBar.PlayedColor = _currentPalette.AccentColor;
+            }
+
+            panelPlayerCard.Invalidate();
         }
 
         private void UpdateThemePanels()
@@ -3655,7 +3818,7 @@ namespace KahoiiMusic
                 musicTrackBar.Location = new Point(14, trackY);
                 musicTrackBar.Size = new Size(artW - 28, 12);
                 musicTrackBar.ShowThumb = false;
-                musicTrackBar.PlayedColor = Color.FromArgb(245, 0, 25);
+                musicTrackBar.PlayedColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(245, 0, 25);
                 musicTrackBar.UnplayedColor = Color.White;
                 musicTrackBar.Visible = true;
                 musicTrackBar.BringToFront();
@@ -3665,8 +3828,8 @@ namespace KahoiiMusic
                 int volH = 28;
                 btnVolume.Location = new Point(14, trackY - volH - 6);
                 btnVolume.Size = new Size(volW, volH);
-                btnVolume.IconColor = Color.FromArgb(235, 0, 130);
-                btnVolume.HoverColor = Color.FromArgb(255, 75, 175);
+                btnVolume.IconColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(235, 0, 130);
+                btnVolume.HoverColor = (_currentPalette != null) ? ColorExtractorService.Lerp(_currentPalette.AccentColor, Color.White, 0.4f) : Color.FromArgb(255, 75, 175);
                 btnVolume.Visible = true;
                 btnVolume.BringToFront();
 
@@ -3705,8 +3868,8 @@ namespace KahoiiMusic
                 // Far Left: Loop / Repeat button (32x32)
                 btnLoop.Location = new Point(14, playY + (playBtnSize - loopBtnSize) / 2);
                 btnLoop.Size = new Size(loopBtnSize, loopBtnSize);
-                btnLoop.InactiveColor = Color.FromArgb(235, 0, 130);
-                btnLoop.ActiveColor = Color.FromArgb(255, 45, 140);
+                btnLoop.InactiveColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(235, 0, 130);
+                btnLoop.ActiveColor = (_currentPalette != null) ? ColorExtractorService.Lerp(_currentPalette.AccentColor, Color.White, 0.2f) : Color.FromArgb(255, 45, 140);
                 btnLoop.Visible = true;
                 btnLoop.BringToFront();
 
@@ -3715,8 +3878,8 @@ namespace KahoiiMusic
                 {
                     btnTimer.Location = new Point(artW - 14 - timerBtnSize, playY + (playBtnSize - timerBtnSize) / 2);
                     btnTimer.Size = new Size(timerBtnSize, timerBtnSize);
-                    btnTimer.InactiveColor = Color.FromArgb(235, 0, 130);
-                    btnTimer.ActiveColor = Color.FromArgb(255, 45, 140);
+                    btnTimer.InactiveColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(235, 0, 130);
+                    btnTimer.ActiveColor = (_currentPalette != null) ? ColorExtractorService.Lerp(_currentPalette.AccentColor, Color.White, 0.2f) : Color.FromArgb(255, 45, 140);
                     btnTimer.Visible = true;
                     btnTimer.BringToFront();
                 }
@@ -3757,8 +3920,8 @@ namespace KahoiiMusic
                     _lyricsCard.Size = new Size(midW, lyricsCardH);
                     _lyricsCard.CardBackColor = Color.FromArgb(120, 18, 8, 36); // Opacity < 100%
                     _lyricsCard.BorderGradient = true;
-                    _lyricsCard.BorderGradientColor1 = Color.FromArgb(140, 30, 180);
-                    _lyricsCard.BorderGradientColor2 = Color.FromArgb(255, 40, 140);
+                    _lyricsCard.BorderGradientColor1 = (_currentPalette != null) ? _currentPalette.SecondaryAccentColor : Color.FromArgb(140, 30, 180);
+                    _lyricsCard.BorderGradientColor2 = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(255, 40, 140);
                     _lyricsCard.CornerRadius = 12;
                     _lyricsCard.Visible = true;
                     _lyricsCard.BringToFront();
@@ -3806,6 +3969,7 @@ namespace KahoiiMusic
             btnPlayPause.IconColor = Color.FromArgb(168, 85, 247);
             if (_lyricsCard != null) _lyricsCard.BorderGradient = false;
             musicTrackBar.ShowThumb = true;
+            musicTrackBar.PlayedColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(235, 15, 15);
             btnVolume.IconColor = Color.White;
             btnVolume.HoverColor = Color.FromArgb(220, 220, 220);
             btnLoop.InactiveColor = Color.FromArgb(220, 220, 220);
