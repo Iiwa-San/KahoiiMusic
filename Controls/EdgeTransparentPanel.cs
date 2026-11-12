@@ -43,7 +43,6 @@ namespace KahoiiMusic.Controls
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.Style |= 0x02000000; // WS_CLIPCHILDREN
                 return cp;
             }
         }

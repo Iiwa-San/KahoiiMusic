@@ -86,7 +86,7 @@ namespace KahoiiMusic
             this.lblLogo.Name = "lblLogo";
             this.lblLogo.Size = new System.Drawing.Size(120, 18);
             this.lblLogo.TabIndex = 4;
-            this.lblLogo.Text = "Kahoii Music";
+            this.lblLogo.Text = "";
             // 
             // panelPlayerCard
             // 

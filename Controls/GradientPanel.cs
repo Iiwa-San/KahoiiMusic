@@ -77,26 +77,7 @@ namespace KahoiiMusic.Controls
 
             e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
 
-            if (_isMaximizedTemplate)
-            {
-                Rectangle gradientRect = new Rectangle(0, -1, w, h + 2);
-                using (LinearGradientBrush lgb = new LinearGradientBrush(gradientRect, Color.Black, Color.Black, LinearGradientMode.Vertical))
-                {
-                    ColorBlend cb = new ColorBlend(4);
-                    cb.Colors = new Color[] {
-                        Color.FromArgb(32, 12, 75),       // Dark rich indigo top
-                        Color.FromArgb(52, 20, 135),      // Vibrant purple
-                        Color.FromArgb(185, 15, 140),     // Magenta transition
-                        Color.FromArgb(250, 0, 145)       // Bright radiant hot pink at bottom
-                    };
-                    cb.Positions = new float[] { 0.0f, 0.28f, 0.70f, 1.0f };
-                    lgb.InterpolationColors = cb;
-                    e.Graphics.FillRectangle(lgb, ClientRectangle);
-                }
-                return;
-            }
-
-            if (BackColor == Color.Transparent)
+            if (_isMaximizedTemplate || BackColor == Color.Transparent)
             {
                 base.OnPaintBackground(e);
                 return;

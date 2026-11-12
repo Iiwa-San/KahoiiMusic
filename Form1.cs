@@ -471,11 +471,12 @@ namespace KahoiiMusic
             // panelTopBar remains transparent to seamlessly inherit the continuous Cyber gradient
 
             // Title logo gradient matching logo_icon (violet to magenta/pink) - Crisp ClearType
-            lblLogo.ForeColor = Color.Transparent;
+            lblLogo.Text = string.Empty;
             lblLogo.Paint += (s, e) =>
             {
                 if (lblLogo.Width <= 0 || lblLogo.Height <= 0) return;
-                SizeF sz = e.Graphics.MeasureString(lblLogo.Text, lblLogo.Font);
+                const string logoText = "Kahoii Music";
+                SizeF sz = e.Graphics.MeasureString(logoText, lblLogo.Font);
                 float gradWidth = Math.Max(sz.Width, 10f);
                 using (LinearGradientBrush lgb = new LinearGradientBrush(
                     new RectangleF(0, 0, gradWidth, lblLogo.Height),
@@ -487,7 +488,7 @@ namespace KahoiiMusic
                     e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                     using (StringFormat sf = new StringFormat { LineAlignment = StringAlignment.Center })
                     {
-                        e.Graphics.DrawString(lblLogo.Text, lblLogo.Font, lgb, new RectangleF(0, 0, lblLogo.Width, lblLogo.Height), sf);
+                        e.Graphics.DrawString(logoText, lblLogo.Font, lgb, new RectangleF(0, 0, lblLogo.Width, lblLogo.Height), sf);
                     }
                 }
             };
