@@ -165,8 +165,16 @@ namespace KahoiiMusic.Controls
             Invalidate();
         }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+        }
+
         protected override void OnMouseEnter(EventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseEnter(e);
             _isHovered = true;
             Invalidate();
@@ -182,6 +190,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
             {
@@ -192,6 +201,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseUp(e);
             if (_isPressed && e.Button == MouseButtons.Left)
             {
@@ -203,7 +213,7 @@ namespace KahoiiMusic.Controls
 
         private void HandleClickAction()
         {
-            if (_isDownloading) return;
+            if (!Enabled || _isDownloading) return;
 
             if (_currentTrack == null || string.IsNullOrWhiteSpace(_currentTrack.Id))
             {
@@ -303,6 +313,25 @@ namespace KahoiiMusic.Controls
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            if (!Enabled)
+            {
+                float cxDis = Width / 2f;
+                float cyDis = Height / 2f;
+                Color disColor = Color.FromArgb(40, 180, 160, 200);
+                using (Pen pen = new Pen(disColor, 1.5f))
+                {
+                    pen.StartCap = LineCap.Round;
+                    pen.EndCap = LineCap.Round;
+                    // Down arrow
+                    g.DrawLine(pen, cxDis, cyDis - 5f, cxDis, cyDis + 2f);
+                    g.DrawLine(pen, cxDis - 3f, cyDis - 1f, cxDis, cyDis + 2.5f);
+                    g.DrawLine(pen, cxDis + 3f, cyDis - 1f, cxDis, cyDis + 2.5f);
+                    // Tray base
+                    g.DrawLine(pen, cxDis - 6f, cyDis + 5.5f, cxDis + 6f, cyDis + 5.5f);
+                }
+                return;
+            }
 
             // Hover background pill
             if (_isHovered)

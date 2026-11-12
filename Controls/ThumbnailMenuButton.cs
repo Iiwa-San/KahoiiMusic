@@ -42,8 +42,16 @@ namespace KahoiiMusic.Controls
             }
         }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+        }
+
         protected override void OnMouseEnter(EventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseEnter(e);
             _isHovered = true;
             Invalidate();
@@ -59,6 +67,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
             {
@@ -80,14 +89,24 @@ namespace KahoiiMusic.Controls
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            if (_isPressed)
+            if (_isPressed && Enabled)
             {
                 g.TranslateTransform(0, 1);
             }
 
-            Color iconColor = _isOpen || _isHovered 
-                ? Color.FromArgb(255, 60, 160) 
-                : Color.FromArgb(235, 0, 130); // Vibrant hot pink matching Figma
+            Color iconColor;
+            if (!Enabled)
+            {
+                iconColor = Color.FromArgb(40, 180, 160, 200);
+            }
+            else if (_isOpen || _isHovered)
+            {
+                iconColor = Color.FromArgb(255, 60, 160);
+            }
+            else
+            {
+                iconColor = Color.FromArgb(235, 0, 130); // Vibrant hot pink matching Figma
+            }
 
             float w = Width;
             float h = Height;

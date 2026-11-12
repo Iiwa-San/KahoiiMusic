@@ -111,8 +111,16 @@ namespace KahoiiMusic.Controls
             return TrackMargin + (int)(v * UsableWidth);
         }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+        }
+
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
             {
@@ -124,6 +132,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseMove(e);
             if (_isDragging)
             {
@@ -133,6 +142,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseUp(e);
             if (_isDragging)
             {
@@ -148,6 +158,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseEnter(EventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseEnter(e);
             _isHovered = true;
             Invalidate();
@@ -169,6 +180,17 @@ namespace KahoiiMusic.Controls
             int startX = TrackMargin;
             int endX = Width - TrackMargin;
             int thumbX = GetXFromValue(_value);
+
+            if (!Enabled)
+            {
+                using (Pen pen = new Pen(Color.FromArgb(40, 180, 160, 200), _trackHeight))
+                {
+                    pen.StartCap = LineCap.Round;
+                    pen.EndCap = LineCap.Round;
+                    g.DrawLine(pen, startX, trackY + _trackHeight / 2, endX, trackY + _trackHeight / 2);
+                }
+                return;
+            }
 
             // 1. Draw played track (Red)
             if (thumbX > startX)

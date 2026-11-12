@@ -79,8 +79,16 @@ namespace KahoiiMusic.Controls
             set { _iconColor = value; Invalidate(); }
         }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+        }
+
         protected override void OnMouseEnter(EventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseEnter(e);
             _isHovered = true;
             Invalidate();
@@ -96,6 +104,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
             {
@@ -116,6 +125,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnClick(EventArgs e)
         {
+            if (!Enabled) return;
             base.OnClick(e);
             IsPlaying = !IsPlaying;
         }
@@ -133,6 +143,49 @@ namespace KahoiiMusic.Controls
             int x = (Width - diameter) / 2;
             int y = (Height - diameter) / 2;
             Rectangle circleRect = new Rectangle(x, y, diameter, diameter);
+
+            if (!Enabled)
+            {
+                if (UseThemeGradient)
+                {
+                    using (SolidBrush disBg = new SolidBrush(Color.FromArgb(40, 70, 20, 90)))
+                    {
+                        g.FillEllipse(disBg, circleRect);
+                    }
+                    using (Pen borderPen = new Pen(Color.FromArgb(25, 255, 255, 255), 1.0f))
+                    {
+                        g.DrawEllipse(borderPen, circleRect);
+                    }
+                }
+                else
+                {
+                    using (SolidBrush disBg = new SolidBrush(Color.FromArgb(35, 180, 160, 200)))
+                    {
+                        g.FillEllipse(disBg, circleRect);
+                    }
+                }
+
+                // Draw dimmed triangle
+                float cxDis = circleRect.X + circleRect.Width / 2.0f;
+                float cyDis = circleRect.Y + circleRect.Height / 2.0f;
+                Color disIconColor = UseThemeGradient ? Color.FromArgb(45, 200, 180, 220) : Color.FromArgb(55, 180, 160, 200);
+                using (SolidBrush iconBrush = new SolidBrush(disIconColor))
+                {
+                    float triW = Math.Max(12f, diameter * 0.38f);
+                    float triH = Math.Max(13f, diameter * 0.42f);
+                    float tx = cxDis - triW * 0.36f;
+                    float ty = cyDis;
+
+                    PointF[] points = new PointF[]
+                    {
+                        new PointF(tx, ty - triH / 2f),
+                        new PointF(tx + triW, ty),
+                        new PointF(tx, ty + triH / 2f)
+                    };
+                    g.FillPolygon(iconBrush, points);
+                }
+                return;
+            }
 
             if (UseThemeGradient)
             {

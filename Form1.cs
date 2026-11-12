@@ -154,6 +154,7 @@ namespace KahoiiMusic
                 WindowState = FormWindowState.Maximized;
             }
             ApplyResponsiveLayout();
+            UpdateAudioControlsEnabledState();
         }
 
         private void LoadAppLogo()
@@ -258,6 +259,10 @@ namespace KahoiiMusic
             btnThumbnailMenu.Visible = false;
             btnThumbnailMenu.Click += (s, e) =>
             {
+                if (!btnThumbnailMenu.Enabled) return;
+                var curItem = GetCurrentPlaylistItem();
+                if (curItem == null || string.IsNullOrWhiteSpace(curItem.Id)) return;
+
                 if (thumbnailActionPopup != null)
                 {
                     if (thumbnailActionPopup.Visible)
@@ -266,7 +271,6 @@ namespace KahoiiMusic
                     }
                     else
                     {
-                        var curItem = GetCurrentPlaylistItem();
                         thumbnailActionPopup.IsTrackDownloaded = (curItem != null && SavedTracksService.Instance.IsTrackSaved(curItem.Id));
                         thumbnailActionPopup.Visible = true;
                         btnThumbnailMenu.IsOpen = true;
@@ -471,11 +475,6 @@ namespace KahoiiMusic
             lblLogo.Paint += (s, e) =>
             {
                 if (lblLogo.Width <= 0 || lblLogo.Height <= 0) return;
-                Color bgCol = GetTitleBarBackgroundColor();
-                using (SolidBrush bg = new SolidBrush(bgCol))
-                {
-                    e.Graphics.FillRectangle(bg, 0, 0, lblLogo.Width, lblLogo.Height);
-                }
                 SizeF sz = e.Graphics.MeasureString(lblLogo.Text, lblLogo.Font);
                 float gradWidth = Math.Max(sz.Width, 10f);
                 using (LinearGradientBrush lgb = new LinearGradientBrush(
@@ -503,11 +502,6 @@ namespace KahoiiMusic
             {
                 Graphics g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                Color bgCol = GetTitleBarBackgroundColor();
-                using (SolidBrush bg = new SolidBrush(bgCol))
-                {
-                    g.FillRectangle(bg, 0, 0, btnClose.Width, btnClose.Height);
-                }
                 if (_isCloseHovered)
                 {
                     using (SolidBrush hoverBg = new SolidBrush(Color.FromArgb(210, 230, 45, 80)))
@@ -538,11 +532,6 @@ namespace KahoiiMusic
                 {
                     Graphics g = e.Graphics;
                     g.SmoothingMode = SmoothingMode.AntiAlias;
-                    Color bgCol = GetTitleBarBackgroundColor();
-                    using (SolidBrush bg = new SolidBrush(bgCol))
-                    {
-                        g.FillRectangle(bg, 0, 0, btnMaximize.Width, btnMaximize.Height);
-                    }
                     if (_isMaxHovered)
                     {
                         using (SolidBrush hoverBg = new SolidBrush(Color.FromArgb(35, 255, 255, 255)))
@@ -560,10 +549,6 @@ namespace KahoiiMusic
                         {
                             // Restore overlapping squares
                             g.DrawRectangle(p, cx - 2, cy - 5, 7, 7);
-                            using (SolidBrush clearBrush = new SolidBrush(bgCol))
-                            {
-                                g.FillRectangle(clearBrush, cx - 5, cy - 2, 7, 7);
-                            }
                             g.DrawRectangle(p, cx - 5, cy - 2, 7, 7);
                         }
                         else
@@ -584,11 +569,6 @@ namespace KahoiiMusic
             {
                 Graphics g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                Color bgCol = GetTitleBarBackgroundColor();
-                using (SolidBrush bg = new SolidBrush(bgCol))
-                {
-                    g.FillRectangle(bg, 0, 0, btnMinimize.Width, btnMinimize.Height);
-                }
                 if (_isMinHovered)
                 {
                     using (SolidBrush hoverBg = new SolidBrush(Color.FromArgb(35, 255, 255, 255)))
@@ -690,6 +670,7 @@ namespace KahoiiMusic
                     if (btnQuickDownload != null) btnQuickDownload.SetCurrentTrack(trackItem);
                     if (btnFavorite != null) btnFavorite.SetCurrentTrack(trackItem);
                 }
+                UpdateAudioControlsEnabledState();
             };
             _audioPlayer.ThumbnailUrlReady += AudioPlayer_ThumbnailUrlReady;
             _audioPlayer.PlaybackStateChanged += AudioPlayer_PlaybackStateChanged;
@@ -722,6 +703,7 @@ namespace KahoiiMusic
                     lyricsPanel.TotalDuration = args.Duration;
                 }
                 LoadLyricsForTrack(args.VideoId, curT, curA, (int)args.Duration.TotalSeconds);
+                UpdateAudioControlsEnabledState();
             };
 
             if (btnFavorite != null)
@@ -1102,6 +1084,7 @@ namespace KahoiiMusic
             searchPillBox?.RemoveFocus();
 
             _audioPlayer.EnqueueAndPlayTrack(item.Id, item.Title, item.Author, item.DurationSeconds, item.Url);
+            UpdateAudioControlsEnabledState();
         }
 
         private async void ShowFullSearchResultsAsync(string query)
@@ -1576,6 +1559,7 @@ namespace KahoiiMusic
         private void AudioPlayer_PlaybackStateChanged(object sender, EventArgs e)
         {
             if (_audioPlayer == null) return;
+            UpdateAudioControlsEnabledState();
             btnPlayPause.IsPlaying = _audioPlayer.IsPlaying;
             playbackTimer.Enabled = _audioPlayer.IsPlaying;
             artworkBox.IsSpinning = _audioPlayer.IsPlaying;
@@ -1596,6 +1580,7 @@ namespace KahoiiMusic
         private void AudioPlayer_PlaybackEnded(object sender, EventArgs e)
         {
             _audioPlayer.Position = TimeSpan.Zero;
+            UpdateAudioControlsEnabledState();
             musicTrackBar.Value = 0f;
             btnPlayPause.IsPlaying = false;
             playbackTimer.Enabled = false;
@@ -1640,6 +1625,46 @@ namespace KahoiiMusic
                 {
                     btnPlayPause.IsPlaying = false;
                     marqueeTitle.Text = "Chưa phát hiện Audio";
+                }
+            }
+        }
+
+
+        private void UpdateAudioControlsEnabledState()
+        {
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(UpdateAudioControlsEnabledState)); } catch { }
+                return;
+            }
+
+            bool hasAudio = _audioPlayer != null && (_audioPlayer.HasTrack || !string.IsNullOrEmpty(_audioPlayer.CurrentVideoId) || _audioPlayer.IsLoading);
+
+            if (btnPrevious != null) btnPrevious.Enabled = hasAudio;
+            if (btnPlayPause != null) btnPlayPause.Enabled = hasAudio;
+            if (btnNext != null) btnNext.Enabled = hasAudio;
+            if (btnFavorite != null) btnFavorite.Enabled = hasAudio;
+            if (btnQuickDownload != null) btnQuickDownload.Enabled = hasAudio;
+            if (btnThumbnailMenu != null) btnThumbnailMenu.Enabled = hasAudio;
+            if (musicTrackBar != null)
+            {
+                musicTrackBar.Enabled = hasAudio;
+                if (!hasAudio) musicTrackBar.Value = 0f;
+            }
+
+            if (!hasAudio)
+            {
+                if (thumbnailActionPopup != null && thumbnailActionPopup.Visible)
+                {
+                    thumbnailActionPopup.Visible = false;
+                }
+                if (_collectionPickerPopup != null && _collectionPickerPopup.Visible)
+                {
+                    _collectionPickerPopup.Visible = false;
+                }
+                if (btnThumbnailMenu != null)
+                {
+                    btnThumbnailMenu.IsOpen = false;
                 }
             }
         }
@@ -2063,8 +2088,6 @@ namespace KahoiiMusic
                 cp.Style |= 0x20000; // WS_MINIMIZEBOX (enables minimize from taskbar)
                 cp.Style |= 0x10000; // WS_MAXIMIZEBOX
                 cp.Style |= 0x80000; // WS_SYSMENU (enables Alt+F4 and standard close signals)
-                cp.Style |= 0x02000000; // WS_CLIPCHILDREN (prevents white flashing during resize)
-                cp.Style |= 0x04000000; // WS_CLIPSIBLINGS
                 return cp;
             }
         }
@@ -3487,7 +3510,7 @@ namespace KahoiiMusic
             // Right of search: User Avatar button (Larger: 36x36, placed with elegant breathing room)
             btnPlaylist.Visible = false;
             btnUser.Visible = true;
-            btnUser.Size = new Size(36, 36);
+            btnUser.Size = new Size(38, 38);
             int userRightLimit = (btnMinimize != null) ? btnMinimize.Left - 16 : cardW - 16;
             btnUser.Location = new Point(userRightLimit - btnUser.Width, (topBarH - btnUser.Height) / 2);
             btnUser.BringToFront();

@@ -76,8 +76,16 @@ namespace KahoiiMusic.Controls
             }
         }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+        }
+
         protected override void OnMouseEnter(EventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseEnter(e);
             _isHovered = true;
             Invalidate();
@@ -93,6 +101,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
             {
@@ -120,7 +129,7 @@ namespace KahoiiMusic.Controls
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            if (_isPressed)
+            if (_isPressed && Enabled)
             {
                 g.TranslateTransform(0, 1);
             }
@@ -166,6 +175,33 @@ namespace KahoiiMusic.Controls
                 }
 
                 RectangleF bounds = path.GetBounds();
+
+                if (!Enabled)
+                {
+                    if (UseThemeGradient)
+                    {
+                        using (SolidBrush disBrush = new SolidBrush(Color.FromArgb(40, 70, 20, 90)))
+                        {
+                            g.FillPath(disBrush, path);
+                        }
+                        using (Pen disPen = new Pen(Color.FromArgb(30, 255, 255, 255), 1.0f))
+                        {
+                            disPen.LineJoin = LineJoin.Round;
+                            g.DrawPath(disPen, path);
+                        }
+                    }
+                    else
+                    {
+                        using (Pen disPen = new Pen(Color.FromArgb(45, 180, 160, 200), _lineWidth))
+                        {
+                            disPen.LineJoin = LineJoin.Round;
+                            disPen.StartCap = LineCap.Round;
+                            disPen.EndCap = LineCap.Round;
+                            g.DrawPath(disPen, path);
+                        }
+                    }
+                    return;
+                }
 
                 if (UseThemeGradient)
                 {

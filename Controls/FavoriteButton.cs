@@ -231,7 +231,7 @@ namespace KahoiiMusic.Controls
 
         public bool ToggleFavorite()
         {
-            if (_currentTrack == null || string.IsNullOrWhiteSpace(_currentTrack.Id))
+            if (!Enabled || _currentTrack == null || string.IsNullOrWhiteSpace(_currentTrack.Id))
             {
                 return false;
             }
@@ -253,8 +253,16 @@ namespace KahoiiMusic.Controls
             if (_toolTip != null) _toolTip.RemoveAll();
         }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            Invalidate();
+        }
+
         protected override void OnMouseEnter(EventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseEnter(e);
             _isHovered = true;
             Invalidate();
@@ -270,6 +278,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (!Enabled) return;
             base.OnMouseDown(e);
             if (e.Button == MouseButtons.Left)
             {
@@ -290,6 +299,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnClick(EventArgs e)
         {
+            if (!Enabled) return;
             base.OnClick(e);
             ToggleFavorite();
         }
@@ -309,6 +319,20 @@ namespace KahoiiMusic.Controls
             float baseH = baseW * 0.90f;
             float heartW = baseW * _bounceScale;
             float heartH = baseH * _bounceScale;
+
+            if (!Enabled)
+            {
+                float heartXDis = (w - heartW) / 2f;
+                float heartYDis = (h - heartH) / 2f;
+                RectangleF disBounds = new RectangleF(heartXDis, heartYDis, heartW, heartH);
+                using (GraphicsPath disPath = CreateHeartPath(disBounds))
+                using (Pen disPen = new Pen(Color.FromArgb(40, 180, 160, 200), 1.5f))
+                {
+                    disPen.LineJoin = LineJoin.Round;
+                    g.DrawPath(disPen, disPath);
+                }
+                return;
+            }
 
             if (_isPressed)
             {
