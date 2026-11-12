@@ -34,6 +34,15 @@ namespace KahoiiMusic
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
         private const int SW_RESTORE = 9;
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetFocus();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetFocus(IntPtr hWnd);
+
         public static Form1 Instance { get; private set; }
         private AudioPlayerService _audioPlayer;
         public AudioPlayerService AudioPlayer => _audioPlayer;
@@ -1308,46 +1317,62 @@ namespace KahoiiMusic
                     }
                 }
             }
+
+            // Global keyboard handling even if window was just activated via Alt+Tab and ActiveControl is null
+            if (m.Msg == 0x0100 /* WM_KEYDOWN */ || m.Msg == 0x0104 /* WM_SYSKEYDOWN */)
+            {
+                if (Form.ActiveForm == this || GetForegroundWindow() == this.Handle)
+                {
+                    bool isSearchFocused = (searchPillBox != null && searchPillBox.ContainsFocus) ||
+                                           (_sideMenuPanel != null && _sideMenuPanel.IsSearchFocused);
+
+                    IntPtr focusHwnd = GetFocus();
+                    Control focusedCtrl = focusHwnd != IntPtr.Zero ? Control.FromHandle(focusHwnd) : null;
+                    bool isTyping = isSearchFocused || (focusedCtrl is TextBoxBase);
+
+                    Keys keyData = (Keys)(int)m.WParam | Control.ModifierKeys;
+
+                    if (keyData == Keys.Escape)
+                    {
+                        if (_searchDropdown != null && _searchDropdown.Visible)
+                        {
+                            _searchDropdown.Hide();
+                            searchPillBox?.RemoveFocus();
+                            return true;
+                        }
+                        if (_searchResultsView != null && _searchResultsView.Visible)
+                        {
+                            _searchResultsView.Visible = false;
+                            return true;
+                        }
+                        if (searchPillBox != null && searchPillBox.ContainsFocus)
+                        {
+                            searchPillBox.RemoveFocus();
+                            _searchDropdown?.Hide();
+                            return true;
+                        }
+                        if (_sideMenuPanel != null && _sideMenuPanel.IsSearchFocused)
+                        {
+                            _sideMenuPanel.ClearSearchFocus();
+                            SetFocus(this.Handle);
+                            return true;
+                        }
+                    }
+
+                    if (!isTyping)
+                    {
+                        if (HandleGlobalShortcut(keyData))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
             return false;
         }
 
-        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        private bool HandleGlobalShortcut(Keys keyData)
         {
-            if (_searchDropdown != null && _searchDropdown.Visible && keyData == Keys.Escape)
-            {
-                _searchDropdown.Hide();
-                searchPillBox.RemoveFocus();
-                return true;
-            }
-
-            if (_searchResultsView != null && _searchResultsView.Visible && keyData == Keys.Escape)
-            {
-                _searchResultsView.Visible = false;
-                return true;
-            }
-
-            if (searchPillBox != null && searchPillBox.ContainsFocus)
-            {
-                if (keyData == Keys.Escape)
-                {
-                    searchPillBox.RemoveFocus();
-                    _searchDropdown?.Hide();
-                    return true;
-                }
-                return base.ProcessCmdKey(ref msg, keyData);
-            }
-
-            if (_sideMenuPanel != null && _sideMenuPanel.Visible && _sideMenuPanel.IsSearchFocused)
-            {
-                if (keyData == Keys.Escape)
-                {
-                    _sideMenuPanel.ClearSearchFocus();
-                    this.Focus();
-                    return true;
-                }
-                return base.ProcessCmdKey(ref msg, keyData);
-            }
-
             switch (keyData)
             {
                 case Keys.Space:
@@ -1421,7 +1446,7 @@ namespace KahoiiMusic
                     break;
 
                 case Keys.OemOpenBrackets:
-                    if (!searchPillBox.ContainsFocus && lyricsPanel != null)
+                    if ((searchPillBox == null || !searchPillBox.ContainsFocus) && lyricsPanel != null)
                     {
                         int newOffset = HistoryService.LyricsDelayOffsetMs - 50;
                         if (newOffset < -500) newOffset = -500;
@@ -1433,7 +1458,7 @@ namespace KahoiiMusic
                     break;
 
                 case Keys.OemCloseBrackets:
-                    if (!searchPillBox.ContainsFocus && lyricsPanel != null)
+                    if ((searchPillBox == null || !searchPillBox.ContainsFocus) && lyricsPanel != null)
                     {
                         int newOffset = HistoryService.LyricsDelayOffsetMs + 50;
                         if (newOffset > 1000) newOffset = 1000;
@@ -1462,6 +1487,51 @@ namespace KahoiiMusic
                         return true;
                     }
                     break;
+            }
+
+            return false;
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (_searchDropdown != null && _searchDropdown.Visible && keyData == Keys.Escape)
+            {
+                _searchDropdown.Hide();
+                searchPillBox.RemoveFocus();
+                return true;
+            }
+
+            if (_searchResultsView != null && _searchResultsView.Visible && keyData == Keys.Escape)
+            {
+                _searchResultsView.Visible = false;
+                return true;
+            }
+
+            if (searchPillBox != null && searchPillBox.ContainsFocus)
+            {
+                if (keyData == Keys.Escape)
+                {
+                    searchPillBox.RemoveFocus();
+                    _searchDropdown?.Hide();
+                    return true;
+                }
+                return base.ProcessCmdKey(ref msg, keyData);
+            }
+
+            if (_sideMenuPanel != null && _sideMenuPanel.Visible && _sideMenuPanel.IsSearchFocused)
+            {
+                if (keyData == Keys.Escape)
+                {
+                    _sideMenuPanel.ClearSearchFocus();
+                    SetFocus(this.Handle);
+                    return true;
+                }
+                return base.ProcessCmdKey(ref msg, keyData);
+            }
+
+            if (HandleGlobalShortcut(keyData))
+            {
+                return true;
             }
 
             return base.ProcessCmdKey(ref msg, keyData);
@@ -3451,7 +3521,7 @@ namespace KahoiiMusic
             base.OnActivated(e);
             if ((searchPillBox == null || !searchPillBox.ContainsFocus) && (_sideMenuPanel == null || !_sideMenuPanel.IsSearchFocused))
             {
-                this.Focus();
+                SetFocus(this.Handle);
             }
         }
 
@@ -3483,7 +3553,7 @@ namespace KahoiiMusic
                     {
                         if ((searchPillBox == null || !searchPillBox.ContainsFocus) && (_sideMenuPanel == null || !_sideMenuPanel.IsSearchFocused))
                         {
-                            this.Focus();
+                            SetFocus(this.Handle);
                         }
                     }));
                 }
@@ -3794,7 +3864,7 @@ namespace KahoiiMusic
                 _topSectionCard.Location = new Point(rightX, padTop);
                 _topSectionCard.Size = new Size(rightW, topH);
                 _topSectionCard.CardBackColor = Color.FromArgb(150, 22, 10, 42); // Opacity < 100%
-                _topSectionCard.CardBorderColor = Color.FromArgb(140, 180, 50, 220);
+                _topSectionCard.CardBorderColor = (_currentPalette != null) ? Color.FromArgb(140, _currentPalette.SecondaryAccentColor) : Color.FromArgb(140, 180, 50, 220);
                 _topSectionCard.CornerRadius = 14;
                 _topSectionCard.Visible = true;
                 _topSectionCard.BringToFront();
