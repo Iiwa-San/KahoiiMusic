@@ -31,9 +31,10 @@ namespace KahoiiMusic.Controls
         private int _dragStartScroll = 0;
         private Rectangle _scrollBarThumbRect;
 
-        private const int TopHeaderHeight = 44;
-        private const int HeroCardHeight = 84;
-        private const int ItemRowHeight = 42;
+        private bool IsLarge => Width >= 900;
+        private int ActualTopHeaderHeight => IsLarge ? 54 : 44;
+        private int ActualHeroCardHeight => IsLarge ? 120 : 84;
+        private int ActualItemRowHeight => IsLarge ? 64 : 42;
 
         public event EventHandler<PlaylistItem> TrackPlaySelected;
         public event EventHandler<PlaylistItem> TrackAddSelected;
@@ -144,7 +145,7 @@ namespace KahoiiMusic.Controls
         }
 
         private int ScrollTrackX => Width - 14;
-        private int ScrollTrackY => TopHeaderHeight + 4;
+        private int ScrollTrackY => ActualTopHeaderHeight + 4;
         private int ScrollTrackHeight => Math.Max(10, Height - ScrollTrackY - 6);
         private int ScrollTrackWidth => 8;
 
@@ -173,8 +174,8 @@ namespace KahoiiMusic.Controls
 
         private void UpdateScrollBounds()
         {
-            int listStartY = TopHeaderHeight + (_items.Count > 0 ? HeroCardHeight + 10 : 0);
-            int totalContentHeight = listStartY + (_items.Count * ItemRowHeight) + 16;
+            int listStartY = ActualTopHeaderHeight + (_items.Count > 0 ? ActualHeroCardHeight + 12 : 0);
+            int totalContentHeight = listStartY + (_items.Count * ActualItemRowHeight) + 24;
             _maxScroll = Math.Max(0, totalContentHeight - Height);
             _scrollOffset = Math.Max(0, Math.Min(_scrollOffset, _maxScroll));
         }
@@ -191,7 +192,7 @@ namespace KahoiiMusic.Controls
             base.OnMouseWheel(e);
             if (_maxScroll > 0)
             {
-                int delta = (e.Delta / 120) * -(ItemRowHeight * 2);
+                int delta = (e.Delta / 120) * -(ActualItemRowHeight * 2);
                 _scrollOffset = Math.Max(0, Math.Min(_maxScroll, _scrollOffset + delta));
                 Invalidate();
             }
@@ -220,11 +221,11 @@ namespace KahoiiMusic.Controls
             _isHoveringBestMatchPlay = _bestMatchPlayRect.Contains(e.Location);
             _hoveredIndex = -1;
 
-            int listStartY = TopHeaderHeight + (_items.Count > 0 ? HeroCardHeight + 10 : 0) - _scrollOffset;
+            int listStartY = ActualTopHeaderHeight + (_items.Count > 0 ? ActualHeroCardHeight + 12 : 0) - _scrollOffset;
 
             if (e.X < Width - 18 && e.Y >= listStartY)
             {
-                int row = (e.Y - listStartY) / ItemRowHeight;
+                int row = (e.Y - listStartY) / ActualItemRowHeight;
                 if (row >= 0 && row < _items.Count)
                 {
                     _hoveredIndex = row;
@@ -285,9 +286,12 @@ namespace KahoiiMusic.Controls
                 if (_hoveredIndex >= 0 && _hoveredIndex < _items.Count)
                 {
                     PlaylistItem item = _items[_hoveredIndex];
-                    int listStartY = TopHeaderHeight + (_items.Count > 0 ? HeroCardHeight + 10 : 0) - _scrollOffset;
-                    int rowY = listStartY + (_hoveredIndex * ItemRowHeight);
-                    Rectangle addRect = new Rectangle(Width - 44, rowY + (ItemRowHeight - 24) / 2, 24, 24);
+                    int listStartY = ActualTopHeaderHeight + (_items.Count > 0 ? ActualHeroCardHeight + 12 : 0) - _scrollOffset;
+                    int rowY = listStartY + (_hoveredIndex * ActualItemRowHeight);
+                    int btnSize = IsLarge ? 32 : 24;
+                    int rightPad = IsLarge ? 16 : 10;
+                    int addX = Width - rightPad - btnSize;
+                    Rectangle addRect = new Rectangle(addX, rowY + (ActualItemRowHeight - btnSize) / 2, btnSize, btnSize);
 
                     if (addRect.Contains(e.Location))
                     {
@@ -324,7 +328,9 @@ namespace KahoiiMusic.Controls
             }
 
             // Top Header
-            _backBtnRect = new Rectangle(12, 8, 126, 26);
+            int backBtnW = IsLarge ? 160 : 126;
+            int backBtnH = IsLarge ? 34 : 26;
+            _backBtnRect = new Rectangle(IsLarge ? 16 : 12, (ActualTopHeaderHeight - backBtnH) / 2, backBtnW, backBtnH);
             using (GraphicsPath bPath = CreateRoundedRectPath(_backBtnRect, 6))
             using (SolidBrush bbBrush = new SolidBrush(_isHoveringBack ? Color.FromArgb(255, 45, 133) : Color.FromArgb(32, 25, 54)))
             using (Pen bbPen = new Pen(_isHoveringBack ? Color.White : Color.FromArgb(80, 255, 45, 133), 1f))
@@ -332,7 +338,7 @@ namespace KahoiiMusic.Controls
                 g.FillPath(bbBrush, bPath);
                 g.DrawPath(bbPen, bPath);
 
-                using (Font bFont = new Font("Segoe UI", 8.0f, FontStyle.Bold))
+                using (Font bFont = new Font("Segoe UI", IsLarge ? 9.5f : 8.0f, FontStyle.Bold))
                 using (SolidBrush btBrush = new SolidBrush(Color.White))
                 {
                     StringFormat bsf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
@@ -341,46 +347,48 @@ namespace KahoiiMusic.Controls
             }
 
             // Header Title
-            int titleX = _backBtnRect.Right + 12;
+            int titleX = _backBtnRect.Right + (IsLarge ? 16 : 12);
             int titleW = Width - titleX - 12;
-            using (Font tFont = new Font("Segoe UI", 9.0f, FontStyle.Bold))
-            using (Font qFont = new Font("Segoe UI", 9.0f, FontStyle.Bold))
+            using (Font tFont = new Font("Segoe UI", IsLarge ? 11.5f : 9.0f, FontStyle.Bold))
+            using (Font qFont = new Font("Segoe UI", IsLarge ? 11.5f : 9.0f, FontStyle.Bold))
             using (SolidBrush tBrush = new SolidBrush(Color.White))
             using (SolidBrush qBrush = new SolidBrush(Color.FromArgb(255, 45, 133)))
             {
                 StringFormat tsf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, LineAlignment = StringAlignment.Center };
                 string prefix = "Kết quả: ";
-                g.DrawString(prefix, tFont, tBrush, titleX, 21, tsf);
+                int titleY = ActualTopHeaderHeight / 2;
+                g.DrawString(prefix, tFont, tBrush, titleX, titleY, tsf);
                 float pW = g.MeasureString(prefix, tFont).Width;
-                g.DrawString("\"" + _query + "\"", qFont, qBrush, new RectangleF(titleX + pW, 11, titleW - pW, 20), tsf);
+                int textH = IsLarge ? 26 : 20;
+                g.DrawString("\"" + _query + "\"", qFont, qBrush, new RectangleF(titleX + pW, titleY - textH / 2, titleW - pW, textH), tsf);
             }
 
             using (Pen divPen = new Pen(Color.FromArgb(38, 30, 60)))
             {
-                g.DrawLine(divPen, 10, TopHeaderHeight - 1, Width - 10, TopHeaderHeight - 1);
+                g.DrawLine(divPen, 10, ActualTopHeaderHeight - 1, Width - 10, ActualTopHeaderHeight - 1);
             }
 
             // Clip for scrollable area
-            Rectangle contentArea = new Rectangle(0, TopHeaderHeight, Width, Height - TopHeaderHeight);
+            Rectangle contentArea = new Rectangle(0, ActualTopHeaderHeight, Width, Height - ActualTopHeaderHeight);
             g.SetClip(contentArea);
 
             if (_isLoading)
             {
-                using (Font lFont = new Font("Segoe UI", 10.0f, FontStyle.Bold))
-                using (Font subFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
+                using (Font lFont = new Font("Segoe UI", IsLarge ? 12.5f : 10.0f, FontStyle.Bold))
+                using (Font subFont = new Font("Segoe UI", IsLarge ? 10.5f : 8.5f, FontStyle.Regular))
                 using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(255, 45, 133)))
                 using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(160, 150, 185)))
                 {
                     StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    g.DrawString("⚡ Đang tìm kiếm trên YouTube...", lFont, textBrush, new RectangleF(0, Height / 2 - 25, Width, 24), sf);
-                    g.DrawString("Vui lòng đợi giây lát", subFont, subBrush, new RectangleF(0, Height / 2 + 2, Width, 20), sf);
+                    g.DrawString("⚡ Đang tìm kiếm trên YouTube...", lFont, textBrush, new RectangleF(0, Height / 2 - 30, Width, 30), sf);
+                    g.DrawString("Vui lòng đợi giây lát", subFont, subBrush, new RectangleF(0, Height / 2 + 5, Width, 24), sf);
                 }
                 return;
             }
 
             if (_items.Count == 0)
             {
-                using (Font emptyFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
+                using (Font emptyFont = new Font("Segoe UI", IsLarge ? 12.0f : 9.5f, FontStyle.Regular))
                 using (SolidBrush emptyBrush = new SolidBrush(Color.FromArgb(160, 150, 185)))
                 {
                     StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
@@ -389,15 +397,16 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
-            int curY = TopHeaderHeight + 6 - _scrollOffset;
+            int curY = ActualTopHeaderHeight + 8 - _scrollOffset;
+            int cardPad = IsLarge ? 16 : 12;
 
             // Best Match Hero Card
             if (_items.Count > 0)
             {
                 PlaylistItem hero = _items[0];
-                _bestMatchRect = new Rectangle(12, curY, Width - 24, HeroCardHeight);
+                _bestMatchRect = new Rectangle(cardPad, curY, Width - (cardPad * 2), ActualHeroCardHeight);
 
-                using (GraphicsPath hPath = CreateRoundedRectPath(_bestMatchRect, 8))
+                using (GraphicsPath hPath = CreateRoundedRectPath(_bestMatchRect, IsLarge ? 12 : 8))
                 using (LinearGradientBrush hBrush = new LinearGradientBrush(_bestMatchRect, Color.FromArgb(42, 28, 70), Color.FromArgb(24, 18, 46), LinearGradientMode.Horizontal))
                 using (Pen hPen = new Pen(Color.FromArgb(90, 255, 45, 133), 1f))
                 {
@@ -405,45 +414,39 @@ namespace KahoiiMusic.Controls
                     g.DrawPath(hPen, hPath);
                 }
 
-                // Thumbnail (96x54)
-                Rectangle heroThumbRect = new Rectangle(_bestMatchRect.X + 10, _bestMatchRect.Y + (_bestMatchRect.Height - 54) / 2, 96, 54);
-                if (_thumbCache.TryGetValue(hero.Id, out Image hThumb) && hThumb != null)
+                // Thumbnail (144x81 when large, 96x54 normal)
+                int heroThumbW = IsLarge ? 144 : 96;
+                int heroThumbH = IsLarge ? 81 : 54;
+                Rectangle heroThumbRect = new Rectangle(_bestMatchRect.X + (IsLarge ? 16 : 10), _bestMatchRect.Y + (_bestMatchRect.Height - heroThumbH) / 2, heroThumbW, heroThumbH);
+                
+                using (GraphicsPath tp = CreateRoundedRectPath(heroThumbRect, IsLarge ? 8 : 4))
                 {
-                    g.DrawImage(hThumb, heroThumbRect);
-                }
-                else
-                {
-                    RequestThumbnail(hero.Id);
-                    using (SolidBrush tb = new SolidBrush(Color.FromArgb(30, 22, 50)))
+                    Region oldRgn = g.Clip;
+                    g.SetClip(tp, CombineMode.Intersect);
+                    if (_thumbCache.TryGetValue(hero.Id, out Image hThumb) && hThumb != null)
                     {
-                        g.FillRectangle(tb, heroThumbRect);
+                        g.DrawImage(hThumb, heroThumbRect);
                     }
-                }
-
-                // Text info
-                int infoX = heroThumbRect.Right + 12;
-                int infoW = _bestMatchRect.Width - (infoX - _bestMatchRect.X) - 90;
-
-                using (Font tagFont = new Font("Segoe UI", 6.5f, FontStyle.Bold))
-                using (Font heroTitleFont = new Font("Segoe UI", 8.5f, FontStyle.Bold))
-                using (Font heroSubFont = new Font("Segoe UI", 7.5f, FontStyle.Regular))
-                using (SolidBrush tagBrush = new SolidBrush(Color.FromArgb(255, 45, 133)))
-                using (SolidBrush hTitleBrush = new SolidBrush(Color.White))
-                using (SolidBrush hSubBrush = new SolidBrush(Color.FromArgb(160, 150, 185)))
-                {
-                    StringFormat tsf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-                    g.DrawString("BÀI HÁT PHÙ HỢP NHẤT", tagFont, tagBrush, infoX, _bestMatchRect.Y + 10);
-                    g.DrawString(hero.Title ?? "Bài hát", heroTitleFont, hTitleBrush, new RectangleF(infoX, _bestMatchRect.Y + 24, infoW, 18), tsf);
-                    g.DrawString((hero.Author ?? "YouTube") + " • " + hero.FormattedDuration, heroSubFont, hSubBrush, new RectangleF(infoX, _bestMatchRect.Y + 44, infoW, 16), tsf);
+                    else
+                    {
+                        RequestThumbnail(hero.Id);
+                        using (SolidBrush tb = new SolidBrush(Color.FromArgb(30, 22, 50)))
+                        {
+                            g.FillRectangle(tb, heroThumbRect);
+                        }
+                    }
+                    g.Clip = oldRgn;
                 }
 
                 // Big Play button
-                _bestMatchPlayRect = new Rectangle(_bestMatchRect.Right - 84, _bestMatchRect.Y + (_bestMatchRect.Height - 30) / 2, 74, 30);
+                int heroPlayW = IsLarge ? 120 : 74;
+                int heroPlayH = IsLarge ? 38 : 30;
+                _bestMatchPlayRect = new Rectangle(_bestMatchRect.Right - heroPlayW - (IsLarge ? 16 : 10), _bestMatchRect.Y + (_bestMatchRect.Height - heroPlayH) / 2, heroPlayW, heroPlayH);
                 using (GraphicsPath pPath = CreateRoundedRectPath(_bestMatchPlayRect, 6))
                 using (SolidBrush pbBrush = new SolidBrush(_isHoveringBestMatchPlay ? Color.FromArgb(255, 65, 150) : Color.FromArgb(255, 45, 133)))
                 {
                     g.FillPath(pbBrush, pPath);
-                    using (Font pFont = new Font("Segoe UI", 8.0f, FontStyle.Bold))
+                    using (Font pFont = new Font("Segoe UI", IsLarge ? 10.0f : 8.0f, FontStyle.Bold))
                     using (SolidBrush ptBrush = new SolidBrush(Color.White))
                     {
                         StringFormat psf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
@@ -451,23 +454,45 @@ namespace KahoiiMusic.Controls
                     }
                 }
 
-                curY += HeroCardHeight + 10;
+                // Text info
+                int infoX = heroThumbRect.Right + (IsLarge ? 16 : 12);
+                int infoW = _bestMatchPlayRect.Left - infoX - 16;
+
+                using (Font tagFont = new Font("Segoe UI", IsLarge ? 8.5f : 6.5f, FontStyle.Bold))
+                using (Font heroTitleFont = new Font("Segoe UI", IsLarge ? 12.5f : 8.5f, FontStyle.Bold))
+                using (Font heroSubFont = new Font("Segoe UI", IsLarge ? 10.5f : 7.5f, FontStyle.Regular))
+                using (SolidBrush tagBrush = new SolidBrush(Color.FromArgb(255, 45, 133)))
+                using (SolidBrush hTitleBrush = new SolidBrush(Color.White))
+                using (SolidBrush hSubBrush = new SolidBrush(Color.FromArgb(160, 150, 185)))
+                {
+                    StringFormat tsf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+                    int tagY = IsLarge ? _bestMatchRect.Y + 14 : _bestMatchRect.Y + 10;
+                    int titleY = IsLarge ? _bestMatchRect.Y + 36 : _bestMatchRect.Y + 24;
+                    int subY = IsLarge ? _bestMatchRect.Y + 68 : _bestMatchRect.Y + 44;
+                    int lineH = IsLarge ? 26 : 18;
+
+                    g.DrawString("BÀI HÁT PHÙ HỢP NHẤT", tagFont, tagBrush, infoX, tagY);
+                    g.DrawString(hero.Title ?? "Bài hát", heroTitleFont, hTitleBrush, new RectangleF(infoX, titleY, infoW, lineH), tsf);
+                    g.DrawString((hero.Author ?? "YouTube") + " • " + hero.FormattedDuration, heroSubFont, hSubBrush, new RectangleF(infoX, subY, infoW, lineH), tsf);
+                }
+
+                curY += ActualHeroCardHeight + 12;
             }
 
             // Results List
             for (int i = 0; i < _items.Count; i++)
             {
                 PlaylistItem item = _items[i];
-                Rectangle rowRect = new Rectangle(12, curY, Width - 24, ItemRowHeight);
+                Rectangle rowRect = new Rectangle(cardPad, curY, Width - (cardPad * 2), ActualItemRowHeight);
 
                 // Only render visible rows
-                if (rowRect.Bottom >= TopHeaderHeight && rowRect.Top <= Height)
+                if (rowRect.Bottom >= ActualTopHeaderHeight && rowRect.Top <= Height)
                 {
                     bool isHovered = (i == _hoveredIndex);
 
                     if (isHovered)
                     {
-                        using (GraphicsPath rPath = CreateRoundedRectPath(rowRect, 6))
+                        using (GraphicsPath rPath = CreateRoundedRectPath(rowRect, IsLarge ? 8 : 6))
                         using (SolidBrush rhBrush = new SolidBrush(Color.FromArgb(40, 28, 62)))
                         using (Pen rhPen = new Pen(Color.FromArgb(100, 255, 45, 133), 1f))
                         {
@@ -477,46 +502,46 @@ namespace KahoiiMusic.Controls
                     }
 
                     // Index #
-                    using (Font numFont = new Font("Segoe UI", 8.0f, FontStyle.Bold))
-                    using (SolidBrush numBrush = new SolidBrush(Color.FromArgb(120, 110, 140)))
+                    int numW = IsLarge ? 34 : 20;
+                    using (Font numFont = new Font("Segoe UI", IsLarge ? 10.5f : 8.0f, FontStyle.Bold))
+                    using (SolidBrush numBrush = new SolidBrush(Color.FromArgb(130, 120, 150)))
                     {
                         StringFormat nsf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                        g.DrawString((i + 1).ToString(), numFont, numBrush, new Rectangle(rowRect.X + 2, rowRect.Y, 20, rowRect.Height), nsf);
+                        g.DrawString((i + 1).ToString(), numFont, numBrush, new Rectangle(rowRect.X + 2, rowRect.Y, numW, rowRect.Height), nsf);
                     }
 
-                    // Thumbnail (46x26)
-                    Rectangle thumbRect = new Rectangle(rowRect.X + 26, rowRect.Y + (rowRect.Height - 26) / 2, 46, 26);
-                    if (_thumbCache.TryGetValue(item.Id, out Image thumb) && thumb != null)
+                    // Thumbnail (78x44 when large, 46x26 normal)
+                    int thumbW = IsLarge ? 78 : 46;
+                    int thumbH = IsLarge ? 44 : 26;
+                    Rectangle thumbRect = new Rectangle(rowRect.X + numW + 6, rowRect.Y + (rowRect.Height - thumbH) / 2, thumbW, thumbH);
+                    
+                    using (GraphicsPath tp = CreateRoundedRectPath(thumbRect, IsLarge ? 6 : 4))
                     {
-                        g.DrawImage(thumb, thumbRect);
-                    }
-                    else
-                    {
-                        RequestThumbnail(item.Id);
-                        using (SolidBrush tb = new SolidBrush(Color.FromArgb(28, 22, 48)))
+                        Region oldRgn = g.Clip;
+                        g.SetClip(tp, CombineMode.Intersect);
+                        if (_thumbCache.TryGetValue(item.Id, out Image thumb) && thumb != null)
                         {
-                            g.FillRectangle(tb, thumbRect);
+                            g.DrawImage(thumb, thumbRect);
                         }
+                        else
+                        {
+                            RequestThumbnail(item.Id);
+                            using (SolidBrush tb = new SolidBrush(Color.FromArgb(28, 22, 48)))
+                            {
+                                g.FillRectangle(tb, thumbRect);
+                            }
+                        }
+                        g.Clip = oldRgn;
                     }
 
-                    // Title & Author
-                    int textX = thumbRect.Right + 8;
-                    int textW = Width - textX - 80;
-
-                    using (Font titleFont = new Font("Segoe UI", 8.25f, FontStyle.Bold))
-                    using (Font subFont = new Font("Segoe UI", 7.5f, FontStyle.Regular))
-                    using (SolidBrush titleBrush = new SolidBrush(isHovered ? Color.FromArgb(255, 100, 165) : Color.White))
-                    using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(150, 140, 175)))
-                    {
-                        StringFormat tsf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-                        g.DrawString(item.Title ?? "Bài hát", titleFont, titleBrush, new RectangleF(textX, rowRect.Y + 4, textW, 16), tsf);
-
-                        string sub = (item.Author ?? "YouTube") + " • " + item.FormattedDuration;
-                        g.DrawString(sub, subFont, subBrush, new RectangleF(textX, rowRect.Y + 20, textW, 14), tsf);
-                    }
+                    // Buttons sizing
+                    int btnSize = IsLarge ? 32 : 22;
+                    int rightPad = IsLarge ? 16 : 10;
+                    int addX = Width - rightPad - btnSize;
+                    int playX = addX - btnSize - (IsLarge ? 10 : 6);
 
                     // Quick Play (▶)
-                    Rectangle playRect = new Rectangle(Width - 72, rowRect.Y + (rowRect.Height - 22) / 2, 22, 22);
+                    Rectangle playRect = new Rectangle(playX, rowRect.Y + (rowRect.Height - btnSize) / 2, btnSize, btnSize);
                     using (GraphicsPath btnPath = new GraphicsPath())
                     {
                         btnPath.AddEllipse(playRect);
@@ -524,7 +549,7 @@ namespace KahoiiMusic.Controls
                         {
                             g.FillPath(pbBrush, btnPath);
                         }
-                        using (Font pFont = new Font("Segoe UI", 8.0f, FontStyle.Bold))
+                        using (Font pFont = new Font("Segoe UI", IsLarge ? 10.0f : 8.0f, FontStyle.Bold))
                         using (SolidBrush pTextBrush = new SolidBrush(isHovered ? Color.White : Color.FromArgb(255, 45, 133)))
                         {
                             StringFormat psf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
@@ -533,7 +558,7 @@ namespace KahoiiMusic.Controls
                     }
 
                     // Add Button (+)
-                    Rectangle addRect = new Rectangle(Width - 44, rowRect.Y + (rowRect.Height - 22) / 2, 22, 22);
+                    Rectangle addRect = new Rectangle(addX, rowRect.Y + (rowRect.Height - btnSize) / 2, btnSize, btnSize);
                     using (GraphicsPath btnPath = new GraphicsPath())
                     {
                         btnPath.AddEllipse(addRect);
@@ -541,16 +566,37 @@ namespace KahoiiMusic.Controls
                         {
                             g.FillPath(abBrush, btnPath);
                         }
-                        using (Font aFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
+                        using (Font aFont = new Font("Segoe UI", IsLarge ? 12.0f : 9.0f, FontStyle.Regular))
                         using (SolidBrush aTextBrush = new SolidBrush(Color.FromArgb(180, 170, 205)))
                         {
                             StringFormat asf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
                             g.DrawString("+", aFont, aTextBrush, addRect, asf);
                         }
                     }
+
+                    // Title & Author
+                    int textX = thumbRect.Right + (IsLarge ? 14 : 8);
+                    int textW = playX - textX - (IsLarge ? 14 : 8);
+
+                    using (Font titleFont = new Font("Segoe UI", IsLarge ? 11.5f : 8.25f, FontStyle.Bold))
+                    using (Font subFont = new Font("Segoe UI", IsLarge ? 10.0f : 7.5f, FontStyle.Regular))
+                    using (SolidBrush titleBrush = new SolidBrush(isHovered ? Color.FromArgb(255, 100, 165) : Color.White))
+                    using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(150, 140, 175)))
+                    {
+                        StringFormat tsf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+                        int tLineY = IsLarge ? rowRect.Y + 10 : rowRect.Y + 4;
+                        int sLineY = IsLarge ? rowRect.Y + 34 : rowRect.Y + 20;
+                        int tLineH = IsLarge ? 22 : 16;
+                        int sLineH = IsLarge ? 18 : 14;
+
+                        g.DrawString(item.Title ?? "Bài hát", titleFont, titleBrush, new RectangleF(textX, tLineY, textW, tLineH), tsf);
+
+                        string sub = (item.Author ?? "YouTube") + " • " + item.FormattedDuration;
+                        g.DrawString(sub, subFont, subBrush, new RectangleF(textX, sLineY, textW, sLineH), tsf);
+                    }
                 }
 
-                curY += ItemRowHeight;
+                curY += ActualItemRowHeight;
             }
 
             g.ResetClip();

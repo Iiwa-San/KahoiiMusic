@@ -52,6 +52,32 @@ namespace KahoiiMusic.Services
                     int parseCount = Math.Max(30, maxResults);
                     var parsed = ParseSearchResults(json, parseCount);
 
+                    // Fetch next page via continuation token if user requested more items
+                    if (parsed.Count < maxResults)
+                    {
+                        var mToken = Regex.Match(json, @"""continuationCommand""\s*:\s*\{[^}]*?""token""\s*:\s*""([^""]+)""");
+                        if (mToken.Success)
+                        {
+                            try
+                            {
+                                string contPayload = string.Format(
+                                    "{{\"continuation\":\"{0}\",\"context\":{{\"client\":{{\"clientName\":\"WEB\",\"clientVersion\":\"2.20240101.00.00\",\"hl\":\"vi\",\"gl\":\"VN\"}}}}}}",
+                                    EscapeJson(mToken.Groups[1].Value));
+                                var contContent = new StringContent(contPayload, Encoding.UTF8, "application/json");
+                                using (var contResponse = await _httpClient.PostAsync("https://www.youtube.com/youtubei/v1/search", contContent, ct).ConfigureAwait(false))
+                                {
+                                    if (contResponse.IsSuccessStatusCode)
+                                    {
+                                        string contJson = await contResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                        var moreItems = ParseSearchResults(contJson, maxResults - parsed.Count);
+                                        parsed.AddRange(moreItems);
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+
                     lock (_cacheLock)
                     {
                         if (_cache.Count > 60)
@@ -93,8 +119,20 @@ namespace KahoiiMusic.Services
                 string author = mAuthor.Success ? UnescapeJson(mAuthor.Groups[1].Value) : string.Empty;
 
                 // Duration
-                var mDur = Regex.Match(block, @"""lengthText""\s*:\s*\{[^}]*?""simpleText""\s*:\s*""([^""]+)""", RegexOptions.Singleline);
                 int durationSeconds = 0;
+                var mDur = Regex.Match(block, @"""lengthText""\s*:\s*\{.+?""simpleText""\s*:\s*""([0-9:]+)""", RegexOptions.Singleline);
+                if (!mDur.Success)
+                {
+                    mDur = Regex.Match(block, @"""thumbnailOverlayTimeStatusRenderer""\s*:\s*\{.+?""simpleText""\s*:\s*""([0-9:]+)""", RegexOptions.Singleline);
+                }
+                if (!mDur.Success)
+                {
+                    mDur = Regex.Match(block, @"""lengthText""\s*:\s*\{.+?""text""\s*:\s*""([0-9:]+)""", RegexOptions.Singleline);
+                }
+                if (!mDur.Success)
+                {
+                    mDur = Regex.Match(block, @"""thumbnailOverlayTimeStatusRenderer""\s*:\s*\{.+?""text""\s*:\s*""([0-9:]+)""", RegexOptions.Singleline);
+                }
                 if (mDur.Success)
                 {
                     durationSeconds = ParseDuration(mDur.Groups[1].Value);

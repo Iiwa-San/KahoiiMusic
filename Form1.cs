@@ -1084,7 +1084,7 @@ namespace KahoiiMusic
             _searchResultsView.BringToFront();
             _searchResultsView.Visible = true;
             _searchResultsView.ShowLoading(query);
-            var results = await Services.YouTubeSearchService.SearchAsync(query, 25);
+            var results = await Services.YouTubeSearchService.SearchAsync(query, 35);
             _searchResultsView.SetResults(query, results);
             _searchResultsView.BringToFront();
         }
