@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -220,19 +220,15 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="packages\NAudio.2.2.1\lib\net472\NAudio.dll">
-      <Link>Resources\NAudio.dll</Link>
       <LogicalName>KahoiiMusic.Resources.NAudio.dll</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="packages\NAudio.Core.2.2.1\lib\netstandard2.0\NAudio.Core.dll">
-      <Link>Resources\NAudio.Core.dll</Link>
       <LogicalName>KahoiiMusic.Resources.NAudio.Core.dll</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="packages\NAudio.Wasapi.2.2.1\lib\netstandard2.0\NAudio.Wasapi.dll">
-      <Link>Resources\NAudio.Wasapi.dll</Link>
       <LogicalName>KahoiiMusic.Resources.NAudio.Wasapi.dll</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="packages\NAudio.WinMM.2.2.1\lib\netstandard2.0\NAudio.WinMM.dll">
-      <Link>Resources\NAudio.WinMM.dll</Link>
       <LogicalName>KahoiiMusic.Resources.NAudio.WinMM.dll</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\logo_icon.png" />
