@@ -1320,7 +1320,7 @@ namespace KahoiiMusic.Controls
                 float availH = Math.Max(1, trackH - thumbH);
                 int thumbY = trackY + (int)((_colLeftScroll / maxScroll) * availH);
 
-                Color thumbColor = (_isDraggingColLeftScroll || _isHoveringColLeftScroll) ? Color.FromArgb(235, 255, 80, 160) : Color.FromArgb(90, 255, 255, 255);
+                Color thumbColor = (_isDraggingColLeftScroll || _isHoveringColLeftScroll) ? Color.FromArgb(220, _theme.AccentColor) : Color.FromArgb(110, _theme.SecondaryAccentColor);
                 using (GraphicsPath thumbPath = RoundedRect(new Rectangle(trackX, thumbY, ScrollBarW, thumbH), 3))
                 using (SolidBrush thumbBrush = new SolidBrush(thumbColor))
                 {
@@ -1355,11 +1355,11 @@ namespace KahoiiMusic.Controls
                 int trackItemW = hasRightScroll ? (rightColW - ScrollBarW - 4) : rightColW;
 
                 using (Font idxFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
-                using (Font titleFont = new Font("Segoe UI", 15.0f, FontStyle.Bold))
-                using (Font authorFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
+                using (Font titleFont = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+                using (Font authorFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
                 using (Font durFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
                 using (StringFormat titleSf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
-                using (StringFormat durSf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
+                using (StringFormat durSf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                 using (StringFormat idxSf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
                     for (int i = 0; i < _filteredCollectionTracks.Count; i++)
@@ -1468,9 +1468,10 @@ namespace KahoiiMusic.Controls
                             }
                         }
 
-                        int durW = 44;
-                        int durX = rowRect.Right - durW - 4;
                         string durText = !string.IsNullOrEmpty(item.FormattedDuration) ? item.FormattedDuration : "";
+                        SizeF durSz = !string.IsNullOrEmpty(durText) ? g.MeasureString(durText, durFont) : SizeF.Empty;
+                        int durW = Math.Max(52, (int)Math.Ceiling(durSz.Width) + 6);
+                        int durX = rowRect.Right - durW - 4;
                         using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(135, 140, 165)))
                         {
                             g.DrawString(durText, durFont, durBrush, new RectangleF(durX, rowY, durW, RowH), durSf);
@@ -1484,11 +1485,11 @@ namespace KahoiiMusic.Controls
 
                             using (SolidBrush titleBrush = new SolidBrush(titleColor))
                             {
-                                g.DrawString(item.Title ?? "Unknown Title", titleFont, titleBrush, new RectangleF(leftX, rowY + 3, textW, 26), titleSf);
+                                g.DrawString(item.Title ?? "Unknown Title", titleFont, titleBrush, new RectangleF(leftX, rowY + 7, textW, 20), titleSf);
                             }
                             using (SolidBrush authorBrush = new SolidBrush(authorColor))
                             {
-                                g.DrawString(item.Author ?? "Unknown Artist", authorFont, authorBrush, new RectangleF(leftX, rowY + 30, textW, 19), titleSf);
+                                g.DrawString(item.Author ?? "Unknown Artist", authorFont, authorBrush, new RectangleF(leftX, rowY + 28, textW, 18), titleSf);
                             }
                         }
                     }
@@ -1510,7 +1511,7 @@ namespace KahoiiMusic.Controls
                 float availableTrackH = Math.Max(1, trackH - thumbH);
                 int thumbY = trackY + (int)((_colRightScroll / maxScroll) * availableTrackH);
 
-                Color thumbColor = (_isDraggingColRightScroll || _isHoveringColRightScroll) ? Color.FromArgb(235, 255, 80, 160) : Color.FromArgb(90, 255, 255, 255);
+                Color thumbColor = (_isDraggingColRightScroll || _isHoveringColRightScroll) ? Color.FromArgb(220, _theme.AccentColor) : Color.FromArgb(110, _theme.SecondaryAccentColor);
                 using (GraphicsPath thumbPath = RoundedRect(new Rectangle(trackX, thumbY, ScrollBarW, thumbH), 3))
                 using (SolidBrush thumbBrush = new SolidBrush(thumbColor))
                 {
@@ -1548,11 +1549,11 @@ namespace KahoiiMusic.Controls
             else
             {
                 using (Font idxFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
-                using (Font titleFont = new Font("Segoe UI", 15.0f, FontStyle.Bold))
-                using (Font authorFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
+                using (Font titleFont = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+                using (Font authorFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
                 using (Font durFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
                 using (StringFormat titleSf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
-                using (StringFormat durSf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
+                using (StringFormat durSf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                 using (StringFormat idxSf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
                     for (int i = 0; i < _filteredItems.Count; i++)
@@ -1661,9 +1662,10 @@ namespace KahoiiMusic.Controls
                             }
                         }
 
-                        int durW = 44;
-                        int durX = rowRect.Right - durW - 4;
                         string durText = !string.IsNullOrEmpty(item.FormattedDuration) ? item.FormattedDuration : "";
+                        SizeF durSz = !string.IsNullOrEmpty(durText) ? g.MeasureString(durText, durFont) : SizeF.Empty;
+                        int durW = Math.Max(52, (int)Math.Ceiling(durSz.Width) + 6);
+                        int durX = rowRect.Right - durW - 4;
                         using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(135, 140, 165)))
                         {
                             g.DrawString(durText, durFont, durBrush, new RectangleF(durX, rowY, durW, RowH), durSf);
@@ -1677,11 +1679,11 @@ namespace KahoiiMusic.Controls
 
                             using (SolidBrush titleBrush = new SolidBrush(titleColor))
                             {
-                                g.DrawString(item.Title ?? "Unknown Title", titleFont, titleBrush, new RectangleF(leftX, rowY + 3, textW, 26), titleSf);
+                                g.DrawString(item.Title ?? "Unknown Title", titleFont, titleBrush, new RectangleF(leftX, rowY + 7, textW, 20), titleSf);
                             }
                             using (SolidBrush authorBrush = new SolidBrush(authorColor))
                             {
-                                g.DrawString(item.Author ?? "Unknown Artist", authorFont, authorBrush, new RectangleF(leftX, rowY + 30, textW, 19), titleSf);
+                                g.DrawString(item.Author ?? "Unknown Artist", authorFont, authorBrush, new RectangleF(leftX, rowY + 28, textW, 18), titleSf);
                             }
                         }
                     }
@@ -1703,7 +1705,7 @@ namespace KahoiiMusic.Controls
                 float availableTrackH = Math.Max(1, trackH - thumbH);
                 int thumbY = trackY + (int)((_scrollOffset / maxScroll) * availableTrackH);
 
-                Color thumbColor = (_isDraggingScroll || _isHoveringScroll) ? Color.FromArgb(235, _theme.AccentColor) : Color.FromArgb(90, 255, 255, 255);
+                Color thumbColor = (_isDraggingScroll || _isHoveringScroll) ? Color.FromArgb(220, _theme.AccentColor) : Color.FromArgb(110, _theme.SecondaryAccentColor);
                 using (GraphicsPath thumbPath = RoundedRect(new Rectangle(trackX, thumbY, ScrollBarW, thumbH), 3))
                 using (SolidBrush thumbBrush = new SolidBrush(thumbColor))
                 {

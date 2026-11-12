@@ -82,6 +82,8 @@ namespace KahoiiMusic.Controls
             _textBox.Font = new Font("Segoe UI", 9.5f, FontStyle.Regular);
             _textBox.TextAlign = HorizontalAlignment.Left;
             _textBox.CueBannerText = _placeholderText;
+            _textBox.TabStop = false;
+            this.TabStop = false;
 
             _textBox.HandleCreated += (s, e) => UpdateCueBanner();
             _textBox.GotFocus += (s, e) => { _textBox.Invalidate(); Invalidate(); };

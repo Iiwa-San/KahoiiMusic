@@ -2633,10 +2633,13 @@ namespace KahoiiMusic.Controls
                     }
 
                     // Duration
-                    RectangleF durRect = new RectangleF(rowRect.Right - 46, rowRect.Y + 9, 42, 18);
-                    using (StringFormat sfDur = new StringFormat() { Alignment = StringAlignment.Far })
+                    string durStr = item.FormattedDuration ?? string.Empty;
+                    SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, durFont) : SizeF.Empty;
+                    int durW = Math.Max(46, (int)Math.Ceiling(durSz.Width) + 4);
+                    RectangleF durRect = new RectangleF(rowRect.Right - durW - 4, rowRect.Y + 9, durW, 18);
+                    using (StringFormat sfDur = new StringFormat() { Alignment = StringAlignment.Far, FormatFlags = StringFormatFlags.NoWrap })
                     {
-                        g.DrawString(item.FormattedDuration, durFont, dimText, durRect, sfDur);
+                        g.DrawString(durStr, durFont, dimText, durRect, sfDur);
                     }
                 }
             }
@@ -3052,10 +3055,13 @@ namespace KahoiiMusic.Controls
                         }
 
                         // Track Duration
-                        RectangleF durRect = new RectangleF(rowRect.Right - 42, rowRect.Y + 7, 38, 18);
-                        using (StringFormat sfDur = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
+                        string durStr = item.FormattedDuration ?? string.Empty;
+                        SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, trkDurFont) : SizeF.Empty;
+                        int durW = Math.Max(46, (int)Math.Ceiling(durSz.Width) + 4);
+                        RectangleF durRect = new RectangleF(rowRect.Right - durW - 4, rowRect.Y + 7, durW, 18);
+                        using (StringFormat sfDur = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                         {
-                            g.DrawString(item.FormattedDuration, trkDurFont, dimText, durRect, sfDur);
+                            g.DrawString(durStr, trkDurFont, dimText, durRect, sfDur);
                         }
                     }
                 }

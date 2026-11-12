@@ -494,31 +494,35 @@ namespace KahoiiMusic.Controls
                         }
                     }
 
-                    // 3. Duration on right
-                    int durW = 46;
-                    int durX = rowRect.Right - durW - 8;
+                    // 3. Duration on right (dynamic width with NoWrap, supporting long formats like hh:mm:ss without wrapping)
+                    string durStr = item.FormattedDuration ?? string.Empty;
                     using (Font durFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
-                    using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(145, 140, 170)))
-                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
                     {
-                        g.DrawString(item.FormattedDuration, durFont, durBrush, new Rectangle(durX, rowRect.Y, durW, rowRect.Height), sf);
-                    }
+                        SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, durFont) : SizeF.Empty;
+                        int durW = Math.Max(54, (int)Math.Ceiling(durSz.Width) + 6);
+                        int durX = rowRect.Right - durW - 8;
+                        using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(145, 140, 170)))
+                        using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                        {
+                            g.DrawString(durStr, durFont, durBrush, new Rectangle(durX, rowRect.Y, durW, rowRect.Height), sf);
+                        }
 
-                    // 4. Title and Author (Font 15 Bold for title)
-                    int textLeft = thumbRect.Right + 12;
-                    int textWidth = Math.Max(40, durX - textLeft - 8);
+                        // 4. Title and Author (proportional font, bounded width)
+                        int textLeft = thumbRect.Right + 12;
+                        int textWidth = Math.Max(40, durX - textLeft - 8);
 
-                    Color titleColor = isPlaying ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.2f) : Color.FromArgb(245, 245, 255);
-                    using (Font tFont = new Font("Segoe UI", 15.0f, FontStyle.Bold))
-                    using (Font aFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
-                    using (SolidBrush tBrush = new SolidBrush(titleColor))
-                    using (SolidBrush aBrush = new SolidBrush(Color.FromArgb(155, 150, 180)))
-                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near, FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter })
-                    {
-                        RectangleF tRect = new RectangleF(textLeft, rowRect.Y + 4, textWidth, 24);
-                        RectangleF aRect = new RectangleF(textLeft, rowRect.Y + 29, textWidth, 18);
-                        g.DrawString(item.Title ?? string.Empty, tFont, tBrush, tRect, sf);
-                        g.DrawString(item.Author ?? string.Empty, aFont, aBrush, aRect, sf);
+                        Color titleColor = isPlaying ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.2f) : Color.FromArgb(245, 245, 255);
+                        using (Font tFont = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+                        using (Font aFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
+                        using (SolidBrush tBrush = new SolidBrush(titleColor))
+                        using (SolidBrush aBrush = new SolidBrush(Color.FromArgb(155, 150, 180)))
+                        using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near, FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter })
+                        {
+                            RectangleF tRect = new RectangleF(textLeft, rowRect.Y + 7, textWidth, 20);
+                            RectangleF aRect = new RectangleF(textLeft, rowRect.Y + 28, textWidth, 18);
+                            g.DrawString(item.Title ?? string.Empty, tFont, tBrush, tRect, sf);
+                            g.DrawString(item.Author ?? string.Empty, aFont, aBrush, aRect, sf);
+                        }
                     }
                 }
             }

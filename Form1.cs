@@ -43,6 +43,9 @@ namespace KahoiiMusic
         [DllImport("user32.dll")]
         private static extern IntPtr SetFocus(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
         public static Form1 Instance { get; private set; }
         private AudioPlayerService _audioPlayer;
         public AudioPlayerService AudioPlayer => _audioPlayer;
@@ -1321,14 +1324,15 @@ namespace KahoiiMusic
             // Global keyboard handling even if window was just activated via Alt+Tab and ActiveControl is null
             if (m.Msg == 0x0100 /* WM_KEYDOWN */ || m.Msg == 0x0104 /* WM_SYSKEYDOWN */)
             {
-                if (Form.ActiveForm == this || GetForegroundWindow() == this.Handle)
-                {
-                    bool isSearchFocused = (searchPillBox != null && searchPillBox.ContainsFocus) ||
-                                           (_sideMenuPanel != null && _sideMenuPanel.IsSearchFocused);
+                uint fgPid = 0;
+                GetWindowThreadProcessId(GetForegroundWindow(), out fgPid);
+                bool isAppForeground = (fgPid == (uint)Process.GetCurrentProcess().Id) || (Form.ActiveForm == this);
 
+                if (isAppForeground)
+                {
                     IntPtr focusHwnd = GetFocus();
                     Control focusedCtrl = focusHwnd != IntPtr.Zero ? Control.FromHandle(focusHwnd) : null;
-                    bool isTyping = isSearchFocused || (focusedCtrl is TextBoxBase);
+                    bool isTyping = (focusedCtrl is TextBoxBase);
 
                     Keys keyData = (Keys)(int)m.WParam | Control.ModifierKeys;
 
@@ -1345,15 +1349,11 @@ namespace KahoiiMusic
                             _searchResultsView.Visible = false;
                             return true;
                         }
-                        if (searchPillBox != null && searchPillBox.ContainsFocus)
+                        if (focusedCtrl is TextBoxBase)
                         {
-                            searchPillBox.RemoveFocus();
-                            _searchDropdown?.Hide();
-                            return true;
-                        }
-                        if (_sideMenuPanel != null && _sideMenuPanel.IsSearchFocused)
-                        {
-                            _sideMenuPanel.ClearSearchFocus();
+                            searchPillBox?.RemoveFocus();
+                            _sideMenuPanel?.ClearSearchFocus();
+                            this.ActiveControl = null;
                             SetFocus(this.Handle);
                             return true;
                         }
@@ -3519,10 +3519,10 @@ namespace KahoiiMusic
         protected override void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
-            if ((searchPillBox == null || !searchPillBox.ContainsFocus) && (_sideMenuPanel == null || !_sideMenuPanel.IsSearchFocused))
-            {
-                SetFocus(this.Handle);
-            }
+            this.ActiveControl = null;
+            searchPillBox?.RemoveFocus();
+            _sideMenuPanel?.ClearSearchFocus();
+            SetFocus(this.Handle);
         }
 
         protected override void WndProc(ref Message m)
@@ -3549,13 +3549,10 @@ namespace KahoiiMusic
                 int wa = unchecked((short)(m.WParam.ToInt64() & 0xFFFF));
                 if (wa != WA_INACTIVE)
                 {
-                    BeginInvoke(new Action(() =>
-                    {
-                        if ((searchPillBox == null || !searchPillBox.ContainsFocus) && (_sideMenuPanel == null || !_sideMenuPanel.IsSearchFocused))
-                        {
-                            SetFocus(this.Handle);
-                        }
-                    }));
+                    this.ActiveControl = null;
+                    searchPillBox?.RemoveFocus();
+                    _sideMenuPanel?.ClearSearchFocus();
+                    SetFocus(this.Handle);
                 }
             }
 

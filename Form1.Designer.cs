@@ -126,6 +126,7 @@ namespace KahoiiMusic
             this.searchPillBox.PlaceholderText = "Tìm bài hát, nghệ sĩ hoặc dán link...";
             this.searchPillBox.Size = new System.Drawing.Size(384, 22);
             this.searchPillBox.TabIndex = 0;
+            this.searchPillBox.TabStop = false;
             // 
             // gradientPanel
             // 
