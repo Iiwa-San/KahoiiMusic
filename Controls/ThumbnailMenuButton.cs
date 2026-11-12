@@ -28,6 +28,9 @@ namespace KahoiiMusic.Controls
         }
 
         [Category("Appearance")]
+        public Color IconColor { get; set; } = Color.FromArgb(235, 0, 130);
+
+        [Category("Appearance")]
         [DefaultValue(false)]
         public bool IsOpen
         {
@@ -101,11 +104,11 @@ namespace KahoiiMusic.Controls
             }
             else if (_isOpen || _isHovered)
             {
-                iconColor = Color.FromArgb(255, 60, 160);
+                iconColor = KahoiiMusic.Services.ColorExtractorService.Lerp(IconColor, Color.White, 0.25f);
             }
             else
             {
-                iconColor = Color.FromArgb(235, 0, 130); // Vibrant hot pink matching Figma
+                iconColor = IconColor;
             }
 
             float w = Width;

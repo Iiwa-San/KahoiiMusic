@@ -18,6 +18,16 @@ namespace KahoiiMusic.Controls
 
         public bool IsSubmenuOpen { get; set; } = false;
         public bool IsTrackDownloaded { get; set; } = false;
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         public ThumbnailActionPopup()
         {
@@ -122,8 +132,8 @@ namespace KahoiiMusic.Controls
                 // Neon gradient border matching theme
                 using (LinearGradientBrush borderGrad = new LinearGradientBrush(
                     rect,
-                    Color.FromArgb(140, 30, 180),
-                    Color.FromArgb(255, 40, 140),
+                    _theme.SecondaryAccentColor,
+                    _theme.AccentColor,
                     LinearGradientMode.ForwardDiagonal))
                 using (Pen borderPen = new Pen(borderGrad, 1.4f))
                 {
@@ -139,7 +149,7 @@ namespace KahoiiMusic.Controls
             if (_hoveredIndex == 0)
             {
                 using (GraphicsPath ip = CreateRoundedRect(item0, 6))
-                using (SolidBrush hb = new SolidBrush(Color.FromArgb(70, 235, 0, 130)))
+                using (SolidBrush hb = new SolidBrush(Color.FromArgb(70, _theme.AccentColor)))
                 {
                     g.FillPath(hb, ip);
                 }
@@ -147,7 +157,7 @@ namespace KahoiiMusic.Controls
             else if (_hoveredIndex == 1)
             {
                 using (GraphicsPath ip = CreateRoundedRect(item1, 6))
-                using (SolidBrush hb = new SolidBrush(Color.FromArgb(70, 235, 0, 130)))
+                using (SolidBrush hb = new SolidBrush(Color.FromArgb(70, _theme.AccentColor)))
                 {
                     g.FillPath(hb, ip);
                 }

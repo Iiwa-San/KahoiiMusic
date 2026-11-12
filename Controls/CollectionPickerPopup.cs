@@ -23,6 +23,16 @@ namespace KahoiiMusic.Controls
         private int _scrollOffset = 0;
         private bool _isDraggingScroll = false;
         private int _dragGrabOffsetY = 0;
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         public event EventHandler<UserPlaylist> PlaylistSelected;
         public event EventHandler CreateNewPlaylistClicked;
@@ -226,8 +236,8 @@ namespace KahoiiMusic.Controls
                 // Neon cyber gradient border
                 using (LinearGradientBrush borderGrad = new LinearGradientBrush(
                     rect,
-                    Color.FromArgb(150, 35, 190),
-                    Color.FromArgb(255, 45, 145),
+                    _theme.SecondaryAccentColor,
+                    _theme.AccentColor,
                     LinearGradientMode.ForwardDiagonal))
                 using (Pen borderPen = new Pen(borderGrad, 1.4f))
                 {
@@ -237,8 +247,8 @@ namespace KahoiiMusic.Controls
 
             // 1. Button: "+ Tạo bộ sưu tập mới"
             Rectangle newBtnRect = GetNewBtnRect();
-            Color nbBg = _isHoveringNewBtn ? Color.FromArgb(85, 235, 0, 130) : Color.FromArgb(45, 235, 0, 130);
-            Color nbBorder = _isHoveringNewBtn ? Color.FromArgb(255, 120, 195) : Color.FromArgb(210, 45, 140);
+            Color nbBg = _isHoveringNewBtn ? Color.FromArgb(85, _theme.AccentColor) : Color.FromArgb(45, _theme.AccentColor);
+            Color nbBorder = _isHoveringNewBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor;
             using (GraphicsPath nbp = CreateRoundedRect(newBtnRect, 5))
             using (SolidBrush nbb = new SolidBrush(nbBg))
             using (Pen nbpPen = new Pen(nbBorder, 1.1f))
@@ -301,7 +311,7 @@ namespace KahoiiMusic.Controls
                         if (isHover)
                         {
                             using (GraphicsPath rp = CreateRoundedRect(rowRect, 5))
-                            using (SolidBrush hb = new SolidBrush(Color.FromArgb(65, 235, 0, 130)))
+                            using (SolidBrush hb = new SolidBrush(Color.FromArgb(65, _theme.AccentColor)))
                             {
                                 g.FillPath(hb, rp);
                             }

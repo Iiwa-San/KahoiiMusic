@@ -12,6 +12,16 @@ namespace KahoiiMusic.Controls
         private bool _isFocused = false;
         private string _cueBanner = "";
         private readonly Color _pillBgColor = Color.FromArgb(28, 23, 53);
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         public event EventHandler<string> SearchTextChanged;
 
@@ -148,8 +158,8 @@ namespace KahoiiMusic.Controls
                 }
 
                 // Draw glowing or subtle cyber gradient border
-                Color gradStart = _isFocused ? Color.FromArgb(180, 110, 255) : Color.FromArgb(120, 150, 95, 230);
-                Color gradEnd = _isFocused ? Color.FromArgb(255, 45, 133) : Color.FromArgb(160, 245, 45, 125);
+                Color gradStart = _isFocused ? KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.SecondaryAccentColor, Color.White, 0.2f) : Color.FromArgb(120, _theme.SecondaryAccentColor);
+                Color gradEnd = _isFocused ? _theme.AccentColor : Color.FromArgb(160, _theme.AccentColor);
                 float penWidth = _isFocused ? 1.6f : 1.1f;
                 using (LinearGradientBrush gradBrush = new LinearGradientBrush(rect, gradStart, gradEnd, LinearGradientMode.Horizontal))
                 using (Pen pen = new Pen(gradBrush, penWidth))
@@ -159,7 +169,7 @@ namespace KahoiiMusic.Controls
             }
 
             // Draw crisp vector magnifying glass icon
-            Color iconColor = _isFocused ? Color.FromArgb(255, 120, 185) : Color.FromArgb(170, 155, 195);
+            Color iconColor = _isFocused ? _theme.AccentColor : Color.FromArgb(170, 155, 195);
             using (Pen iconPen = new Pen(iconColor, 1.5f))
             {
                 float cy = Height / 2f;

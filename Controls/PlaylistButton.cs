@@ -17,6 +17,20 @@ namespace KahoiiMusic.Controls
         private Color _hoverIconColor = Color.White;
         private Color _activeColor = Color.FromArgb(168, 85, 247); // Accent Purple
 
+        [Category("Appearance")]
+        public Color ActiveColor
+        {
+            get => _activeColor;
+            set
+            {
+                if (_activeColor != value)
+                {
+                    _activeColor = value;
+                    Invalidate();
+                }
+            }
+        }
+
         public PlaylistButton()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint |

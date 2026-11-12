@@ -18,6 +18,15 @@ namespace KahoiiMusic.Controls
         private Color _filledColor = Color.FromArgb(235, 15, 15);     // Red
         private Color _unfilledColor = Color.FromArgb(255, 255, 255); // White
 
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _filledColor = theme.AccentColor;
+                Invalidate();
+            }
+        }
+
         private const int TrackTop = 26;
         private const int TrackBottom = 104;
         private const int TrackHeight = TrackBottom - TrackTop; // 78px

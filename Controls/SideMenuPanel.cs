@@ -64,6 +64,20 @@ namespace KahoiiMusic.Controls
         private Rectangle _closeBtnRect = Rectangle.Empty;
         private Rectangle[] _tabRects = new Rectangle[4];
 
+        private DynamicThemePalette _theme = ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                _searchBox?.SetTheme(theme);
+                _searchCollectionsBox?.SetTheme(theme);
+                _searchCollectionTracksBox?.SetTheme(theme);
+                Invalidate();
+            }
+        }
+
         public event EventHandler<PlaylistItem> TrackSelected;
         public event EventHandler CloseRequested;
 
@@ -1093,7 +1107,7 @@ namespace KahoiiMusic.Controls
                 {
                     g.FillPath(bgBrush, path);
                 }
-                using (Pen borderPen = new Pen(Color.FromArgb(140, 180, 50, 220), 1.2f))
+                using (Pen borderPen = new Pen(_theme.CardBorderColor, 1.2f))
                 {
                     g.DrawPath(borderPen, path);
                 }
@@ -1107,8 +1121,8 @@ namespace KahoiiMusic.Controls
                 bool isCurTab = ((int)_activeTab == i);
                 bool isHover = (_hoveredTab == i);
 
-                Color bgColor = isCurTab ? Color.FromArgb(220, 75, 22, 105) : (isHover ? Color.FromArgb(180, 45, 28, 76) : Color.FromArgb(140, 28, 14, 52));
-                Color borderColor = isCurTab ? Color.FromArgb(255, 45, 135) : (isHover ? Color.FromArgb(160, 180, 80, 220) : Color.FromArgb(80, 140, 50, 190));
+                Color bgColor = isCurTab ? _theme.ActiveTabBg : (isHover ? Color.FromArgb(180, 45, 28, 76) : Color.FromArgb(140, 28, 14, 52));
+                Color borderColor = isCurTab ? _theme.ActiveTabBorder : (isHover ? Color.FromArgb(160, _theme.SecondaryAccentColor) : Color.FromArgb(80, _theme.SecondaryAccentColor));
                 Color textColor = isCurTab ? Color.White : (isHover ? Color.FromArgb(245, 240, 255) : Color.FromArgb(190, 180, 210));
                 FontStyle fs = isCurTab ? FontStyle.Bold : FontStyle.Regular;
 
@@ -1155,15 +1169,15 @@ namespace KahoiiMusic.Controls
 
             // ===== LEFT COLUMN HEADER =====
             using (Font subHeaderFont = new Font("Segoe UI", 8.25f, FontStyle.Bold))
-            using (SolidBrush subHeaderBrush = new SolidBrush(Color.FromArgb(220, 180, 255)))
+            using (SolidBrush subHeaderBrush = new SolidBrush(ColorExtractorService.Lerp(_theme.SecondaryAccentColor, Color.White, 0.4f)))
             {
                 g.DrawString("DANH SÁCH LƯU", subHeaderFont, subHeaderBrush, leftColX + 2, listTop + 4);
             }
 
             // Button "+ Mới"
             Rectangle newBtnRect = GetNewPlaylistBtnRect();
-            Color newBtnBg = _isHoveringNewBtn ? Color.FromArgb(70, 235, 0, 130) : Color.FromArgb(35, 235, 0, 130);
-            Color newBtnBorder = _isHoveringNewBtn ? Color.FromArgb(255, 120, 190) : Color.FromArgb(200, 45, 135);
+            Color newBtnBg = _isHoveringNewBtn ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(35, _theme.AccentColor);
+            Color newBtnBorder = _isHoveringNewBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor;
             using (GraphicsPath nbp = RoundedRect(newBtnRect, 5))
             using (SolidBrush nbb = new SolidBrush(newBtnBg))
             using (Pen nbpPen = new Pen(newBtnBorder, 1f))
@@ -1191,8 +1205,8 @@ namespace KahoiiMusic.Controls
 
             // Button "[▶ Phát tất cả]"
             Rectangle playAllRect = GetPlayAllBtnRect();
-            Color playAllBg = _isHoveringPlayAllBtn ? Color.FromArgb(70, 235, 0, 130) : Color.FromArgb(35, 235, 0, 130);
-            Color playAllBorder = _isHoveringPlayAllBtn ? Color.FromArgb(255, 120, 190) : Color.FromArgb(200, 45, 135);
+            Color playAllBg = _isHoveringPlayAllBtn ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(35, _theme.AccentColor);
+            Color playAllBorder = _isHoveringPlayAllBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor;
             using (GraphicsPath pap = RoundedRect(playAllRect, 5))
             using (SolidBrush pab = new SolidBrush(playAllBg))
             using (Pen papPen = new Pen(playAllBorder, 1f))
@@ -1216,7 +1230,7 @@ namespace KahoiiMusic.Controls
             }
 
             // Vertical divider between Left and Right columns
-            using (Pen divPen = new Pen(Color.FromArgb(35, 200, 100, 255), 1.2f))
+            using (Pen divPen = new Pen(Color.FromArgb(35, _theme.SecondaryAccentColor), 1.2f))
             {
                 g.DrawLine(divPen, divX, listTop + 2, divX, listTop + listH - 2);
             }
@@ -1251,14 +1265,14 @@ namespace KahoiiMusic.Controls
                     if (isSel)
                     {
                         using (GraphicsPath rp = RoundedRect(rowRect, 6))
-                        using (SolidBrush selBg = new SolidBrush(Color.FromArgb(60, 235, 0, 130)))
-                        using (Pen selPen = new Pen(Color.FromArgb(180, 255, 45, 135), 1.2f))
+                        using (SolidBrush selBg = new SolidBrush(_theme.ActiveRowBg))
+                        using (Pen selPen = new Pen(_theme.ActiveRowBorder, 1.2f))
                         {
                             g.FillPath(selBg, rp);
                             g.DrawPath(selPen, rp);
                         }
                         // Left active indicator pill
-                        using (SolidBrush pill = new SolidBrush(Color.FromArgb(255, 45, 135)))
+                        using (SolidBrush pill = new SolidBrush(_theme.AccentColor))
                         {
                             g.FillRectangle(pill, rowRect.X + 2, rowRect.Y + 8, 3, rowRect.Height - 16);
                         }
@@ -1555,11 +1569,11 @@ namespace KahoiiMusic.Controls
                         if (isPlaying)
                         {
                             using (GraphicsPath rp = RoundedRect(rowRect, 6))
-                            using (SolidBrush activeBg = new SolidBrush(Color.FromArgb(50, 255, 60, 160)))
+                            using (SolidBrush activeBg = new SolidBrush(_theme.ActiveRowBg))
                             {
                                 g.FillPath(activeBg, rp);
                             }
-                            using (SolidBrush bar = new SolidBrush(Color.FromArgb(255, 65, 160)))
+                            using (SolidBrush bar = new SolidBrush(_theme.AccentColor))
                             {
                                 g.FillRectangle(bar, rowRect.X, rowRect.Y + 4, 3, rowRect.Height - 8);
                             }
@@ -1576,7 +1590,7 @@ namespace KahoiiMusic.Controls
                         int leftX = rowRect.X + 8;
                         if (isPlaying)
                         {
-                            using (SolidBrush eqBrush = new SolidBrush(Color.FromArgb(255, 100, 180)))
+                            using (SolidBrush eqBrush = new SolidBrush(_theme.AccentColor))
                             {
                                 int eqY = rowY + (RowH - 12) / 2;
                                 g.FillRectangle(eqBrush, leftX, eqY + 4, 2, 8);
@@ -1689,7 +1703,7 @@ namespace KahoiiMusic.Controls
                 float availableTrackH = Math.Max(1, trackH - thumbH);
                 int thumbY = trackY + (int)((_scrollOffset / maxScroll) * availableTrackH);
 
-                Color thumbColor = (_isDraggingScroll || _isHoveringScroll) ? Color.FromArgb(235, 255, 80, 160) : Color.FromArgb(90, 255, 255, 255);
+                Color thumbColor = (_isDraggingScroll || _isHoveringScroll) ? Color.FromArgb(235, _theme.AccentColor) : Color.FromArgb(90, 255, 255, 255);
                 using (GraphicsPath thumbPath = RoundedRect(new Rectangle(trackX, thumbY, ScrollBarW, thumbH), 3))
                 using (SolidBrush thumbBrush = new SolidBrush(thumbColor))
                 {

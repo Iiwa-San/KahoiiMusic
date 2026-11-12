@@ -28,6 +28,16 @@ namespace KahoiiMusic.Controls
         private System.Windows.Forms.Timer _slideAnimTimer;
         private int _targetHeight = 100;
         private int _currentAnimHeight = 100;
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         public SearchDropdownPopup()
         {
@@ -342,12 +352,12 @@ namespace KahoiiMusic.Controls
                 using (GraphicsPath btnPath = new GraphicsPath())
                 {
                     btnPath.AddEllipse(playBtnRect);
-                    using (SolidBrush pbBrush = new SolidBrush(isHovered ? Color.FromArgb(255, 45, 133) : Color.FromArgb(40, 32, 65)))
+                    using (SolidBrush pbBrush = new SolidBrush(isHovered ? _theme.AccentColor : Color.FromArgb(40, 32, 65)))
                     {
                         g.FillPath(pbBrush, btnPath);
                     }
                     using (Font pFont = new Font("Segoe UI", isWide ? 9.0f : 8.0f, FontStyle.Bold))
-                    using (SolidBrush pTextBrush = new SolidBrush(isHovered ? Color.White : Color.FromArgb(255, 45, 133)))
+                    using (SolidBrush pTextBrush = new SolidBrush(isHovered ? Color.White : _theme.AccentColor))
                     {
                         StringFormat psf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
                         g.DrawString("▶", pFont, pTextBrush, playBtnRect, psf);
@@ -405,7 +415,7 @@ namespace KahoiiMusic.Controls
             }
 
             using (Font fFont = new Font("Segoe UI", isWide ? 9.0f : 8.0f, FontStyle.Bold))
-            using (SolidBrush fBrush = new SolidBrush(_hoveringViewAll ? Color.FromArgb(255, 45, 133) : Color.FromArgb(200, 190, 225)))
+            using (SolidBrush fBrush = new SolidBrush(_hoveringViewAll ? _theme.AccentColor : Color.FromArgb(200, 190, 225)))
             {
                 StringFormat fsf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
                 string fText = string.Format("🔍 Xem tất cả kết quả cho \"{0}\" (Enter ↵)", _currentQuery);
@@ -413,7 +423,7 @@ namespace KahoiiMusic.Controls
             }
 
             // Outer Neon Border
-            using (Pen borderPen = new Pen(Color.FromArgb(255, 45, 133), 1.5f))
+            using (Pen borderPen = new Pen(_theme.AccentColor, 1.5f))
             {
                 g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
             }

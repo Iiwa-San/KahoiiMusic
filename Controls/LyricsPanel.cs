@@ -35,6 +35,16 @@ namespace KahoiiMusic.Controls
         private int _delayOffsetMs = 220;
         private Rectangle _romaziBtnRect = Rectangle.Empty;
         private Rectangle _reloadBtnRect = Rectangle.Empty;
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         public event Action<TimeSpan> SeekRequested;
         public event EventHandler ReloadRequested;
@@ -587,8 +597,8 @@ namespace KahoiiMusic.Controls
                         // "Nhạc đến đâu lyrics sáng đến đó"
                         drawFont = activeFont;
                         textColor = Color.White;
-                        glowColor = Color.FromArgb(140, 255, 60, 160); // Neon pink glow
-                        subColor = Color.FromArgb(235, 255, 180, 230);
+                        glowColor = Color.FromArgb(140, _theme.AccentColor); // Theme glow
+                        subColor = Color.FromArgb(235, 255, 255, 255);
                     }
                     else if (_lyrics == null || !_lyrics.IsSynced)
                     {
@@ -626,7 +636,7 @@ namespace KahoiiMusic.Controls
                         }
 
                         // Left vertical active accent pill
-                        using (SolidBrush pillBrush = new SolidBrush(Color.FromArgb(255, 65, 150)))
+                        using (SolidBrush pillBrush = new SolidBrush(_theme.AccentColor))
                         {
                             FillRoundedRect(g, pillBrush, 2, renderY + 4 * fontScale, 3 * fontScale, 14 * fontScale, 1.5f);
                         }
@@ -759,8 +769,10 @@ namespace KahoiiMusic.Controls
             else if (_romanizationMode == RomanizationDisplayMode.Dual)
             {
                 btnLabel = isJa ? "Romaji • 2 dòng" : "Pinyin • 2 dòng";
-                borderColor = Color.FromArgb(255, 65, 150);
-                fillColor = _isRomaziBtnHovered ? Color.FromArgb(230, 80, 25, 95) : Color.FromArgb(210, 55, 20, 75);
+                borderColor = _theme.AccentColor;
+                fillColor = _isRomaziBtnHovered
+                    ? Color.FromArgb(230, KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.AccentColor, Color.Black, 0.6f))
+                    : Color.FromArgb(210, KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.AccentColor, Color.Black, 0.75f));
                 textCol = Color.White;
             }
             else

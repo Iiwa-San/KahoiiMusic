@@ -39,6 +39,16 @@ namespace KahoiiMusic.Controls
         public event EventHandler<PlaylistItem> TrackPlaySelected;
         public event EventHandler<PlaylistItem> TrackAddSelected;
         public event EventHandler CloseRequested;
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         public SearchResultsView()
         {
@@ -384,8 +394,8 @@ namespace KahoiiMusic.Controls
             int backBtnH = IsLarge ? 34 : 26;
             _backBtnRect = new Rectangle(IsLarge ? 16 : 12, (ActualTopHeaderHeight - backBtnH) / 2, backBtnW, backBtnH);
             using (GraphicsPath bPath = CreateRoundedRectPath(_backBtnRect, 6))
-            using (SolidBrush bbBrush = new SolidBrush(_isHoveringBack ? Color.FromArgb(255, 45, 133) : Color.FromArgb(32, 25, 54)))
-            using (Pen bbPen = new Pen(_isHoveringBack ? Color.White : Color.FromArgb(80, 255, 45, 133), 1f))
+            using (SolidBrush bbBrush = new SolidBrush(_isHoveringBack ? _theme.AccentColor : Color.FromArgb(32, 25, 54)))
+            using (Pen bbPen = new Pen(_isHoveringBack ? Color.White : Color.FromArgb(80, _theme.AccentColor), 1f))
             {
                 g.FillPath(bbBrush, bPath);
                 g.DrawPath(bbPen, bPath);
@@ -404,7 +414,7 @@ namespace KahoiiMusic.Controls
             using (Font tFont = new Font("Segoe UI", IsLarge ? 11.5f : 9.0f, FontStyle.Bold))
             using (Font qFont = new Font("Segoe UI", IsLarge ? 11.5f : 9.0f, FontStyle.Bold))
             using (SolidBrush tBrush = new SolidBrush(Color.White))
-            using (SolidBrush qBrush = new SolidBrush(Color.FromArgb(255, 45, 133)))
+            using (SolidBrush qBrush = new SolidBrush(_theme.AccentColor))
             {
                 StringFormat tsf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, LineAlignment = StringAlignment.Center };
                 string prefix = "Kết quả: ";
@@ -460,7 +470,7 @@ namespace KahoiiMusic.Controls
 
                 using (GraphicsPath hPath = CreateRoundedRectPath(_bestMatchRect, IsLarge ? 12 : 8))
                 using (LinearGradientBrush hBrush = new LinearGradientBrush(_bestMatchRect, Color.FromArgb(42, 28, 70), Color.FromArgb(24, 18, 46), LinearGradientMode.Horizontal))
-                using (Pen hPen = new Pen(Color.FromArgb(90, 255, 45, 133), 1f))
+                using (Pen hPen = new Pen(Color.FromArgb(90, _theme.AccentColor), 1f))
                 {
                     g.FillPath(hBrush, hPath);
                     g.DrawPath(hPen, hPath);
@@ -495,7 +505,7 @@ namespace KahoiiMusic.Controls
                 int heroPlayH = IsLarge ? 38 : 30;
                 _bestMatchPlayRect = new Rectangle(_bestMatchRect.Right - heroPlayW - (IsLarge ? 16 : 10), _bestMatchRect.Y + (_bestMatchRect.Height - heroPlayH) / 2, heroPlayW, heroPlayH);
                 using (GraphicsPath pPath = CreateRoundedRectPath(_bestMatchPlayRect, 6))
-                using (SolidBrush pbBrush = new SolidBrush(_isHoveringBestMatchPlay ? Color.FromArgb(255, 65, 150) : Color.FromArgb(255, 45, 133)))
+                using (SolidBrush pbBrush = new SolidBrush(_isHoveringBestMatchPlay ? KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.25f) : _theme.AccentColor))
                 {
                     g.FillPath(pbBrush, pPath);
                     using (Font pFont = new Font("Segoe UI", IsLarge ? 10.0f : 8.0f, FontStyle.Bold))

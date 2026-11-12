@@ -26,6 +26,16 @@ namespace KahoiiMusic.Controls
         private bool _isLoading = false;
         private Timer _dotsTimer;
         private int _dotCount = 1;
+        private DynamicThemePalette _theme = ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         public event EventHandler<PlaylistItem> TrackSelected;
 
@@ -308,7 +318,7 @@ namespace KahoiiMusic.Controls
                 {
                     g.FillPath(bgBrush, path);
                 }
-                using (Pen borderPen = new Pen(Color.FromArgb(140, 180, 50, 220), 1.2f))
+                using (Pen borderPen = new Pen(_theme.CardBorderColor, 1.2f))
                 {
                     g.DrawPath(borderPen, path);
                 }
@@ -326,8 +336,8 @@ namespace KahoiiMusic.Controls
             {
                 string countText = string.Format("{0} bài hát", _items.Count);
                 using (Font countFont = new Font("Segoe UI", 8.25f, FontStyle.Bold))
-                using (SolidBrush countBg = new SolidBrush(Color.FromArgb(45, 255, 45, 135)))
-                using (SolidBrush countTextBrush = new SolidBrush(Color.FromArgb(255, 120, 190)))
+                using (SolidBrush countBg = new SolidBrush(Color.FromArgb(45, _theme.AccentColor)))
+                using (SolidBrush countTextBrush = new SolidBrush(ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.25f)))
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
                     SizeF sz = g.MeasureString(countText, countFont);
@@ -397,14 +407,14 @@ namespace KahoiiMusic.Controls
                     if (isPlaying)
                     {
                         using (GraphicsPath rp = RoundedRect(rowRect, 8))
-                        using (SolidBrush playBg = new SolidBrush(Color.FromArgb(55, 255, 45, 135)))
-                        using (Pen playBorder = new Pen(Color.FromArgb(90, 255, 75, 175), 1.2f))
+                        using (SolidBrush playBg = new SolidBrush(_theme.ActiveRowBg))
+                        using (Pen playBorder = new Pen(_theme.ActiveRowBorder, 1.2f))
                         {
                             g.FillPath(playBg, rp);
                             g.DrawPath(playBorder, rp);
                         }
                         // Left active indicator pill
-                        using (SolidBrush pillBrush = new SolidBrush(Color.FromArgb(255, 45, 135)))
+                        using (SolidBrush pillBrush = new SolidBrush(_theme.AccentColor))
                         {
                             g.FillRectangle(pillBrush, rowRect.X + 2, rowRect.Y + 8, 3, rowRect.Height - 16);
                         }
@@ -423,7 +433,7 @@ namespace KahoiiMusic.Controls
                     if (isPlaying)
                     {
                         // Draw animated/equalizer wave icon
-                        using (SolidBrush waveBrush = new SolidBrush(Color.FromArgb(255, 70, 160)))
+                        using (SolidBrush waveBrush = new SolidBrush(_theme.AccentColor))
                         {
                             int waveX = indexX + 2;
                             int waveY = rowRect.Y + (rowRect.Height - 14) / 2;
@@ -498,7 +508,7 @@ namespace KahoiiMusic.Controls
                     int textLeft = thumbRect.Right + 12;
                     int textWidth = Math.Max(40, durX - textLeft - 8);
 
-                    Color titleColor = isPlaying ? Color.FromArgb(255, 75, 175) : Color.FromArgb(245, 245, 255);
+                    Color titleColor = isPlaying ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.2f) : Color.FromArgb(245, 245, 255);
                     using (Font tFont = new Font("Segoe UI", 15.0f, FontStyle.Bold))
                     using (Font aFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
                     using (SolidBrush tBrush = new SolidBrush(titleColor))
@@ -527,7 +537,7 @@ namespace KahoiiMusic.Controls
                 float availableTrackH = Math.Max(1, trackH - thumbH);
                 int thumbY = trackY + (int)((_scrollOffset / maxScroll) * availableTrackH);
 
-                Color thumbColor = (_isDraggingScroll || _isHoveringScroll) ? Color.FromArgb(220, 255, 65, 160) : Color.FromArgb(110, 180, 120, 220);
+                Color thumbColor = (_isDraggingScroll || _isHoveringScroll) ? Color.FromArgb(220, _theme.AccentColor) : Color.FromArgb(110, _theme.SecondaryAccentColor);
                 Rectangle thumbRect = new Rectangle(trackX, thumbY, ScrollBarW, thumbH);
                 using (GraphicsPath thumbPath = RoundedRect(thumbRect, ScrollBarW / 2))
                 using (SolidBrush thumbBrush = new SolidBrush(thumbColor))

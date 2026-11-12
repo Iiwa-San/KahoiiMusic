@@ -82,6 +82,9 @@ namespace KahoiiMusic.Controls
         }
 
         [Category("Appearance")]
+        public Color ActiveColor { get; set; } = Color.FromArgb(255, 65, 150);
+
+        [Category("Appearance")]
         [DefaultValue(false)]
         public bool IsOpen
         {
@@ -211,7 +214,7 @@ namespace KahoiiMusic.Controls
             if (_isOpen || (_isHovered && Enabled))
             {
                 Color bg = _isOpen
-                    ? Color.FromArgb(45, 255, 65, 150)
+                    ? Color.FromArgb(45, ActiveColor)
                     : (_isPressed ? Color.FromArgb(50, 255, 255, 255) : Color.FromArgb(25, 255, 255, 255));
                 using (SolidBrush b = new SolidBrush(bg))
                 using (GraphicsPath p = GetRoundedRect(new Rectangle(1, 1, Width - 2, Height - 2), 6))
@@ -225,10 +228,10 @@ namespace KahoiiMusic.Controls
 
             if (_isLoading)
             {
-                // Breathing neon magenta glow while lyrics is loading
+                // Breathing neon glow while lyrics is loading
                 int alpha = (int)(70 + 70 * _pulseFactor);
                 iconColor = Color.FromArgb(240, 180, 225);
-                glowColor = Color.FromArgb(alpha, 255, 65, 150);
+                glowColor = Color.FromArgb(alpha, ActiveColor);
             }
             else if (!Enabled)
             {
@@ -237,9 +240,9 @@ namespace KahoiiMusic.Controls
             }
             else if (_isOpen)
             {
-                // Active / Open state: Bright neon pink with soft glow
-                iconColor = Color.FromArgb(255, 65, 150);
-                glowColor = Color.FromArgb(120, 255, 65, 150);
+                // Active / Open state: Bright neon color with soft glow
+                iconColor = ActiveColor;
+                glowColor = Color.FromArgb(120, ActiveColor);
             }
             else if (_isPressed)
             {

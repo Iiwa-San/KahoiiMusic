@@ -36,6 +36,16 @@ namespace KahoiiMusic.Controls
         private Color _borderColorIdle = Color.FromArgb(60, 48, 96);
         private Color _borderColorFocused = Color.FromArgb(255, 45, 133);
         private Color _textColor = Color.White;
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         private System.Windows.Forms.Timer _debounceTimer;
         private Rectangle _clearBtnRect = Rectangle.Empty;
@@ -416,8 +426,8 @@ namespace KahoiiMusic.Controls
                 }
 
                 // Draw glowing or subtle cyber gradient border
-                Color gradStart = isFocused ? Color.FromArgb(180, 110, 255) : Color.FromArgb(120, 150, 95, 230);
-                Color gradEnd = isFocused ? Color.FromArgb(255, 45, 133) : Color.FromArgb(160, 245, 45, 125);
+                Color gradStart = isFocused ? KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.SecondaryAccentColor, Color.White, 0.2f) : Color.FromArgb(120, _theme.SecondaryAccentColor);
+                Color gradEnd = isFocused ? _theme.AccentColor : Color.FromArgb(160, _theme.AccentColor);
                 float penWidth = isFocused ? 1.8f : 1.2f;
                 using (LinearGradientBrush gradBrush = new LinearGradientBrush(rect, gradStart, gradEnd, LinearGradientMode.Horizontal))
                 using (Pen pen = new Pen(gradBrush, penWidth))
@@ -444,8 +454,8 @@ namespace KahoiiMusic.Controls
             // Draw Submit Arrow Button (➔)
             if (!_submitBtnRect.IsEmpty)
             {
-                Color arrColor = _isHoveringSubmit ? Color.FromArgb(255, 45, 133) : Color.FromArgb(160, 150, 190);
-                if (isFocused || HasRealText) arrColor = _isHoveringSubmit ? Color.White : Color.FromArgb(255, 45, 133);
+                Color arrColor = _isHoveringSubmit ? _theme.AccentColor : Color.FromArgb(160, 150, 190);
+                if (isFocused || HasRealText) arrColor = _isHoveringSubmit ? Color.White : _theme.AccentColor;
 
                 using (Font aFont = new Font("Segoe UI", 9.0f, FontStyle.Bold))
                 using (SolidBrush brush = new SolidBrush(arrColor))
@@ -460,8 +470,8 @@ namespace KahoiiMusic.Controls
             {
                 using (GraphicsPath pastePath = GetRoundedRect(_pasteBtnRect, _pasteBtnRect.Height / 2))
                 {
-                    Color bgCol = _isHoveringPaste ? Color.FromArgb(220, 255, 45, 133) : Color.FromArgb(70, 160, 60, 200);
-                    Color borderCol = _isHoveringPaste ? Color.FromArgb(255, 80, 180) : Color.FromArgb(90, 180, 90, 220);
+                    Color bgCol = _isHoveringPaste ? Color.FromArgb(220, _theme.AccentColor) : Color.FromArgb(70, _theme.SecondaryAccentColor);
+                    Color borderCol = _isHoveringPaste ? KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : Color.FromArgb(90, _theme.SecondaryAccentColor);
                     using (SolidBrush bgBrush = new SolidBrush(bgCol))
                     {
                         g.FillPath(bgBrush, pastePath);
@@ -482,7 +492,7 @@ namespace KahoiiMusic.Controls
 
         private void DrawMagnifyingGlass(Graphics g, int x, int y, bool active)
         {
-            Color iconColor = active ? Color.FromArgb(255, 45, 133) : Color.FromArgb(130, 120, 155);
+            Color iconColor = active ? _theme.AccentColor : Color.FromArgb(130, 120, 155);
             using (Pen pen = new Pen(iconColor, 1.8f))
             {
                 // Circle

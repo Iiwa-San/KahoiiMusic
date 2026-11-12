@@ -2321,6 +2321,7 @@ namespace KahoiiMusic
         private void ApplyCurrentPaletteToUI()
         {
             if (_currentPalette == null) return;
+            ColorExtractorService.CurrentTheme = _currentPalette;
 
             // Compact mode colors
             gradientPanel.TopColor = _currentPalette.CompactTop;
@@ -2336,6 +2337,19 @@ namespace KahoiiMusic
                 _lyricsCard.BorderGradientColor1 = _currentPalette.SecondaryAccentColor;
                 _lyricsCard.BorderGradientColor2 = _currentPalette.AccentColor;
             }
+
+            _sideMenuPanel?.SetTheme(_currentPalette);
+            _activeQueuePanel?.SetTheme(_currentPalette);
+            searchPillBox?.SetTheme(_currentPalette);
+            lyricsPanel?.SetTheme(_currentPalette);
+            if (btnThumbnailMenu != null) btnThumbnailMenu.IconColor = _currentPalette.AccentColor;
+            btnFavorite?.SetTheme(_currentPalette);
+            volumePopup?.SetTheme(_currentPalette);
+            playlistPopup?.SetTheme(_currentPalette);
+            _searchResultsView?.SetTheme(_currentPalette);
+            _searchDropdown?.SetTheme(_currentPalette);
+            _collectionPickerPopup?.SetTheme(_currentPalette);
+            thumbnailActionPopup?.SetTheme(_currentPalette);
 
             // Buttons theme gradient
             btnPlayPause.ThemeGradientTop = _currentPalette.ButtonGradientTop;
@@ -2361,6 +2375,11 @@ namespace KahoiiMusic
             else
             {
                 musicTrackBar.PlayedColor = _currentPalette.AccentColor;
+                btnPlayPause.IconColor = _currentPalette.AccentColor;
+                btnLoop.ActiveColor = _currentPalette.AccentColor;
+                if (btnTimer != null) btnTimer.ActiveColor = _currentPalette.AccentColor;
+                if (btnPlaylist != null) btnPlaylist.ActiveColor = _currentPalette.AccentColor;
+                if (btnLyrics != null) btnLyrics.ActiveColor = _currentPalette.AccentColor;
             }
 
             panelPlayerCard.Invalidate();
@@ -3966,19 +3985,21 @@ namespace KahoiiMusic
             btnPlayPause.UseThemeGradient = false;
             btnPlayPause.CircleColor = Color.White;
             btnPlayPause.CircleHoverColor = Color.FromArgb(240, 240, 240);
-            btnPlayPause.IconColor = Color.FromArgb(168, 85, 247);
+            btnPlayPause.IconColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(168, 85, 247);
             if (_lyricsCard != null) _lyricsCard.BorderGradient = false;
             musicTrackBar.ShowThumb = true;
             musicTrackBar.PlayedColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(235, 15, 15);
             btnVolume.IconColor = Color.White;
             btnVolume.HoverColor = Color.FromArgb(220, 220, 220);
             btnLoop.InactiveColor = Color.FromArgb(220, 220, 220);
-            btnLoop.ActiveColor = Color.FromArgb(168, 85, 247);
+            btnLoop.ActiveColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(168, 85, 247);
             if (btnTimer != null)
             {
                 btnTimer.InactiveColor = Color.FromArgb(220, 220, 220);
-                btnTimer.ActiveColor = Color.FromArgb(168, 85, 247);
+                btnTimer.ActiveColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(168, 85, 247);
             }
+            if (btnPlaylist != null) btnPlaylist.ActiveColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(168, 85, 247);
+            if (btnLyrics != null) btnLyrics.ActiveColor = (_currentPalette != null) ? _currentPalette.AccentColor : Color.FromArgb(168, 85, 247);
 
             // Reparent title bar controls back to this Form
             if (picLogo.Parent != this) this.Controls.Add(picLogo);

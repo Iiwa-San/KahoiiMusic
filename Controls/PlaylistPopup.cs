@@ -34,6 +34,19 @@ namespace KahoiiMusic.Controls
         private int _hoveredTabIndex = -1; // 0: Playlist, 1: Collection, 2: Favorite, 3: History, 4: Saved
         private bool _isHoveringClose = false;
         private bool _isLoading = false;
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                _searchTracksBox?.SetTheme(theme);
+                _searchCollectionsBox?.SetTheme(theme);
+                _searchCollectionTracksBox?.SetTheme(theme);
+                Invalidate();
+            }
+        }
 
         private PlaylistSearchBox _searchTracksBox;
         private PlaylistSearchBox _searchCollectionsBox;
@@ -2493,7 +2506,7 @@ namespace KahoiiMusic.Controls
             using (SolidBrush normalText = new SolidBrush(Color.FromArgb(235, 235, 240)))
             using (SolidBrush activeText = new SolidBrush(Color.White))
             using (SolidBrush dimText = new SolidBrush(Color.FromArgb(140, 140, 150)))
-            using (SolidBrush activeIndicatorBrush = new SolidBrush(Color.FromArgb(168, 85, 247)))
+            using (SolidBrush activeIndicatorBrush = new SolidBrush(_theme.AccentColor))
             using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
             {
                 int totalCount = currentList.Count;
@@ -2518,8 +2531,8 @@ namespace KahoiiMusic.Controls
                     if (isActive)
                     {
                         using (GraphicsPath rp = GetRoundedRect(rowRect, 6))
-                        using (SolidBrush activeBg = new SolidBrush(Color.FromArgb(45, 168, 85, 247)))
-                        using (Pen activeBorder = new Pen(Color.FromArgb(80, 168, 85, 247), 1))
+                        using (SolidBrush activeBg = new SolidBrush(Color.FromArgb(45, _theme.AccentColor)))
+                        using (Pen activeBorder = new Pen(Color.FromArgb(80, _theme.AccentColor), 1))
                         {
                             g.FillPath(activeBg, rp);
                             g.DrawPath(activeBorder, rp);
@@ -2688,8 +2701,8 @@ namespace KahoiiMusic.Controls
 
             // Button "+ Mới"
             Rectangle newBtnRect = GetNewPlaylistBtnRect();
-            Color newBtnBg = _isHoveringNewPlaylistBtn ? Color.FromArgb(70, 168, 85, 247) : Color.FromArgb(35, 168, 85, 247);
-            Color newBtnBorder = _isHoveringNewPlaylistBtn ? Color.FromArgb(216, 180, 254) : Color.FromArgb(168, 85, 247);
+            Color newBtnBg = _isHoveringNewPlaylistBtn ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(35, _theme.AccentColor);
+            Color newBtnBorder = _isHoveringNewPlaylistBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor;
             using (GraphicsPath nbp = GetRoundedRect(newBtnRect, 4))
             using (SolidBrush nbb = new SolidBrush(newBtnBg))
             using (Pen nbpPen = new Pen(newBtnBorder, 1))
@@ -2761,15 +2774,15 @@ namespace KahoiiMusic.Controls
                         if (isSel)
                         {
                             using (GraphicsPath rp = GetRoundedRect(rowRect, 6))
-                            using (SolidBrush activeBg = new SolidBrush(Color.FromArgb(55, 168, 85, 247)))
-                            using (Pen activeBorder = new Pen(Color.FromArgb(110, 168, 85, 247), 1))
+                            using (SolidBrush activeBg = new SolidBrush(Color.FromArgb(55, _theme.AccentColor)))
+                            using (Pen activeBorder = new Pen(Color.FromArgb(110, _theme.AccentColor), 1))
                             {
                                 g.FillPath(activeBg, rp);
                                 g.DrawPath(activeBorder, rp);
                             }
 
                             // Accent left indicator bar
-                            using (SolidBrush barBrush = new SolidBrush(Color.FromArgb(192, 132, 252)))
+                            using (SolidBrush barBrush = new SolidBrush(_theme.AccentColor))
                             {
                                 g.FillRectangle(barBrush, rowRect.X + 2, rowRect.Y + 7, 3, rowRect.Height - 14);
                             }
@@ -2858,8 +2871,8 @@ namespace KahoiiMusic.Controls
 
             // [▶ Phát] Button
             bool hasItems = curPlaylist.Items != null && curPlaylist.Items.Count > 0;
-            Color playBg = !hasItems ? Color.FromArgb(20, 255, 255, 255) : (_isHoveringPlayAllBtn ? Color.FromArgb(70, 168, 85, 247) : Color.FromArgb(40, 168, 85, 247));
-            Color playBorder = !hasItems ? Color.FromArgb(40, 255, 255, 255) : (_isHoveringPlayAllBtn ? Color.FromArgb(216, 180, 254) : Color.FromArgb(168, 85, 247));
+            Color playBg = !hasItems ? Color.FromArgb(20, 255, 255, 255) : (_isHoveringPlayAllBtn ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(40, _theme.AccentColor));
+            Color playBorder = !hasItems ? Color.FromArgb(40, 255, 255, 255) : (_isHoveringPlayAllBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor);
             using (GraphicsPath pbp = GetRoundedRect(playAllBtn, 4))
             using (SolidBrush pbb = new SolidBrush(playBg))
             using (Pen pbpPen = new Pen(playBorder, 1))
@@ -2926,7 +2939,7 @@ namespace KahoiiMusic.Controls
                 using (SolidBrush normalText = new SolidBrush(Color.FromArgb(235, 235, 240)))
                 using (SolidBrush activeText = new SolidBrush(Color.White))
                 using (SolidBrush dimText = new SolidBrush(Color.FromArgb(140, 140, 150)))
-                using (SolidBrush activeIndicatorBrush = new SolidBrush(Color.FromArgb(168, 85, 247)))
+                using (SolidBrush activeIndicatorBrush = new SolidBrush(_theme.AccentColor))
                 using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                 {
                     int totalTracks = filteredTracks.Count;
@@ -2946,8 +2959,8 @@ namespace KahoiiMusic.Controls
                         if (isActive)
                         {
                             using (GraphicsPath rp = GetRoundedRect(rowRect, 5))
-                            using (SolidBrush activeBg = new SolidBrush(Color.FromArgb(45, 168, 85, 247)))
-                            using (Pen activeBorder = new Pen(Color.FromArgb(80, 168, 85, 247), 1))
+                            using (SolidBrush activeBg = new SolidBrush(Color.FromArgb(45, _theme.AccentColor)))
+                            using (Pen activeBorder = new Pen(Color.FromArgb(80, _theme.AccentColor), 1))
                             {
                                 g.FillPath(activeBg, rp);
                                 g.DrawPath(activeBorder, rp);
@@ -3076,9 +3089,9 @@ namespace KahoiiMusic.Controls
 
         private void DrawTab(Graphics g, Rectangle rect, string text, int count, bool isActive, bool isHovered, bool isFavoriteTab = false)
         {
-            Color activeBgColor = isFavoriteTab ? Color.FromArgb(50, 255, 45, 85) : Color.FromArgb(50, 168, 85, 247);
-            Color activeBorderColor = isFavoriteTab ? Color.FromArgb(120, 255, 45, 85) : Color.FromArgb(90, 168, 85, 247);
-            Color activeLineColor = isFavoriteTab ? Color.FromArgb(255, 45, 85) : Color.FromArgb(192, 132, 252);
+            Color activeBgColor = isFavoriteTab ? Color.FromArgb(50, 255, 45, 85) : Color.FromArgb(50, _theme.AccentColor);
+            Color activeBorderColor = isFavoriteTab ? Color.FromArgb(120, 255, 45, 85) : Color.FromArgb(90, _theme.AccentColor);
+            Color activeLineColor = isFavoriteTab ? Color.FromArgb(255, 45, 85) : _theme.AccentColor;
 
             if (isActive)
             {

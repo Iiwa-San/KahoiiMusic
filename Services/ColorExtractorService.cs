@@ -22,6 +22,12 @@ namespace KahoiiMusic.Services
         public Color ButtonGradientTop { get; set; }
         public Color ButtonGradientBottom { get; set; }
 
+        public Color CardBorderColor => Color.FromArgb(140, SecondaryAccentColor);
+        public Color ActiveRowBg => Color.FromArgb(55, AccentColor);
+        public Color ActiveRowBorder => Color.FromArgb(90, AccentColor);
+        public Color ActiveTabBg => Color.FromArgb(200, ColorExtractorService.Lerp(AccentColor, Color.Black, 0.65f));
+        public Color ActiveTabBorder => AccentColor;
+
         public DynamicThemePalette Clone()
         {
             return new DynamicThemePalette
@@ -41,6 +47,7 @@ namespace KahoiiMusic.Services
     public static class ColorExtractorService
     {
         private static readonly float[] DefaultMaximizedPositions = new float[] { 0.0f, 0.28f, 0.70f, 1.0f };
+        public static DynamicThemePalette CurrentTheme { get; set; } = GetDefaultTheme();
 
         public static DynamicThemePalette GetDefaultTheme()
         {

@@ -20,6 +20,16 @@ namespace KahoiiMusic.Controls
         private readonly Color _activeHoverColor = Color.FromArgb(255, 84, 117);  // Brighter Pink #FF5475
         private readonly Color _inactiveColor = Color.FromArgb(190, 190, 205);   // Muted outline
         private readonly Color _inactiveHoverColor = Color.White;                // Hover white
+        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+
+        public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                Invalidate();
+            }
+        }
 
         public event EventHandler<bool> FavoriteChanged;
 
@@ -414,15 +424,17 @@ namespace KahoiiMusic.Controls
                 }
                 else
                 {
-                    // Solid filled purple heart with 70% opacity matching other control buttons (#32124B)
-                    Color purpleFill = _isHovered ? Color.FromArgb(220, 70, 25, 105) : Color.FromArgb(178, 50, 18, 75);
+                    // Solid filled translucent heart matching other control buttons with theme tint
+                    Color purpleFill = _isHovered 
+                        ? Color.FromArgb(220, KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.AccentColor, Color.Black, 0.65f)) 
+                        : Color.FromArgb(178, KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.AccentColor, Color.Black, 0.78f));
                     using (SolidBrush fillBrush = new SolidBrush(purpleFill))
                     {
                         g.FillPath(fillBrush, heartPath);
                     }
 
                     // Subtle outline to maintain definition over dark album art
-                    Color strokeColor = _isHovered ? Color.FromArgb(180, 120, 50, 160) : Color.FromArgb(100, 80, 35, 115);
+                    Color strokeColor = _isHovered ? Color.FromArgb(180, _theme.SecondaryAccentColor) : Color.FromArgb(100, _theme.SecondaryAccentColor);
                     using (Pen strokePen = new Pen(strokeColor, 1.0f) { LineJoin = LineJoin.Round })
                     {
                         g.DrawPath(strokePen, heartPath);
