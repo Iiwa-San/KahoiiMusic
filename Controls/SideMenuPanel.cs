@@ -1360,7 +1360,7 @@ namespace KahoiiMusic.Controls
                 using (Font durFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
                 using (StringFormat titleSf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
                 using (StringFormat durSf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
-                using (StringFormat idxSf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                using (StringFormat idxSf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                 {
                     for (int i = 0; i < _filteredCollectionTracks.Count; i++)
                     {
@@ -1404,16 +1404,16 @@ namespace KahoiiMusic.Controls
                                 g.FillRectangle(eqBrush, leftX + 4, eqY, 2, 12);
                                 g.FillRectangle(eqBrush, leftX + 8, eqY + 2, 2, 10);
                             }
-                            leftX += 18;
+                            leftX += 26;
                         }
                         else
                         {
-                            int idxW = (i + 1) >= 10 ? 22 : 18;
+                            int idxW = (i + 1) >= 100 ? 32 : ((i + 1) >= 10 ? 26 : 20);
                             using (SolidBrush idxBrush = new SolidBrush(Color.FromArgb(120, 130, 160)))
                             {
                                 g.DrawString((i + 1).ToString(), idxFont, idxBrush, new RectangleF(leftX, rowY, idxW, RowH), idxSf);
                             }
-                            leftX += idxW + 4;
+                            leftX += idxW + 6;
                         }
 
                         // Micro Thumbnail
@@ -1470,7 +1470,7 @@ namespace KahoiiMusic.Controls
 
                         string durText = !string.IsNullOrEmpty(item.FormattedDuration) ? item.FormattedDuration : "";
                         SizeF durSz = !string.IsNullOrEmpty(durText) ? g.MeasureString(durText, durFont) : SizeF.Empty;
-                        int durW = Math.Max(52, (int)Math.Ceiling(durSz.Width) + 6);
+                        int durW = Math.Max(56, (int)Math.Ceiling(durSz.Width) + 8);
                         int durX = rowRect.Right - durW - 4;
                         using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(135, 140, 165)))
                         {
@@ -1487,9 +1487,11 @@ namespace KahoiiMusic.Controls
                             {
                                 g.DrawString(item.Title ?? "Unknown Title", titleFont, titleBrush, new RectangleF(leftX, rowY + 7, textW, 20), titleSf);
                             }
+                            string authorText = !string.IsNullOrWhiteSpace(item.Author) ? item.Author : Services.AudioPlayerService.ExtractAuthorFromTitle(item.Title);
+                            if (string.IsNullOrWhiteSpace(authorText)) authorText = "YouTube";
                             using (SolidBrush authorBrush = new SolidBrush(authorColor))
                             {
-                                g.DrawString(item.Author ?? "Unknown Artist", authorFont, authorBrush, new RectangleF(leftX, rowY + 28, textW, 18), titleSf);
+                                g.DrawString(authorText, authorFont, authorBrush, new RectangleF(leftX, rowY + 28, textW, 18), titleSf);
                             }
                         }
                     }
@@ -1554,7 +1556,7 @@ namespace KahoiiMusic.Controls
                 using (Font durFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
                 using (StringFormat titleSf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
                 using (StringFormat durSf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
-                using (StringFormat idxSf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                using (StringFormat idxSf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                 {
                     for (int i = 0; i < _filteredItems.Count; i++)
                     {
@@ -1598,16 +1600,16 @@ namespace KahoiiMusic.Controls
                                 g.FillRectangle(eqBrush, leftX + 4, eqY, 2, 12);
                                 g.FillRectangle(eqBrush, leftX + 8, eqY + 2, 2, 10);
                             }
-                            leftX += 18;
+                            leftX += 26;
                         }
                         else
                         {
-                            int idxW = (i + 1) >= 10 ? 22 : 18;
+                            int idxW = (i + 1) >= 100 ? 32 : ((i + 1) >= 10 ? 26 : 20);
                             using (SolidBrush idxBrush = new SolidBrush(Color.FromArgb(120, 130, 160)))
                             {
                                 g.DrawString((i + 1).ToString(), idxFont, idxBrush, new RectangleF(leftX, rowY, idxW, RowH), idxSf);
                             }
-                            leftX += idxW + 4;
+                            leftX += idxW + 6;
                         }
 
                         // Micro Thumbnail
@@ -1664,7 +1666,7 @@ namespace KahoiiMusic.Controls
 
                         string durText = !string.IsNullOrEmpty(item.FormattedDuration) ? item.FormattedDuration : "";
                         SizeF durSz = !string.IsNullOrEmpty(durText) ? g.MeasureString(durText, durFont) : SizeF.Empty;
-                        int durW = Math.Max(52, (int)Math.Ceiling(durSz.Width) + 6);
+                        int durW = Math.Max(56, (int)Math.Ceiling(durSz.Width) + 8);
                         int durX = rowRect.Right - durW - 4;
                         using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(135, 140, 165)))
                         {
@@ -1681,9 +1683,11 @@ namespace KahoiiMusic.Controls
                             {
                                 g.DrawString(item.Title ?? "Unknown Title", titleFont, titleBrush, new RectangleF(leftX, rowY + 7, textW, 20), titleSf);
                             }
+                            string authorText = !string.IsNullOrWhiteSpace(item.Author) ? item.Author : Services.AudioPlayerService.ExtractAuthorFromTitle(item.Title);
+                            if (string.IsNullOrWhiteSpace(authorText)) authorText = "YouTube";
                             using (SolidBrush authorBrush = new SolidBrush(authorColor))
                             {
-                                g.DrawString(item.Author ?? "Unknown Artist", authorFont, authorBrush, new RectangleF(leftX, rowY + 28, textW, 18), titleSf);
+                                g.DrawString(authorText, authorFont, authorBrush, new RectangleF(leftX, rowY + 28, textW, 18), titleSf);
                             }
                         }
                     }

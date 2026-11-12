@@ -1,8 +1,8 @@
 {
-  "versionCode": 27,
-  "versionName": "1.0.27",
-  "changelog": "• Tinh chỉnh cỡ chữ bài hát ở Hàng đợi & Danh mục bên trái cân đối, chống che lấp nghệ sĩ\n• Tối ưu thời lượng bài hát: tự động co giãn và chống ngắt dòng đối với bài hát dài dạng giờ (hh:mm:ss)\n• Đồng bộ màu chủ đạo động (Dynamic Theme) cho tất cả thanh cuộn (Scrollbar) session bên trái theo thumbnail\n• Khắc phục hoàn toàn lỗi phím tắt khi Alt+Tab vào ứng dụng (nhận diện Space, Mũi tên, Media keys ngay lập tức không cần nhấp chuột)",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.27.exe",
+  "versionCode": 28,
+  "versionName": "1.0.28",
+  "changelog": "• Khắc phục triệt để lỗi số thứ tự bài hát (10, 11, 12...) và thời lượng dài bị xuống dòng trên màn hình Windows tỉ lệ phóng to (DPI Scale 125%, 150%)\n• Sửa lỗi tên nghệ sĩ không hiển thị ngay ở danh sách và lịch sử: tự động phân giải nghệ sĩ ngầm và trích xuất dự phòng tức thì không cần click vào bài\n• Đồng bộ bố cục hàng danh sách phát và menu mini app mượt mà và chuẩn xác ở mọi tỉ lệ hiển thị",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.28.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {

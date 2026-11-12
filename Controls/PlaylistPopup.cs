@@ -2510,7 +2510,7 @@ namespace KahoiiMusic.Controls
             using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
             {
                 int totalCount = currentList.Count;
-                int indexColW = (totalCount >= 1000) ? 34 : ((totalCount >= 100) ? 27 : 18);
+                int indexColW = (totalCount >= 1000) ? 36 : ((totalCount >= 100) ? 30 : 24);
                 int thumbSize = 26;
                 int thumbXOffset = indexColW + 6;
                 int titleXOffset = thumbXOffset + thumbSize + 8;
@@ -2619,9 +2619,19 @@ namespace KahoiiMusic.Controls
                         }
                     }
 
+                    // Duration
+                    string durStr = item.FormattedDuration ?? string.Empty;
+                    SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, durFont) : SizeF.Empty;
+                    int durW = Math.Max(54, (int)Math.Ceiling(durSz.Width) + 8);
+                    RectangleF durRect = new RectangleF(rowRect.Right - durW - 4, rowRect.Y + 9, durW, 18);
+                    using (StringFormat sfDur = new StringFormat() { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                    {
+                        g.DrawString(durStr, durFont, dimText, durRect, sfDur);
+                    }
+
                     // 3. Title
                     int titleX = rowRect.X + titleXOffset;
-                    int titleW = Math.Max(50, rowRect.Right - 46 - titleX - 4);
+                    int titleW = Math.Max(40, (int)durRect.Left - titleX - 4);
                     RectangleF titleRect = new RectangleF(titleX, rowRect.Y + 8, titleW, 20);
 
                     using (StringFormat sfTitle = new StringFormat() { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
@@ -2630,16 +2640,6 @@ namespace KahoiiMusic.Controls
                             ? Services.AudioPlayerService.CleanDisplayTitle(item.Title)
                             : string.Format("Bài {0}", i + 1);
                         g.DrawString(displayTitle, titleFont, isActive ? activeText : normalText, titleRect, sfTitle);
-                    }
-
-                    // Duration
-                    string durStr = item.FormattedDuration ?? string.Empty;
-                    SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, durFont) : SizeF.Empty;
-                    int durW = Math.Max(46, (int)Math.Ceiling(durSz.Width) + 4);
-                    RectangleF durRect = new RectangleF(rowRect.Right - durW - 4, rowRect.Y + 9, durW, 18);
-                    using (StringFormat sfDur = new StringFormat() { Alignment = StringAlignment.Far, FormatFlags = StringFormatFlags.NoWrap })
-                    {
-                        g.DrawString(durStr, durFont, dimText, durRect, sfDur);
                     }
                 }
             }
@@ -2946,7 +2946,7 @@ namespace KahoiiMusic.Controls
                 using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                 {
                     int totalTracks = filteredTracks.Count;
-                    int indexColW = (totalTracks >= 1000) ? 36 : ((totalTracks >= 100) ? 28 : 20);
+                    int indexColW = (totalTracks >= 1000) ? 36 : ((totalTracks >= 100) ? 30 : 24);
 
                     for (int i = 0; i < filteredTracks.Count; i++)
                     {
@@ -3041,9 +3041,19 @@ namespace KahoiiMusic.Controls
                             }
                         }
 
+                        // Track Duration
+                        string durStr = item.FormattedDuration ?? string.Empty;
+                        SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, trkDurFont) : SizeF.Empty;
+                        int durW = Math.Max(54, (int)Math.Ceiling(durSz.Width) + 8);
+                        RectangleF durRect = new RectangleF(rowRect.Right - durW - 4, rowRect.Y + 7, durW, 18);
+                        using (StringFormat sfDur = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                        {
+                            g.DrawString(durStr, trkDurFont, dimText, durRect, sfDur);
+                        }
+
                         // Track Title
                         int titleX = thumbRect.Right + 7;
-                        int titleW = Math.Max(40, rowRect.Right - 44 - titleX - 2);
+                        int titleW = Math.Max(40, (int)durRect.Left - titleX - 4);
                         RectangleF titleRect = new RectangleF(titleX, rowRect.Y + 7, titleW, 18);
 
                         using (StringFormat sfTitle = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
@@ -3052,16 +3062,6 @@ namespace KahoiiMusic.Controls
                                 ? Services.AudioPlayerService.CleanDisplayTitle(item.Title)
                                 : string.Format("Bài {0}", i + 1);
                             g.DrawString(displayTitle, trkTitleFont, isActive ? activeText : normalText, titleRect, sfTitle);
-                        }
-
-                        // Track Duration
-                        string durStr = item.FormattedDuration ?? string.Empty;
-                        SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, trkDurFont) : SizeF.Empty;
-                        int durW = Math.Max(46, (int)Math.Ceiling(durSz.Width) + 4);
-                        RectangleF durRect = new RectangleF(rowRect.Right - durW - 4, rowRect.Y + 7, durW, 18);
-                        using (StringFormat sfDur = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
-                        {
-                            g.DrawString(durStr, trkDurFont, dimText, durRect, sfDur);
                         }
                     }
                 }

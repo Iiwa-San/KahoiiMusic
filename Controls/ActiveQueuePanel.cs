@@ -444,16 +444,17 @@ namespace KahoiiMusic.Controls
                     }
                     else
                     {
+                        int idxW = (i + 1) >= 100 ? 32 : ((i + 1) >= 10 ? 26 : 20);
                         using (Font idxFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
                         using (SolidBrush idxBrush = new SolidBrush(Color.FromArgb(130, 125, 155)))
-                        using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                        using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                         {
-                            g.DrawString((i + 1).ToString(), idxFont, idxBrush, new Rectangle(indexX, rowRect.Y, 22, rowRect.Height), sf);
+                            g.DrawString((i + 1).ToString(), idxFont, idxBrush, new Rectangle(indexX, rowRect.Y, idxW, rowRect.Height), sf);
                         }
                     }
 
                     // 2. Thumbnail
-                    int thumbX = indexX + 28;
+                    int thumbX = indexX + 32;
                     int thumbSize = 38;
                     int thumbY = rowRect.Y + (rowRect.Height - thumbSize) / 2;
                     Rectangle thumbRect = new Rectangle(thumbX, thumbY, thumbSize, thumbSize);
@@ -499,7 +500,7 @@ namespace KahoiiMusic.Controls
                     using (Font durFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
                     {
                         SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, durFont) : SizeF.Empty;
-                        int durW = Math.Max(54, (int)Math.Ceiling(durSz.Width) + 6);
+                        int durW = Math.Max(56, (int)Math.Ceiling(durSz.Width) + 8);
                         int durX = rowRect.Right - durW - 8;
                         using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(145, 140, 170)))
                         using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
@@ -521,7 +522,9 @@ namespace KahoiiMusic.Controls
                             RectangleF tRect = new RectangleF(textLeft, rowRect.Y + 7, textWidth, 20);
                             RectangleF aRect = new RectangleF(textLeft, rowRect.Y + 28, textWidth, 18);
                             g.DrawString(item.Title ?? string.Empty, tFont, tBrush, tRect, sf);
-                            g.DrawString(item.Author ?? string.Empty, aFont, aBrush, aRect, sf);
+                            string authorText = !string.IsNullOrWhiteSpace(item.Author) ? item.Author : Services.AudioPlayerService.ExtractAuthorFromTitle(item.Title);
+                            if (string.IsNullOrWhiteSpace(authorText)) authorText = "YouTube";
+                            g.DrawString(authorText, aFont, aBrush, aRect, sf);
                         }
                     }
                 }
