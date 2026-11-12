@@ -159,6 +159,7 @@ namespace KahoiiMusic.Services
                 }
             }
             catch { }
+            _translationMemoryCache[clean] = null;
             return null;
         }
         private static readonly Lazy<LyricsService> _instance = new Lazy<LyricsService>(() => new LyricsService());
@@ -563,7 +564,7 @@ namespace KahoiiMusic.Services
             return Regex.Replace(lower, @"[\s\-_/|–—'""~`\.・,!?\(\)\[\]\{\}【】『』「」]+", "");
         }
 
-        public static bool IsTitleMatch(string targetTitle, string resultTrack, string targetArtist = null, string resultArtist = null, string resultAlbum = null)
+        public static bool IsTitleMatch(string targetTitle, string resultTrack, string targetArtist = null, string resultArtist = null, string resultAlbum = null, bool allowTranslation = true)
         {
             if (string.IsNullOrWhiteSpace(targetTitle) || string.IsNullOrWhiteSpace(resultTrack))
                 return false;
@@ -578,7 +579,7 @@ namespace KahoiiMusic.Services
             // If both target artist and result artist are provided, verify they are compatible!
             if (!string.IsNullOrEmpty(aTarget) && !string.IsNullOrEmpty(aResult))
             {
-                if (!AreArtistsSimilar(aTarget, aResult))
+                if (!AreArtistsSimilar(aTarget, aResult, allowTranslation: false))
                 {
                     return false;
                 }
@@ -594,17 +595,23 @@ namespace KahoiiMusic.Services
             if (!string.IsNullOrEmpty(cTarget) && string.Equals(cTarget, cTrack, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            // 1c. Translation & Romanization match for CJK songs
-            if (ContainsCjk(targetTitle))
+            // 1c. Translation & Romanization match for CJK songs (Guarded against recursion)
+            if (allowTranslation && ContainsCjk(targetTitle))
             {
                 var trkRes = TranslateAndRomanizeSync(targetTitle);
                 if (trkRes != null)
                 {
-                    if (!string.IsNullOrEmpty(trkRes.Translation) && IsTitleMatch(trkRes.Translation, resultTrack, targetArtist, resultArtist, resultAlbum))
-                        return true;
+                    if (!string.IsNullOrEmpty(trkRes.Translation) && !string.Equals(trkRes.Translation, targetTitle, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (IsTitleMatch(trkRes.Translation, resultTrack, targetArtist, resultArtist, resultAlbum, allowTranslation: false))
+                            return true;
+                    }
                     string cleanRom = RemoveDiacritics(trkRes.Romaji);
-                    if (!string.IsNullOrEmpty(cleanRom) && IsTitleMatch(cleanRom, resultTrack, targetArtist, resultArtist, resultAlbum))
-                        return true;
+                    if (!string.IsNullOrEmpty(cleanRom) && !string.Equals(cleanRom, targetTitle, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (IsTitleMatch(cleanRom, resultTrack, targetArtist, resultArtist, resultAlbum, allowTranslation: false))
+                            return true;
+                    }
                 }
             }
 
@@ -621,7 +628,7 @@ namespace KahoiiMusic.Services
             // 3. Album match (especially for anime / video game soundtrack releases)
             if (!string.IsNullOrEmpty(tAlbum) && (string.Equals(tTarget, tAlbum, StringComparison.OrdinalIgnoreCase) || (tTarget.Length >= 4 && tAlbum.Contains(tTarget))))
             {
-                if (string.IsNullOrEmpty(aTarget) || string.IsNullOrEmpty(aResult) || AreArtistsSimilar(aTarget, aResult))
+                if (string.IsNullOrEmpty(aTarget) || string.IsNullOrEmpty(aResult) || AreArtistsSimilar(aTarget, aResult, allowTranslation: false))
                 {
                     return true;
                 }
@@ -660,7 +667,7 @@ namespace KahoiiMusic.Services
             return false;
         }
 
-        public static bool AreArtistsSimilar(string a1, string a2)
+        public static bool AreArtistsSimilar(string a1, string a2, bool allowTranslation = true)
         {
             if (string.IsNullOrWhiteSpace(a1) || string.IsNullOrWhiteSpace(a2)) return true;
 
@@ -669,25 +676,40 @@ namespace KahoiiMusic.Services
             if (string.Equals(n1, n2, StringComparison.OrdinalIgnoreCase)) return true;
             if (n1.Contains(n2) || n2.Contains(n1)) return true;
 
-            // Translation & Romanization check if either artist contains CJK
-            if (ContainsCjk(a1))
+            // Translation & Romanization check if either artist contains CJK (Guarded against recursion)
+            if (allowTranslation)
             {
-                var t1 = TranslateAndRomanizeSync(a1);
-                if (t1 != null)
+                if (ContainsCjk(a1))
                 {
-                    if (!string.IsNullOrEmpty(t1.Translation) && AreArtistsSimilar(t1.Translation, a2)) return true;
-                    string cleanRom = RemoveDiacritics(t1.Romaji);
-                    if (!string.IsNullOrEmpty(cleanRom) && AreArtistsSimilar(cleanRom, a2)) return true;
+                    var t1 = TranslateAndRomanizeSync(a1);
+                    if (t1 != null)
+                    {
+                        if (!string.IsNullOrEmpty(t1.Translation) && !string.Equals(t1.Translation, a1, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (AreArtistsSimilar(t1.Translation, a2, allowTranslation: false)) return true;
+                        }
+                        string cleanRom = RemoveDiacritics(t1.Romaji);
+                        if (!string.IsNullOrEmpty(cleanRom) && !string.Equals(cleanRom, a1, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (AreArtistsSimilar(cleanRom, a2, allowTranslation: false)) return true;
+                        }
+                    }
                 }
-            }
-            if (ContainsCjk(a2))
-            {
-                var t2 = TranslateAndRomanizeSync(a2);
-                if (t2 != null)
+                if (ContainsCjk(a2))
                 {
-                    if (!string.IsNullOrEmpty(t2.Translation) && AreArtistsSimilar(a1, t2.Translation)) return true;
-                    string cleanRom = RemoveDiacritics(t2.Romaji);
-                    if (!string.IsNullOrEmpty(cleanRom) && AreArtistsSimilar(a1, cleanRom)) return true;
+                    var t2 = TranslateAndRomanizeSync(a2);
+                    if (t2 != null)
+                    {
+                        if (!string.IsNullOrEmpty(t2.Translation) && !string.Equals(t2.Translation, a2, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (AreArtistsSimilar(a1, t2.Translation, allowTranslation: false)) return true;
+                        }
+                        string cleanRom = RemoveDiacritics(t2.Romaji);
+                        if (!string.IsNullOrEmpty(cleanRom) && !string.Equals(cleanRom, a2, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (AreArtistsSimilar(a1, cleanRom, allowTranslation: false)) return true;
+                        }
+                    }
                 }
             }
 
