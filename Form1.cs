@@ -987,11 +987,9 @@ namespace KahoiiMusic
             _searchDropdown = new Controls.SearchDropdownPopup();
             _searchDropdown.TrackPlaySelected += (s, item) =>
             {
-                _searchDropdown.Hide();
-                searchPillBox.RemoveFocus();
                 if (item != null)
                 {
-                    SearchPillBox_UrlSubmitted(searchPillBox, item.Url);
+                    PlayTrackItem(item);
                 }
             };
             _searchDropdown.TrackAddSelected += (s, item) =>
@@ -1056,7 +1054,7 @@ namespace KahoiiMusic
             {
                 if (item != null)
                 {
-                    SearchPillBox_UrlSubmitted(searchPillBox, item.Url);
+                    PlayTrackItem(item);
                 }
             };
             _searchResultsView.TrackAddSelected += (s, item) =>
@@ -1074,7 +1072,36 @@ namespace KahoiiMusic
                     lyricsPanel.BringToFront();
                 }
             };
+            _searchResultsView.LoadMoreRequested += async (s, token) =>
+            {
+                string curQ = _searchResultsView.CurrentQuery;
+                if (!string.IsNullOrEmpty(curQ))
+                {
+                    var nextBatch = await Services.YouTubeSearchService.SearchBatchAsync(curQ, token);
+                    if (nextBatch != null && nextBatch.Items.Count > 0)
+                    {
+                        _searchResultsView.AppendResults(nextBatch.Items, nextBatch.NextContinuationToken);
+                    }
+                    else
+                    {
+                        _searchResultsView.SetNoMoreResults();
+                    }
+                }
+            };
             gradientPanel.Controls.Add(_searchResultsView);
+        }
+
+        private void PlayTrackItem(PlaylistItem item)
+        {
+            if (item == null || string.IsNullOrEmpty(item.Id)) return;
+            _audioPlayer.IsPlayingFromHistory = false;
+            _audioPlayer.CurrentQueueSource = ActiveQueueSource.Playlist;
+            btnPlaylist.HasPlaylist = true;
+
+            _searchDropdown?.Hide();
+            searchPillBox?.RemoveFocus();
+
+            _audioPlayer.EnqueueAndPlayTrack(item.Id, item.Title, item.Author, item.DurationSeconds, item.Url);
         }
 
         private async void ShowFullSearchResultsAsync(string query)
@@ -1084,8 +1111,8 @@ namespace KahoiiMusic
             _searchResultsView.BringToFront();
             _searchResultsView.Visible = true;
             _searchResultsView.ShowLoading(query);
-            var results = await Services.YouTubeSearchService.SearchAsync(query, 35);
-            _searchResultsView.SetResults(query, results);
+            var batch = await Services.YouTubeSearchService.SearchBatchAsync(query);
+            _searchResultsView.SetResults(query, batch.Items, batch.NextContinuationToken);
             _searchResultsView.BringToFront();
         }
 

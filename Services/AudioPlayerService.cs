@@ -1929,6 +1929,46 @@ namespace KahoiiMusic.Services
                 if (PlaylistIndexChanged != null) PlaylistIndexChanged(this, _currentPlaylistIndex);
             }, null);
 
+            // Proactively resolve title and author via fast oEmbed if placeholder was used,
+            // ensuring the title never gets stuck if user quickly clicks another song
+            if (string.IsNullOrWhiteSpace(title) || cleanTitle.StartsWith("Đang tải") || cleanTitle.StartsWith("Đang nạp"))
+            {
+                System.Threading.ThreadPool.QueueUserWorkItem(delegate
+                {
+                    try
+                    {
+                        using (var wc = new System.Net.WebClient())
+                        {
+                            wc.Encoding = System.Text.Encoding.UTF8;
+                            wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                            string json = wc.DownloadString("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + videoId + "&format=json");
+                            if (!string.IsNullOrEmpty(json))
+                            {
+                                var mT = System.Text.RegularExpressions.Regex.Match(json, @"""title""\s*:\s*""([^""]+)""");
+                                var mA = System.Text.RegularExpressions.Regex.Match(json, @"""author_name""\s*:\s*""([^""]+)""");
+                                string rTitle = mT.Success ? CleanDisplayTitle(System.Text.RegularExpressions.Regex.Unescape(mT.Groups[1].Value)) : null;
+                                string rAuthor = mA.Success ? CleanAuthor(System.Text.RegularExpressions.Regex.Unescape(mA.Groups[1].Value)) : null;
+
+                                if (!string.IsNullOrWhiteSpace(rTitle))
+                                {
+                                    var target = _sessionPlaylist?.Find(x => string.Equals(x.Id, videoId, StringComparison.OrdinalIgnoreCase));
+                                    if (target != null)
+                                    {
+                                        target.Title = rTitle;
+                                        if (!string.IsNullOrWhiteSpace(rAuthor)) target.Author = rAuthor;
+                                        _syncContext?.Post(delegate
+                                        {
+                                            PlaylistLoaded?.Invoke(this, _sessionPlaylist);
+                                        }, null);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                });
+            }
+
             // Bắt đầu phát bài này ngay lập tức
             string targetUrl = !string.IsNullOrWhiteSpace(customUrl) ? customUrl : ("https://www.youtube.com/watch?v=" + videoId);
             LoadAndPlay(targetUrl);
@@ -2044,7 +2084,10 @@ namespace KahoiiMusic.Services
                             }
                         }
 
-                        if (item.Title != "Đang nạp bài hát..." && !string.IsNullOrEmpty(item.Title) && !string.IsNullOrEmpty(item.Author)) continue;
+                        bool isPlaceholder = string.IsNullOrWhiteSpace(item.Title) ||
+                                             item.Title.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
+                                             item.Title.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
+                        if (!isPlaceholder && !string.IsNullOrEmpty(item.Author)) continue;
                         try
                         {
                             using (var wc = new System.Net.WebClient())
@@ -2201,7 +2244,10 @@ namespace KahoiiMusic.Services
                                                     item.DurationSeconds = dur;
                                                     anyUpdated = true;
                                                 }
-                                                if ((item.Title == "Đang nạp bài hát..." || string.IsNullOrWhiteSpace(item.Title)) && !string.IsNullOrWhiteSpace(title) && title != "NA" && title != "None")
+                                                bool isPlaceholder = string.IsNullOrWhiteSpace(item.Title) ||
+                                                                     item.Title.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
+                                                                     item.Title.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
+                                                if (isPlaceholder && !string.IsNullOrWhiteSpace(title) && title != "NA" && title != "None")
                                                 {
                                                     item.Title = CleanDisplayTitle(title);
                                                     anyUpdated = true;
@@ -2289,7 +2335,10 @@ namespace KahoiiMusic.Services
                                             item.DurationSeconds = dur;
                                             anyUpdated = true;
                                         }
-                                        if ((item.Title == "Đang nạp bài hát..." || string.IsNullOrWhiteSpace(item.Title)) && !string.IsNullOrWhiteSpace(title) && title != "NA" && title != "None")
+                                        bool isPlaceholder = string.IsNullOrWhiteSpace(item.Title) ||
+                                                             item.Title.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
+                                                             item.Title.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
+                                        if (isPlaceholder && !string.IsNullOrWhiteSpace(title) && title != "NA" && title != "None")
                                         {
                                             item.Title = CleanDisplayTitle(title);
                                             anyUpdated = true;

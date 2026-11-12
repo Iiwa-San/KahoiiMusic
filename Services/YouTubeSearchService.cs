@@ -9,10 +9,16 @@ using KahoiiMusic.Models;
 
 namespace KahoiiMusic.Services
 {
+    public class SearchResultBatch
+    {
+        public List<PlaylistItem> Items { get; set; } = new List<PlaylistItem>();
+        public string NextContinuationToken { get; set; }
+    }
+
     public static class YouTubeSearchService
     {
         private static readonly HttpClient _httpClient = new HttpClient();
-        private static readonly Dictionary<string, (DateTime ExpireAt, List<PlaylistItem> Results)> _cache = new Dictionary<string, (DateTime ExpireAt, List<PlaylistItem> Results)>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, (DateTime ExpireAt, List<PlaylistItem> Results, string NextToken)> _cache = new Dictionary<string, (DateTime ExpireAt, List<PlaylistItem> Results, string NextToken)>(StringComparer.OrdinalIgnoreCase);
         private static readonly object _cacheLock = new object();
 
         static YouTubeSearchService()
@@ -21,80 +27,92 @@ namespace KahoiiMusic.Services
             _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         }
 
-        public static async Task<List<PlaylistItem>> SearchAsync(string query, int maxResults = 20, CancellationToken ct = default)
+        public static async Task<SearchResultBatch> SearchBatchAsync(string query, string continuationToken = null, CancellationToken ct = default)
         {
-            if (string.IsNullOrWhiteSpace(query)) return new List<PlaylistItem>();
-            query = query.Trim();
+            var batch = new SearchResultBatch();
+            if (string.IsNullOrWhiteSpace(query) && string.IsNullOrWhiteSpace(continuationToken)) return batch;
+            query = query?.Trim() ?? string.Empty;
 
-            lock (_cacheLock)
+            // If initial search and cached
+            if (string.IsNullOrEmpty(continuationToken))
             {
-                if (_cache.TryGetValue(query, out var entry) && entry.ExpireAt > DateTime.UtcNow)
+                lock (_cacheLock)
                 {
-                    if (entry.Results.Count >= maxResults || entry.Results.Count > 0)
+                    if (_cache.TryGetValue(query, out var entry) && entry.ExpireAt > DateTime.UtcNow && entry.Results.Count > 0)
                     {
-                        int take = Math.Min(maxResults, entry.Results.Count);
-                        return entry.Results.GetRange(0, take);
+                        batch.Items = new List<PlaylistItem>(entry.Results);
+                        batch.NextContinuationToken = entry.NextToken;
+                        return batch;
                     }
                 }
             }
 
             try
             {
-                string payload = string.Format(
-                    "{{\"query\":\"{0}\",\"context\":{{\"client\":{{\"clientName\":\"WEB\",\"clientVersion\":\"2.20240101.00.00\",\"hl\":\"vi\",\"gl\":\"VN\"}}}}}}",
-                    EscapeJson(query));
-
-                var content = new StringContent(payload, Encoding.UTF8, "application/json");
-                using (var response = await _httpClient.PostAsync("https://www.youtube.com/youtubei/v1/search", content, ct).ConfigureAwait(false))
+                string curToken = continuationToken;
+                int hops = 0;
+                // Fetch at least 20 items per batch, hopping forward up to 3 times if YouTube returns empty shelf (e.g. Shorts)
+                while (batch.Items.Count < (string.IsNullOrEmpty(continuationToken) ? 35 : 20) && hops < 3)
                 {
-                    if (!response.IsSuccessStatusCode) return new List<PlaylistItem>();
-                    string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    int parseCount = Math.Max(30, maxResults);
-                    var parsed = ParseSearchResults(json, parseCount);
-
-                    // Fetch next page via continuation token if user requested more items
-                    if (parsed.Count < maxResults)
+                    hops++;
+                    string payload;
+                    if (!string.IsNullOrEmpty(curToken))
                     {
-                        var mToken = Regex.Match(json, @"""continuationCommand""\s*:\s*\{[^}]*?""token""\s*:\s*""([^""]+)""");
-                        if (mToken.Success)
-                        {
-                            try
-                            {
-                                string contPayload = string.Format(
-                                    "{{\"continuation\":\"{0}\",\"context\":{{\"client\":{{\"clientName\":\"WEB\",\"clientVersion\":\"2.20240101.00.00\",\"hl\":\"vi\",\"gl\":\"VN\"}}}}}}",
-                                    EscapeJson(mToken.Groups[1].Value));
-                                var contContent = new StringContent(contPayload, Encoding.UTF8, "application/json");
-                                using (var contResponse = await _httpClient.PostAsync("https://www.youtube.com/youtubei/v1/search", contContent, ct).ConfigureAwait(false))
-                                {
-                                    if (contResponse.IsSuccessStatusCode)
-                                    {
-                                        string contJson = await contResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
-                                        var moreItems = ParseSearchResults(contJson, maxResults - parsed.Count);
-                                        parsed.AddRange(moreItems);
-                                    }
-                                }
-                            }
-                            catch { }
-                        }
+                        payload = string.Format(
+                            "{{\"continuation\":\"{0}\",\"context\":{{\"client\":{{\"clientName\":\"WEB\",\"clientVersion\":\"2.20240101.00.00\",\"hl\":\"vi\",\"gl\":\"VN\"}}}}}}",
+                            EscapeJson(curToken));
+                    }
+                    else
+                    {
+                        payload = string.Format(
+                            "{{\"query\":\"{0}\",\"context\":{{\"client\":{{\"clientName\":\"WEB\",\"clientVersion\":\"2.20240101.00.00\",\"hl\":\"vi\",\"gl\":\"VN\"}}}}}}",
+                            EscapeJson(query));
                     }
 
+                    var content = new StringContent(payload, Encoding.UTF8, "application/json");
+                    using (var response = await _httpClient.PostAsync("https://www.youtube.com/youtubei/v1/search", content, ct).ConfigureAwait(false))
+                    {
+                        if (!response.IsSuccessStatusCode) break;
+                        string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        var items = ParseSearchResults(json, 40);
+                        foreach (var it in items)
+                        {
+                            if (!batch.Items.Exists(x => string.Equals(x.Id, it.Id, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                batch.Items.Add(it);
+                            }
+                        }
+
+                        var mToken = Regex.Match(json, @"""continuationCommand""\s*:\s*\{[^}]*?""token""\s*:\s*""([^""]+)""");
+                        curToken = mToken.Success ? mToken.Groups[1].Value : null;
+                        batch.NextContinuationToken = curToken;
+
+                        if (string.IsNullOrEmpty(curToken)) break;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(continuationToken) && batch.Items.Count > 0)
+                {
                     lock (_cacheLock)
                     {
-                        if (_cache.Count > 60)
-                        {
-                            _cache.Clear();
-                        }
-                        _cache[query] = (DateTime.UtcNow.AddMinutes(5), parsed);
+                        if (_cache.Count > 60) _cache.Clear();
+                        _cache[query] = (DateTime.UtcNow.AddMinutes(5), batch.Items, batch.NextContinuationToken);
                     }
-
-                    int returnCount = Math.Min(maxResults, parsed.Count);
-                    return parsed.GetRange(0, returnCount);
                 }
             }
-            catch
+            catch { }
+
+            return batch;
+        }
+
+        public static async Task<List<PlaylistItem>> SearchAsync(string query, int maxResults = 20, CancellationToken ct = default)
+        {
+            var batch = await SearchBatchAsync(query, null, ct).ConfigureAwait(false);
+            if (batch.Items.Count >= maxResults)
             {
-                return new List<PlaylistItem>();
+                return batch.Items.GetRange(0, maxResults);
             }
+            return batch.Items;
         }
 
         public static List<PlaylistItem> ParseSearchResults(string json, int maxResults = 20)

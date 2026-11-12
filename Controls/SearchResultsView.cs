@@ -52,22 +52,31 @@ namespace KahoiiMusic.Controls
         }
 
         private bool _isLoading = false;
+        private string _nextContinuationToken = null;
+        private bool _isLoadingMore = false;
+
+        public string CurrentQuery => _query;
+        public event EventHandler<string> LoadMoreRequested;
 
         public void ShowLoading(string query)
         {
             _query = query ?? string.Empty;
             _items = new List<PlaylistItem>();
             _isLoading = true;
+            _isLoadingMore = false;
+            _nextContinuationToken = null;
             _scrollOffset = 0;
             _hoveredIndex = -1;
             Invalidate();
         }
 
-        public void SetResults(string query, List<PlaylistItem> items)
+        public void SetResults(string query, List<PlaylistItem> items, string nextContinuationToken = null)
         {
             _isLoading = false;
+            _isLoadingMore = false;
             _query = query ?? string.Empty;
             _items = items ?? new List<PlaylistItem>();
+            _nextContinuationToken = nextContinuationToken;
             _scrollOffset = 0;
             _hoveredIndex = -1;
 
@@ -85,6 +94,46 @@ namespace KahoiiMusic.Controls
             }
 
             Invalidate();
+        }
+
+        public void AppendResults(List<PlaylistItem> newItems, string nextContinuationToken = null)
+        {
+            _isLoadingMore = false;
+            _nextContinuationToken = nextContinuationToken;
+
+            if (newItems != null && newItems.Count > 0)
+            {
+                foreach (var it in newItems)
+                {
+                    if (it != null && !string.IsNullOrEmpty(it.Id) && !_items.Exists(x => string.Equals(x.Id, it.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        _items.Add(it);
+                    }
+                }
+            }
+
+            UpdateScrollBounds();
+            Invalidate();
+        }
+
+        public void SetNoMoreResults()
+        {
+            _isLoadingMore = false;
+            _nextContinuationToken = null;
+            Invalidate();
+        }
+
+        private void CheckTriggerLoadMore()
+        {
+            if (!_isLoading && !_isLoadingMore && !string.IsNullOrEmpty(_nextContinuationToken))
+            {
+                if (_scrollOffset >= _maxScroll - (ActualItemRowHeight * 4))
+                {
+                    _isLoadingMore = true;
+                    Invalidate();
+                    LoadMoreRequested?.Invoke(this, _nextContinuationToken);
+                }
+            }
         }
 
         private void RequestThumbnail(string videoId)
@@ -175,7 +224,8 @@ namespace KahoiiMusic.Controls
         private void UpdateScrollBounds()
         {
             int listStartY = ActualTopHeaderHeight + (_items.Count > 0 ? ActualHeroCardHeight + 12 : 0);
-            int totalContentHeight = listStartY + (_items.Count * ActualItemRowHeight) + 24;
+            int bottomExtra = (!string.IsNullOrEmpty(_nextContinuationToken) || _isLoadingMore) ? 64 : 24;
+            int totalContentHeight = listStartY + (_items.Count * ActualItemRowHeight) + bottomExtra;
             _maxScroll = Math.Max(0, totalContentHeight - Height);
             _scrollOffset = Math.Max(0, Math.Min(_scrollOffset, _maxScroll));
         }
@@ -194,6 +244,7 @@ namespace KahoiiMusic.Controls
             {
                 int delta = (e.Delta / 120) * -(ActualItemRowHeight * 2);
                 _scrollOffset = Math.Max(0, Math.Min(_maxScroll, _scrollOffset + delta));
+                CheckTriggerLoadMore();
                 Invalidate();
             }
         }
@@ -209,6 +260,7 @@ namespace KahoiiMusic.Controls
                 int deltaY = e.Y - _dragStartY;
                 float scrollRatio = (float)deltaY / availTravel;
                 _scrollOffset = Math.Max(0, Math.Min(_maxScroll, _dragStartScroll + (int)(scrollRatio * _maxScroll)));
+                CheckTriggerLoadMore();
                 Invalidate();
                 return;
             }
@@ -597,6 +649,35 @@ namespace KahoiiMusic.Controls
                 }
 
                 curY += ActualItemRowHeight;
+            }
+
+            // Bottom loading / more status
+            if (_isLoadingMore)
+            {
+                using (Font moreFont = new Font("Segoe UI", IsLarge ? 10.5f : 8.5f, FontStyle.Bold))
+                using (SolidBrush moreBrush = new SolidBrush(Color.FromArgb(255, 45, 133)))
+                {
+                    StringFormat msf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("⚡ Đang tải thêm bài hát từ YouTube...", moreFont, moreBrush, new RectangleF(0, curY + 6, Width, 36), msf);
+                }
+            }
+            else if (!string.IsNullOrEmpty(_nextContinuationToken) && _items.Count >= 15)
+            {
+                using (Font moreFont = new Font("Segoe UI", IsLarge ? 9.5f : 8.0f, FontStyle.Regular))
+                using (SolidBrush moreBrush = new SolidBrush(Color.FromArgb(140, 130, 165)))
+                {
+                    StringFormat msf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("⤓ Cuộn xuống để tải thêm kết quả...", moreFont, moreBrush, new RectangleF(0, curY + 6, Width, 30), msf);
+                }
+            }
+            else if (_items.Count >= 25)
+            {
+                using (Font endFont = new Font("Segoe UI", IsLarge ? 9.0f : 8.0f, FontStyle.Regular))
+                using (SolidBrush endBrush = new SolidBrush(Color.FromArgb(100, 90, 120)))
+                {
+                    StringFormat esf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("— Đã hiển thị tất cả kết quả tìm kiếm —", endFont, endBrush, new RectangleF(0, curY + 6, Width, 30), esf);
+                }
             }
 
             g.ResetClip();
