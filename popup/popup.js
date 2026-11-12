@@ -73,6 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ================= INITIALIZATION ================= //
   checkSession();
+  fetchLatestPcInstaller();
 
   function checkSession() {
     chrome.runtime.sendMessage({ action: "GET_SESSION" }, (res) => {
@@ -1004,8 +1005,31 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ================= MODAL: DOWNLOAD APPS ================= //
+  function fetchLatestPcInstaller() {
+    try {
+      fetch("https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/version.json?t=" + Date.now())
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && data.installerUrl) {
+            const linkPc = document.getElementById("link-download-pc");
+            if (linkPc) {
+              linkPc.href = data.installerUrl;
+              if (data.versionName) {
+                const desc = linkPc.querySelector(".item-desc");
+                if (desc) {
+                  desc.textContent = `Phiên bản v${data.versionName} • Bộ cài đặt (.exe) cho Windows`;
+                }
+              }
+            }
+          }
+        })
+        .catch(() => {});
+    } catch { }
+  }
+
   function openDownloadModal() {
     if (modalDownload) modalDownload.classList.remove("hidden");
+    fetchLatestPcInstaller();
   }
 
   function closeDownloadModal() {
