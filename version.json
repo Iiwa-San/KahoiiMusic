@@ -1,8 +1,8 @@
 {
-  "versionCode": 28,
-  "versionName": "1.0.28",
-  "changelog": "• Khắc phục triệt để lỗi số thứ tự bài hát (10, 11, 12...) và thời lượng dài bị xuống dòng trên màn hình Windows tỉ lệ phóng to (DPI Scale 125%, 150%)\n• Sửa lỗi tên nghệ sĩ không hiển thị ngay ở danh sách và lịch sử: tự động phân giải nghệ sĩ ngầm và trích xuất dự phòng tức thì không cần click vào bài\n• Đồng bộ bố cục hàng danh sách phát và menu mini app mượt mà và chuẩn xác ở mọi tỉ lệ hiển thị",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.28.exe",
+  "versionCode": 29,
+  "versionName": "1.0.29",
+  "changelog": "• Khắc phục sự cố chuyển thiết bị đầu ra / tai nghe Bluetooth bị đơ nhạc nhờ cơ chế phục hồi IMMNotificationClient tự động\n• Chuẩn hóa độ trễ lời bài hát (lyrics offset delay) về 0ms tiêu chuẩn\n• Sửa lỗi phóng to trên màn hình phụ dọc (1080x1920) bị biến mất thông qua WM_GETMINMAXINFO chuẩn xác\n• Tối ưu hiển thị màn hình dọc: kéo dài 2 cột danh sách phát và menu sâu xuống dưới\n• Bảo vệ Tab Danh sách phát và nút Playlist không bị ghi đè khi phát Bộ sưu tập, Đã tải, Lịch sử hay chuyển đổi giữa mini app và phóng to\n• Cập nhật kích thước và bố cục trang kết quả tìm kiếm tức thì khi chuyển đổi giữa dạng mini và phóng to",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.29.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {

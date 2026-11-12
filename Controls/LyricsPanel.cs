@@ -32,7 +32,7 @@ namespace KahoiiMusic.Controls
         private bool _isReloadBtnHovered = false;
 
         private RomanizationDisplayMode _romanizationMode = RomanizationDisplayMode.Dual;
-        private int _delayOffsetMs = 220;
+        private int _delayOffsetMs = 0; // 0ms standard exact synchronization
         private Rectangle _romaziBtnRect = Rectangle.Empty;
         private Rectangle _reloadBtnRect = Rectangle.Empty;
         private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
@@ -135,7 +135,7 @@ namespace KahoiiMusic.Controls
         }
 
         [Category("Behavior")]
-        [DefaultValue(220)]
+        [DefaultValue(0)]
         public int DelayOffsetMs
         {
             get { return _delayOffsetMs; }

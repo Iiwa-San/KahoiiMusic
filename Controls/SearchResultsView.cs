@@ -31,7 +31,22 @@ namespace KahoiiMusic.Controls
         private int _dragStartScroll = 0;
         private Rectangle _scrollBarThumbRect;
 
-        private bool IsLarge => Width >= 900;
+        private bool _isMaximizedMode = false;
+        public bool IsMaximizedMode
+        {
+            get => _isMaximizedMode;
+            set
+            {
+                if (_isMaximizedMode != value)
+                {
+                    _isMaximizedMode = value;
+                    UpdateScrollBounds();
+                    Invalidate();
+                }
+            }
+        }
+
+        private bool IsLarge => _isMaximizedMode || Width >= 800;
         private int ActualTopHeaderHeight => IsLarge ? 54 : 44;
         private int ActualHeroCardHeight => IsLarge ? 120 : 84;
         private int ActualItemRowHeight => IsLarge ? 64 : 42;
@@ -39,15 +54,13 @@ namespace KahoiiMusic.Controls
         public event EventHandler<PlaylistItem> TrackPlaySelected;
         public event EventHandler<PlaylistItem> TrackAddSelected;
         public event EventHandler CloseRequested;
-        private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
+        private KahoiiMusic.Services.DynamicThemePalette _customTheme = null;
+        private KahoiiMusic.Services.DynamicThemePalette _theme => _customTheme ?? KahoiiMusic.Services.ColorExtractorService.CurrentTheme ?? KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
 
         public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
         {
-            if (theme != null)
-            {
-                _theme = theme;
-                Invalidate();
-            }
+            _customTheme = theme;
+            Invalidate();
         }
 
         public SearchResultsView()

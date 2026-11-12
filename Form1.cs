@@ -149,10 +149,9 @@ namespace KahoiiMusic
 
             Shown += (s, e) =>
             {
+                EnsureWindowIsOnScreen();
                 if (HistoryService.IsMaximizedMode && WindowState != FormWindowState.Maximized)
                 {
-                    Screen scr = Screen.FromHandle(Handle);
-                    MaximizedBounds = scr.WorkingArea;
                     WindowState = FormWindowState.Maximized;
                     _lastNonMinimizedState = FormWindowState.Maximized;
                     _wasMaximizedBeforeMinimize = true;
@@ -259,7 +258,17 @@ namespace KahoiiMusic
             {
                 if (item != null)
                 {
-                    _audioPlayer?.LoadAndPlay(item.Url);
+                    var pl = _audioPlayer?.Playlist;
+                    if (pl != null)
+                    {
+                        int idx = pl.FindIndex(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase));
+                        if (idx >= 0 && idx < pl.Count)
+                        {
+                            _audioPlayer.PlayTrackAtIndex(idx);
+                            return;
+                        }
+                    }
+                    _audioPlayer?.LoadAndPlay(item.Url, preserveQueueSource: true);
                 }
             };
             gradientPanel.Controls.Add(_activeQueuePanel);
@@ -895,17 +904,27 @@ namespace KahoiiMusic
 
             _audioPlayer.PlaylistLoaded += (s, list) =>
             {
-                bool hasList = (list != null && list.Count > 0);
-                btnPlaylist.HasPlaylist = hasList;
-                if (hasList)
+                // Tab 0 ("Danh sách phát") of playlistPopup strictly mirrors _sessionPlaylist (imported playlist/queue).
+                // Playing collections, favorites, saved tracks, or history goes to ActiveQueuePanel ("Hàng đợi") and must NOT hijack Tab 0!
+                var sessionList = _audioPlayer.SessionPlaylist;
+                bool hasSessionList = (sessionList != null && sessionList.Count > 0);
+                btnPlaylist.HasPlaylist = hasSessionList;
+
+                if (hasSessionList)
                 {
-                    playlistPopup.SetPlaylist(list, _audioPlayer.CurrentPlaylistIndex);
+                    int curIdx = (_audioPlayer.CurrentQueueSource == ActiveQueueSource.Playlist)
+                        ? _audioPlayer.CurrentPlaylistIndex
+                        : sessionList.FindIndex(x => string.Equals(x.Id, _audioPlayer.CurrentVideoId, StringComparison.OrdinalIgnoreCase));
+                    playlistPopup.SetPlaylist(sessionList, curIdx);
                 }
                 else
                 {
-                    btnPlaylist.IsOpen = false;
                     playlistPopup.Clear();
-                    playlistPopup.Hide();
+                    if (_audioPlayer.CurrentQueueSource == ActiveQueueSource.Playlist && playlistPopup.ActiveTab == KahoiiMusic.Controls.MenuTab.Playlist)
+                    {
+                        btnPlaylist.IsOpen = false;
+                        playlistPopup.Hide();
+                    }
                 }
             };
 
@@ -1054,7 +1073,9 @@ namespace KahoiiMusic
             };
 
             _searchResultsView = new Controls.SearchResultsView();
-            _searchResultsView.Dock = DockStyle.Fill;
+            _searchResultsView.Dock = DockStyle.None;
+            _searchResultsView.Location = Point.Empty;
+            _searchResultsView.Size = gradientPanel.ClientSize;
             _searchResultsView.Visible = false;
             _searchResultsView.TrackPlaySelected += (s, item) =>
             {
@@ -1095,6 +1116,14 @@ namespace KahoiiMusic
                 }
             };
             gradientPanel.Controls.Add(_searchResultsView);
+            gradientPanel.Resize += (s, e) =>
+            {
+                if (_searchResultsView != null)
+                {
+                    _searchResultsView.Location = Point.Empty;
+                    _searchResultsView.Size = gradientPanel.ClientSize;
+                }
+            };
         }
 
         private void PlayTrackItem(PlaylistItem item)
@@ -1115,12 +1144,21 @@ namespace KahoiiMusic
         {
             if (string.IsNullOrWhiteSpace(query)) return;
             if (searchPillBox != null && searchPillBox.Text != query) searchPillBox.Text = query;
-            _searchResultsView.BringToFront();
-            _searchResultsView.Visible = true;
-            _searchResultsView.ShowLoading(query);
+            if (_searchResultsView != null)
+            {
+                _searchResultsView.Location = Point.Empty;
+                _searchResultsView.Size = gradientPanel.ClientSize;
+                _searchResultsView.IsMaximizedMode = _isMaximizedMode;
+                _searchResultsView.BringToFront();
+                _searchResultsView.Visible = true;
+                _searchResultsView.ShowLoading(query);
+            }
             var batch = await Services.YouTubeSearchService.SearchBatchAsync(query);
-            _searchResultsView.SetResults(query, batch.Items, batch.NextContinuationToken);
-            _searchResultsView.BringToFront();
+            if (_searchResultsView != null)
+            {
+                _searchResultsView.SetResults(query, batch.Items, batch.NextContinuationToken);
+                _searchResultsView.BringToFront();
+            }
         }
 
         private bool _isMaximizedDragTracking = false;
@@ -1162,7 +1200,8 @@ namespace KahoiiMusic
                         if (dx > 4 || dy > 4)
                         {
                             _isMaximizedDragTracking = false;
-                            float ratio = (float)_maximizedDragStartPos.X / Math.Max(1, Width);
+                            Point clientStart = PointToClient(_maximizedDragStartPos);
+                            float ratio = Math.Max(0.05f, Math.Min(0.95f, (float)clientStart.X / Math.Max(1, Width)));
                             WindowState = FormWindowState.Normal;
                             if (btnMaximize != null) btnMaximize.Invalidate();
 
@@ -2705,10 +2744,9 @@ namespace KahoiiMusic
                 bool shouldBeMaximized = _wasMaximizedBeforeMinimize || HistoryService.IsMaximizedMode;
 
                 Show();
+                EnsureWindowIsOnScreen();
                 if (shouldBeMaximized)
                 {
-                    Screen scr = Screen.FromHandle(Handle);
-                    MaximizedBounds = scr.WorkingArea;
                     WindowState = FormWindowState.Maximized;
                     _lastNonMinimizedState = FormWindowState.Maximized;
                     _wasMaximizedBeforeMinimize = true;
@@ -3399,8 +3437,6 @@ namespace KahoiiMusic
             }
             else
             {
-                Screen scr = Screen.FromHandle(Handle);
-                MaximizedBounds = scr.WorkingArea;
                 WindowState = FormWindowState.Maximized;
                 _lastNonMinimizedState = FormWindowState.Maximized;
                 _wasMaximizedBeforeMinimize = true;
@@ -3466,6 +3502,99 @@ namespace KahoiiMusic
             public int Bottom;
         }
 
+        private const int WM_GETMINMAXINFO = 0x0024;
+        private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO mi);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int x;
+            public int y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MINMAXINFO
+        {
+            public POINT ptReserved;
+            public POINT ptMaxSize;
+            public POINT ptMaxPosition;
+            public POINT ptMinTrackSize;
+            public POINT ptMaxTrackSize;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct MONITORINFO
+        {
+            public int cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public int dwFlags;
+        }
+
+        private void EnsureWindowIsOnScreen()
+        {
+            try
+            {
+                Rectangle formRect = new Rectangle(Location, Size);
+                bool intersects = false;
+                foreach (Screen s in Screen.AllScreens)
+                {
+                    if (s.WorkingArea.IntersectsWith(formRect))
+                    {
+                        intersects = true;
+                        break;
+                    }
+                }
+
+                if (!intersects)
+                {
+                    Screen scr = Screen.PrimaryScreen;
+                    Location = new Point(scr.WorkingArea.X + (scr.WorkingArea.Width - Width) / 2,
+                                         scr.WorkingArea.Y + (scr.WorkingArea.Height - Height) / 2);
+                }
+            }
+            catch { }
+        }
+
+        private void WmGetMinMaxInfo(IntPtr hWnd, IntPtr lParam)
+        {
+            try
+            {
+                MINMAXINFO mmi = (MINMAXINFO)Marshal.PtrToStructure(lParam, typeof(MINMAXINFO));
+
+                IntPtr hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+                if (hMonitor != IntPtr.Zero)
+                {
+                    MONITORINFO mi = new MONITORINFO();
+                    mi.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+                    if (GetMonitorInfo(hMonitor, ref mi))
+                    {
+                        RECT rcWork = mi.rcWork;
+                        RECT rcMonitor = mi.rcMonitor;
+
+                        mmi.ptMaxPosition.x = Math.Abs(rcWork.Left - rcMonitor.Left);
+                        mmi.ptMaxPosition.y = Math.Abs(rcWork.Top - rcMonitor.Top);
+                        mmi.ptMaxSize.x = Math.Abs(rcWork.Right - rcWork.Left);
+                        mmi.ptMaxSize.y = Math.Abs(rcWork.Bottom - rcWork.Top);
+                        mmi.ptMaxTrackSize.x = mmi.ptMaxSize.x;
+                        mmi.ptMaxTrackSize.y = mmi.ptMaxSize.y;
+                    }
+                }
+
+                mmi.ptMinTrackSize.x = 480;
+                mmi.ptMinTrackSize.y = 362;
+
+                Marshal.StructureToPtr(mmi, lParam, true);
+            }
+            catch { }
+        }
+
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private static readonly IntPtr _darkBrush = CreateSolidBrush(ColorTranslator.ToWin32(Color.FromArgb(20, 16, 38)));
@@ -3527,6 +3656,18 @@ namespace KahoiiMusic
 
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == WM_GETMINMAXINFO)
+            {
+                WmGetMinMaxInfo(m.HWnd, m.LParam);
+                m.Result = IntPtr.Zero;
+                return;
+            }
+
+            if (m.Msg == 0x0219) // WM_DEVICECHANGE
+            {
+                _audioPlayer?.NotifyDeviceChanged();
+            }
+
             if (m.Msg == WM_ENTERSIZEMOVE)
             {
                 _isUserResizing = true;
@@ -3666,6 +3807,19 @@ namespace KahoiiMusic
                     Point dropPt = panelTopBar.PointToScreen(new Point(searchPillBox.Left, searchPillBox.Bottom + 4));
                     _searchDropdown.Location = dropPt;
                     _searchDropdown.Width = searchPillBox.Width;
+                }
+
+                // Update Search Results View bounds and mode
+                if (_searchResultsView != null)
+                {
+                    _searchResultsView.Location = Point.Empty;
+                    _searchResultsView.Size = gradientPanel.ClientSize;
+                    _searchResultsView.IsMaximizedMode = (WindowState == FormWindowState.Maximized || clientW >= 800);
+                    if (_searchResultsView.Visible)
+                    {
+                        _searchResultsView.BringToFront();
+                        _searchResultsView.Invalidate();
+                    }
                 }
             }
             finally
@@ -3854,8 +4008,18 @@ namespace KahoiiMusic
             int rightW = totalW - rightX - padX;
             int rightAvailH = totalH - padTop - padBottom;
 
-            // Top Card: _topSectionCard (~33% of vertical space, matching Image 1!)
-            int topH = Math.Max(165, (int)(rightAvailH * 0.33f));
+            // In portrait orientation (e.g. 1080x1920), keep top player card compact (~180px)
+            // so both list sessions (_sideMenuPanel on the left & _activeQueuePanel on the right) stretch deeply downward!
+            bool isPortrait = totalH > totalW;
+            int topH;
+            if (isPortrait)
+            {
+                topH = Math.Max(165, Math.Min(190, (int)(rightAvailH * 0.15f)));
+            }
+            else
+            {
+                topH = Math.Max(165, Math.Min(250, (int)(rightAvailH * 0.33f)));
+            }
             if (_topSectionCard != null)
             {
                 _topSectionCard.Location = new Point(rightX, padTop);
@@ -4032,9 +4196,16 @@ namespace KahoiiMusic
                 _activeQueuePanel.RefreshData();
             }
 
-            if (_searchResultsView != null && _searchResultsView.Visible)
+            if (_searchResultsView != null)
             {
-                _searchResultsView.BringToFront();
+                _searchResultsView.Location = Point.Empty;
+                _searchResultsView.Size = gradientPanel.ClientSize;
+                _searchResultsView.IsMaximizedMode = true;
+                if (_searchResultsView.Visible)
+                {
+                    _searchResultsView.BringToFront();
+                    _searchResultsView.Invalidate();
+                }
             }
         }
 
@@ -4254,6 +4425,18 @@ namespace KahoiiMusic
 
             // VolumePopup position above btnVolume
             UpdateVolumePopupPosition();
+
+            if (_searchResultsView != null)
+            {
+                _searchResultsView.Location = Point.Empty;
+                _searchResultsView.Size = gradientPanel.ClientSize;
+                _searchResultsView.IsMaximizedMode = false;
+                if (_searchResultsView.Visible)
+                {
+                    _searchResultsView.BringToFront();
+                    _searchResultsView.Invalidate();
+                }
+            }
         }
 
         private void UpdateVolumePopupPosition()

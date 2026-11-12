@@ -19,6 +19,7 @@ using System.Threading;
 using NAudio.Wave;
 
 using NAudio.CoreAudioApi;
+using NAudio.CoreAudioApi.Interfaces;
 
 using KahoiiMusic.Models;
 
@@ -59,6 +60,13 @@ namespace KahoiiMusic.Services
         private ManagedAudioStream _managedStream;
 
         private IWavePlayer _outputDevice;
+
+        private MMDeviceEnumerator _deviceEnumerator;
+        private AudioEndpointNotifier _endpointNotifier;
+        private volatile bool _isRecoveringDevice = false;
+        private readonly object _deviceRecoveryLock = new object();
+        private bool _isDisposed = false;
+        private volatile bool _isPlaying = false;
 
         private SynchronizationContext _syncContext;
 
@@ -389,6 +397,22 @@ namespace KahoiiMusic.Services
 
             ClearAudioCache();
 
+            InitializeDeviceNotifier();
+
+        }
+
+        private void InitializeDeviceNotifier()
+        {
+            try
+            {
+                _deviceEnumerator = new MMDeviceEnumerator();
+                _endpointNotifier = new AudioEndpointNotifier(this);
+                _deviceEnumerator.RegisterEndpointNotificationCallback(_endpointNotifier);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Failed to register audio endpoint notification: " + ex.Message);
+            }
         }
 
         public HashSet<string> GetProtectedTrackIdSet()
@@ -1163,6 +1187,7 @@ namespace KahoiiMusic.Services
 
                         }
 
+                        _isPlaying = true;
                         _outputDevice.Play();
 
                         RaisePlaybackStateChanged();
@@ -1193,6 +1218,7 @@ namespace KahoiiMusic.Services
 
                 {
 
+                    _isPlaying = false;
                     if (_outputDevice != null)
 
                     {
@@ -3411,32 +3437,11 @@ namespace KahoiiMusic.Services
 
                                 _managedStream = new ManagedAudioStream(_audioReader, this, clusters);
 
-                                try
+                                InitializeOutputDevice(_managedStream);
+                                if (_outputDevice != null)
                                 {
-                                    _outputDevice = new WasapiOut(AudioClientShareMode.Shared, 200);
-                                    _outputDevice.PlaybackStopped += OutputDevice_PlaybackStopped;
-                                    _outputDevice.Init(_managedStream);
+                                    _outputDevice.Play();
                                 }
-                                catch (Exception wasapiEx)
-                                {
-                                    Debug.WriteLine("WASAPI init failed, falling back to WaveOutEvent: " + wasapiEx.Message);
-                                    if (_outputDevice != null)
-                                    {
-                                        try { _outputDevice.Dispose(); } catch { }
-                                        _outputDevice = null;
-                                    }
-                                    var waveOut = new WaveOutEvent
-                                    {
-                                        DeviceNumber = -1,
-                                        DesiredLatency = 300,
-                                        NumberOfBuffers = 3
-                                    };
-                                    waveOut.PlaybackStopped += OutputDevice_PlaybackStopped;
-                                    waveOut.Init(_managedStream);
-                                    _outputDevice = waveOut;
-                                }
-
-                                _outputDevice.Play();
 
                             }
 
@@ -3764,6 +3769,155 @@ namespace KahoiiMusic.Services
 
         }
 
+        private bool InitializeOutputDevice(WaveStream stream)
+        {
+            if (stream == null) return false;
+            lock (_lock)
+            {
+                if (_outputDevice != null)
+                {
+                    try
+                    {
+                        _outputDevice.PlaybackStopped -= OutputDevice_PlaybackStopped;
+                        _outputDevice.Stop();
+                        _outputDevice.Dispose();
+                    }
+                    catch { }
+                    _outputDevice = null;
+                }
+
+                try
+                {
+                    var wasapi = new WasapiOut(AudioClientShareMode.Shared, 200);
+                    wasapi.PlaybackStopped += OutputDevice_PlaybackStopped;
+                    wasapi.Init(stream);
+                    _outputDevice = wasapi;
+                    return true;
+                }
+                catch (Exception wasapiEx)
+                {
+                    Debug.WriteLine("WASAPI init failed, falling back to WaveOutEvent: " + wasapiEx.Message);
+                    if (_outputDevice != null)
+                    {
+                        try { _outputDevice.Dispose(); } catch { }
+                        _outputDevice = null;
+                    }
+
+                    try
+                    {
+                        var waveOut = new WaveOutEvent
+                        {
+                            DeviceNumber = -1,
+                            DesiredLatency = 300,
+                            NumberOfBuffers = 3
+                        };
+                        waveOut.PlaybackStopped += OutputDevice_PlaybackStopped;
+                        waveOut.Init(stream);
+                        _outputDevice = waveOut;
+                        return true;
+                    }
+                    catch (Exception waveEx)
+                    {
+                        Debug.WriteLine("WaveOut init also failed: " + waveEx.Message);
+                        return false;
+                    }
+                }
+            }
+        }
+
+        public void NotifyDeviceChanged()
+        {
+            RecoverAudioDeviceAsync();
+        }
+
+        private async void RecoverAudioDeviceAsync()
+        {
+            if (_isDisposed) return;
+            if (_managedStream == null && _audioReader == null) return;
+
+            lock (_deviceRecoveryLock)
+            {
+                if (_isRecoveringDevice) return;
+                _isRecoveringDevice = true;
+            }
+
+            try
+            {
+                bool wasPlaying = _isPlaying || (_outputDevice != null && _outputDevice.PlaybackState == PlaybackState.Playing);
+                TimeSpan resumePos = Position;
+
+                // 1. Dispose old dead device
+                lock (_lock)
+                {
+                    if (_outputDevice != null)
+                    {
+                        try
+                        {
+                            _outputDevice.PlaybackStopped -= OutputDevice_PlaybackStopped;
+                            _outputDevice.Stop();
+                            _outputDevice.Dispose();
+                        }
+                        catch { }
+                        _outputDevice = null;
+                    }
+                }
+
+                // 2. Wait for Windows audio driver / Bluetooth stack to finish negotiation
+                await System.Threading.Tasks.Task.Delay(300).ConfigureAwait(false);
+
+                // 3. Re-initialize output device with retry for Bluetooth latency
+                bool success = false;
+                for (int attempt = 0; attempt < 4 && !success; attempt++)
+                {
+                    try
+                    {
+                        WaveStream stream = (WaveStream)_managedStream ?? _audioReader;
+                        if (stream == null) break;
+
+                        if (InitializeOutputDevice(stream))
+                        {
+                            success = true;
+                            if (wasPlaying && _outputDevice != null)
+                            {
+                                Position = resumePos;
+                                _outputDevice.Play();
+                                _isPlaying = true;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("Audio recovery attempt " + attempt + " failed: " + ex.Message);
+                    }
+
+                    if (!success)
+                    {
+                        await System.Threading.Tasks.Task.Delay(400).ConfigureAwait(false);
+                    }
+                }
+
+                _syncContext.Post(delegate
+                {
+                    RaisePlaybackStateChanged();
+                    if (success)
+                    {
+                        RaiseStatus("✓ Đã chuyển thiết bị âm thanh");
+                    }
+                }, null);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("RecoverAudioDeviceAsync error: " + ex.Message);
+            }
+            finally
+            {
+                lock (_deviceRecoveryLock)
+                {
+                    _isRecoveringDevice = false;
+                }
+            }
+        }
+
         private void OutputDevice_PlaybackStopped(object sender, StoppedEventArgs e)
 
         {
@@ -3809,6 +3963,13 @@ namespace KahoiiMusic.Services
                 }
 
                 RaisePlaybackStateChanged();
+
+                if (!naturallyEnded && (e.Exception != null || _isPlaying))
+                {
+                    Debug.WriteLine("Audio playback stopped prematurely: " + (e.Exception != null ? e.Exception.Message : "Device switched"));
+                    RecoverAudioDeviceAsync();
+                    return;
+                }
 
                 if (naturallyEnded)
                 {
@@ -3867,7 +4028,7 @@ namespace KahoiiMusic.Services
         private void CleanupCurrentTrack()
 
         {
-
+            _isPlaying = false;
             if (_outputDevice != null)
 
             {
@@ -4352,6 +4513,15 @@ namespace KahoiiMusic.Services
         public void Dispose()
 
         {
+
+            _isDisposed = true;
+            if (_deviceEnumerator != null && _endpointNotifier != null)
+            {
+                try { _deviceEnumerator.UnregisterEndpointNotificationCallback(_endpointNotifier); } catch { }
+                try { _deviceEnumerator.Dispose(); } catch { }
+                _deviceEnumerator = null;
+                _endpointNotifier = null;
+            }
 
             CancelActiveDownload();
 
@@ -5130,6 +5300,36 @@ namespace KahoiiMusic.Services
 
         }
 
+    }
+
+    internal class AudioEndpointNotifier : IMMNotificationClient
+    {
+        private readonly AudioPlayerService _service;
+
+        public AudioEndpointNotifier(AudioPlayerService service)
+        {
+            _service = service;
+        }
+
+        public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
+        {
+            if (flow == DataFlow.Render && (role == Role.Multimedia || role == Role.Console))
+            {
+                _service?.NotifyDeviceChanged();
+            }
+        }
+
+        public void OnDeviceStateChanged(string deviceId, DeviceState newState)
+        {
+            if (newState == DeviceState.Active || newState == DeviceState.Disabled || newState == DeviceState.Unplugged)
+            {
+                _service?.NotifyDeviceChanged();
+            }
+        }
+
+        public void OnDeviceAdded(string pwstrDeviceId) { }
+        public void OnDeviceRemoved(string pwstrDeviceId) { }
+        public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }
     }
 
 }

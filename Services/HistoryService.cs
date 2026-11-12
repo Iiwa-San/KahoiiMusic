@@ -48,11 +48,19 @@ namespace KahoiiMusic.Services
 
         public static int LyricsDelayOffsetMs
         {
-            get { lock (_lock) { return _lyricsDelayOffsetMs; } }
+            get
+            {
+                lock (_lock)
+                {
+                    if (!_initialized) Init();
+                    return _lyricsDelayOffsetMs;
+                }
+            }
             set
             {
                 lock (_lock)
                 {
+                    if (!_initialized) Init();
                     if (_lyricsDelayOffsetMs != value)
                     {
                         _lyricsDelayOffsetMs = value;
@@ -297,7 +305,6 @@ namespace KahoiiMusic.Services
                     {
                         Id = item.Id,
                         Title = item.Title,
-                        Author = item.Author ?? string.Empty,
                         DurationSeconds = item.DurationSeconds
                     });
                     changed = true;
@@ -332,11 +339,6 @@ namespace KahoiiMusic.Services
                     if (!string.IsNullOrWhiteSpace(item.Title) && item.Title != "None" && item.Title != "NA" && !item.Title.StartsWith("Bài ") && match.Title != item.Title)
                     {
                         match.Title = item.Title;
-                        changed = true;
-                    }
-                    if (!string.IsNullOrWhiteSpace(item.Author) && match.Author != item.Author)
-                    {
-                        match.Author = item.Author;
                         changed = true;
                     }
                     if (item.DurationSeconds > 0 && match.DurationSeconds != item.DurationSeconds)
@@ -738,74 +740,8 @@ namespace KahoiiMusic.Services
                         });
                     }
                 }
-                ResolveMissingAuthorsInBackground();
             }
             catch { }
-        }
-
-        public static void ResolveMissingAuthorsInBackground()
-        {
-            System.Threading.ThreadPool.QueueUserWorkItem(delegate
-            {
-                List<string> missingIds = new List<string>();
-                lock (_lock)
-                {
-                    foreach (var h in _history)
-                    {
-                        if (string.IsNullOrWhiteSpace(h.Author) && !string.IsNullOrEmpty(h.Id))
-                        {
-                            missingIds.Add(h.Id);
-                        }
-                    }
-                }
-
-                if (missingIds.Count == 0) return;
-
-                bool anyResolved = false;
-                using (System.Net.WebClient wc = new System.Net.WebClient())
-                {
-                    wc.Encoding = Encoding.UTF8;
-                    wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-
-                    foreach (var id in missingIds)
-                    {
-                        try
-                        {
-                            string resolvedAuthor = SavedTracksService.Instance.GetTrackAuthor(id);
-                            if (string.IsNullOrWhiteSpace(resolvedAuthor))
-                            {
-                                string url = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + id + "&format=json";
-                                string json = wc.DownloadString(url);
-                                Match mAuthor = Regex.Match(json, @"""author_name""\s*:\s*""([^""]+)""");
-                                if (mAuthor.Success)
-                                {
-                                    resolvedAuthor = AudioPlayerService.CleanAuthor(Regex.Unescape(mAuthor.Groups[1].Value));
-                                }
-                            }
-
-                            if (!string.IsNullOrWhiteSpace(resolvedAuthor))
-                            {
-                                lock (_lock)
-                                {
-                                    var match = _history.Find(x => x.Id == id);
-                                    if (match != null && string.IsNullOrWhiteSpace(match.Author))
-                                    {
-                                        match.Author = resolvedAuthor;
-                                        anyResolved = true;
-                                    }
-                                }
-                            }
-                        }
-                        catch { }
-                    }
-                }
-
-                if (anyResolved)
-                {
-                    lock (_lock) { SaveHistory(); }
-                    HistoryChanged?.Invoke(null, EventArgs.Empty);
-                }
-            });
         }
 
         private static void LoadDeletedHistory()
