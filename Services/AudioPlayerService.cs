@@ -2091,6 +2091,9 @@ namespace KahoiiMusic.Services
             // Bắt đầu phát bài hiện tại qua PlayTrackAtIndex để bảo toàn thứ tự danh sách phát
             PlayTrackAtIndex(startIdx);
 
+            // Tự động phân giải thời lượng cho toàn bộ bài hát trong danh sách còn thiếu
+            ResolveMissingTrackDurationsAsync(null, null);
+
             // Nạp ngầm tiêu đề cho các bài trong danh sách
             ThreadPool.QueueUserWorkItem(delegate
             {
@@ -2202,7 +2205,7 @@ namespace KahoiiMusic.Services
 
         public void ResolveMissingTrackDurationsAsync(string listId, string playlistUrl = null)
         {
-            if (string.IsNullOrEmpty(listId) && string.IsNullOrEmpty(playlistUrl)) return;
+            if (string.IsNullOrEmpty(listId) && string.IsNullOrEmpty(playlistUrl) && (_sessionPlaylist == null || !_sessionPlaylist.Exists(x => x.DurationSeconds <= 0))) return;
             ThreadPool.QueueUserWorkItem(delegate
             {
                 try
@@ -2268,6 +2271,8 @@ namespace KahoiiMusic.Services
                                                 if (item.DurationSeconds <= 0 && dur > 0)
                                                 {
                                                     item.DurationSeconds = dur;
+                                                    HistoryService.UpdateDuration(vid, dur);
+                                                    SavedTracksService.Instance.UpdateDuration(vid, dur);
                                                     anyUpdated = true;
                                                 }
                                                 bool isPlaceholder = string.IsNullOrWhiteSpace(item.Title) ||
@@ -2319,66 +2324,138 @@ namespace KahoiiMusic.Services
                     {
                         targetUrl = "https://www.youtube.com/playlist?list=" + listId;
                     }
-                    if (string.IsNullOrEmpty(targetUrl) && !string.IsNullOrEmpty(listId))
-                    {
-                        targetUrl = "https://www.youtube.com/playlist?list=" + listId;
-                    }
 
-                    ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = ytdlpPath;
-                    psi.Arguments = string.Format("--encoding utf-8 --yes-playlist --flat-playlist --print \"%(id)s\t%(duration)s\t%(title)s\t%(uploader)s\" \"{0}\"", targetUrl);
-                    psi.CreateNoWindow = true;
-                    psi.UseShellExecute = false;
-                    psi.RedirectStandardOutput = true;
-                    psi.RedirectStandardError = true;
-                    psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
-                    psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
-
-                    using (Process proc = Process.Start(psi))
+                    if (!string.IsNullOrEmpty(targetUrl) && (targetUrl.Contains("list=PL") || targetUrl.Contains("list=OLAK")))
                     {
-                        string line;
-                        while ((line = proc.StandardOutput.ReadLine()) != null)
+                        ProcessStartInfo psi = new ProcessStartInfo();
+                        psi.FileName = ytdlpPath;
+                        psi.Arguments = string.Format("--encoding utf-8 --yes-playlist --flat-playlist --print \"%(id)s\t%(duration)s\t%(title)s\t%(uploader)s\" \"{0}\"", targetUrl);
+                        psi.CreateNoWindow = true;
+                        psi.UseShellExecute = false;
+                        psi.RedirectStandardOutput = true;
+                        psi.RedirectStandardError = true;
+                        psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
+                        psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+
+                        using (Process proc = Process.Start(psi))
                         {
-                            line = line.Trim();
-                            if (string.IsNullOrEmpty(line)) continue;
-                            string[] parts = line.Split('\t');
-                            if (parts.Length >= 2)
+                            string line;
+                            while ((line = proc.StandardOutput.ReadLine()) != null)
                             {
-                                string id = parts[0].Trim();
-                                int dur = 0;
-                                int.TryParse(parts[1].Trim(), out dur);
-                                string title = parts.Length >= 3 ? parts[2].Trim() : null;
-                                string author = parts.Length >= 4 ? parts[3].Trim() : null;
-
-                                var pl = _sessionPlaylist;
-                                if (pl != null)
+                                line = line.Trim();
+                                if (string.IsNullOrEmpty(line)) continue;
+                                string[] parts = line.Split('\t');
+                                if (parts.Length >= 2)
                                 {
-                                    var item = pl.Find(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
-                                    if (item != null)
+                                    string id = parts[0].Trim();
+                                    int dur = 0;
+                                    int.TryParse(parts[1].Trim(), out dur);
+                                    string title = parts.Length >= 3 ? parts[2].Trim() : null;
+                                    string author = parts.Length >= 4 ? parts[3].Trim() : null;
+
+                                    var pl = _sessionPlaylist;
+                                    if (pl != null)
                                     {
-                                        if (item.DurationSeconds <= 0 && dur > 0)
+                                        var item = pl.Find(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+                                        if (item != null)
                                         {
-                                            item.DurationSeconds = dur;
-                                            anyUpdated = true;
-                                        }
-                                        bool isPlaceholder = string.IsNullOrWhiteSpace(item.Title) ||
-                                                             item.Title.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
-                                                             item.Title.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
-                                        if (isPlaceholder && !string.IsNullOrWhiteSpace(title) && title != "NA" && title != "None")
-                                        {
-                                            item.Title = CleanDisplayTitle(title);
-                                            anyUpdated = true;
-                                        }
-                                        if (string.IsNullOrWhiteSpace(item.Author) && !string.IsNullOrWhiteSpace(author) && author != "NA" && author != "None")
-                                        {
-                                            item.Author = CleanAuthor(author);
-                                            anyUpdated = true;
+                                            if (item.DurationSeconds <= 0 && dur > 0)
+                                            {
+                                                item.DurationSeconds = dur;
+                                                HistoryService.UpdateDuration(id, dur);
+                                                SavedTracksService.Instance.UpdateDuration(id, dur);
+                                                anyUpdated = true;
+                                            }
+                                            bool isPlaceholder = string.IsNullOrWhiteSpace(item.Title) ||
+                                                                 item.Title.StartsWith("Đang nạp", StringComparison.OrdinalIgnoreCase) ||
+                                                                 item.Title.StartsWith("Đang tải", StringComparison.OrdinalIgnoreCase);
+                                            if (isPlaceholder && !string.IsNullOrWhiteSpace(title) && title != "NA" && title != "None")
+                                            {
+                                                item.Title = CleanDisplayTitle(title);
+                                                anyUpdated = true;
+                                            }
+                                            if (string.IsNullOrWhiteSpace(item.Author) && !string.IsNullOrWhiteSpace(author) && author != "NA" && author != "None")
+                                            {
+                                                item.Author = CleanAuthor(author);
+                                                anyUpdated = true;
+                                            }
                                         }
                                     }
                                 }
                             }
+                            proc.WaitForExit(10000);
                         }
-                        proc.WaitForExit(10000);
+                    }
+
+                    // 3. Fallback: Query yt-dlp directly for any remaining individual items with DurationSeconds <= 0
+                    var plCurrent = _sessionPlaylist;
+                    if (plCurrent != null)
+                    {
+                        var remainingMissing = plCurrent.FindAll(x => x.DurationSeconds <= 0 && !string.IsNullOrEmpty(x.Id));
+                        if (remainingMissing.Count > 0)
+                        {
+                            var batchUrls = new List<string>();
+                            int maxBatch = Math.Min(30, remainingMissing.Count);
+                            for (int mi = 0; mi < maxBatch; mi++)
+                            {
+                                var mItem = remainingMissing[mi];
+                                batchUrls.Add(string.Format("\"https://www.youtube.com/watch?v={0}\"", mItem.Id));
+                            }
+
+                            ProcessStartInfo psiBatch = new ProcessStartInfo
+                            {
+                                FileName = ytdlpPath,
+                                Arguments = "--encoding utf-8 --flat-playlist --print \"%(id)s\t%(duration)s\t%(title)s\t%(uploader)s\" " + string.Join(" ", batchUrls),
+                                CreateNoWindow = true,
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                StandardOutputEncoding = System.Text.Encoding.UTF8
+                            };
+                            psiBatch.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+
+                            using (Process procBatch = Process.Start(psiBatch))
+                            {
+                                string line;
+                                while ((line = procBatch.StandardOutput.ReadLine()) != null)
+                                {
+                                    line = line.Trim();
+                                    if (string.IsNullOrEmpty(line)) continue;
+                                    string[] parts = line.Split('\t');
+                                    if (parts.Length >= 2)
+                                    {
+                                        string id = parts[0].Trim();
+                                        int dur = 0;
+                                        int.TryParse(parts[1].Trim(), out dur);
+                                        string title = parts.Length >= 3 ? parts[2].Trim() : null;
+                                        string author = parts.Length >= 4 ? parts[3].Trim() : null;
+
+                                        var item = _sessionPlaylist?.Find(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+                                        if (item != null)
+                                        {
+                                            if (item.DurationSeconds <= 0 && dur > 0)
+                                            {
+                                                item.DurationSeconds = dur;
+                                                HistoryService.UpdateDuration(id, dur);
+                                                SavedTracksService.Instance.UpdateDuration(id, dur);
+                                                anyUpdated = true;
+                                            }
+                                            if (!string.IsNullOrWhiteSpace(title) && (item.Title.StartsWith("Đang tải") || item.Title.StartsWith("Đang nạp")))
+                                            {
+                                                item.Title = CleanDisplayTitle(title);
+                                                anyUpdated = true;
+                                            }
+                                            if (string.IsNullOrWhiteSpace(item.Author) && !string.IsNullOrWhiteSpace(author) && author != "NA" && author != "None")
+                                            {
+                                                item.Author = CleanAuthor(author);
+                                                anyUpdated = true;
+                                            }
+                                        }
+                                    }
+                                }
+                                procBatch.WaitForExit(15000);
+                            }
+                        }
                     }
 
                     if (anyUpdated)

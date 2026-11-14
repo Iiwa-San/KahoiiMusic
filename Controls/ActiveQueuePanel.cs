@@ -444,17 +444,17 @@ namespace KahoiiMusic.Controls
                     }
                     else
                     {
-                        int idxW = (i + 1) >= 100 ? 32 : ((i + 1) >= 10 ? 26 : 20);
+                        int idxW = (i + 1) >= 1000 ? 46 : ((i + 1) >= 100 ? 38 : ((i + 1) >= 10 ? 32 : 24));
                         using (Font idxFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
                         using (SolidBrush idxBrush = new SolidBrush(Color.FromArgb(130, 125, 155)))
-                        using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                        using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                         {
                             g.DrawString((i + 1).ToString(), idxFont, idxBrush, new Rectangle(indexX, rowRect.Y, idxW, rowRect.Height), sf);
                         }
                     }
 
                     // 2. Thumbnail
-                    int thumbX = indexX + 32;
+                    int thumbX = indexX + ((i + 1) >= 1000 ? 52 : ((i + 1) >= 100 ? 44 : 36));
                     int thumbSize = 38;
                     int thumbY = rowRect.Y + (rowRect.Height - thumbSize) / 2;
                     Rectangle thumbRect = new Rectangle(thumbX, thumbY, thumbSize, thumbSize);
@@ -500,10 +500,10 @@ namespace KahoiiMusic.Controls
                     using (Font durFont = new Font("Segoe UI", 8.5f, FontStyle.Regular))
                     {
                         SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, durFont) : SizeF.Empty;
-                        int durW = Math.Max(56, (int)Math.Ceiling(durSz.Width) + 8);
+                        int durW = Math.Max(64, (int)Math.Ceiling(durSz.Width) + 12);
                         int durX = rowRect.Right - durW - 8;
                         using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(145, 140, 170)))
-                        using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                        using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                         {
                             g.DrawString(durStr, durFont, durBrush, new Rectangle(durX, rowRect.Y, durW, rowRect.Height), sf);
                         }

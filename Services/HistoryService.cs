@@ -263,6 +263,26 @@ namespace KahoiiMusic.Services
             }
         }
 
+        public static void UpdateDuration(string id, int duration)
+        {
+            if (string.IsNullOrEmpty(id) || duration <= 0) return;
+            bool updated = false;
+            lock (_lock)
+            {
+                var match = _history.Find(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+                if (match != null && match.DurationSeconds <= 0)
+                {
+                    match.DurationSeconds = duration;
+                    updated = true;
+                }
+            }
+            if (updated)
+            {
+                lock (_lock) { SaveHistory(); }
+                HistoryChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
+
 
         public static void AddTrack(PlaylistItem item)
         {

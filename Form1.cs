@@ -3212,10 +3212,7 @@ namespace KahoiiMusic
                     btnPlaylist.HasPlaylist = true;
                     playlistPopup.StartLoading();
                     _audioPlayer.EnqueueTrackList(vids, incomingV, incomingTitle, incomingAuthor, incomingDur);
-                    if (!string.IsNullOrEmpty(incomingList))
-                    {
-                        _audioPlayer.ResolveMissingTrackDurationsAsync(incomingList, targetUrlToPlay);
-                    }
+                    _audioPlayer.ResolveMissingTrackDurationsAsync(incomingList, targetUrlToPlay);
                     return;
                 }
             }
@@ -3675,6 +3672,17 @@ namespace KahoiiMusic
             else if (m.Msg == WM_EXITSIZEMOVE)
             {
                 _isUserResizing = false;
+                if (WindowState == FormWindowState.Normal)
+                {
+                    Point cur = Cursor.Position;
+                    Screen screen = Screen.FromPoint(cur);
+                    Rectangle wa = screen.WorkingArea;
+                    // Auto maximize when dragged to top edge, left edge, or right edge
+                    if (cur.Y <= wa.Top + 6 || cur.X <= wa.Left + 6 || cur.X >= wa.Right - 6)
+                    {
+                        ToggleMaximize();
+                    }
+                }
                 ApplyResponsiveLayout();
                 Invalidate(true);
             }

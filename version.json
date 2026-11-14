@@ -1,8 +1,8 @@
 {
-  "versionCode": 29,
-  "versionName": "1.0.29",
-  "changelog": "• Khắc phục sự cố chuyển thiết bị đầu ra / tai nghe Bluetooth bị đơ nhạc nhờ cơ chế phục hồi IMMNotificationClient tự động\n• Chuẩn hóa độ trễ lời bài hát (lyrics offset delay) về 0ms tiêu chuẩn\n• Sửa lỗi phóng to trên màn hình phụ dọc (1080x1920) bị biến mất thông qua WM_GETMINMAXINFO chuẩn xác\n• Tối ưu hiển thị màn hình dọc: kéo dài 2 cột danh sách phát và menu sâu xuống dưới\n• Bảo vệ Tab Danh sách phát và nút Playlist không bị ghi đè khi phát Bộ sưu tập, Đã tải, Lịch sử hay chuyển đổi giữa mini app và phóng to\n• Cập nhật kích thước và bố cục trang kết quả tìm kiếm tức thì khi chuyển đổi giữa dạng mini và phóng to",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.29.exe",
+  "versionCode": 30,
+  "versionName": "1.0.30",
+  "changelog": "• Kéo thả cửa sổ app lên mép trên, mép trái/phải màn hình tự động phóng to toàn màn hình mượt mà không lỗi khung viền\n• Tự động đồng bộ và nạp ngầm toàn bộ thời lượng bài hát từ Extension ngay lập tức, không cần click vào từng bài\n• Khắc phục triệt để lỗi số thứ tự (10, 11, 12...) và thời lượng dài (dạng giờ hh:mm:ss) bị xuống dòng ở màn hình tỉ lệ phóng to (DPI Scale 125%, 150%)\n• Trích xuất trực tiếp thời lượng video HTML5 từ Extension YouTube cho độ chính xác tuyệt đối",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.30.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {

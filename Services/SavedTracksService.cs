@@ -150,6 +150,27 @@ namespace KahoiiMusic.Services
             }
         }
 
+        public void UpdateDuration(string videoId, int duration)
+        {
+            if (string.IsNullOrEmpty(videoId) || duration <= 0) return;
+            bool updated = false;
+            lock (_lock)
+            {
+                if (!_isLoaded) LoadFromFile();
+                var match = _savedTracks.Find(x => string.Equals(x.Id, videoId, StringComparison.OrdinalIgnoreCase));
+                if (match != null && match.DurationSeconds <= 0)
+                {
+                    match.DurationSeconds = duration;
+                    updated = true;
+                }
+            }
+            if (updated)
+            {
+                lock (_lock) { SaveToFile(); }
+                SavedTracksChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
 
         public bool IsTrackSaved(string videoId)
         {

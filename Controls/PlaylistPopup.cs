@@ -2507,10 +2507,10 @@ namespace KahoiiMusic.Controls
             using (SolidBrush activeText = new SolidBrush(Color.White))
             using (SolidBrush dimText = new SolidBrush(Color.FromArgb(140, 140, 150)))
             using (SolidBrush activeIndicatorBrush = new SolidBrush(_theme.AccentColor))
-            using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+            using (StringFormat sfNum = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
             {
                 int totalCount = currentList.Count;
-                int indexColW = (totalCount >= 1000) ? 36 : ((totalCount >= 100) ? 30 : 24);
+                int indexColW = (totalCount >= 1000) ? 44 : ((totalCount >= 100) ? 36 : ((totalCount >= 10) ? 30 : 22));
                 int thumbSize = 26;
                 int thumbXOffset = indexColW + 6;
                 int titleXOffset = thumbXOffset + thumbSize + 8;
@@ -2622,16 +2622,16 @@ namespace KahoiiMusic.Controls
                     // Duration
                     string durStr = item.FormattedDuration ?? string.Empty;
                     SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, durFont) : SizeF.Empty;
-                    int durW = Math.Max(54, (int)Math.Ceiling(durSz.Width) + 8);
+                    int durW = Math.Max(64, (int)Math.Ceiling(durSz.Width) + 12);
                     RectangleF durRect = new RectangleF(rowRect.Right - durW - 4, rowRect.Y + 9, durW, 18);
-                    using (StringFormat sfDur = new StringFormat() { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                    using (StringFormat sfDur = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                     {
                         g.DrawString(durStr, durFont, dimText, durRect, sfDur);
                     }
 
                     // 3. Title
                     int titleX = rowRect.X + titleXOffset;
-                    int titleW = Math.Max(40, (int)durRect.Left - titleX - 4);
+                    int titleW = Math.Max(40, (int)durRect.Left - titleX - 6);
                     RectangleF titleRect = new RectangleF(titleX, rowRect.Y + 8, titleW, 20);
 
                     using (StringFormat sfTitle = new StringFormat() { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
@@ -2943,10 +2943,10 @@ namespace KahoiiMusic.Controls
                 using (SolidBrush activeText = new SolidBrush(Color.White))
                 using (SolidBrush dimText = new SolidBrush(Color.FromArgb(140, 140, 150)))
                 using (SolidBrush activeIndicatorBrush = new SolidBrush(_theme.AccentColor))
-                using (StringFormat sfNum = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                using (StringFormat sfNum = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                 {
                     int totalTracks = filteredTracks.Count;
-                    int indexColW = (totalTracks >= 1000) ? 36 : ((totalTracks >= 100) ? 30 : 24);
+                    int indexColW = (totalTracks >= 1000) ? 44 : ((totalTracks >= 100) ? 36 : ((totalTracks >= 10) ? 30 : 22));
 
                     for (int i = 0; i < filteredTracks.Count; i++)
                     {
@@ -3044,16 +3044,16 @@ namespace KahoiiMusic.Controls
                         // Track Duration
                         string durStr = item.FormattedDuration ?? string.Empty;
                         SizeF durSz = !string.IsNullOrEmpty(durStr) ? g.MeasureString(durStr, trkDurFont) : SizeF.Empty;
-                        int durW = Math.Max(54, (int)Math.Ceiling(durSz.Width) + 8);
+                        int durW = Math.Max(64, (int)Math.Ceiling(durSz.Width) + 12);
                         RectangleF durRect = new RectangleF(rowRect.Right - durW - 4, rowRect.Y + 7, durW, 18);
-                        using (StringFormat sfDur = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                        using (StringFormat sfDur = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
                         {
                             g.DrawString(durStr, trkDurFont, dimText, durRect, sfDur);
                         }
 
                         // Track Title
                         int titleX = thumbRect.Right + 7;
-                        int titleW = Math.Max(40, (int)durRect.Left - titleX - 4);
+                        int titleW = Math.Max(40, (int)durRect.Left - titleX - 6);
                         RectangleF titleRect = new RectangleF(titleX, rowRect.Y + 7, titleW, 18);
 
                         using (StringFormat sfTitle = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
