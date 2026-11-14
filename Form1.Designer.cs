@@ -420,8 +420,7 @@ namespace KahoiiMusic
             // 
             // Form1
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(20)))), ((int)(((byte)(16)))), ((int)(((byte)(38)))));
             this.ClientSize = new System.Drawing.Size(530, 420);
             this.Controls.Add(this.btnMinimize);

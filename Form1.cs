@@ -182,6 +182,10 @@ namespace KahoiiMusic
                 _lastNonMinimizedState = FormWindowState.Maximized;
                 WindowState = FormWindowState.Maximized;
             }
+            else
+            {
+                ClientSize = new Size(MiniAppWidth, MiniAppHeight);
+            }
             ApplyResponsiveLayout();
             UpdateAudioControlsEnabledState();
         }
@@ -4298,13 +4302,14 @@ namespace KahoiiMusic
 
             int contentX;
             int contentW;
+            int artH;
             int topH;
 
             // When in compact / single column (normal window):
             // Queue panel shows single N+1 track ("Bài tiếp theo") so thumbnail and lyrics have room.
             // When in 2-column or tall window:
             // Queue panel displays the full queue list with scrolling ("Hàng đợi").
-            bool isShortHeight = !hasSideMenuColumn && (totalH < 560);
+            bool isShortHeight = !hasSideMenuColumn && (totalH < 500);
 
             if (hasSideMenuColumn)
             {
@@ -4325,7 +4330,8 @@ namespace KahoiiMusic
                 contentX = padX + sideW + gutterX;
                 contentW = totalW - contentX - padX;
                 int rightAvailH = totalH - padTop - padBottom;
-                topH = Math.Max(200, Math.Min(280, (int)(rightAvailH * 0.34f)));
+                artH = Math.Min(220, Math.Max(186, (int)(rightAvailH * 0.32f)));
+                topH = artH + 24;
             }
             else
             {
@@ -4341,18 +4347,15 @@ namespace KahoiiMusic
 
                 if (isShortHeight)
                 {
-                    // Mini App / Short window: bottom queue panel shows only single N+1 track (height 110px)
-                    int singleQueueH = 110;
-                    topH = Math.Max(160, totalH - padTop - padBottom - gutterY - singleQueueH);
+                    // Mini App / Short compact window: fixed thumbnail size 186x186
+                    artH = 186;
                 }
                 else
                 {
-                    // Phóng to 50%, 25%, 1/3 screen, or tall window:
-                    // Bê phóng to 100% xuống rồi rút gọn session danh sách phát thành nút menu:
-                    // Top session: Thumbnail + Lyrics (~34% height)
-                    // Bottom session: Full queue list with scrollbar!
-                    topH = Math.Max(200, Math.Min(280, (int)(totalH * 0.34f)));
+                    // Snap / Tall window: scale smoothly up to 220
+                    artH = Math.Min(220, Math.Max(186, (int)(contentW * 0.32f)));
                 }
+                topH = artH + 24;
             }
 
             if (_topSectionCard != null)
@@ -4365,11 +4368,7 @@ namespace KahoiiMusic
                 _topSectionCard.Visible = true;
                 _topSectionCard.BringToFront();
 
-                // Artwork inside top card (Square 1:1, cleanly fitting inside _topSectionCard without squishing lyrics)
-                int maxArtByWidth = Math.Max(110, (int)(contentW * 0.40f));
-                int artH = Math.Min(topH - 24, maxArtByWidth);
-                if (artH > 240) artH = 240;
-                if (artH < 110) artH = 110;
+                // Artwork inside top card (Square 1:1, fixed geometry, perfectly aligned)
                 int artW = artH;
                 artworkBox.Location = new Point(12, 12);
                 artworkBox.Size = new Size(artW, artH);
@@ -4512,11 +4511,11 @@ namespace KahoiiMusic
                 marqueeAuthor.Visible = true;
                 marqueeAuthor.BringToFront();
 
-                // Lyrics box inside top card (distinct vibrant magenta/hot pink gradient border matching theme)
+                // Lyrics box inside top card: Bottom aligns strictly with artworkBox.Bottom!
                 if (_lyricsCard != null)
                 {
                     int lyricsCardY = marqueeAuthor.Bottom + 4;
-                    int lyricsCardH = Math.Max(30, topH - lyricsCardY - 8);
+                    int lyricsCardH = Math.Max(30, artworkBox.Bottom - lyricsCardY);
                     _lyricsCard.Location = new Point(midX, lyricsCardY);
                     _lyricsCard.Size = new Size(midW, lyricsCardH);
                     _lyricsCard.CardBackColor = Color.FromArgb(120, 18, 8, 36); // Opacity < 100%
@@ -4535,11 +4534,11 @@ namespace KahoiiMusic
                 }
             }
 
-            // Bottom Card: _activeQueuePanel
+            // Bottom Card: _activeQueuePanel fills remaining canvas height down to padBottom
             if (_activeQueuePanel != null)
             {
-                int bottomH = isShortHeight ? 110 : (totalH - (padTop + topH + gutterY) - padBottom);
                 int bottomY = padTop + topH + gutterY;
+                int bottomH = Math.Max(100, totalH - bottomY - padBottom);
                 _activeQueuePanel.IsSingleNextTrackMode = isShortHeight;
                 _activeQueuePanel.Location = new Point(contentX, bottomY);
                 _activeQueuePanel.Size = new Size(contentW, bottomH);
