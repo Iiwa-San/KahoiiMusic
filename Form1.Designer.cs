@@ -34,36 +34,36 @@ namespace KahoiiMusic
             this.panelPlayerCard = new KahoiiMusic.Controls.EdgeTransparentPanel();
             this.panelTopBar = new KahoiiMusic.Controls.EdgeTransparentPanel();
             this.btnPlaylist = new KahoiiMusic.Controls.PlaylistButton();
-                        this.searchPillBox = new KahoiiMusic.Controls.SearchPillBox();
+            this.searchPillBox = new KahoiiMusic.Controls.SearchPillBox();
+            this.btnUser = new KahoiiMusic.Controls.UserAccountButton();
             this.gradientPanel = new KahoiiMusic.Controls.GradientPanel();
             this.volumePopup = new KahoiiMusic.Controls.VolumePopup();
             this.artworkBox = new KahoiiMusic.Controls.ArtworkBox();
             this.lyricsPanel = new KahoiiMusic.Controls.LyricsPanel();
             this.marqueeTitle = new KahoiiMusic.Controls.MarqueeLabel();
             this.marqueeAuthor = new KahoiiMusic.Controls.MarqueeLabel();
-            this.btnFavorite = new KahoiiMusic.Controls.FavoriteButton();
-            this.panelBottomControls = new KahoiiMusic.Controls.EdgeTransparentPanel();
             this.btnLyrics = new KahoiiMusic.Controls.LyricsButton();
+            this.panelBottomControls = new KahoiiMusic.Controls.EdgeTransparentPanel();
+            this.btnFavorite = new KahoiiMusic.Controls.FavoriteButton();
+            this.btnQuickDownload = new KahoiiMusic.Controls.QuickDownloadButton();
             this.btnVolume = new KahoiiMusic.Controls.VolumeButton();
             this.btnPrevious = new KahoiiMusic.Controls.DirectionalButton();
             this.btnPlayPause = new KahoiiMusic.Controls.PlayPauseButton();
             this.btnNext = new KahoiiMusic.Controls.DirectionalButton();
             this.btnLoop = new KahoiiMusic.Controls.LoopButton();
             this.btnTimer = new KahoiiMusic.Controls.TimerButton();
-            this.btnQuickDownload = new KahoiiMusic.Controls.QuickDownloadButton();
             this.musicTrackBar = new KahoiiMusic.Controls.MusicTrackBar();
             this.lblCopyright = new System.Windows.Forms.Label();
             this.lblVersion = new System.Windows.Forms.Label();
             this.btnClose = new System.Windows.Forms.Label();
             this.btnMaximize = new System.Windows.Forms.Label();
             this.btnMinimize = new System.Windows.Forms.Label();
-            this.btnUser = new KahoiiMusic.Controls.UserAccountButton();
             this.playbackTimer = new System.Windows.Forms.Timer(this.components);
+            ((System.ComponentModel.ISupportInitialize)(this.picLogo)).BeginInit();
             this.panelPlayerCard.SuspendLayout();
             this.panelTopBar.SuspendLayout();
             this.gradientPanel.SuspendLayout();
             this.panelBottomControls.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.picLogo)).BeginInit();
             this.SuspendLayout();
             // 
             // picLogo
@@ -78,7 +78,6 @@ namespace KahoiiMusic
             // 
             // lblLogo
             // 
-            this.lblLogo.AutoSize = false;
             this.lblLogo.BackColor = System.Drawing.Color.Transparent;
             this.lblLogo.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.lblLogo.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(235)))), ((int)(((byte)(95)))), ((int)(((byte)(195)))));
@@ -86,7 +85,6 @@ namespace KahoiiMusic
             this.lblLogo.Name = "lblLogo";
             this.lblLogo.Size = new System.Drawing.Size(120, 18);
             this.lblLogo.TabIndex = 4;
-            this.lblLogo.Text = "";
             // 
             // panelPlayerCard
             // 
@@ -111,6 +109,7 @@ namespace KahoiiMusic
             // 
             // btnPlaylist
             // 
+            this.btnPlaylist.ActiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(168)))), ((int)(((byte)(85)))), ((int)(((byte)(247)))));
             this.btnPlaylist.BackColor = System.Drawing.Color.Transparent;
             this.btnPlaylist.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnPlaylist.Location = new System.Drawing.Point(12, 3);
@@ -128,6 +127,16 @@ namespace KahoiiMusic
             this.searchPillBox.TabIndex = 0;
             this.searchPillBox.TabStop = false;
             // 
+            // btnUser
+            // 
+            this.btnUser.BackColor = System.Drawing.Color.Transparent;
+            this.btnUser.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnUser.Location = new System.Drawing.Point(436, 3);
+            this.btnUser.Name = "btnUser";
+            this.btnUser.Size = new System.Drawing.Size(28, 24);
+            this.btnUser.TabIndex = 2;
+            this.btnUser.Click += new System.EventHandler(this.btnUser_Click);
+            // 
             // gradientPanel
             // 
             this.gradientPanel.BottomColor = System.Drawing.Color.FromArgb(((int)(((byte)(168)))), ((int)(((byte)(26)))), ((int)(((byte)(94)))));
@@ -143,15 +152,6 @@ namespace KahoiiMusic
             this.gradientPanel.TabIndex = 1;
             this.gradientPanel.TopColor = System.Drawing.Color.FromArgb(((int)(((byte)(38)))), ((int)(((byte)(16)))), ((int)(((byte)(92)))));
             // 
-            // lyricsPanel
-            // 
-            this.lyricsPanel.BackColor = System.Drawing.Color.Transparent;
-            this.lyricsPanel.Location = new System.Drawing.Point(176, 8);
-            this.lyricsPanel.Name = "lyricsPanel";
-            this.lyricsPanel.Size = new System.Drawing.Size(292, 190);
-            this.lyricsPanel.TabIndex = 4;
-            this.lyricsPanel.Visible = false;
-            // 
             // volumePopup
             // 
             this.volumePopup.BackColor = System.Drawing.Color.Transparent;
@@ -165,13 +165,30 @@ namespace KahoiiMusic
             // artworkBox
             // 
             this.artworkBox.BackColor = System.Drawing.Color.Transparent;
+            this.artworkBox.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.artworkBox.DisplayMode = KahoiiMusic.Services.ArtworkDisplayMode.VinylRecord;
+            this.artworkBox.EnableModeToggleOnClick = true;
             this.artworkBox.Image = null;
             this.artworkBox.IsSpinning = false;
             this.artworkBox.Location = new System.Drawing.Point(156, 0);
             this.artworkBox.Name = "artworkBox";
+            this.artworkBox.ShowBottomTimeText = true;
             this.artworkBox.Size = new System.Drawing.Size(164, 162);
             this.artworkBox.TabIndex = 0;
             this.artworkBox.TimeText = "";
+            // 
+            // lyricsPanel
+            // 
+            this.lyricsPanel.BackColor = System.Drawing.Color.Transparent;
+            this.lyricsPanel.CurrentIndex = -1;
+            this.lyricsPanel.CurrentPosition = System.TimeSpan.Parse("00:00:00");
+            this.lyricsPanel.Location = new System.Drawing.Point(176, 8);
+            this.lyricsPanel.Lyrics = null;
+            this.lyricsPanel.Name = "lyricsPanel";
+            this.lyricsPanel.Size = new System.Drawing.Size(292, 190);
+            this.lyricsPanel.TabIndex = 4;
+            this.lyricsPanel.TotalDuration = System.TimeSpan.Parse("00:00:00");
+            this.lyricsPanel.Visible = false;
             // 
             // marqueeTitle
             // 
@@ -179,9 +196,9 @@ namespace KahoiiMusic
             this.marqueeTitle.Font = new System.Drawing.Font("Segoe UI", 9.5F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.marqueeTitle.Location = new System.Drawing.Point(23, 162);
             this.marqueeTitle.Name = "marqueeTitle";
+            this.marqueeTitle.ShadowColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
             this.marqueeTitle.Size = new System.Drawing.Size(430, 20);
             this.marqueeTitle.TabIndex = 2;
-            this.marqueeTitle.Text = "";
             this.marqueeTitle.TextColor = System.Drawing.Color.White;
             // 
             // marqueeAuthor
@@ -190,10 +207,21 @@ namespace KahoiiMusic
             this.marqueeAuthor.Font = new System.Drawing.Font("Segoe UI", 8.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.marqueeAuthor.Location = new System.Drawing.Point(23, 184);
             this.marqueeAuthor.Name = "marqueeAuthor";
+            this.marqueeAuthor.ShadowColor = System.Drawing.Color.FromArgb(((int)(((byte)(140)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))), ((int)(((byte)(0)))));
             this.marqueeAuthor.Size = new System.Drawing.Size(430, 18);
             this.marqueeAuthor.TabIndex = 3;
-            this.marqueeAuthor.Text = "";
             this.marqueeAuthor.TextColor = System.Drawing.Color.FromArgb(((int)(((byte)(200)))), ((int)(((byte)(195)))), ((int)(((byte)(215)))));
+            // 
+            // btnLyrics
+            // 
+            this.btnLyrics.ActiveColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(65)))), ((int)(((byte)(150)))));
+            this.btnLyrics.BackColor = System.Drawing.Color.Transparent;
+            this.btnLyrics.Cursor = System.Windows.Forms.Cursors.Default;
+            this.btnLyrics.Enabled = false;
+            this.btnLyrics.Location = new System.Drawing.Point(408, 47);
+            this.btnLyrics.Name = "btnLyrics";
+            this.btnLyrics.Size = new System.Drawing.Size(28, 24);
+            this.btnLyrics.TabIndex = 9;
             // 
             // panelBottomControls
             // 
@@ -238,6 +266,7 @@ namespace KahoiiMusic
             // 
             this.btnVolume.BackColor = System.Drawing.Color.Transparent;
             this.btnVolume.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnVolume.HoverColor = System.Drawing.Color.FromArgb(((int)(((byte)(220)))), ((int)(((byte)(220)))), ((int)(((byte)(220)))));
             this.btnVolume.IconColor = System.Drawing.Color.White;
             this.btnVolume.Location = new System.Drawing.Point(128, 47);
             this.btnVolume.Name = "btnVolume";
@@ -249,33 +278,43 @@ namespace KahoiiMusic
             // 
             this.btnPrevious.BackColor = System.Drawing.Color.Transparent;
             this.btnPrevious.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnPrevious.FillColor = System.Drawing.Color.Transparent;
             this.btnPrevious.Location = new System.Drawing.Point(176, 47);
             this.btnPrevious.Name = "btnPrevious";
             this.btnPrevious.OutlineColor = System.Drawing.Color.White;
             this.btnPrevious.Size = new System.Drawing.Size(24, 24);
             this.btnPrevious.TabIndex = 1;
+            this.btnPrevious.ThemeGradientBottom = System.Drawing.Color.FromArgb(((int)(((byte)(235)))), ((int)(((byte)(0)))), ((int)(((byte)(130)))));
+            this.btnPrevious.ThemeGradientTop = System.Drawing.Color.FromArgb(((int)(((byte)(105)))), ((int)(((byte)(12)))), ((int)(((byte)(150)))));
             // 
             // btnPlayPause
             // 
             this.btnPlayPause.BackColor = System.Drawing.Color.Transparent;
             this.btnPlayPause.CircleColor = System.Drawing.Color.FromArgb(((int)(((byte)(217)))), ((int)(((byte)(217)))), ((int)(((byte)(217)))));
+            this.btnPlayPause.CircleHoverColor = System.Drawing.Color.FromArgb(((int)(((byte)(235)))), ((int)(((byte)(235)))), ((int)(((byte)(235)))));
+            this.btnPlayPause.CirclePressedColor = System.Drawing.Color.FromArgb(((int)(((byte)(190)))), ((int)(((byte)(190)))), ((int)(((byte)(190)))));
             this.btnPlayPause.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnPlayPause.IconColor = System.Drawing.Color.FromArgb(((int)(((byte)(106)))), ((int)(((byte)(0)))), ((int)(((byte)(255)))));
             this.btnPlayPause.Location = new System.Drawing.Point(223, 44);
             this.btnPlayPause.Name = "btnPlayPause";
             this.btnPlayPause.Size = new System.Drawing.Size(30, 30);
             this.btnPlayPause.TabIndex = 2;
+            this.btnPlayPause.ThemeGradientBottom = System.Drawing.Color.FromArgb(((int)(((byte)(235)))), ((int)(((byte)(0)))), ((int)(((byte)(130)))));
+            this.btnPlayPause.ThemeGradientTop = System.Drawing.Color.FromArgb(((int)(((byte)(105)))), ((int)(((byte)(12)))), ((int)(((byte)(150)))));
             // 
             // btnNext
             // 
             this.btnNext.BackColor = System.Drawing.Color.Transparent;
             this.btnNext.Cursor = System.Windows.Forms.Cursors.Hand;
             this.btnNext.Direction = KahoiiMusic.Controls.DirectionType.Next;
+            this.btnNext.FillColor = System.Drawing.Color.Transparent;
             this.btnNext.Location = new System.Drawing.Point(276, 47);
             this.btnNext.Name = "btnNext";
             this.btnNext.OutlineColor = System.Drawing.Color.White;
             this.btnNext.Size = new System.Drawing.Size(24, 24);
             this.btnNext.TabIndex = 3;
+            this.btnNext.ThemeGradientBottom = System.Drawing.Color.FromArgb(((int)(((byte)(235)))), ((int)(((byte)(0)))), ((int)(((byte)(130)))));
+            this.btnNext.ThemeGradientTop = System.Drawing.Color.FromArgb(((int)(((byte)(105)))), ((int)(((byte)(12)))), ((int)(((byte)(150)))));
             // 
             // btnLoop
             // 
@@ -299,15 +338,16 @@ namespace KahoiiMusic
             this.btnTimer.Size = new System.Drawing.Size(28, 24);
             this.btnTimer.TabIndex = 6;
             // 
-            // btnLyrics
+            // musicTrackBar
             // 
-            this.btnLyrics.BackColor = System.Drawing.Color.Transparent;
-            this.btnLyrics.Cursor = System.Windows.Forms.Cursors.Default;
-            this.btnLyrics.Enabled = false;
-            this.btnLyrics.Location = new System.Drawing.Point(408, 47);
-            this.btnLyrics.Name = "btnLyrics";
-            this.btnLyrics.Size = new System.Drawing.Size(28, 24);
-            this.btnLyrics.TabIndex = 9;
+            this.musicTrackBar.BackColor = System.Drawing.Color.Transparent;
+            this.musicTrackBar.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.musicTrackBar.Location = new System.Drawing.Point(23, 16);
+            this.musicTrackBar.Name = "musicTrackBar";
+            this.musicTrackBar.PlayedColor = System.Drawing.Color.FromArgb(((int)(((byte)(235)))), ((int)(((byte)(15)))), ((int)(((byte)(15)))));
+            this.musicTrackBar.Size = new System.Drawing.Size(430, 20);
+            this.musicTrackBar.TabIndex = 0;
+            this.musicTrackBar.UnplayedColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(255)))), ((int)(((byte)(255)))));
             // 
             // lblCopyright
             // 
@@ -335,17 +375,6 @@ namespace KahoiiMusic
             this.lblVersion.Text = "v1.0.24";
             this.lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
-            // musicTrackBar
-            // 
-            this.musicTrackBar.BackColor = System.Drawing.Color.Transparent;
-            this.musicTrackBar.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.musicTrackBar.Location = new System.Drawing.Point(23, 16);
-            this.musicTrackBar.Name = "musicTrackBar";
-            this.musicTrackBar.PlayedColor = System.Drawing.Color.FromArgb(((int)(((byte)(235)))), ((int)(((byte)(15)))), ((int)(((byte)(15)))));
-            this.musicTrackBar.Size = new System.Drawing.Size(430, 20);
-            this.musicTrackBar.TabIndex = 0;
-            this.musicTrackBar.UnplayedColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(255)))), ((int)(((byte)(255)))));
-            // 
             // btnClose
             // 
             this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
@@ -357,18 +386,7 @@ namespace KahoiiMusic
             this.btnClose.Name = "btnClose";
             this.btnClose.Size = new System.Drawing.Size(22, 18);
             this.btnClose.TabIndex = 2;
-            this.btnClose.Text = "";
             this.btnClose.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            // 
-            // btnUser
-            // 
-            this.btnUser.BackColor = System.Drawing.Color.Transparent;
-            this.btnUser.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.btnUser.Location = new System.Drawing.Point(436, 3);
-            this.btnUser.Name = "btnUser";
-            this.btnUser.Size = new System.Drawing.Size(28, 24);
-            this.btnUser.TabIndex = 2;
-            this.btnUser.Click += new System.EventHandler(this.btnUser_Click);
             // 
             // btnMaximize
             // 
@@ -381,7 +399,6 @@ namespace KahoiiMusic
             this.btnMaximize.Name = "btnMaximize";
             this.btnMaximize.Size = new System.Drawing.Size(22, 18);
             this.btnMaximize.TabIndex = 3;
-            this.btnMaximize.Text = "";
             this.btnMaximize.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // btnMinimize
@@ -395,7 +412,6 @@ namespace KahoiiMusic
             this.btnMinimize.Name = "btnMinimize";
             this.btnMinimize.Size = new System.Drawing.Size(22, 18);
             this.btnMinimize.TabIndex = 1;
-            this.btnMinimize.Text = "";
             this.btnMinimize.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // playbackTimer
@@ -408,7 +424,6 @@ namespace KahoiiMusic
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(20)))), ((int)(((byte)(16)))), ((int)(((byte)(38)))));
             this.ClientSize = new System.Drawing.Size(530, 420);
-            this.MinimumSize = new System.Drawing.Size(400, 320);
             this.Controls.Add(this.btnMinimize);
             this.Controls.Add(this.btnMaximize);
             this.Controls.Add(this.btnClose);
@@ -416,16 +431,16 @@ namespace KahoiiMusic
             this.Controls.Add(this.picLogo);
             this.Controls.Add(this.lblLogo);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+            this.MinimumSize = new System.Drawing.Size(400, 320);
             this.Name = "Form1";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Kahoii Music";
+            ((System.ComponentModel.ISupportInitialize)(this.picLogo)).EndInit();
             this.panelPlayerCard.ResumeLayout(false);
             this.panelTopBar.ResumeLayout(false);
             this.gradientPanel.ResumeLayout(false);
             this.panelBottomControls.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.picLogo)).EndInit();
             this.ResumeLayout(false);
-            this.PerformLayout();
 
         }
 
