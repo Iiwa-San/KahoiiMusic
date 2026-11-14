@@ -49,6 +49,8 @@ namespace KahoiiMusic
         private Label lblSyncStatus;
         private RoundedButton btnSyncNow;
         private RoundedButton btnSignOut;
+        private Label lblVersion;
+        private Label lblCopyright;
 
         private Color _accentColor = Color.FromArgb(255, 45, 120);
         private Color _secondaryAccentColor = Color.FromArgb(168, 85, 247);
@@ -125,6 +127,16 @@ namespace KahoiiMusic
                     lblStats.Invalidate();
                 }
 
+                if (lblCopyright != null)
+                {
+                    lblCopyright.ForeColor = Color.FromArgb(120, 115, 140);
+                }
+
+                if (lblVersion != null)
+                {
+                    lblVersion.ForeColor = Color.FromArgb(170, 165, 195);
+                }
+
                 pnlEmailBox?.Invalidate();
                 pnlPasswordBox?.Invalidate();
                 pnlConfirmPasswordBox?.Invalidate();
@@ -191,7 +203,7 @@ namespace KahoiiMusic
 
             this.KeyPreview = true;
             this.Text = "Tài Khoản Kahoii";
-            this.Size = new Size(340, 338);
+            this.Size = new Size(340, 378);
             this.BackColor = _bgGradBottom;
             this.ShowInTaskbar = false;
             this.DoubleBuffered = true;
@@ -223,8 +235,60 @@ namespace KahoiiMusic
             btnClose.SetTheme(_accentColor, _secondaryAccentColor);
             btnClose.Click += (s, e) => this.Hide();
 
+            lblVersion = new Label
+            {
+                Text = $"v{AppUpdateService.CurrentVersionName}  •  Kiểm tra cập nhật",
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
+                ForeColor = Color.FromArgb(170, 165, 195),
+                Location = new Point(20, 330),
+                Size = new Size(300, 18),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Cursor = Cursors.Hand,
+                BackColor = Color.Transparent
+            };
+            lblVersion.MouseEnter += (s, e) =>
+            {
+                lblVersion.ForeColor = _accentColor;
+                lblVersion.Font = new Font("Segoe UI", 8.5F, FontStyle.Underline);
+            };
+            lblVersion.MouseLeave += (s, e) =>
+            {
+                lblVersion.ForeColor = Color.FromArgb(170, 165, 195);
+                lblVersion.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
+            };
+            lblVersion.Click += async (s, e) =>
+            {
+                if (Form1.Instance != null)
+                {
+                    lblVersion.Text = "Đang kiểm tra cập nhật...";
+                    lblVersion.Enabled = false;
+                    try
+                    {
+                        await Form1.Instance.CheckForAppUpdatesAsync(manual: true);
+                    }
+                    finally
+                    {
+                        lblVersion.Enabled = true;
+                        lblVersion.Text = $"v{AppUpdateService.CurrentVersionName}  •  Kiểm tra cập nhật";
+                    }
+                }
+            };
+
+            lblCopyright = new Label
+            {
+                Text = "Copyright by Kahoii-san",
+                Font = new Font("Segoe UI", 8F, FontStyle.Regular),
+                ForeColor = Color.FromArgb(120, 115, 140),
+                Location = new Point(20, 350),
+                Size = new Size(300, 16),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
+            };
+
             this.Controls.Add(lblTitle);
             this.Controls.Add(btnClose);
+            this.Controls.Add(lblVersion);
+            this.Controls.Add(lblCopyright);
 
             SetupAuthUI();
             SetupProfileUI();
@@ -570,7 +634,17 @@ namespace KahoiiMusic
                     btnSubmit.Location = new Point(20, 282);
                     btnSubmit.Text = "TẠO TÀI KHOẢN";
                 }
-                this.Height = 338;
+                this.Height = 376;
+                if (lblVersion != null)
+                {
+                    lblVersion.Location = new Point(20, 326);
+                    lblVersion.BringToFront();
+                }
+                if (lblCopyright != null)
+                {
+                    lblCopyright.Location = new Point(20, 348);
+                    lblCopyright.BringToFront();
+                }
             }
             else
             {
@@ -587,7 +661,17 @@ namespace KahoiiMusic
                     btnSubmit.Location = new Point(20, 234);
                     btnSubmit.Text = "ĐĂNG NHẬP";
                 }
-                this.Height = 290;
+                this.Height = 328;
+                if (lblVersion != null)
+                {
+                    lblVersion.Location = new Point(20, 278);
+                    lblVersion.BringToFront();
+                }
+                if (lblCopyright != null)
+                {
+                    lblCopyright.Location = new Point(20, 300);
+                    lblCopyright.BringToFront();
+                }
             }
             UpdateRegion();
             if (Owner is Form1 f1 && f1.Visible)
@@ -798,7 +882,17 @@ namespace KahoiiMusic
                 if (btnForgotPassword != null) btnForgotPassword.Visible = false;
                 if (lblError != null) lblError.Visible = false;
 
-                this.Height = 338;
+                this.Height = 378;
+                if (lblVersion != null)
+                {
+                    lblVersion.Location = new Point(20, 330);
+                    lblVersion.BringToFront();
+                }
+                if (lblCopyright != null)
+                {
+                    lblCopyright.Location = new Point(20, 350);
+                    lblCopyright.BringToFront();
+                }
 
                 var user = FirebaseAuthService.Instance.CurrentUser;
                 if (lblUserEmail != null) lblUserEmail.Text = user?.email ?? "User";

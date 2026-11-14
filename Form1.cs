@@ -2871,7 +2871,7 @@ namespace KahoiiMusic
             catch { }
         }
 
-        private async Task CheckForAppUpdatesAsync(bool manual = false)
+        public async Task CheckForAppUpdatesAsync(bool manual = false)
         {
             if (manual)
             {
@@ -4300,11 +4300,11 @@ namespace KahoiiMusic
             int contentW;
             int topH;
 
-            // When totalH < 440 (e.g. standard mini app clientH=420, totalH=370):
+            // When in compact / single column (normal window):
             // Queue panel shows single N+1 track ("Bài tiếp theo") so thumbnail and lyrics have room.
-            // When totalH >= 440 (50% snap, 25% snap, 1/3 screen, tall window, 100% full screen):
+            // When in 2-column or tall window:
             // Queue panel displays the full queue list with scrolling ("Hàng đợi").
-            bool isShortHeight = (totalH < 440);
+            bool isShortHeight = !hasSideMenuColumn && (totalH < 560);
 
             if (hasSideMenuColumn)
             {
