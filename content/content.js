@@ -295,6 +295,12 @@
   }
 
   function getVideoDuration() {
+    try {
+      const videoEl = document.querySelector("video.html5-main-video, video");
+      if (videoEl && typeof videoEl.duration === "number" && !isNaN(videoEl.duration) && videoEl.duration > 0) {
+        return Math.round(videoEl.duration);
+      }
+    } catch (_) {}
     const durEl = document.querySelector(".ytp-time-duration");
     if (durEl && durEl.textContent) {
       const d = parseDurationText(durEl.textContent);
