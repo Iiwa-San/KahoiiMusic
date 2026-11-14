@@ -250,6 +250,11 @@ namespace KahoiiMusic.Controls
 
         public static bool ShowConfirm(string title, string message, string yesText = "Chuyển ngay", string noText = "Để sau", Form owner = null)
         {
+            if (owner == null)
+            {
+                owner = Form.ActiveForm ?? (Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null);
+            }
+
             using (var dlg = new CyberConfirmDialog(title, message, yesText, noText, isConfirm: true))
             {
                 if (owner != null && owner.Visible)
@@ -267,15 +272,25 @@ namespace KahoiiMusic.Controls
                 else
                 {
                     dlg.StartPosition = FormStartPosition.CenterScreen;
-                    dlg.TopMost = true;
-                    dlg.ShowDialog();
+                    dlg.ShowDialog(owner);
                 }
+
+                if (owner != null && !owner.IsDisposed && owner.Visible)
+                {
+                    try { owner.Activate(); } catch { }
+                }
+
                 return dlg._result;
             }
         }
 
         public static void ShowAlert(string title, string message, string okText = "Đã hiểu", Form owner = null)
         {
+            if (owner == null)
+            {
+                owner = Form.ActiveForm ?? (Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null);
+            }
+
             using (var dlg = new CyberConfirmDialog(title, message, okText, "", isConfirm: false))
             {
                 if (owner != null && owner.Visible)
@@ -293,8 +308,12 @@ namespace KahoiiMusic.Controls
                 else
                 {
                     dlg.StartPosition = FormStartPosition.CenterScreen;
-                    dlg.TopMost = true;
-                    dlg.ShowDialog();
+                    dlg.ShowDialog(owner);
+                }
+
+                if (owner != null && !owner.IsDisposed && owner.Visible)
+                {
+                    try { owner.Activate(); } catch { }
                 }
             }
         }

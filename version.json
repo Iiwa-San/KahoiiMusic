@@ -1,8 +1,8 @@
 {
-  "versionCode": 30,
-  "versionName": "1.0.30",
-  "changelog": "• Kéo thả cửa sổ app lên mép trên, mép trái/phải màn hình tự động phóng to toàn màn hình mượt mà không lỗi khung viền\n• Tự động đồng bộ và nạp ngầm toàn bộ thời lượng bài hát từ Extension ngay lập tức, không cần click vào từng bài\n• Khắc phục triệt để lỗi số thứ tự (10, 11, 12...) và thời lượng dài (dạng giờ hh:mm:ss) bị xuống dòng ở màn hình tỉ lệ phóng to (DPI Scale 125%, 150%)\n• Trích xuất trực tiếp thời lượng video HTML5 từ Extension YouTube cho độ chính xác tuyệt đối",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.30.exe",
+  "versionCode": 31,
+  "versionName": "1.0.31",
+  "changelog": "• Đồng bộ màu sắc và hiệu ứng Frosted Liquid Glass cho popup Tài khoản bám theo bài hát\n• Popup Tài khoản luôn bám sát ngay dưới Avatar, hiển thị sắc nét không đứt viền\n• Căn chỉnh hoàn hảo hàng ngang nút Menu, Logo và thanh Search\n• Hiệu ứng sóng 3 chấm động khi tìm kiếm bài hát\n• Khắc phục triệt để lỗi chuyển tab popup làm nhảy focus sang ứng dụng khác",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.31.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {

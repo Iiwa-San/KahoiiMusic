@@ -280,9 +280,9 @@ namespace KahoiiMusic.Controls
             {
                 StringFormat sf = new StringFormat { LineAlignment = StringAlignment.Center };
                 int headerY = ActualHeaderHeight / 2;
-                g.DrawString("Gợi ý YouTube:", hFont, hBrush, 12, headerY - (isWide ? 7 : 6));
+                g.DrawString("Gợi ý:", hFont, hBrush, 12, headerY - (isWide ? 7 : 6));
                 string qText = "\"" + _currentQuery + "\"";
-                float labelWidth = g.MeasureString("Gợi ý YouTube: ", hFont).Width;
+                float labelWidth = g.MeasureString("Gợi ý: ", hFont).Width;
                 g.DrawString(qText, hFont, qBrush, 12 + labelWidth, headerY - (isWide ? 7 : 6));
 
                 StringFormat rightSf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
@@ -398,7 +398,7 @@ namespace KahoiiMusic.Controls
 
                     g.DrawString(item.Title ?? "Bài hát", titleFont, titleBrush, new RectangleF(textX, tY, textW, tH), tsf);
 
-                    string authorAndDur = (!string.IsNullOrEmpty(item.Author) ? item.Author : "YouTube") + " • " + item.FormattedDuration;
+                    string authorAndDur = (!string.IsNullOrEmpty(item.Author) ? item.Author : "Nghệ sĩ") + " • " + item.FormattedDuration;
                     g.DrawString(authorAndDur, subFont, subBrush, new RectangleF(textX, sY, textW, sH), tsf);
                 }
             }

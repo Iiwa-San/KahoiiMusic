@@ -183,6 +183,22 @@ namespace KahoiiMusic.Services
         private volatile bool _isPreloadingQueueRunning = false;
         private int _currentLoadId = 0;
 
+        private System.Threading.Timer _trackSwitchDebounceTimer;
+        private readonly object _debounceLock = new object();
+        private const int TrackSwitchDebounceMs = 350;
+
+        private void CancelTrackSwitchDebounce()
+        {
+            lock (_debounceLock)
+            {
+                if (_trackSwitchDebounceTimer != null)
+                {
+                    try { _trackSwitchDebounceTimer.Dispose(); } catch { }
+                    _trackSwitchDebounceTimer = null;
+                }
+            }
+        }
+
         public bool IsDownloadingOrPreloading
         {
             get
@@ -1293,54 +1309,39 @@ namespace KahoiiMusic.Services
             }
         }
 
-        public void PlayNext()
-
+        public void PlayNext(bool debounce = true)
         {
-
             if (!HasPlaylist) return;
 
             if (_loopMode == LoopMode.Shuffle)
             {
-                PlayRandomNext();
+                PlayRandomNext(debounce);
                 return;
             }
 
             int next = _currentPlaylistIndex + 1;
-
             if (next >= _playlist.Count)
-
             {
-
                 if (_loopMode == LoopMode.All)
-
                 {
-
                     next = 0;
-
                 }
-
                 else
-
                 {
-
                     RaiseStatus("Đã hết danh sách phát.");
-
                     return;
-
                 }
-
             }
 
-            PlayTrackAtIndex(next);
-
+            PlayTrackAtIndex(next, debounce);
         }
 
-        public void PlayRandomNext()
+        public void PlayRandomNext(bool debounce = true)
         {
             if (!HasPlaylist || _playlist == null || _playlist.Count == 0) return;
             if (_playlist.Count == 1)
             {
-                PlayTrackAtIndex(0);
+                PlayTrackAtIndex(0, debounce);
                 return;
             }
 
@@ -1381,7 +1382,7 @@ namespace KahoiiMusic.Services
 
                 int nextIndex = unplayed[_random.Next(unplayed.Count)];
                 _shufflePlayedIndices.Add(nextIndex);
-                PlayTrackAtIndex(nextIndex);
+                PlayTrackAtIndex(nextIndex, debounce);
             }
         }
 
@@ -1399,18 +1400,12 @@ namespace KahoiiMusic.Services
             }
         }
 
-        public void PlayPrevious()
-
+        public void PlayPrevious(bool debounce = true)
         {
-
             if (!HasPlaylist)
-
             {
-
                 Position = TimeSpan.Zero;
-
                 return;
-
             }
 
             if (_loopMode == LoopMode.Shuffle && _shufflePlayedIndices.Count > 1)
@@ -1419,17 +1414,14 @@ namespace KahoiiMusic.Services
                 {
                     _shufflePlayedIndices.RemoveAt(_shufflePlayedIndices.Count - 1);
                     int shuffPrev = _shufflePlayedIndices[_shufflePlayedIndices.Count - 1];
-                    PlayTrackAtIndex(shuffPrev);
+                    PlayTrackAtIndex(shuffPrev, debounce);
                     return;
                 }
             }
 
             int prev = _currentPlaylistIndex - 1;
-
             if (prev < 0)
-
             {
-
                 if (_loopMode == LoopMode.All || _loopMode == LoopMode.Shuffle)
                 {
                     prev = _playlist.Count - 1;
@@ -1439,11 +1431,9 @@ namespace KahoiiMusic.Services
                     Position = TimeSpan.Zero;
                     return;
                 }
-
             }
 
-            PlayTrackAtIndex(prev);
-
+            PlayTrackAtIndex(prev, debounce);
         }
 
         public void ClearPlaylist()
@@ -1580,7 +1570,7 @@ namespace KahoiiMusic.Services
                 PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
             }, null);
 
-            PlayTrackAtIndex(_currentPlaylistIndex);
+            PlayTrackAtIndex(_currentPlaylistIndex, debounce: false);
         }
 
         public void PlayFavorites(List<PlaylistItem> favoriteItems, int startIndex = 0)
@@ -1607,7 +1597,7 @@ namespace KahoiiMusic.Services
                 PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
             }, null);
 
-            PlayTrackAtIndex(_currentPlaylistIndex);
+            PlayTrackAtIndex(_currentPlaylistIndex, debounce: false);
         }
 
         public void PlayCollection(List<PlaylistItem> items, int startIndex, string playlistTitle, string playlistId)
@@ -1634,7 +1624,7 @@ namespace KahoiiMusic.Services
                 PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
             }, null);
 
-            PlayTrackAtIndex(_currentPlaylistIndex);
+            PlayTrackAtIndex(_currentPlaylistIndex, debounce: false);
         }
 
         public void RestoreSessionPlaylist(int index = 0)
@@ -1657,7 +1647,7 @@ namespace KahoiiMusic.Services
                 PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
             }, null);
 
-            PlayTrackAtIndex(_currentPlaylistIndex);
+            PlayTrackAtIndex(_currentPlaylistIndex, debounce: false);
         }
 
         public void SetPlaylist(List<PlaylistItem> items, int initialIndex = 0, string playlistTitle = null, string playlistId = null)
@@ -1772,28 +1762,19 @@ namespace KahoiiMusic.Services
             }, null);
         }
 
-        public void PlayTrackAtIndex(int index)
-
+        public void PlayTrackAtIndex(int index, bool debounce = true)
         {
-
             var pl = _playlist;
-
             if (pl == null || index < 0 || index >= pl.Count) return;
 
             _currentPlaylistIndex = index;
 
             _syncContext.Post(delegate
-
             {
-
                 if (PlaylistIndexChanged != null)
-
                 {
-
                     PlaylistIndexChanged(this, _currentPlaylistIndex);
-
                 }
-
             }, null);
 
             PlaylistItem item = pl[index];
@@ -1835,8 +1816,27 @@ namespace KahoiiMusic.Services
                 }
             }
 
-            LoadAndPlay(item.Url, preserveQueueSource: true);
+            if (!debounce)
+            {
+                CancelTrackSwitchDebounce();
+                LoadAndPlay(item.Url, preserveQueueSource: true);
+                return;
+            }
 
+            lock (_debounceLock)
+            {
+                _trackSwitchDebounceTimer?.Dispose();
+                string targetUrl = item.Url;
+                _trackSwitchDebounceTimer = new System.Threading.Timer(_ =>
+                {
+                    lock (_debounceLock)
+                    {
+                        _trackSwitchDebounceTimer?.Dispose();
+                        _trackSwitchDebounceTimer = null;
+                    }
+                    LoadAndPlay(targetUrl, preserveQueueSource: true);
+                }, null, TrackSwitchDebounceMs, Timeout.Infinite);
+            }
         }
 
         public void LoadPlaylistQueueOnly(string playlistUrl)
@@ -2089,7 +2089,7 @@ namespace KahoiiMusic.Services
             }, null);
 
             // Bắt đầu phát bài hiện tại qua PlayTrackAtIndex để bảo toàn thứ tự danh sách phát
-            PlayTrackAtIndex(startIdx);
+            PlayTrackAtIndex(startIdx, debounce: false);
 
             // Tự động phân giải thời lượng cho toàn bộ bài hát trong danh sách còn thiếu
             ResolveMissingTrackDurationsAsync(null, null);
@@ -2747,7 +2747,7 @@ namespace KahoiiMusic.Services
                             hasStartedFirst = true;
                             int targetIdx = foundIdx >= 0 ? foundIdx : 0;
                             _currentPlaylistIndex = targetIdx;
-                            PlayTrackAtIndex(targetIdx);
+                            PlayTrackAtIndex(targetIdx, debounce: false);
                         }
 
                         if (!string.IsNullOrEmpty(listId) && list.Exists(x => x.DurationSeconds <= 0))
@@ -2919,7 +2919,7 @@ namespace KahoiiMusic.Services
 
                         {
 
-                            PlayTrackAtIndex(0);
+                            PlayTrackAtIndex(0, debounce: false);
 
                         }
 
@@ -2982,10 +2982,10 @@ namespace KahoiiMusic.Services
         }
 
         public void LoadAndPlay(string input, bool preserveQueueSource = false)
-
         {
-
             if (string.IsNullOrWhiteSpace(input)) return;
+
+            CancelTrackSwitchDebounce();
 
             int myLoadId = Interlocked.Increment(ref _currentLoadId);
 
@@ -4068,13 +4068,13 @@ namespace KahoiiMusic.Services
                     {
                         if (_loopMode == LoopMode.Shuffle)
                         {
-                            PlayRandomNext();
+                            PlayRandomNext(debounce: false);
                             return;
                         }
 
                         if (_loopMode == LoopMode.All || CanPlayNext)
                         {
-                            PlayNext();
+                            PlayNext(debounce: false);
                             return;
                         }
                     }
@@ -4588,10 +4588,9 @@ namespace KahoiiMusic.Services
        
 
         public void Dispose()
-
         {
-
             _isDisposed = true;
+            CancelTrackSwitchDebounce();
             if (_deviceEnumerator != null && _endpointNotifier != null)
             {
                 try { _deviceEnumerator.UnregisterEndpointNotificationCallback(_endpointNotifier); } catch { }

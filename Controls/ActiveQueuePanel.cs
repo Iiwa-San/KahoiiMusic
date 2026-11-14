@@ -11,9 +11,27 @@ namespace KahoiiMusic.Controls
     public class ActiveQueuePanel : Panel
     {
         private const int WM_ERASEBKGND = 0x0014;
-        private const int HeaderH = 42;
-        private const int RowH = 56;
+        private const int HeaderH = 34;
+        private int RowH => Height < 140 ? 46 : 54;
         private const int ScrollBarW = 6;
+
+        public bool IsSingleNextTrackMode { get; set; } = false;
+
+        public int GetNextTrackIndex()
+        {
+            if (_items == null || _items.Count == 0) return -1;
+            string curId = _audioPlayer?.CurrentVideoId;
+            int curIdx = -1;
+            if (!string.IsNullOrEmpty(curId))
+            {
+                curIdx = _items.FindIndex(it => string.Equals(it.Id, curId, StringComparison.OrdinalIgnoreCase));
+            }
+            if (curIdx >= 0)
+            {
+                return (curIdx + 1 < _items.Count) ? curIdx + 1 : 0;
+            }
+            return 0;
+        }
 
         private AudioPlayerService _audioPlayer;
         private List<PlaylistItem> _items = new List<PlaylistItem>();
@@ -136,9 +154,12 @@ namespace KahoiiMusic.Controls
             Invalidate();
         }
 
-        private int ListTop => HeaderH + 4;
-        private int ListHeight => Math.Max(10, Height - ListTop - 6);
+        private int ListTop => HeaderH + 2;
+        private int ListHeight => Math.Max(10, Height - ListTop - 4);
         private int TotalListContentHeight => _items.Count * RowH;
+
+        private int SingleRowHeight => Math.Max(56, Math.Min(68, ListHeight - 6));
+        private Rectangle SingleRowRect => new Rectangle(8, ListTop + Math.Max(0, (ListHeight - SingleRowHeight) / 2), Math.Max(10, Width - 16), SingleRowHeight);
 
         private void ClampScroll()
         {
@@ -165,6 +186,25 @@ namespace KahoiiMusic.Controls
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
+
+            if (IsSingleNextTrackMode)
+            {
+                int nextIdx = GetNextTrackIndex();
+                bool hover = false;
+                if (nextIdx >= 0 && nextIdx < _items.Count)
+                {
+                    hover = SingleRowRect.Contains(e.Location);
+                }
+                int newRow = hover ? nextIdx : -1;
+                if (_hoveredRow != newRow)
+                {
+                    _hoveredRow = newRow;
+                    Invalidate();
+                }
+                Cursor = hover ? Cursors.Hand : Cursors.Default;
+                return;
+            }
+
             bool needRepaint = false;
 
             bool overScroll = (e.X >= Width - ScrollBarW - 14 && e.X <= Width && TotalListContentHeight > ListHeight && e.Y >= ListTop && e.Y <= ListTop + ListHeight);
@@ -224,6 +264,34 @@ namespace KahoiiMusic.Controls
         {
             base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left) return;
+
+            if (IsSingleNextTrackMode)
+            {
+                int nextIdx = GetNextTrackIndex();
+                if (nextIdx >= 0 && nextIdx < _items.Count)
+                {
+                    if (SingleRowRect.Contains(e.Location))
+                    {
+                        PlaylistItem item = _items[nextIdx];
+                        if (_audioPlayer != null)
+                        {
+                            var pl = _audioPlayer.Playlist;
+                            if (pl != null && pl.Contains(item))
+                            {
+                                int idx = pl.IndexOf(item);
+                                _audioPlayer.PlayTrackAtIndex(idx);
+                            }
+                            else
+                            {
+                                TrackSelected?.Invoke(this, item);
+                                _audioPlayer.LoadAndPlay(item.Url);
+                            }
+                        }
+                        Invalidate();
+                    }
+                }
+                return;
+            }
 
             int listTop = ListTop;
             int listH = ListHeight;
@@ -324,32 +392,12 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            // 2. Header
-            using (Font titleFont = new Font("Segoe UI", 12.0f, FontStyle.Bold))
+            // 2. Header (Clean pure title, no count badge)
+            string titleText = IsSingleNextTrackMode ? "Bài tiếp theo" : "Hàng đợi";
+            using (Font titleFont = new Font("Segoe UI", Height < 140 ? 10.5f : 11.5f, FontStyle.Bold))
             using (SolidBrush titleBrush = new SolidBrush(Color.FromArgb(250, 245, 255)))
             {
-                g.DrawString("Hàng đợi", titleFont, titleBrush, new PointF(18, 10));
-            }
-
-            // Track count pill badge on the right of header
-            if (_items.Count > 0)
-            {
-                string countText = string.Format("{0} bài hát", _items.Count);
-                using (Font countFont = new Font("Segoe UI", 8.25f, FontStyle.Bold))
-                using (SolidBrush countBg = new SolidBrush(Color.FromArgb(45, _theme.AccentColor)))
-                using (SolidBrush countTextBrush = new SolidBrush(ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.25f)))
-                using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-                {
-                    SizeF sz = g.MeasureString(countText, countFont);
-                    int pillW = (int)sz.Width + 16;
-                    int pillH = 22;
-                    Rectangle pillRect = new Rectangle(Width - pillW - 18, 10, pillW, pillH);
-                    using (GraphicsPath pillPath = RoundedRect(pillRect, pillH / 2))
-                    {
-                        g.FillPath(countBg, pillPath);
-                    }
-                    g.DrawString(countText, countFont, countTextBrush, pillRect, sf);
-                }
+                g.DrawString(titleText, titleFont, titleBrush, new PointF(16, Height < 140 ? 7 : 9));
             }
 
             // Header separator line
@@ -386,7 +434,110 @@ namespace KahoiiMusic.Controls
                 using (SolidBrush emptyBrush = new SolidBrush(Color.FromArgb(135, 130, 160)))
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
-                    g.DrawString("Hàng đợi trống", emptyFont, emptyBrush, listBounds, sf);
+                    g.DrawString("Chưa có bài tiếp theo", emptyFont, emptyBrush, listBounds, sf);
+                }
+            }
+            else if (IsSingleNextTrackMode)
+            {
+                int nextIdx = GetNextTrackIndex();
+                if (nextIdx < 0 || nextIdx >= _items.Count)
+                {
+                    using (Font emptyFont = new Font("Segoe UI", 10.0f, FontStyle.Italic))
+                    using (SolidBrush emptyBrush = new SolidBrush(Color.FromArgb(135, 130, 160)))
+                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                    {
+                        g.DrawString("Chưa có bài tiếp theo", emptyFont, emptyBrush, listBounds, sf);
+                    }
+                }
+                else
+                {
+                    PlaylistItem item = _items[nextIdx];
+                    Rectangle rowRect = SingleRowRect;
+                    bool isHovered = (nextIdx == _hoveredRow);
+
+                    if (isHovered)
+                    {
+                        using (GraphicsPath rp = RoundedRect(rowRect, 10))
+                        using (SolidBrush hoverBg = new SolidBrush(Color.FromArgb(40, 255, 255, 255)))
+                        {
+                            g.FillPath(hoverBg, rp);
+                        }
+                    }
+
+                    // 1. Next pill indicator
+                    int indexX = rowRect.X + 8;
+                    using (SolidBrush pillBrush = new SolidBrush(_theme.AccentColor))
+                    {
+                        int pillH = Math.Min(22, rowRect.Height - 24);
+                        int pillY = rowRect.Y + (rowRect.Height - pillH) / 2;
+                        g.FillRectangle(pillBrush, indexX, pillY, 3, pillH);
+                    }
+
+                    // 2. Thumbnail (scaled up to fill card nicely)
+                    int thumbX = indexX + 12;
+                    int thumbSize = Math.Min(52, rowRect.Height - 12);
+                    int thumbY = rowRect.Y + (rowRect.Height - thumbSize) / 2;
+                    Rectangle thumbRect = new Rectangle(thumbX, thumbY, thumbSize, thumbSize);
+
+                    Bitmap bmp = null;
+                    if (!string.IsNullOrEmpty(item.Id))
+                    {
+                        bmp = ThumbnailManager.GetThumbnail(item.Id);
+                        if (bmp == null)
+                        {
+                            ThumbnailManager.QueueLoad(item.Id, () =>
+                            {
+                                try { BeginInvoke(new Action(Invalidate)); } catch { }
+                            });
+                        }
+                    }
+
+                    using (GraphicsPath tp = RoundedRect(thumbRect, 8))
+                    {
+                        if (bmp != null)
+                        {
+                            g.DrawImage(bmp, thumbRect);
+                        }
+                        else
+                        {
+                            using (SolidBrush placeholderBrush = new SolidBrush(Color.FromArgb(50, 40, 75)))
+                            {
+                                g.FillPath(placeholderBrush, tp);
+                            }
+                        }
+                    }
+
+                    // 3. Duration on right
+                    string durStr = item.FormattedDuration ?? string.Empty;
+                    int durW = 56;
+                    int durX = rowRect.Right - durW - 10;
+                    if (!string.IsNullOrEmpty(durStr))
+                    {
+                        using (Font durFont = new Font("Segoe UI", 9.5f, FontStyle.Regular))
+                        using (SolidBrush durBrush = new SolidBrush(Color.FromArgb(145, 140, 170)))
+                        using (StringFormat sf = new StringFormat(StringFormat.GenericTypographic) { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                        {
+                            g.DrawString(durStr, durFont, durBrush, new Rectangle(durX, rowRect.Y, durW, rowRect.Height), sf);
+                        }
+                    }
+
+                    // 4. Title and Author
+                    int textLeft = thumbRect.Right + 12;
+                    int textWidth = Math.Max(40, durX - textLeft - 8);
+
+                    using (Font tFont = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+                    using (Font aFont = new Font("Segoe UI", 9.0f, FontStyle.Regular))
+                    using (SolidBrush tBrush = new SolidBrush(isHovered ? Color.White : Color.FromArgb(245, 245, 255)))
+                    using (SolidBrush aBrush = new SolidBrush(Color.FromArgb(155, 150, 180)))
+                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near, FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter })
+                    {
+                        RectangleF tRect = new RectangleF(textLeft, rowRect.Y + (rowRect.Height - 42) / 2, textWidth, 22);
+                        RectangleF aRect = new RectangleF(textLeft, tRect.Bottom + 1, textWidth, 18);
+                        g.DrawString(item.Title ?? string.Empty, tFont, tBrush, tRect, sf);
+                        string authorText = !string.IsNullOrWhiteSpace(item.Author) ? item.Author : Services.AudioPlayerService.ExtractAuthorFromTitle(item.Title);
+                        if (string.IsNullOrWhiteSpace(authorText)) authorText = "YouTube";
+                        g.DrawString(authorText, aFont, aBrush, aRect, sf);
+                    }
                 }
             }
             else
@@ -455,7 +606,7 @@ namespace KahoiiMusic.Controls
 
                     // 2. Thumbnail
                     int thumbX = indexX + ((i + 1) >= 1000 ? 52 : ((i + 1) >= 100 ? 44 : 36));
-                    int thumbSize = 38;
+                    int thumbSize = RowH < 50 ? 32 : 38;
                     int thumbY = rowRect.Y + (rowRect.Height - thumbSize) / 2;
                     Rectangle thumbRect = new Rectangle(thumbX, thumbY, thumbSize, thumbSize);
 
@@ -533,7 +684,7 @@ namespace KahoiiMusic.Controls
             g.Clip = oldClip;
 
             // 4. Custom Scrollbar
-            if (TotalListContentHeight > listH)
+            if (!IsSingleNextTrackMode && TotalListContentHeight > listH)
             {
                 int trackX = Width - ScrollBarW - 6;
                 int trackY = listTop + 4;

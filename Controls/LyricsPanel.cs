@@ -33,8 +33,12 @@ namespace KahoiiMusic.Controls
 
         private RomanizationDisplayMode _romanizationMode = RomanizationDisplayMode.Dual;
         private int _delayOffsetMs = 0; // 0ms standard exact synchronization
+        private int _fontSizeLevel = 1; // 0 = Nhỏ (0.86x), 1 = Vừa (1.04x), 2 = Lớn (1.26x)
         private Rectangle _romaziBtnRect = Rectangle.Empty;
         private Rectangle _reloadBtnRect = Rectangle.Empty;
+        private Rectangle _fontSizeBtnRect = Rectangle.Empty;
+        private Rectangle _nonSyncedBadgeRect = Rectangle.Empty;
+        private bool _isFontSizeBtnHovered = false;
         private KahoiiMusic.Services.DynamicThemePalette _theme = KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
 
         public void SetTheme(KahoiiMusic.Services.DynamicThemePalette theme)
@@ -82,6 +86,7 @@ namespace KahoiiMusic.Controls
             {
                 _delayOffsetMs = HistoryService.LyricsDelayOffsetMs;
                 _romanizationMode = (RomanizationDisplayMode)HistoryService.LyricsRomanizationMode;
+                _fontSizeLevel = HistoryService.LyricsFontSizeLevel;
             }
             catch { }
 
@@ -101,6 +106,27 @@ namespace KahoiiMusic.Controls
             var miReload = new ToolStripMenuItem("↻ Tải lại lời bài hát (Làm mới cache)");
             miReload.Click += (s, e) => ReloadRequested?.Invoke(this, EventArgs.Empty);
             cms.Items.Add(miReload);
+
+            cms.Items.Add(new ToolStripSeparator());
+            var miFontSmall = new ToolStripMenuItem("Cỡ chữ: Nhỏ");
+            miFontSmall.Click += (s, e) => FontSizeLevel = 0;
+            cms.Items.Add(miFontSmall);
+
+            var miFontMedium = new ToolStripMenuItem("Cỡ chữ: Vừa");
+            miFontMedium.Click += (s, e) => FontSizeLevel = 1;
+            cms.Items.Add(miFontMedium);
+
+            var miFontLarge = new ToolStripMenuItem("Cỡ chữ: Lớn");
+            miFontLarge.Click += (s, e) => FontSizeLevel = 2;
+            cms.Items.Add(miFontLarge);
+
+            cms.Opening += (s, e) =>
+            {
+                miFontSmall.Checked = (_fontSizeLevel == 0);
+                miFontMedium.Checked = (_fontSizeLevel == 1);
+                miFontLarge.Checked = (_fontSizeLevel == 2);
+            };
+
             ContextMenuStrip = cms;
         }
 
@@ -167,6 +193,25 @@ namespace KahoiiMusic.Controls
             }
         }
 
+        [Category("Appearance")]
+        [DefaultValue(1)]
+        public int FontSizeLevel
+        {
+            get { return _fontSizeLevel; }
+            set
+            {
+                int clamped = Math.Max(0, Math.Min(2, value));
+                if (_fontSizeLevel != clamped)
+                {
+                    _fontSizeLevel = clamped;
+                    try { HistoryService.LyricsFontSizeLevel = clamped; } catch { }
+                    RebuildLayout();
+                    RecalculateTargetScroll();
+                    Invalidate();
+                }
+            }
+        }
+
         [Category("Data")]
         public int CurrentIndex
         {
@@ -190,6 +235,7 @@ namespace KahoiiMusic.Controls
             {
                 _lyrics = value;
                 _isUserScrolling = false;
+                UpdateButtonsLayout();
                 RebuildLayout();
 
                 if (_lyrics != null && _lyrics.HasLyrics && _lyrics.IsSynced && _currentPosition > TimeSpan.Zero)
@@ -311,8 +357,9 @@ namespace KahoiiMusic.Controls
         {
             if (_layoutLines.Count == 0) return;
 
-            // Pin active line firmly at upper-middle center (38% from top)
-            float viewFocusY = Height * 0.38f;
+            // Pin active line firmly at exact vertical center of reading area (below top buttons)
+            int topButtonBottom = (_fontSizeBtnRect.IsEmpty && _romaziBtnRect.IsEmpty && _reloadBtnRect.IsEmpty) ? 0 : 28;
+            float viewFocusY = topButtonBottom + (Height - topButtonBottom) * 0.50f;
 
             if (_currentIndex >= 0 && _currentIndex < _layoutLines.Count)
             {
@@ -396,10 +443,66 @@ namespace KahoiiMusic.Controls
             RecalculateTargetScroll();
         }
 
+        private void UpdateButtonsLayout()
+        {
+            int btnH = 20;
+            int btnY = 6;
+            int curRight = Width - 10;
+
+            // 1. Romazi / Pinyin button
+            if (HasRomanizationSupport)
+            {
+                int romaziW = 88;
+                _romaziBtnRect = new Rectangle(curRight - romaziW, btnY, romaziW, btnH);
+                curRight -= (romaziW + 6);
+            }
+            else
+            {
+                _romaziBtnRect = Rectangle.Empty;
+            }
+
+            // 2. Non-synced badge
+            if (_lyrics != null && !_lyrics.IsSynced)
+            {
+                int badgeW = 78;
+                _nonSyncedBadgeRect = new Rectangle(curRight - badgeW, btnY, badgeW, btnH);
+                curRight -= (badgeW + 6);
+            }
+            else
+            {
+                _nonSyncedBadgeRect = Rectangle.Empty;
+            }
+
+            // 3. Font Size 3-level Toggle Button
+            if (_lyrics != null && _lyrics.HasLyrics)
+            {
+                bool isWide = (Width >= 400);
+                int fontBtnW = isWide ? 84 : 46;
+                _fontSizeBtnRect = new Rectangle(curRight - fontBtnW, btnY, fontBtnW, btnH);
+                curRight -= (fontBtnW + 6);
+            }
+            else
+            {
+                _fontSizeBtnRect = Rectangle.Empty;
+            }
+
+            // 4. Reload Button
+            if (_lyrics != null && _lyrics.HasLyrics)
+            {
+                int reloadW = 22;
+                _reloadBtnRect = new Rectangle(curRight - reloadW, btnY, reloadW, btnH);
+                curRight -= (reloadW + 6);
+            }
+            else
+            {
+                _reloadBtnRect = Rectangle.Empty;
+            }
+        }
+
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
-            _romaziBtnRect = new Rectangle(Width - 94, 6, 88, 20);
+            UpdateButtonsLayout();
             RebuildLayout();
             RecalculateTargetScroll();
             Invalidate();
@@ -432,15 +535,23 @@ namespace KahoiiMusic.Controls
             base.OnMouseMove(e);
 
             // Check Romaji/Pinyin button hover
-            bool overBtn = HasRomanizationSupport && _romaziBtnRect.Contains(e.Location);
+            bool overBtn = HasRomanizationSupport && !_romaziBtnRect.IsEmpty && _romaziBtnRect.Contains(e.Location);
             if (overBtn != _isRomaziBtnHovered)
             {
                 _isRomaziBtnHovered = overBtn;
                 Invalidate();
             }
 
+            // Check Font Size button hover
+            bool overFont = !_fontSizeBtnRect.IsEmpty && _fontSizeBtnRect.Contains(e.Location);
+            if (overFont != _isFontSizeBtnHovered)
+            {
+                _isFontSizeBtnHovered = overFont;
+                Invalidate();
+            }
+
             // Check Reload button hover
-            bool overReload = _reloadBtnRect.Width > 0 && _reloadBtnRect.Contains(e.Location);
+            bool overReload = !_reloadBtnRect.IsEmpty && _reloadBtnRect.Contains(e.Location);
             if (overReload != _isReloadBtnHovered)
             {
                 _isReloadBtnHovered = overReload;
@@ -466,7 +577,7 @@ namespace KahoiiMusic.Controls
                 Invalidate();
             }
 
-            Cursor = (overBtn || overReload || (hovered >= 0 && _lyrics != null && _lyrics.HasLyrics)) ? Cursors.Hand : Cursors.Default;
+            Cursor = (overBtn || overFont || overReload || (hovered >= 0 && _lyrics != null && _lyrics.HasLyrics)) ? Cursors.Hand : Cursors.Default;
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -474,6 +585,7 @@ namespace KahoiiMusic.Controls
             base.OnMouseLeave(e);
             _hoveredLineIndex = -1;
             _isRomaziBtnHovered = false;
+            _isFontSizeBtnHovered = false;
             _isReloadBtnHovered = false;
             Cursor = Cursors.Default;
             Invalidate();
@@ -485,14 +597,21 @@ namespace KahoiiMusic.Controls
             if (e.Button != MouseButtons.Left) return;
 
             // 0. Click Reload button
-            if (_reloadBtnRect.Width > 0 && _reloadBtnRect.Contains(e.Location))
+            if (!_reloadBtnRect.IsEmpty && _reloadBtnRect.Contains(e.Location))
             {
                 ReloadRequested?.Invoke(this, EventArgs.Empty);
                 return;
             }
 
-            // 1. Click Romaji / Pinyin pill button
-            if (HasRomanizationSupport && _romaziBtnRect.Contains(e.Location))
+            // 1. Click Font Size button: Cycle Nhỏ (0) -> Vừa (1) -> Lớn (2) -> Nhỏ (0)
+            if (!_fontSizeBtnRect.IsEmpty && _fontSizeBtnRect.Contains(e.Location))
+            {
+                FontSizeLevel = (_fontSizeLevel + 1) % 3;
+                return;
+            }
+
+            // 2. Click Romaji / Pinyin pill button
+            if (HasRomanizationSupport && !_romaziBtnRect.IsEmpty && _romaziBtnRect.Contains(e.Location))
             {
                 // Cycle: Original (0) -> Dual (1) -> RomanizedOnly (2) -> Original (0)
                 int nextMode = ((int)_romanizationMode + 1) % 3;
@@ -500,7 +619,7 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
-            // 2. Click line to seek
+            // 3. Click line to seek
             if (_lyrics != null && _lyrics.HasLyrics)
             {
                 float mouseY = e.Y - _currentScrollY;
@@ -567,6 +686,15 @@ namespace KahoiiMusic.Controls
             int panelH = Height;
             int panelW = Width;
 
+            // Clip lyrics text below the top button bar so text never collides with buttons
+            int topButtonBottom = (_fontSizeBtnRect.IsEmpty && _romaziBtnRect.IsEmpty && _reloadBtnRect.IsEmpty) ? 0 : 28;
+            Region savedLyricsClip = g.Clip;
+            if (topButtonBottom > 0)
+            {
+                RectangleF lyricsClipRect = new RectangleF(0, topButtonBottom, panelW, panelH - topButtonBottom);
+                g.SetClip(lyricsClipRect, CombineMode.Intersect);
+            }
+
             // Draw Lyrics Lines
             using (Font activeFont = new Font("Segoe UI", 11.5f * fontScale, FontStyle.Bold))
             using (Font nearFont = new Font("Segoe UI", 10.0f * fontScale, FontStyle.Regular))
@@ -616,10 +744,15 @@ namespace KahoiiMusic.Controls
                     else
                     {
                         drawFont = farFont;
-                        float distFromCenter = Math.Abs(renderY + item.Height / 2f - panelH * 0.38f);
-                        int alpha = Math.Max(35, (int)(135 - (distFromCenter / (panelH * 0.5f)) * 95));
+                        float distFromCenter = Math.Abs(renderY + item.Height / 2f - panelH * 0.50f);
+                        int alpha = Math.Max(25, (int)(135 - (distFromCenter / (panelH * 0.5f)) * 95));
+                        // Fade out near top if buttons are present to avoid overlapping controls
+                        if (renderY < 30 && (!_fontSizeBtnRect.IsEmpty || !_reloadBtnRect.IsEmpty))
+                        {
+                            alpha = Math.Max(0, (int)(alpha * Math.Max(0f, renderY / 30f)));
+                        }
                         textColor = isHovered ? Color.FromArgb(220, 255, 255, 255) : Color.FromArgb(alpha, 210, 205, 225);
-                        subColor = Color.FromArgb(Math.Max(25, alpha - 20), 190, 185, 215);
+                        subColor = Color.FromArgb(Math.Max(0, alpha - 20), 190, 185, 215);
                     }
 
                     RectangleF textRect = new RectangleF(10f, renderY, panelW - 16f, item.Height);
@@ -661,45 +794,99 @@ namespace KahoiiMusic.Controls
                 }
             }
 
+            if (topButtonBottom > 0)
+            {
+                g.Clip = savedLyricsClip;
+            }
+
+            // Ensure buttons layout is updated
+            UpdateButtonsLayout();
+
             // Draw Romaji / Pinyin Toggle Pill Button in Top Right
-            if (HasRomanizationSupport)
+            if (HasRomanizationSupport && !_romaziBtnRect.IsEmpty)
             {
                 DrawRomanizationButton(g);
             }
 
             // Draw "non-synced" badge beside Romaji button if lyrics are not audio-synchronized
-            if (_lyrics != null && !_lyrics.IsSynced)
+            if (_lyrics != null && !_lyrics.IsSynced && !_nonSyncedBadgeRect.IsEmpty)
             {
                 DrawNonSyncedBadge(g);
             }
 
+            // Draw 3-step Font Size Toggle Pill Button (Nhỏ / Vừa / Lớn)
+            if (_lyrics != null && _lyrics.HasLyrics && !_fontSizeBtnRect.IsEmpty)
+            {
+                DrawFontSizeButton(g);
+            }
+
             // Draw Reload / Refresh button "↻" (allows user to re-fetch/clean cache anytime)
-            if (_lyrics != null && _lyrics.HasLyrics)
+            if (_lyrics != null && _lyrics.HasLyrics && !_reloadBtnRect.IsEmpty)
             {
                 DrawReloadButton(g);
             }
         }
 
+        private void DrawFontSizeButton(Graphics g)
+        {
+            if (_fontSizeBtnRect.IsEmpty || _fontSizeBtnRect.Width <= 0) return;
+
+            bool isWide = (_fontSizeBtnRect.Width >= 60);
+            string label;
+            if (isWide)
+            {
+                switch (_fontSizeLevel)
+                {
+                    case 0: label = "Cỡ chữ: Nhỏ"; break;
+                    case 2: label = "Cỡ chữ: Lớn"; break;
+                    default: label = "Cỡ chữ: Vừa"; break;
+                }
+            }
+            else
+            {
+                switch (_fontSizeLevel)
+                {
+                    case 0: label = "Aa 1"; break;
+                    case 2: label = "Aa 3"; break;
+                    default: label = "Aa 2"; break;
+                }
+            }
+
+            Color borderColor = _isFontSizeBtnHovered
+                ? Color.FromArgb(200, 255, 255, 255)
+                : (_fontSizeLevel == 1 ? Color.FromArgb(100, 160, 140, 200) : _theme.AccentColor);
+
+            Color fillColor = _isFontSizeBtnHovered
+                ? Color.FromArgb(220, 50, 30, 80)
+                : Color.FromArgb(200, 32, 20, 52);
+
+            Color textCol = _isFontSizeBtnHovered
+                ? Color.White
+                : (_fontSizeLevel == 1 ? Color.FromArgb(215, 215, 230) : Color.FromArgb(240, 240, 255));
+
+            using (GraphicsPath btnPath = CreateRoundedRectanglePath(_fontSizeBtnRect, 10))
+            {
+                using (SolidBrush fillBrush = new SolidBrush(fillColor))
+                {
+                    g.FillPath(fillBrush, btnPath);
+                }
+                using (Pen borderPen = new Pen(borderColor, 1.0f))
+                {
+                    g.DrawPath(borderPen, btnPath);
+                }
+            }
+
+            using (Font font = new Font("Segoe UI", isWide ? 7.5f : 7.8f, FontStyle.Bold))
+            using (SolidBrush textBrush = new SolidBrush(textCol))
+            using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                g.DrawString(label, font, textBrush, _fontSizeBtnRect, sf);
+            }
+        }
+
         private void DrawReloadButton(Graphics g)
         {
-            int btnW = 22;
-            int btnH = 20;
-            int btnY = 6;
-            int rightBoundary = Width - 10;
-
-            if (HasRomanizationSupport && _romaziBtnRect.Width > 0)
-            {
-                rightBoundary = Math.Min(rightBoundary, _romaziBtnRect.Left - 6);
-            }
-            if (_lyrics != null && !_lyrics.IsSynced)
-            {
-                int badgeW = 78;
-                int badgeX = HasRomanizationSupport ? (_romaziBtnRect.Left - badgeW - 6) : (Width - badgeW - 10);
-                rightBoundary = Math.Min(rightBoundary, badgeX - 6);
-            }
-
-            int btnX = rightBoundary - btnW;
-            _reloadBtnRect = new Rectangle(btnX, btnY, btnW, btnH);
+            if (_reloadBtnRect.IsEmpty || _reloadBtnRect.Width <= 0) return;
 
             Color borderColor = _isReloadBtnHovered ? Color.FromArgb(220, 200, 240) : Color.FromArgb(100, 160, 140, 200);
             Color fillColor = _isReloadBtnHovered ? Color.FromArgb(230, 60, 35, 90) : Color.FromArgb(200, 32, 20, 52);
@@ -727,13 +914,9 @@ namespace KahoiiMusic.Controls
 
         private void DrawNonSyncedBadge(Graphics g)
         {
-            int badgeW = 78;
-            int badgeH = 20;
-            int badgeX = HasRomanizationSupport ? (_romaziBtnRect.Left - badgeW - 6) : (Width - badgeW - 10);
-            int badgeY = 6;
-            Rectangle badgeRect = new Rectangle(badgeX, badgeY, badgeW, badgeH);
+            if (_nonSyncedBadgeRect.IsEmpty || _nonSyncedBadgeRect.Width <= 0) return;
 
-            using (GraphicsPath path = CreateRoundedRectanglePath(badgeRect, 10))
+            using (GraphicsPath path = CreateRoundedRectanglePath(_nonSyncedBadgeRect, 10))
             using (SolidBrush fillBrush = new SolidBrush(Color.FromArgb(200, 32, 20, 52)))
             using (Pen borderPen = new Pen(Color.FromArgb(140, 255, 175, 75), 1.0f))
             using (Font font = new Font("Segoe UI", 7.8f, FontStyle.Bold))
@@ -742,7 +925,7 @@ namespace KahoiiMusic.Controls
             {
                 g.FillPath(fillBrush, path);
                 g.DrawPath(borderPen, path);
-                g.DrawString("non-synced", font, textBrush, badgeRect, sf);
+                g.DrawString("non-synced", font, textBrush, _nonSyncedBadgeRect, sf);
             }
         }
 
@@ -845,7 +1028,14 @@ namespace KahoiiMusic.Controls
             float scaleH = 1.0f + Math.Max(0f, (Height - 200f) / 450f) * 0.70f;
             float scaleW = 1.0f + Math.Max(0f, (Width - 280f) / 500f) * 0.70f;
             float scale = Math.Min(scaleH, scaleW);
-            return Math.Max(1.0f, Math.Min(1.80f, scale));
+            float baseScale = Math.Max(1.0f, Math.Min(1.80f, scale));
+
+            float levelMultiplier = 1.04f;
+            if (_fontSizeLevel == 0) levelMultiplier = 0.86f;      // Mốc 1: Nhỏ
+            else if (_fontSizeLevel == 1) levelMultiplier = 1.04f; // Mốc 2: Vừa (chuẩn)
+            else if (_fontSizeLevel == 2) levelMultiplier = 1.26f; // Mốc 3: Lớn
+
+            return baseScale * levelMultiplier;
         }
 
         protected override void Dispose(bool disposing)

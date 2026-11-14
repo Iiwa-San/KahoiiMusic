@@ -77,6 +77,67 @@ namespace KahoiiMusic.Controls
         private bool _isLoading = false;
         private string _nextContinuationToken = null;
         private bool _isLoadingMore = false;
+        private System.Windows.Forms.Timer _loadingAnimTimer;
+        private int _animFrame = 0;
+
+        private void StartLoadingAnim()
+        {
+            if (_loadingAnimTimer == null)
+            {
+                _loadingAnimTimer = new System.Windows.Forms.Timer();
+                _loadingAnimTimer.Interval = 70;
+                _loadingAnimTimer.Tick += (s, e) =>
+                {
+                    if (!_isLoading && !_isLoadingMore)
+                    {
+                        StopLoadingAnim();
+                        return;
+                    }
+                    _animFrame = (_animFrame + 1) % 120;
+                    Invalidate();
+                };
+            }
+            _animFrame = 0;
+            _loadingAnimTimer.Start();
+        }
+
+        private void StopLoadingAnim()
+        {
+            try
+            {
+                _loadingAnimTimer?.Stop();
+            }
+            catch { }
+        }
+
+        private void DrawBouncingText(Graphics g, string text, Font font, Brush brush, float centerX, float centerY, float dotSize = 5f, float dotGap = 5f)
+        {
+            SizeF textSz = g.MeasureString(text, font);
+            float totalDotsW = (3 * dotSize) + (2 * dotGap);
+            float spacingBetween = 4f;
+            float totalW = textSz.Width + spacingBetween + totalDotsW;
+
+            float startX = centerX - (totalW / 2f);
+            float textY = centerY - (textSz.Height / 2f);
+
+            // Draw text
+            g.DrawString(text, font, brush, startX, textY);
+
+            // Draw 3 bouncing dots
+            float dotsStartX = startX + textSz.Width + spacingBetween;
+            float baseY = centerY + (textSz.Height * 0.15f);
+
+            for (int i = 0; i < 3; i++)
+            {
+                double phase = (_animFrame * 0.35) - (i * 0.7);
+                double sinVal = Math.Sin(phase);
+                float jump = sinVal > 0 ? (float)(sinVal * 6.0) : 0f;
+                float dotY = baseY - jump;
+                float dotX = dotsStartX + (i * (dotSize + dotGap));
+
+                g.FillEllipse(brush, dotX, dotY - (dotSize / 2f), dotSize, dotSize);
+            }
+        }
 
         public string CurrentQuery => _query;
         public event EventHandler<string> LoadMoreRequested;
@@ -90,6 +151,7 @@ namespace KahoiiMusic.Controls
             _nextContinuationToken = null;
             _scrollOffset = 0;
             _hoveredIndex = -1;
+            StartLoadingAnim();
             Invalidate();
         }
 
@@ -97,6 +159,7 @@ namespace KahoiiMusic.Controls
         {
             _isLoading = false;
             _isLoadingMore = false;
+            StopLoadingAnim();
             _query = query ?? string.Empty;
             _items = items ?? new List<PlaylistItem>();
             _nextContinuationToken = nextContinuationToken;
@@ -122,6 +185,7 @@ namespace KahoiiMusic.Controls
         public void AppendResults(List<PlaylistItem> newItems, string nextContinuationToken = null)
         {
             _isLoadingMore = false;
+            StopLoadingAnim();
             _nextContinuationToken = nextContinuationToken;
 
             if (newItems != null && newItems.Count > 0)
@@ -142,6 +206,7 @@ namespace KahoiiMusic.Controls
         public void SetNoMoreResults()
         {
             _isLoadingMore = false;
+            StopLoadingAnim();
             _nextContinuationToken = null;
             Invalidate();
         }
@@ -153,6 +218,7 @@ namespace KahoiiMusic.Controls
                 if (_scrollOffset >= _maxScroll - (ActualItemRowHeight * 4))
                 {
                     _isLoadingMore = true;
+                    StartLoadingAnim();
                     Invalidate();
                     LoadMoreRequested?.Invoke(this, _nextContinuationToken);
                 }
@@ -455,8 +521,8 @@ namespace KahoiiMusic.Controls
                 using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(160, 150, 185)))
                 {
                     StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    g.DrawString("⚡ Đang tìm kiếm trên YouTube...", lFont, textBrush, new RectangleF(0, Height / 2 - 30, Width, 30), sf);
-                    g.DrawString("Vui lòng đợi giây lát", subFont, subBrush, new RectangleF(0, Height / 2 + 5, Width, 24), sf);
+                    DrawBouncingText(g, "Đang tải", lFont, textBrush, Width / 2f, Height / 2f - 15, dotSize: IsLarge ? 5f : 4f, dotGap: 4.5f);
+                    g.DrawString("Vui lòng đợi giây lát", subFont, subBrush, new RectangleF(0, Height / 2f + 10, Width, 24), sf);
                 }
                 return;
             }
@@ -548,7 +614,7 @@ namespace KahoiiMusic.Controls
 
                     g.DrawString("BÀI HÁT PHÙ HỢP NHẤT", tagFont, tagBrush, infoX, tagY);
                     g.DrawString(hero.Title ?? "Bài hát", heroTitleFont, hTitleBrush, new RectangleF(infoX, titleY, infoW, lineH), tsf);
-                    g.DrawString((hero.Author ?? "YouTube") + " • " + hero.FormattedDuration, heroSubFont, hSubBrush, new RectangleF(infoX, subY, infoW, lineH), tsf);
+                    g.DrawString((hero.Author ?? "Nghệ sĩ") + " • " + hero.FormattedDuration, heroSubFont, hSubBrush, new RectangleF(infoX, subY, infoW, lineH), tsf);
                 }
 
                 curY += ActualHeroCardHeight + 12;
@@ -666,7 +732,7 @@ namespace KahoiiMusic.Controls
 
                         g.DrawString(item.Title ?? "Bài hát", titleFont, titleBrush, new RectangleF(textX, tLineY, textW, tLineH), tsf);
 
-                        string sub = (item.Author ?? "YouTube") + " • " + item.FormattedDuration;
+                        string sub = (item.Author ?? "Nghệ sĩ") + " • " + item.FormattedDuration;
                         g.DrawString(sub, subFont, subBrush, new RectangleF(textX, sLineY, textW, sLineH), tsf);
                     }
                 }
@@ -680,8 +746,7 @@ namespace KahoiiMusic.Controls
                 using (Font moreFont = new Font("Segoe UI", IsLarge ? 10.5f : 8.5f, FontStyle.Bold))
                 using (SolidBrush moreBrush = new SolidBrush(Color.FromArgb(255, 45, 133)))
                 {
-                    StringFormat msf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    g.DrawString("⚡ Đang tải thêm bài hát từ YouTube...", moreFont, moreBrush, new RectangleF(0, curY + 6, Width, 36), msf);
+                    DrawBouncingText(g, "Đang tải thêm kết quả", moreFont, moreBrush, Width / 2f, curY + 20, dotSize: IsLarge ? 4.5f : 3.5f, dotGap: 4f);
                 }
             }
             else if (!string.IsNullOrEmpty(_nextContinuationToken) && _items.Count >= 15)

@@ -26,6 +26,7 @@ namespace KahoiiMusic.Services
         private static bool _autoCleanTempOnExit = false;
         private static int _lyricsDelayOffsetMs = 0; // Default: 0ms true audio synchronization
         private static int _lyricsRomanizationMode = 1; // Default: Dual mode (Song ngữ)
+        private static int _lyricsFontSizeLevel = 1; // 0 = Nhỏ, 1 = Vừa (chuẩn), 2 = Lớn
         private static int _artworkDisplayMode = 0; // 0 = VinylRecord, 1 = RoundedCard
         private static bool _isMaximizedMode = false;
         private static bool _initialized = false;
@@ -81,6 +82,24 @@ namespace KahoiiMusic.Services
                     if (_lyricsRomanizationMode != value)
                     {
                         _lyricsRomanizationMode = value;
+                        SaveSettings();
+                    }
+                }
+                SettingsChanged?.Invoke(null, EventArgs.Empty);
+            }
+        }
+
+        public static int LyricsFontSizeLevel
+        {
+            get { lock (_lock) { return _lyricsFontSizeLevel; } }
+            set
+            {
+                lock (_lock)
+                {
+                    int val = Math.Max(0, Math.Min(2, value));
+                    if (_lyricsFontSizeLevel != val)
+                    {
+                        _lyricsFontSizeLevel = val;
                         SaveSettings();
                     }
                 }
@@ -694,6 +713,15 @@ namespace KahoiiMusic.Services
                     {
                         _isMaximizedMode = bool.Parse(mMax.Groups[1].Value);
                     }
+
+                    Match mFont = Regex.Match(text, "\"lyricsFontSizeLevel\"\\s*:\\s*(\\d+)", RegexOptions.IgnoreCase);
+                    if (mFont.Success)
+                    {
+                        if (int.TryParse(mFont.Groups[1].Value, out int fontVal))
+                        {
+                            _lyricsFontSizeLevel = Math.Max(0, Math.Min(2, fontVal));
+                        }
+                    }
                     return;
                 }
             }
@@ -701,6 +729,7 @@ namespace KahoiiMusic.Services
             _autoCleanTempOnExit = true; // Default: ON (clean unused temp on exit)
             _lyricsDelayOffsetMs = 0;
             _lyricsRomanizationMode = 1;
+            _lyricsFontSizeLevel = 1;
             _artworkDisplayMode = 0;
             _isMaximizedMode = false;
         }
@@ -709,12 +738,13 @@ namespace KahoiiMusic.Services
         {
             try
             {
-                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2},\r\n  \"artworkDisplayMode\": {3},\r\n  \"isMaximizedMode\": {4}\r\n}}",
+                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2},\r\n  \"artworkDisplayMode\": {3},\r\n  \"isMaximizedMode\": {4},\r\n  \"lyricsFontSizeLevel\": {5}\r\n}}",
                     _autoCleanTempOnExit ? "true" : "false",
                     _lyricsDelayOffsetMs,
                     _lyricsRomanizationMode,
                     _artworkDisplayMode,
-                    _isMaximizedMode ? "true" : "false");
+                    _isMaximizedMode ? "true" : "false",
+                    _lyricsFontSizeLevel);
                 File.WriteAllText(SettingsFile, json, Encoding.UTF8);
             }
             catch { }

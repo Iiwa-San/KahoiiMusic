@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using KahoiiMusic.Services;
 
 namespace KahoiiMusic.Controls
 {
@@ -16,6 +17,17 @@ namespace KahoiiMusic.Controls
         private Color _iconColor = Color.FromArgb(200, 200, 210);
         private Color _hoverIconColor = Color.White;
         private Color _activeColor = Color.FromArgb(168, 85, 247); // Accent Purple
+        private DynamicThemePalette _theme;
+
+        public void SetTheme(DynamicThemePalette theme)
+        {
+            if (theme != null)
+            {
+                _theme = theme;
+                _activeColor = theme.AccentColor;
+                Invalidate();
+            }
+        }
 
         [Category("Appearance")]
         public Color ActiveColor
@@ -113,12 +125,25 @@ namespace KahoiiMusic.Controls
             g.SmoothingMode = SmoothingMode.HighQuality;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
+            Color activeCol = _theme?.AccentColor ?? _activeColor;
+
             // Optional hover glass pill background
             if (_isOpen || _isHovered)
             {
-                Color bg = _isOpen
-                    ? Color.FromArgb(50, 168, 85, 247)
-                    : (_isPressed ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(30, 255, 255, 255));
+                Color bg;
+                if (_isOpen)
+                {
+                    bg = Color.FromArgb(50, activeCol);
+                }
+                else if (_isPressed)
+                {
+                    bg = _theme != null ? Color.FromArgb(45, activeCol) : Color.FromArgb(60, 255, 255, 255);
+                }
+                else
+                {
+                    bg = _theme != null ? Color.FromArgb(28, activeCol) : Color.FromArgb(30, 255, 255, 255);
+                }
+
                 using (SolidBrush b = new SolidBrush(bg))
                 using (GraphicsPath p = GetRoundedRect(new Rectangle(1, 1, Width - 2, Height - 2), 6))
                 {
@@ -126,29 +151,44 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            Color drawColor = _isOpen ? _activeColor : (_isHovered ? _hoverIconColor : _iconColor);
+            Color drawColor;
+            if (_isOpen)
+            {
+                drawColor = activeCol;
+            }
+            else if (_isHovered)
+            {
+                drawColor = _theme != null ? ColorExtractorService.Lerp(activeCol, Color.White, 0.5f) : _hoverIconColor;
+            }
+            else
+            {
+                drawColor = _theme != null ? ColorExtractorService.Lerp(Color.FromArgb(215, 215, 225), activeCol, 0.45f) : _iconColor;
+            }
 
-            int barW = 16;
-            int startX = (Width - barW) / 2;
+            int barW = 18;
             int barH = 2;
+            int spacing = 4;
+            int totalBarsH = (3 * barH) + (2 * spacing); // 14px total height
+            int startX = (Width - barW) / 2;
+            int startY = (Height - totalBarsH) / 2; // Exactly vertically centered
 
             // Draw 3 clean horizontal menu (hamburger) bars
             using (SolidBrush barBrush = new SolidBrush(drawColor))
             {
                 // Top bar
-                FillRoundedBar(g, barBrush, startX, 6, barW, barH);
+                FillRoundedBar(g, barBrush, startX, startY, barW, barH);
                 // Middle bar
-                FillRoundedBar(g, barBrush, startX, 11, barW, barH);
+                FillRoundedBar(g, barBrush, startX, startY + barH + spacing, barW, barH);
                 // Bottom bar
-                FillRoundedBar(g, barBrush, startX, 16, barW, barH);
+                FillRoundedBar(g, barBrush, startX, startY + (2 * (barH + spacing)), barW, barH);
             }
 
-            // Indicator dot when playlist is loaded
+            // Indicator dot when playlist is loaded - placed as clean top-right badge
             if (_hasPlaylist)
             {
-                using (SolidBrush dotBrush = new SolidBrush(_activeColor))
+                using (SolidBrush dotBrush = new SolidBrush(activeCol))
                 {
-                    g.FillEllipse(dotBrush, Width - 6, Height - 6, 4, 4);
+                    g.FillEllipse(dotBrush, startX + barW - 1, startY - 2, 4, 4);
                 }
             }
         }

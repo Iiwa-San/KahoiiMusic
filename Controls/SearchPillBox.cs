@@ -234,6 +234,16 @@ namespace KahoiiMusic.Controls
             Invalidate();
         }
 
+        public void FocusInput()
+        {
+            if (_textBox != null && !_textBox.IsDisposed)
+            {
+                _textBox.Focus();
+                _textBox.SelectAll();
+                Invalidate();
+            }
+        }
+
         private void TextBox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)

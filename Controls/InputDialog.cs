@@ -147,10 +147,28 @@ namespace KahoiiMusic.Controls
 
         public static string Show(string prompt, string title, string defaultText = "", Form owner = null)
         {
+            if (owner == null)
+            {
+                owner = Form.ActiveForm ?? (Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null);
+            }
+
             using (var dlg = new InputDialog(prompt, title, defaultText))
             {
-                if (owner != null) dlg.StartPosition = FormStartPosition.CenterParent;
+                if (owner != null && owner.Visible)
+                {
+                    dlg.StartPosition = FormStartPosition.CenterParent;
+                }
+                else
+                {
+                    dlg.StartPosition = FormStartPosition.CenterScreen;
+                }
                 dlg.ShowDialog(owner);
+
+                if (owner != null && !owner.IsDisposed && owner.Visible)
+                {
+                    try { owner.Activate(); } catch { }
+                }
+
                 return dlg._confirmed ? dlg.InputText : null;
             }
         }

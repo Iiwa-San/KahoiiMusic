@@ -16,10 +16,8 @@ namespace KahoiiMusic
         private static extern int SendMessage(IntPtr hWnd, int msg, int wParam, [MarshalAs(UnmanagedType.LPWStr)] string lParam);
         private const int EM_SETCUEBANNER = 0x1501;
 
-        private Panel pnlHeader;
         private Label lblTitle;
         private GradientCloseButton btnClose;
-        private Panel pnlContent;
 
         // Custom Tab Control
         private CustomTabPill tabSelector;
@@ -44,7 +42,6 @@ namespace KahoiiMusic
         private Label btnForgotPassword;
         
         // Profile View (Logged in)
-        private Panel pnlProfile;
         private UserAvatarBox picUserAvatar;
         private Label lblUserEmail;
         private Label lblUserId;
@@ -53,12 +50,89 @@ namespace KahoiiMusic
         private RoundedButton btnSyncNow;
         private RoundedButton btnSignOut;
 
-        private readonly Color BgDark = Color.FromArgb(18, 16, 25);
-        private readonly Color HeaderBg = Color.FromArgb(24, 21, 32);
-        private readonly Color CardBg = Color.FromArgb(28, 25, 38);
-        private readonly Color InputBg = Color.FromArgb(30, 26, 42);
+        private Color _accentColor = Color.FromArgb(255, 45, 120);
+        private Color _secondaryAccentColor = Color.FromArgb(168, 85, 247);
+        private Color _bgGradTop = Color.FromArgb(26, 20, 36);
+        private Color _bgGradBottom = Color.FromArgb(15, 13, 20);
+        private Color _cardBg = Color.FromArgb(28, 25, 40);
+        private Color _borderGradColor1 = Color.FromArgb(160, 255, 45, 120);
+        private Color _borderGradColor2 = Color.FromArgb(120, 168, 85, 247);
+
         private readonly Color BorderMuted = Color.FromArgb(56, 48, 72);
-        private readonly Color AccentPink = Color.FromArgb(255, 45, 120);
+
+        public void SetTheme(DynamicThemePalette theme)
+        {
+            if (theme == null) return;
+            try
+            {
+                _accentColor = theme.AccentColor;
+                _secondaryAccentColor = theme.SecondaryAccentColor;
+
+                _bgGradTop = BlendColor(Color.FromArgb(22, 18, 30), theme.CompactTop, 0.25f);
+                _bgGradBottom = BlendColor(Color.FromArgb(13, 11, 18), theme.CompactBottom, 0.15f);
+                _cardBg = BlendColor(Color.FromArgb(28, 24, 38), theme.SecondaryAccentColor, 0.18f);
+
+                _borderGradColor1 = Color.FromArgb(160, _accentColor);
+                _borderGradColor2 = Color.FromArgb(120, _secondaryAccentColor);
+
+                this.BackColor = _bgGradBottom;
+
+                if (tabSelector != null)
+                {
+                    tabSelector.ActiveColor = _accentColor;
+                    tabSelector.BackColor = _cardBg;
+                    tabSelector.Invalidate();
+                }
+
+                if (btnSubmit != null)
+                {
+                    btnSubmit.ButtonColor = _accentColor;
+                    btnSubmit.Invalidate();
+                }
+
+                if (btnSyncNow != null)
+                {
+                    btnSyncNow.ButtonColor = _accentColor;
+                    btnSyncNow.Invalidate();
+                }
+
+                if (chkRememberMe != null)
+                {
+                    chkRememberMe.AccentColor = _accentColor;
+                    chkRememberMe.Invalidate();
+                }
+
+                if (btnClose != null)
+                {
+                    btnClose.SetTheme(_accentColor, _secondaryAccentColor);
+                    btnClose.Invalidate();
+                }
+
+                if (picUserAvatar != null)
+                {
+                    picUserAvatar.SetTheme(_accentColor, _secondaryAccentColor);
+                    picUserAvatar.Invalidate();
+                }
+
+                if (lblSyncStatus != null)
+                {
+                    lblSyncStatus.ForeColor = _accentColor;
+                }
+
+                if (lblStats != null)
+                {
+                    lblStats.BackColor = _cardBg;
+                    lblStats.Invalidate();
+                }
+
+                pnlEmailBox?.Invalidate();
+                pnlPasswordBox?.Invalidate();
+                pnlConfirmPasswordBox?.Invalidate();
+
+                Invalidate();
+            }
+            catch { }
+        }
 
         public AccountForm()
         {
@@ -117,29 +191,21 @@ namespace KahoiiMusic
 
             this.KeyPreview = true;
             this.Text = "Tài Khoản Kahoii";
-            this.Size = new Size(340, 270);
-            this.BackColor = BgDark;
+            this.Size = new Size(340, 338);
+            this.BackColor = _bgGradBottom;
             this.ShowInTaskbar = false;
             this.DoubleBuffered = true;
 
-            // Form Border
-            this.Paint += (s, e) =>
+            lblTitle = new Label
             {
-                e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
-                using (var pen = new Pen(BorderMuted, 1.5f))
-                {
-                    e.Graphics.DrawRectangle(pen, 0, 0, this.Width - 1, this.Height - 1);
-                }
+                Text = "Tài Khoản Kahoii",
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                ForeColor = Color.White,
+                Location = new Point(14, 11),
+                AutoSize = true,
+                BackColor = Color.Transparent
             };
-
-            // 1. Header Bar
-            pnlHeader = new Panel
-            {
-                Location = new Point(0, 0),
-                Size = new Size(this.Width, 40),
-                BackColor = HeaderBg
-            };
-            pnlHeader.MouseDown += (s, e) =>
+            lblTitle.MouseDown += (s, e) =>
             {
                 if (e.Button == MouseButtons.Left)
                 {
@@ -149,37 +215,20 @@ namespace KahoiiMusic
                 }
             };
 
-            lblTitle = new Label
-            {
-                Text = "Tài Khoản Kahoii",
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = Color.White,
-                Location = new Point(14, 10),
-                AutoSize = true
-            };
-
             btnClose = new GradientCloseButton
             {
-                Location = new Point(302, 7),
+                Location = new Point(this.Width - 34, 7),
                 Size = new Size(26, 26)
             };
+            btnClose.SetTheme(_accentColor, _secondaryAccentColor);
             btnClose.Click += (s, e) => this.Hide();
 
-            pnlHeader.Controls.Add(lblTitle);
-            pnlHeader.Controls.Add(btnClose);
-            this.Controls.Add(pnlHeader);
-
-            // 2. Content Area
-            pnlContent = new Panel
-            {
-                Location = new Point(0, 40),
-                Size = new Size(this.Width, this.Height - 40),
-                Padding = new Padding(0)
-            };
-            this.Controls.Add(pnlContent);
+            this.Controls.Add(lblTitle);
+            this.Controls.Add(btnClose);
 
             SetupAuthUI();
             SetupProfileUI();
+            UpdateRegion();
         }
 
         private void SetupAuthUI()
@@ -187,35 +236,36 @@ namespace KahoiiMusic
             // Segmented Tab Pill
             tabSelector = new CustomTabPill
             {
-                Location = new Point(20, 12),
+                Location = new Point(20, 50),
                 Size = new Size(300, 34),
-                ActiveColor = AccentPink,
-                BackColor = CardBg
+                ActiveColor = _accentColor,
+                BackColor = _cardBg
             };
             tabSelector.TabChanged += (s, isRegister) => SwitchTab(isRegister);
-            pnlContent.Controls.Add(tabSelector);
+            this.Controls.Add(tabSelector);
 
             // Email Box
-            pnlEmailBox = CreateInputBox(20, 58, "✉", "Email của bạn...", false, out txtEmail);
-            pnlContent.Controls.Add(pnlEmailBox);
+            pnlEmailBox = CreateInputBox(20, 96, "✉", "Email của bạn...", false, out txtEmail);
+            this.Controls.Add(pnlEmailBox);
 
             // Password Box
-            pnlPasswordBox = CreateInputBox(20, 106, "🔒", "Mật khẩu (tối thiểu 6 ký tự)...", true, out txtPassword);
-            pnlContent.Controls.Add(pnlPasswordBox);
+            pnlPasswordBox = CreateInputBox(20, 144, "🔒", "Mật khẩu (tối thiểu 6 ký tự)...", true, out txtPassword);
+            this.Controls.Add(pnlPasswordBox);
 
             // Confirm Password Box (for Register)
-            pnlConfirmPasswordBox = CreateInputBox(20, 154, "🔒", "Nhập lại mật khẩu...", true, out txtConfirmPassword);
+            pnlConfirmPasswordBox = CreateInputBox(20, 192, "🔒", "Nhập lại mật khẩu...", true, out txtConfirmPassword);
             pnlConfirmPasswordBox.Visible = false;
-            pnlContent.Controls.Add(pnlConfirmPasswordBox);
+            this.Controls.Add(pnlConfirmPasswordBox);
 
             // Remember Login Checkbox
             chkRememberMe = new CustomCheckBox
             {
-                Location = new Point(20, 148),
+                Location = new Point(20, 186),
                 Size = new Size(160, 22),
-                Checked = true
+                Checked = true,
+                AccentColor = _accentColor
             };
-            pnlContent.Controls.Add(chkRememberMe);
+            this.Controls.Add(chkRememberMe);
 
             // Forgot Password Button
             btnForgotPassword = new Label
@@ -223,12 +273,13 @@ namespace KahoiiMusic
                 Text = "Quên mật khẩu?",
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Underline),
                 ForeColor = Color.FromArgb(170, 165, 195),
-                Location = new Point(190, 149),
+                Location = new Point(190, 187),
                 Size = new Size(130, 20),
                 TextAlign = ContentAlignment.MiddleRight,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                BackColor = Color.Transparent
             };
-            btnForgotPassword.MouseEnter += (s, e) => btnForgotPassword.ForeColor = AccentPink;
+            btnForgotPassword.MouseEnter += (s, e) => btnForgotPassword.ForeColor = _accentColor;
             btnForgotPassword.MouseLeave += (s, e) => btnForgotPassword.ForeColor = Color.FromArgb(170, 165, 195);
             btnForgotPassword.Click += async (s, e) =>
             {
@@ -254,27 +305,28 @@ namespace KahoiiMusic
                     ShowError(res.Item2);
                 }
             };
-            pnlContent.Controls.Add(btnForgotPassword);
+            this.Controls.Add(btnForgotPassword);
 
             // Error Label
             lblError = new Label
             {
-                Location = new Point(20, 174),
+                Location = new Point(20, 212),
                 Size = new Size(300, 20),
                 ForeColor = Color.FromArgb(255, 100, 125),
                 Font = new Font("Segoe UI", 8.5F),
                 TextAlign = ContentAlignment.MiddleLeft,
-                Visible = false
+                Visible = false,
+                BackColor = Color.Transparent
             };
-            pnlContent.Controls.Add(lblError);
+            this.Controls.Add(lblError);
 
             // Submit Button
             btnSubmit = new RoundedButton
             {
                 Text = "ĐĂNG NHẬP",
-                Location = new Point(20, 196),
+                Location = new Point(20, 234),
                 Size = new Size(300, 38),
-                ButtonColor = AccentPink,
+                ButtonColor = _accentColor,
                 TextColor = Color.White,
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
                 Cursor = Cursors.Hand
@@ -348,23 +400,90 @@ namespace KahoiiMusic
                 }
                 btnSubmit.Enabled = true;
             };
-            pnlContent.Controls.Add(btnSubmit);
-
-
+            this.Controls.Add(btnSubmit);
         }
 
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
-            if (pnlHeader != null)
+            UpdateRegion();
+            if (btnClose != null) btnClose.Location = new Point(this.Width - 34, 7);
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button == MouseButtons.Left && e.Y <= 42)
             {
-                pnlHeader.Width = this.Width;
-                if (btnClose != null) btnClose.Location = new Point(this.Width - 34, 7);
+                this.Capture = false;
+                Message msg = Message.Create(this.Handle, 0xA1, new IntPtr(2), IntPtr.Zero);
+                this.DefWndProc(ref msg);
             }
-            if (pnlContent != null)
+        }
+
+        private bool _isUpdatingRegion = false;
+        private Size _lastRegionSize = Size.Empty;
+
+        private void UpdateRegion()
+        {
+            if (_isUpdatingRegion) return;
+            if (Width <= 0 || Height <= 0) return;
+            if (Size == _lastRegionSize) return;
+
+            _isUpdatingRegion = true;
+            try
             {
-                pnlContent.Width = this.Width;
-                pnlContent.Height = Math.Max(0, this.Height - 40);
+                _lastRegionSize = Size;
+                using (GraphicsPath path = RoundedRect(new Rectangle(0, 0, Width, Height), 14))
+                {
+                    Region = new Region(path);
+                }
+            }
+            catch { }
+            finally
+            {
+                _isUpdatingRegion = false;
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.HighQuality;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            int w = ClientRectangle.Width;
+            int h = ClientRectangle.Height;
+            if (w <= 0 || h <= 0) return;
+
+            // 1. Frosted Liquid Glass Background Gradient
+            using (var bgBrush = new LinearGradientBrush(new Rectangle(0, 0, w, h), _bgGradTop, _bgGradBottom, 90f))
+            using (var path = RoundedRect(new Rectangle(0, 0, w, h), 14))
+            {
+                g.FillPath(bgBrush, path);
+            }
+
+            // 2. Liquid Glass Specular highlight sheen along the top edge
+            using (var highlightPen = new Pen(Color.FromArgb(55, 255, 255, 255), 1.0f))
+            {
+                g.DrawLine(highlightPen, 18, 1, w - 19, 1);
+            }
+
+            // 3. Frosted header divider line at Y = 40
+            using (var divPen = new Pen(Color.FromArgb(40, _secondaryAccentColor), 1f))
+            {
+                g.DrawLine(divPen, 14, 40, w - 14, 40);
+            }
+
+            // 4. Cyber neon gradient border (inset by 1px so it's 100% inside Region and never clipped)
+            Rectangle borderRect = new Rectangle(1, 1, w - 2, h - 2);
+            using (var borderBrush = new LinearGradientBrush(borderRect, _borderGradColor1, _borderGradColor2, 45f))
+            using (var borderPen = new Pen(borderBrush, 1.5f))
+            using (var borderPath = RoundedRect(borderRect, 13))
+            {
+                g.DrawPath(borderPen, borderPath);
             }
         }
 
@@ -380,15 +499,16 @@ namespace KahoiiMusic
             {
                 Location = new Point(x, y),
                 Size = new Size(300, 36),
-                BackColor = InputBg
+                BackColor = Color.FromArgb(200, 24, 20, 36)
             };
 
             bool isFocused = false;
             pnl.Paint += (s, e) =>
             {
                 e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
-                using (var pen = new Pen(isFocused ? AccentPink : BorderMuted, isFocused ? 1.5f : 1f))
-                using (var path = GetRoundedRect(new Rectangle(0, 0, pnl.Width - 1, pnl.Height - 1), 6))
+                Color borderC = isFocused ? _accentColor : Color.FromArgb(60, _secondaryAccentColor);
+                using (var pen = new Pen(borderC, isFocused ? 1.5f : 1f))
+                using (var path = RoundedRect(new Rectangle(0, 0, pnl.Width - 1, pnl.Height - 1), 6))
                 {
                     e.Graphics.DrawPath(pen, path);
                 }
@@ -398,10 +518,11 @@ namespace KahoiiMusic
             {
                 Text = iconText,
                 Font = new Font("Segoe UI Symbol", 10F),
-                ForeColor = Color.FromArgb(150, 145, 170),
+                ForeColor = Color.FromArgb(160, 155, 180),
                 Location = new Point(8, 7),
                 Size = new Size(20, 20),
-                TextAlign = ContentAlignment.MiddleCenter
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
             };
             pnl.Controls.Add(lblIcon);
 
@@ -409,7 +530,7 @@ namespace KahoiiMusic
             {
                 Location = new Point(32, 9),
                 Width = 258,
-                BackColor = InputBg,
+                BackColor = Color.FromArgb(24, 20, 36),
                 ForeColor = Color.White,
                 BorderStyle = BorderStyle.None,
                 Font = new Font("Segoe UI", 9.5F)
@@ -432,32 +553,48 @@ namespace KahoiiMusic
         private void SwitchTab(bool register)
         {
             _isRegisterMode = register;
-            lblError.Visible = false;
-            lblError.Text = "";
+            if (lblError != null)
+            {
+                lblError.Visible = false;
+                lblError.Text = "";
+            }
 
             if (register)
             {
-                pnlConfirmPasswordBox.Visible = true;
+                if (pnlConfirmPasswordBox != null) pnlConfirmPasswordBox.Visible = true;
                 if (btnForgotPassword != null) btnForgotPassword.Visible = false;
-                chkRememberMe.Location = new Point(20, 194);
-                lblError.Location = new Point(20, 220);
-                btnSubmit.Location = new Point(20, 242);
-                btnSubmit.Text = "TẠO TÀI KHOẢN";
-                this.Height = 344;
-                pnlContent.Height = this.Height - 40;
+                if (chkRememberMe != null) chkRememberMe.Location = new Point(20, 234);
+                if (lblError != null) lblError.Location = new Point(20, 260);
+                if (btnSubmit != null)
+                {
+                    btnSubmit.Location = new Point(20, 282);
+                    btnSubmit.Text = "TẠO TÀI KHOẢN";
+                }
+                this.Height = 338;
             }
             else
             {
-                pnlConfirmPasswordBox.Visible = false;
-                if (btnForgotPassword != null) btnForgotPassword.Visible = true;
-                chkRememberMe.Location = new Point(20, 148);
-                if (btnForgotPassword != null) btnForgotPassword.Location = new Point(190, 149);
-                lblError.Location = new Point(20, 174);
-                btnSubmit.Location = new Point(20, 196);
-                btnSubmit.Text = "ĐĂNG NHẬP";
-                this.Height = 298;
-                pnlContent.Height = this.Height - 40;
+                if (pnlConfirmPasswordBox != null) pnlConfirmPasswordBox.Visible = false;
+                if (btnForgotPassword != null)
+                {
+                    btnForgotPassword.Visible = true;
+                    btnForgotPassword.Location = new Point(190, 187);
+                }
+                if (chkRememberMe != null) chkRememberMe.Location = new Point(20, 186);
+                if (lblError != null) lblError.Location = new Point(20, 212);
+                if (btnSubmit != null)
+                {
+                    btnSubmit.Location = new Point(20, 234);
+                    btnSubmit.Text = "ĐĂNG NHẬP";
+                }
+                this.Height = 290;
             }
+            UpdateRegion();
+            if (Owner is Form1 f1 && f1.Visible)
+            {
+                f1.UpdateAccountPopupLocation();
+            }
+            Invalidate();
         }
 
         private async void ChangeAvatar()
@@ -506,71 +643,83 @@ namespace KahoiiMusic
 
         private void SetupProfileUI()
         {
-            pnlProfile = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Visible = false
-            };
-
             picUserAvatar = new UserAvatarBox
             {
-                Location = new Point(132, 6),
+                Location = new Point(132, 48),
                 Size = new Size(76, 76)
             };
+            picUserAvatar.SetTheme(_accentColor, _secondaryAccentColor);
             picUserAvatar.Click += (s, e) => ChangeAvatar();
 
             lblUserEmail = new Label
             {
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
                 ForeColor = Color.White,
-                Location = new Point(0, 86),
+                Location = new Point(0, 128),
                 Size = new Size(340, 22),
-                TextAlign = ContentAlignment.MiddleCenter
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
             };
 
             lblUserId = new Label
             {
                 Font = new Font("Consolas", 8F),
                 ForeColor = Color.FromArgb(135, 130, 155),
-                Location = new Point(0, 108),
+                Location = new Point(0, 150),
                 Size = new Size(340, 16),
-                TextAlign = ContentAlignment.MiddleCenter
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
             };
 
             lblStats = new Label
             {
                 Font = new Font("Segoe UI", 9F),
-                ForeColor = Color.FromArgb(200, 195, 220),
-                Location = new Point(20, 128),
-                Size = new Size(300, 42),
-                BackColor = CardBg,
+                ForeColor = Color.FromArgb(220, 215, 240),
+                Location = new Point(20, 172),
+                Size = new Size(300, 44),
+                BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleCenter
             };
             lblStats.Paint += (s, e) =>
             {
                 e.Graphics.SmoothingMode = SmoothingMode.HighQuality;
-                using (var pen = new Pen(BorderMuted, 1))
-                using (var path = GetRoundedRect(new Rectangle(0, 0, lblStats.Width - 1, lblStats.Height - 1), 6))
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+                Rectangle r = new Rectangle(0, 0, lblStats.Width - 1, lblStats.Height - 1);
+                using (var bgBrush = new SolidBrush(_cardBg))
+                using (var path = RoundedRect(r, 8))
+                {
+                    e.Graphics.FillPath(bgBrush, path);
+                }
+                using (var pen = new Pen(Color.FromArgb(80, _secondaryAccentColor), 1f))
+                using (var path = RoundedRect(r, 8))
                 {
                     e.Graphics.DrawPath(pen, path);
+                }
+
+                if (!string.IsNullOrEmpty(lblStats.Text))
+                {
+                    TextRenderer.DrawText(e.Graphics, lblStats.Text, lblStats.Font, lblStats.ClientRectangle, lblStats.ForeColor,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 }
             };
 
             lblSyncStatus = new Label
             {
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
-                ForeColor = AccentPink,
-                Location = new Point(20, 174),
+                ForeColor = _accentColor,
+                Location = new Point(20, 222),
                 Size = new Size(300, 20),
-                TextAlign = ContentAlignment.MiddleCenter
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
             };
 
             btnSyncNow = new RoundedButton
             {
                 Text = "⟳  Đồng Bộ Ngay (Tự Động Bật)",
-                Location = new Point(20, 198),
+                Location = new Point(20, 246),
                 Size = new Size(300, 36),
-                ButtonColor = AccentPink,
+                ButtonColor = _accentColor,
                 TextColor = Color.White,
                 Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
                 Cursor = Cursors.Hand
@@ -595,9 +744,9 @@ namespace KahoiiMusic
             btnSignOut = new RoundedButton
             {
                 Text = "Đăng Xuất",
-                Location = new Point(20, 242),
+                Location = new Point(20, 288),
                 Size = new Size(300, 34),
-                ButtonColor = Color.FromArgb(38, 20, 28),
+                ButtonColor = Color.FromArgb(36, 22, 32),
                 TextColor = Color.FromArgb(255, 120, 130),
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Cursor = Cursors.Hand
@@ -614,50 +763,59 @@ namespace KahoiiMusic
                 }
             };
 
-            pnlProfile.Controls.Add(picUserAvatar);
-            pnlProfile.Controls.Add(lblUserEmail);
-            pnlProfile.Controls.Add(lblUserId);
-            pnlProfile.Controls.Add(lblStats);
-            pnlProfile.Controls.Add(lblSyncStatus);
-            pnlProfile.Controls.Add(btnSyncNow);
-            pnlProfile.Controls.Add(btnSignOut);
-
-            pnlContent.Controls.Add(pnlProfile);
+            this.Controls.Add(picUserAvatar);
+            this.Controls.Add(lblUserEmail);
+            this.Controls.Add(lblUserId);
+            this.Controls.Add(lblStats);
+            this.Controls.Add(lblSyncStatus);
+            this.Controls.Add(btnSyncNow);
+            this.Controls.Add(btnSignOut);
         }
 
         private void RefreshViewState()
         {
-            if (FirebaseAuthService.Instance.IsLoggedIn)
+            bool loggedIn = FirebaseAuthService.Instance.IsLoggedIn;
+
+            // Auth controls
+            if (tabSelector != null) tabSelector.Visible = !loggedIn;
+            if (pnlEmailBox != null) pnlEmailBox.Visible = !loggedIn;
+            if (pnlPasswordBox != null) pnlPasswordBox.Visible = !loggedIn;
+            if (chkRememberMe != null) chkRememberMe.Visible = !loggedIn;
+            if (btnSubmit != null) btnSubmit.Visible = !loggedIn;
+
+            // Profile controls
+            if (picUserAvatar != null) picUserAvatar.Visible = loggedIn;
+            if (lblUserEmail != null) lblUserEmail.Visible = loggedIn;
+            if (lblUserId != null) lblUserId.Visible = loggedIn;
+            if (lblStats != null) lblStats.Visible = loggedIn;
+            if (lblSyncStatus != null) lblSyncStatus.Visible = loggedIn;
+            if (btnSyncNow != null) btnSyncNow.Visible = loggedIn;
+            if (btnSignOut != null) btnSignOut.Visible = loggedIn;
+
+            if (loggedIn)
             {
-                tabSelector.Visible = false;
-                pnlEmailBox.Visible = false;
-                pnlPasswordBox.Visible = false;
-                pnlConfirmPasswordBox.Visible = false;
-                chkRememberMe.Visible = false;
+                if (pnlConfirmPasswordBox != null) pnlConfirmPasswordBox.Visible = false;
                 if (btnForgotPassword != null) btnForgotPassword.Visible = false;
-                btnSubmit.Visible = false;
-                lblError.Visible = false;
-                
-                pnlProfile.Visible = true;
-                this.Height = 336;
-                pnlContent.Height = this.Height - 40;
+                if (lblError != null) lblError.Visible = false;
+
+                this.Height = 338;
 
                 var user = FirebaseAuthService.Instance.CurrentUser;
-                lblUserEmail.Text = user?.email ?? "User";
-                lblUserId.Text = "UID: " + (user?.localId ?? "");
+                if (lblUserEmail != null) lblUserEmail.Text = user?.email ?? "User";
+                if (lblUserId != null) lblUserId.Text = "UID: " + (user?.localId ?? "");
                 UpdateStats();
                 UpdateSyncStatus();
             }
             else
             {
-                pnlProfile.Visible = false;
-                tabSelector.Visible = true;
-                pnlEmailBox.Visible = true;
-                pnlPasswordBox.Visible = true;
-                chkRememberMe.Visible = true;
-                btnSubmit.Visible = true;
-                                SwitchTab(_isRegisterMode);
+                SwitchTab(_isRegisterMode);
             }
+            UpdateRegion();
+            if (Owner is Form1 f1 && f1.Visible)
+            {
+                f1.UpdateAccountPopupLocation();
+            }
+            Invalidate();
         }
 
         private void UpdateStats()
@@ -673,6 +831,7 @@ namespace KahoiiMusic
 
             lblStats.Text = string.Format("Đã tải: {0} bài  •  Bộ sưu tập: {1}\r\nLịch sử nghe: {2} bài",
                 savedCount, collectionCount, historyCount);
+            lblStats.Invalidate();
         }
 
         private void UpdateSyncStatus()
@@ -692,28 +851,36 @@ namespace KahoiiMusic
             UpdateStats();
         }
 
-        private static GraphicsPath GetRoundedRect(Rectangle r, int radius)
+        private static GraphicsPath RoundedRect(Rectangle rc, int radius)
         {
             GraphicsPath path = new GraphicsPath();
-            if (r.Width <= 0 || r.Height <= 0) return path;
-            int maxRadius = Math.Min(r.Width, r.Height) / 2;
+            if (rc.Width <= 0 || rc.Height <= 0) return path;
+            int maxRadius = Math.Min(rc.Width, rc.Height) / 2;
             radius = Math.Max(1, Math.Min(radius, maxRadius));
             int d = radius * 2;
-            if (d > 0 && r.Width >= d && r.Height >= d)
+            if (d > 0 && rc.Width >= d && rc.Height >= d)
             {
-                path.AddArc(r.X, r.Y, d, d, 180, 90);
-                path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-                path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-                path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+                path.AddArc(rc.X, rc.Y, d, d, 180, 90);
+                path.AddArc(rc.Right - d, rc.Y, d, d, 270, 90);
+                path.AddArc(rc.Right - d, rc.Bottom - d, d, d, 0, 90);
+                path.AddArc(rc.X, rc.Bottom - d, d, d, 90, 90);
                 path.CloseFigure();
             }
             else
             {
-                path.AddRectangle(r);
+                path.AddRectangle(rc);
             }
             return path;
         }
 
+        private static Color BlendColor(Color from, Color to, float amount)
+        {
+            amount = Math.Max(0f, Math.Min(1f, amount));
+            int r = (int)(from.R + (to.R - from.R) * amount);
+            int g = (int)(from.G + (to.G - from.G) * amount);
+            int b = (int)(from.B + (to.B - from.B) * amount);
+            return Color.FromArgb(r, g, b);
+        }
 
         private DialogResult ShowMessageBox(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon)
         {
@@ -748,6 +915,7 @@ namespace KahoiiMusic
             {
                 CreateParams cp = base.CreateParams;
                 cp.ClassStyle |= 0x20000; // CS_DROPSHADOW
+                cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW: stays strictly within app window hierarchy
                 return cp;
             }
         }
@@ -768,16 +936,11 @@ namespace KahoiiMusic
 
                 Point p = PointToClient(Cursor.Position);
                 Control child = GetChildAtPoint(p);
-                if (child == pnlContent)
+                if (child == pnlEmailBox || child == pnlPasswordBox || child == pnlConfirmPasswordBox)
                 {
-                    Point pContent = pnlContent.PointToClient(Cursor.Position);
-                    Control contentChild = pnlContent.GetChildAtPoint(pContent);
-                    if (contentChild == pnlEmailBox || contentChild == pnlPasswordBox || contentChild == pnlConfirmPasswordBox)
-                    {
-                        m.Result = (IntPtr)MA_ACTIVATE;
-                        base.WndProc(ref m);
-                        return;
-                    }
+                    m.Result = (IntPtr)MA_ACTIVATE;
+                    base.WndProc(ref m);
+                    return;
                 }
                 m.Result = (IntPtr)MA_NOACTIVATE;
                 return;
@@ -791,11 +954,21 @@ namespace KahoiiMusic
             _lastDeactivatedTime = DateTime.UtcNow;
             if (_isShowingChildDialog) return;
             if (Owner is Form1 f1 && f1.IsFormClosed) { Hide(); return; }
-            if (Owner != null && !Owner.IsDisposed)
+
+            try
             {
-                try { Owner.Activate(); } catch { }
+                BeginInvoke(new Action(() =>
+                {
+                    if (Visible)
+                    {
+                        Hide();
+                    }
+                }));
             }
-            Hide();
+            catch
+            {
+                Hide();
+            }
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
@@ -842,7 +1015,15 @@ namespace KahoiiMusic
         private class UserAvatarBox : Control
         {
             private bool _isHovered = false;
-            private readonly ToolTip _tip = new ToolTip();
+            private Color _accentColor = Color.FromArgb(255, 45, 120);
+            private Color _secondaryAccentColor = Color.FromArgb(168, 85, 247);
+
+            public void SetTheme(Color accent, Color secondary)
+            {
+                _accentColor = accent;
+                _secondaryAccentColor = secondary;
+                Invalidate();
+            }
 
             public UserAvatarBox()
             {
@@ -874,8 +1055,8 @@ namespace KahoiiMusic
                     Rectangle rCircle = new Rectangle(2, 2, d, d);
 
                     // 1. Tỏa sáng gradient viền ngoài
-                    int glowAlpha = _isHovered ? 150 : 75;
-                    using (Pen glowPen = new Pen(Color.FromArgb(glowAlpha, 255, 45, 120), 2.5f))
+                    int glowAlpha = _isHovered ? 160 : 80;
+                    using (Pen glowPen = new Pen(Color.FromArgb(glowAlpha, _accentColor), 2.5f))
                     {
                         g.DrawEllipse(glowPen, 1, 1, d + 2, d + 2);
                     }
@@ -902,15 +1083,16 @@ namespace KahoiiMusic
 
                     if (!drewAvatar)
                     {
-                        using (LinearGradientBrush bgBrush = new LinearGradientBrush(rInner,
-                            Color.FromArgb(48, 22, 38), Color.FromArgb(28, 16, 36), 45f))
+                        Color topTint = BlendColor(Color.FromArgb(38, 20, 36), _accentColor, 0.25f);
+                        Color botTint = BlendColor(Color.FromArgb(20, 14, 28), _secondaryAccentColor, 0.2f);
+                        using (LinearGradientBrush bgBrush = new LinearGradientBrush(rInner, topTint, botTint, 45f))
                         {
                             g.FillEllipse(bgBrush, rInner);
                         }
                         int cx = rInner.X + rInner.Width / 2;
                         int cy = rInner.Y + rInner.Height / 2;
-                        using (SolidBrush iconBrush = new SolidBrush(Color.FromArgb(255, 45, 120)))
-                        using (Pen iconPen = new Pen(Color.FromArgb(255, 45, 120), 2.2f))
+                        using (SolidBrush iconBrush = new SolidBrush(_accentColor))
+                        using (Pen iconPen = new Pen(_accentColor, 2.2f))
                         {
                             iconPen.StartCap = LineCap.Round;
                             iconPen.EndCap = LineCap.Round;
@@ -920,8 +1102,7 @@ namespace KahoiiMusic
                     }
 
                     // 3. Viền gradient sắc nét
-                    using (LinearGradientBrush lgb = new LinearGradientBrush(rCircle,
-                        Color.FromArgb(255, 45, 120), Color.FromArgb(168, 85, 247), 45f))
+                    using (LinearGradientBrush lgb = new LinearGradientBrush(rCircle, _accentColor, _secondaryAccentColor, 45f))
                     using (Pen gradPen = new Pen(lgb, 2.2f))
                     {
                         g.DrawEllipse(gradPen, rCircle);
@@ -934,12 +1115,12 @@ namespace KahoiiMusic
                     Rectangle rBadge = new Rectangle(badgeX, badgeY, badgeD, badgeD);
 
                     // Viền tối ngăn cách badge với ảnh avatar
-                    using (Pen sepPen = new Pen(Color.FromArgb(24, 21, 32), 2.5f))
+                    using (Pen sepPen = new Pen(Color.FromArgb(22, 18, 30), 2.5f))
                     {
                         g.DrawEllipse(sepPen, rBadge);
                     }
 
-                    Color badgeBg = _isHovered ? Color.FromArgb(255, 75, 140) : Color.FromArgb(255, 45, 120);
+                    Color badgeBg = _isHovered ? ControlPaint.Light(_accentColor, 0.2f) : _accentColor;
                     using (SolidBrush badgeBrush = new SolidBrush(badgeBg))
                     {
                         g.FillEllipse(badgeBrush, rBadge);
@@ -989,7 +1170,7 @@ namespace KahoiiMusic
 
                 Color c = _isHovered ? ControlPaint.Light(ButtonColor, 0.15f) : ButtonColor;
                 using (var brush = new SolidBrush(c))
-                using (var path = GetRoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
+                using (var path = RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
                 {
                     g.FillPath(brush, path);
                 }
@@ -1032,7 +1213,7 @@ namespace KahoiiMusic
 
                 // Base container
                 using (var bgBrush = new SolidBrush(BackColor))
-                using (var path = GetRoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
+                using (var path = RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 8))
                 {
                     g.FillPath(bgBrush, path);
                 }
@@ -1044,7 +1225,7 @@ namespace KahoiiMusic
                 int activeY = 3;
 
                 using (var activeBrush = new SolidBrush(ActiveColor))
-                using (var activePath = GetRoundedRect(new Rectangle(activeX, activeY, tabW, tabH), 6))
+                using (var activePath = RoundedRect(new Rectangle(activeX, activeY, tabW, tabH), 6))
                 {
                     g.FillPath(activeBrush, activePath);
                 }
@@ -1074,6 +1255,15 @@ namespace KahoiiMusic
             private float _targetProgress = 0f;
             private bool _isPressed = false;
             private Timer _animTimer;
+            private Color _accentColor = Color.FromArgb(255, 38, 128);
+            private Color _secondaryAccentColor = Color.FromArgb(180, 50, 255);
+
+            public void SetTheme(Color accent, Color secondary)
+            {
+                _accentColor = accent;
+                _secondaryAccentColor = secondary;
+                Invalidate();
+            }
 
             public GradientCloseButton()
             {
@@ -1154,19 +1344,19 @@ namespace KahoiiMusic
                 int cy = Height / 2;
                 int r = _isPressed ? 4 : 5;
 
-                // Subtle soft ambient glow background on hover (NOT an opaque solid circle)
+                // Subtle soft ambient glow background on hover
                 if (_hoverProgress > 0.02f)
                 {
                     int bgAlpha = (int)(25 * _hoverProgress);
-                    using (var bgBrush = new SolidBrush(Color.FromArgb(bgAlpha, 255, 45, 140)))
-                    using (var path = GetRoundedRect(new Rectangle(2, 2, Width - 5, Height - 5), 6))
+                    using (var bgBrush = new SolidBrush(Color.FromArgb(bgAlpha, _accentColor)))
+                    using (var path = RoundedRect(new Rectangle(2, 2, Width - 5, Height - 5), 6))
                     {
                         g.FillPath(bgBrush, path);
                     }
 
                     // Soft neon bloom behind the 'X'
                     int glowAlpha = (int)(65 * _hoverProgress);
-                    using (var glowPen = new Pen(Color.FromArgb(glowAlpha, 255, 50, 150), 3.8f))
+                    using (var glowPen = new Pen(Color.FromArgb(glowAlpha, _accentColor), 3.8f))
                     {
                         glowPen.StartCap = LineCap.Round;
                         glowPen.EndCap = LineCap.Round;
@@ -1177,7 +1367,6 @@ namespace KahoiiMusic
 
                 if (_hoverProgress < 0.02f)
                 {
-                    // Clean Muted '✕' in default state
                     using (var pen = new Pen(Color.FromArgb(160, 160, 175), 1.6f))
                     {
                         pen.StartCap = LineCap.Round;
@@ -1188,14 +1377,12 @@ namespace KahoiiMusic
                 }
                 else
                 {
-                    // Gradient '✕' with Smooth Color Shift (Purple #7819BE to Neon Pink #FF2680)
                     var gradRect = new Rectangle(cx - r - 1, cy - r - 1, (r * 2) + 2, (r * 2) + 2);
-                    Color purple = _isPressed ? Color.FromArgb(160, 40, 240) : Color.FromArgb(180, 50, 255);
-                    Color pink = _isPressed ? Color.FromArgb(255, 90, 170) : Color.FromArgb(255, 38, 128);
+                    Color secColor = _isPressed ? ControlPaint.Dark(_secondaryAccentColor, 0.1f) : _secondaryAccentColor;
+                    Color priColor = _isPressed ? ControlPaint.Dark(_accentColor, 0.1f) : _accentColor;
 
-                    // Interpolate starting colors with muted grey based on progress
-                    Color startC = BlendColor(Color.FromArgb(160, 160, 175), purple, _hoverProgress);
-                    Color endC = BlendColor(Color.FromArgb(160, 160, 175), pink, _hoverProgress);
+                    Color startC = BlendColor(Color.FromArgb(160, 160, 175), secColor, _hoverProgress);
+                    Color endC = BlendColor(Color.FromArgb(160, 160, 175), priColor, _hoverProgress);
 
                     using (var gradBrush = new LinearGradientBrush(gradRect, startC, endC, 45f))
                     using (var pen = new Pen(gradBrush, 2.0f))
@@ -1206,15 +1393,6 @@ namespace KahoiiMusic
                         g.DrawLine(pen, cx + r, cy - r, cx - r, cy + r);
                     }
                 }
-            }
-
-            private Color BlendColor(Color from, Color to, float amount)
-            {
-                amount = Math.Max(0f, Math.Min(1f, amount));
-                int r = (int)(from.R + (to.R - from.R) * amount);
-                int g = (int)(from.G + (to.G - from.G) * amount);
-                int b = (int)(from.B + (to.B - from.B) * amount);
-                return Color.FromArgb(r, g, b);
             }
         }
 
@@ -1228,6 +1406,7 @@ namespace KahoiiMusic
                 set { _checked = value; Invalidate(); }
             }
 
+            public Color AccentColor { get; set; } = Color.FromArgb(255, 38, 128);
             public string LabelText { get; set; } = "Ghi nhớ đăng nhập";
 
             public CustomCheckBox()
@@ -1257,8 +1436,8 @@ namespace KahoiiMusic
 
                 if (_checked)
                 {
-                    using (var brush = new SolidBrush(Color.FromArgb(255, 38, 128))) // Neon Pink
-                    using (var path = GetRoundedRect(boxRect, 4))
+                    using (var brush = new SolidBrush(AccentColor))
+                    using (var path = RoundedRect(boxRect, 4))
                     {
                         g.FillPath(brush, path);
                     }
@@ -1276,7 +1455,7 @@ namespace KahoiiMusic
                 {
                     using (var brush = new SolidBrush(Color.FromArgb(28, 25, 42)))
                     using (var pen = new Pen(Color.FromArgb(90, 85, 115), 1.2f))
-                    using (var path = GetRoundedRect(boxRect, 4))
+                    using (var path = RoundedRect(boxRect, 4))
                     {
                         g.FillPath(brush, path);
                         g.DrawPath(pen, path);

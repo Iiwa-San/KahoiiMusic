@@ -56,6 +56,11 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
+            if (owner == null)
+            {
+                owner = Form.ActiveForm ?? (Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null);
+            }
+
             try
             {
                 using (var dialog = new CyberUpdateDialog(info))
@@ -72,6 +77,10 @@ namespace KahoiiMusic.Controls
                         dialog.Location = new Point(x, y);
                     }
                     dialog.ShowDialog(owner);
+                }
+                if (owner is Form oForm && !oForm.IsDisposed && oForm.Visible)
+                {
+                    try { oForm.Activate(); } catch { }
                 }
             }
             catch (Exception ex)

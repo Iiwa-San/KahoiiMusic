@@ -18,6 +18,7 @@ namespace KahoiiMusic.Controls
 
     public class SideMenuPanel : Panel
     {
+        public bool IsPopup { get; set; } = false;
         private const int WM_ERASEBKGND = 0x0014;
         private const int TabsH = 40;
         private const int SearchBoxH = 28;
@@ -227,6 +228,14 @@ namespace KahoiiMusic.Controls
         public bool IsSearchFocused => (_searchBox != null && _searchBox.ContainsFocus) ||
                                        (_searchCollectionsBox != null && _searchCollectionsBox.ContainsFocus) ||
                                        (_searchCollectionTracksBox != null && _searchCollectionTracksBox.ContainsFocus);
+
+        public bool IsSearchBoxAt(Point pt)
+        {
+            if (_searchBox != null && _searchBox.Visible && _searchBox.Bounds.Contains(pt)) return true;
+            if (_searchCollectionsBox != null && _searchCollectionsBox.Visible && _searchCollectionsBox.Bounds.Contains(pt)) return true;
+            if (_searchCollectionTracksBox != null && _searchCollectionTracksBox.Visible && _searchCollectionTracksBox.Bounds.Contains(pt)) return true;
+            return false;
+        }
 
         public void ClearSearchFocus()
         {
@@ -460,12 +469,20 @@ namespace KahoiiMusic.Controls
         {
             base.OnResize(e);
 
-            _closeBtnRect = Rectangle.Empty;
-
             int tabY = 10;
             int tabMargin = 8;
-            int availTabW = Width - (tabMargin * 2);
             int tabSpacing = 4;
+            int closeBtnW = IsPopup ? 28 : 0;
+            if (IsPopup)
+            {
+                _closeBtnRect = new Rectangle(Width - tabMargin - closeBtnW, tabY + (TabsH - closeBtnW) / 2, closeBtnW, closeBtnW);
+            }
+            else
+            {
+                _closeBtnRect = Rectangle.Empty;
+            }
+
+            int availTabW = Width - (tabMargin * 2) - (IsPopup ? (closeBtnW + tabSpacing) : 0);
             int tabW = Math.Max(20, (availTabW - 3 * tabSpacing) / 4);
             for (int i = 0; i < 4; i++)
             {
@@ -593,6 +610,16 @@ namespace KahoiiMusic.Controls
             }
             if (_hoveredTab != prevTab) needRepaint = true;
 
+            if (IsPopup && !_closeBtnRect.IsEmpty)
+            {
+                bool overClose = _closeBtnRect.Contains(e.Location);
+                if (overClose != _isHoveringClose)
+                {
+                    _isHoveringClose = overClose;
+                    needRepaint = true;
+                }
+            }
+
             if (_activeTab == SideTab.Favorites)
             {
                 // Collection 2-column mode hover detection
@@ -658,7 +685,7 @@ namespace KahoiiMusic.Controls
                     needRepaint = true;
                 }
 
-                Cursor = (_hoveredTab >= 0 || _isHoveringNewBtn || _isHoveringPlayAllBtn || _hoveredPlaylistIndex >= 0 || _hoveredTrackRow >= 0 || _isHoveringColLeftScroll || _isHoveringColRightScroll)
+                Cursor = (_isHoveringClose || _hoveredTab >= 0 || _isHoveringNewBtn || _isHoveringPlayAllBtn || _hoveredPlaylistIndex >= 0 || _hoveredTrackRow >= 0 || _isHoveringColLeftScroll || _isHoveringColRightScroll)
                     ? Cursors.Hand : Cursors.Default;
             }
             else
@@ -685,7 +712,7 @@ namespace KahoiiMusic.Controls
                 }
                 if (_hoveredRow != prevRow) needRepaint = true;
 
-                Cursor = (_hoveredTab >= 0 || _hoveredRow >= 0 || _isHoveringScroll || _isDraggingScroll) ? Cursors.Hand : Cursors.Default;
+                Cursor = (_isHoveringClose || _hoveredTab >= 0 || _hoveredRow >= 0 || _isHoveringScroll || _isDraggingScroll) ? Cursors.Hand : Cursors.Default;
             }
 
             if (needRepaint) Invalidate();
@@ -763,6 +790,13 @@ namespace KahoiiMusic.Controls
             }
 
             if (e.Button != MouseButtons.Left) return;
+
+            // Close button click when in popup mode
+            if (IsPopup && !_closeBtnRect.IsEmpty && _closeBtnRect.Contains(e.Location))
+            {
+                CloseRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
 
             // Tab click
             for (int i = 0; i < 4; i++)
@@ -1055,8 +1089,6 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseWheel(MouseEventArgs e)
         {
-            base.OnMouseWheel(e);
-
             if (_activeTab == SideTab.Favorites)
             {
                 int leftColX = 10;
@@ -1103,18 +1135,43 @@ namespace KahoiiMusic.Controls
             Rectangle cardRect = new Rectangle(0, 0, Width - 1, Height - 1);
             using (GraphicsPath path = RoundedRect(cardRect, 14))
             {
-                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(150, 22, 10, 42)))
+                Color bg = IsPopup ? Color.FromArgb(246, 22, 10, 42) : Color.FromArgb(150, 22, 10, 42);
+                using (SolidBrush bgBrush = new SolidBrush(bg))
                 {
                     g.FillPath(bgBrush, path);
                 }
-                using (Pen borderPen = new Pen(_theme.CardBorderColor, 1.2f))
+                using (Pen borderPen = new Pen(_theme.CardBorderColor, IsPopup ? 1.4f : 1.2f))
                 {
                     g.DrawPath(borderPen, path);
                 }
             }
 
-            // 2. Tabs (Pill Buttons directly at top)
-            string[] tabLabels = { "Danh sách phát", "Bộ sưu tập", "Lịch sử", "Đã tải" };
+            // Close button "✕" when IsPopup is true
+            if (IsPopup && !_closeBtnRect.IsEmpty)
+            {
+                if (_isHoveringClose)
+                {
+                    using (GraphicsPath cp = RoundedRect(_closeBtnRect, 6))
+                    using (SolidBrush cb = new SolidBrush(Color.FromArgb(40, 255, 255, 255)))
+                    {
+                        g.FillPath(cb, cp);
+                    }
+                }
+                Color closeColor = _isHoveringClose ? Color.FromArgb(255, 100, 130) : Color.FromArgb(160, 160, 180);
+                using (Font closeFont = new Font("Segoe UI", 10f, FontStyle.Regular))
+                using (SolidBrush closeBrush = new SolidBrush(closeColor))
+                using (StringFormat sfClose = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    g.DrawString("✕", closeFont, closeBrush, _closeBtnRect, sfClose);
+                }
+            }
+
+            // 2. Tabs (Pill Buttons directly at top) - Pure Titles without (n)
+            string[] tabLabels = new string[4];
+            tabLabels[0] = "Danh sách phát";
+            tabLabels[1] = "Bộ sưu tập";
+            tabLabels[2] = "Lịch sử";
+            tabLabels[3] = "Đã tải";
             for (int i = 0; i < 4; i++)
             {
                 Rectangle tr = _tabRects[i];
