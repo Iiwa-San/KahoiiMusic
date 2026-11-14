@@ -312,22 +312,56 @@
   function extractPlaylistItemsFromPage() {
     const items = [];
     const currentV = getVideoId();
+
+    const getVideoIdFromEl = (el) => {
+      if (!el) return null;
+      const link = el.querySelector("a#wc-endpoint") || el.querySelector("a#video-title") || el.querySelector("a#thumbnail") || el.querySelector("a[href*='v=']");
+      if (link) {
+        const href = link.getAttribute("href") || "";
+        const match = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+        if (match && match[1]) return match[1];
+      }
+      if (el.data && el.data.videoId) return el.data.videoId;
+      if (el.__data && el.__data.data && el.__data.data.videoId) return el.__data.data.videoId;
+      return null;
+    };
+
+    const getTitleFromEl = (el, fallbackIdx) => {
+      const titleEl = el.querySelector("#video-title") || el.querySelector("span#video-title") || el.querySelector("yt-formatted-string#video-title") || el.querySelector(".title");
+      if (titleEl) {
+        const t = (titleEl.textContent || titleEl.getAttribute("title") || titleEl.innerText || "").trim();
+        if (t) return t;
+      }
+      const aria = el.getAttribute("aria-label") || (el.querySelector("a") ? el.querySelector("a").getAttribute("aria-label") : null);
+      if (aria) {
+        const cleaned = aria.replace(/\s*-\s*\d+:\d+.*$/, "").trim();
+        if (cleaned) return cleaned;
+      }
+      return "";
+    };
+
+    const getAuthorFromEl = (el) => {
+      const authorEl = el.querySelector("#byline") || el.querySelector("#channel-name") || el.querySelector("#byline-container a");
+      if (authorEl && authorEl.textContent) {
+        const a = authorEl.textContent.trim();
+        if (a) return a;
+      }
+      return "YouTube";
+    };
+
     const panelRenderers = document.querySelectorAll("ytd-playlist-panel-video-renderer");
     if (panelRenderers && panelRenderers.length > 0) {
-      panelRenderers.forEach((el) => {
-        const link = el.querySelector("a#wc-endpoint") || el.querySelector("a");
-        const href = link ? link.getAttribute("href") || "" : "";
-        const match = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-        const vid = match ? match[1] : null;
-        const titleEl = el.querySelector("#video-title");
-        const title = titleEl ? titleEl.textContent.trim() : "";
-        const authorEl = el.querySelector("#byline") || el.querySelector("#channel-name");
-        const author = authorEl ? authorEl.textContent.trim() : "YouTube";
-        let dur = extractDurationFromElement(el);
-        if (dur === 0 && vid && currentV && vid === currentV) {
-          dur = getVideoDuration();
-        }
-        if (vid && title && !items.some(x => x.Id === vid)) {
+      panelRenderers.forEach((el, idx) => {
+        const vid = getVideoIdFromEl(el);
+        if (vid && !items.some(x => x.Id === vid)) {
+          let title = getTitleFromEl(el, idx);
+          if (!title && vid === currentV) title = getVideoTitle();
+          if (!title) title = `Bài hát ${items.length + 1}`;
+          const author = getAuthorFromEl(el);
+          let dur = extractDurationFromElement(el);
+          if (dur === 0 && vid && currentV && vid === currentV) {
+            dur = getVideoDuration();
+          }
           items.push({ Id: vid, Title: title, Author: author, DurationSeconds: dur });
         }
       });
@@ -336,20 +370,17 @@
     if (items.length === 0) {
       const listRenderers = document.querySelectorAll("ytd-playlist-video-renderer");
       if (listRenderers && listRenderers.length > 0) {
-        listRenderers.forEach((el) => {
-          const link = el.querySelector("a#video-title") || el.querySelector("a#thumbnail");
-          const href = link ? link.getAttribute("href") || "" : "";
-          const match = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-          const vid = match ? match[1] : null;
-          const titleEl = el.querySelector("#video-title");
-          const title = titleEl ? titleEl.textContent.trim() : "";
-          const authorEl = el.querySelector("#byline-container a") || el.querySelector("#channel-name");
-          const author = authorEl ? authorEl.textContent.trim() : "YouTube";
-          let dur = extractDurationFromElement(el);
-          if (dur === 0 && vid && currentV && vid === currentV) {
-            dur = getVideoDuration();
-          }
-          if (vid && title && !items.some(x => x.Id === vid)) {
+        listRenderers.forEach((el, idx) => {
+          const vid = getVideoIdFromEl(el);
+          if (vid && !items.some(x => x.Id === vid)) {
+            let title = getTitleFromEl(el, idx);
+            if (!title && vid === currentV) title = getVideoTitle();
+            if (!title) title = `Bài hát ${items.length + 1}`;
+            const author = getAuthorFromEl(el);
+            let dur = extractDurationFromElement(el);
+            if (dur === 0 && vid && currentV && vid === currentV) {
+              dur = getVideoDuration();
+            }
             items.push({ Id: vid, Title: title, Author: author, DurationSeconds: dur });
           }
         });
