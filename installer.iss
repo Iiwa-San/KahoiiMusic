@@ -16,6 +16,7 @@ AppPublisherURL=https://github.com/Kahoii
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+DisableDirPage=no
 
 ; Output Configuration
 OutputDir=publish\Installer
