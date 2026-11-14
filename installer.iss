@@ -2,7 +2,7 @@
 ; Uses Inno Setup (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "Kahoii Music"
-#define MyAppVersion "1.0.32"
+#define MyAppVersion "1.0.33"
 #define MyAppPublisher "Kahoii"
 #define MyAppExeName "KahoiiMusic.exe"
 

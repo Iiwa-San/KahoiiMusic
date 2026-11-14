@@ -1,8 +1,8 @@
 {
-  "versionCode": 32,
-  "versionName": "1.0.32",
-  "changelog": "• Bổ sung Version (kèm tính năng click kiểm tra cập nhật) & Copyright by Kahoii-san dưới nút Đăng Xuất\n• Khắc phục hiển thị đồng nhất session Bài tiếp theo ngay khi mở app ở cửa sổ mặc định\n• Đồng bộ hiệu ứng Frosted Liquid Glass và căn chỉnh chuẩn xác giao diện",
-  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.32.exe",
+  "versionCode": 33,
+  "versionName": "1.0.33",
+  "changelog": "• Bổ sung Version (kèm click kiểm tra cập nhật) & Copyright by Kahoii-san dưới nút Đăng Xuất\n• Khắc phục triệt để lỗi đường dẫn làm việc (WorkingDir) khi khởi động sau khi cài đặt\n• Khắc phục hiển thị đồng nhất session Bài tiếp theo ngay khi mở app ở cửa sổ mặc định\n• Đồng bộ hiệu ứng Frosted Liquid Glass và căn chỉnh chuẩn xác giao diện",
+  "installerUrl": "https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.33.exe",
   "releasePageUrl": "https://github.com/Iiwa-San/KahoiiMusic/releases",
   "forceUpdate": false,
   "android": {
