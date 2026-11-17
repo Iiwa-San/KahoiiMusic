@@ -4069,9 +4069,13 @@ export default function App() {
       {/* 3. USER PROFILE MODAL (Clicked from "avatar" button)                      */}
       {/* ========================================================================= */}
       {isAccountOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="figma-panel w-full max-w-[420px] flex flex-col p-5 relative shadow-2xl border theme-accent-border">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="w-full max-w-[430px] flex flex-col p-6 rounded-[28px] relative shadow-2xl border theme-accent-border overflow-hidden backdrop-blur-2xl bg-[var(--theme-panel-bg)]/90 transition-all duration-300">
+            {/* Ambient dynamic glowing orbs */}
+            <div className="absolute -top-16 -right-16 w-52 h-52 rounded-full blur-3xl opacity-35 pointer-events-none theme-accent-bg" />
+            <div className="absolute -bottom-16 -left-16 w-52 h-52 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
+
+            <div className="flex items-center justify-between pb-3.5 border-b border-white/10 relative z-20">
               <span className="font-extrabold text-sm theme-accent-text flex items-center gap-2">
                 <User className="w-4 h-4" />
                 Hồ sơ người dùng
@@ -4182,41 +4186,53 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              /* Auth Form (Login or Register) */
-              <div className="flex flex-col gap-3.5 mt-3">
-                {/* Tabs to switch between Login and Register */}
-                <div className="flex items-center p-1 rounded-xl bg-white/5 border border-white/10 gap-1">
+              /* Auth Form (Login or Register with Extension-style Jelly Fluid Switch & Glass Blur) */
+              <div className="flex flex-col gap-3.5 mt-3 relative z-20">
+                {/* Segmented Liquid Tabs Container */}
+                <div className="relative flex items-center w-full p-1 rounded-2xl bg-black/40 border border-white/10 overflow-hidden mb-1">
+                  {/* Active Jelly Liquid Pill: Glides with smooth elastic cubic-bezier */}
+                  <div
+                    className="absolute top-1 bottom-1 rounded-xl pointer-events-none z-10"
+                    style={{
+                      width: "calc(50% - 4px)",
+                      left: "4px",
+                      transform: authMode === "login" ? "translateX(0%)" : "translateX(100%)",
+                      transition: "transform 0.35s cubic-bezier(0.25, 1.3, 0.45, 1), background 0.8s ease, box-shadow 0.8s ease",
+                      background: "var(--theme-btn-gradient)",
+                      boxShadow: "0 0 16px var(--theme-panel-border), 0 4px 18px rgba(0,0,0,0.4)",
+                    }}
+                  />
+
+                  {/* Tab 1: Đăng nhập */}
                   <button
                     type="button"
                     onClick={() => {
                       setAuthMode("login");
                       setLoginError(null);
                     }}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      authMode === "login"
-                        ? "theme-btn-primary text-white shadow-md"
-                        : "text-white/60 hover:text-white"
+                    className={`relative z-20 flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer text-center ${
+                      authMode === "login" ? "text-white scale-[1.02]" : "text-white/60 hover:text-white"
                     }`}
                   >
                     Đăng nhập
                   </button>
+
+                  {/* Tab 2: Đăng ký */}
                   <button
                     type="button"
                     onClick={() => {
                       setAuthMode("register");
                       setLoginError(null);
                     }}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      authMode === "register"
-                        ? "theme-btn-primary text-white shadow-md"
-                        : "text-white/60 hover:text-white"
+                    className={`relative z-20 flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer text-center ${
+                      authMode === "register" ? "text-white scale-[1.02]" : "text-white/60 hover:text-white"
                     }`}
                   >
                     Đăng ký
                   </button>
                 </div>
 
-                <p className="text-xs text-white/70">
+                <p className="text-xs text-white/70 transition-all">
                   {authMode === "login"
                     ? "Đăng nhập tài khoản Kahoii Music để đồng bộ danh sách phát và bài hát yêu thích."
                     : "Tạo tài khoản Kahoii Music mới để lưu trữ và đồng bộ kho nhạc của bạn lên Cloud."}
@@ -4238,7 +4254,7 @@ export default function App() {
                       placeholder="nhap-email@gmail.com"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
                     />
                   </div>
 
@@ -4250,28 +4266,34 @@ export default function App() {
                       placeholder="••••••••"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
                     />
                   </div>
 
-                  {authMode === "register" && (
-                    <div className="flex flex-col gap-1.5">
+                  {/* Confirm Password Field with Smooth Jelly Accordion Animation */}
+                  <div
+                    className={`transition-all duration-300 overflow-hidden ${
+                      authMode === "register"
+                        ? "max-h-24 opacity-100 translate-y-0 pointer-events-auto"
+                        : "max-h-0 opacity-0 -translate-y-2 pointer-events-none"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-1.5 pt-1">
                       <label className="text-[11px] font-semibold text-white/80">Nhập lại mật khẩu</label>
                       <input
                         type="password"
-                        required
                         placeholder="••••••••"
                         value={registerConfirmPassword}
                         onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                        className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
                       />
                     </div>
-                  )}
+                  </div>
 
                   <button
                     type="submit"
                     disabled={isLoggingIn || isRegistering}
-                    className="w-full mt-2 py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full mt-2 py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {isLoggingIn || isRegistering ? (
                       <>
