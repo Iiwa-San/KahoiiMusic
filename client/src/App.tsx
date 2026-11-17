@@ -269,6 +269,11 @@ export default function App() {
   const [artistPlaylists, setArtistPlaylists] = useState<SearchPlaylistItem[]>([]);
   const [activeArtistTab, setActiveArtistTab] = useState<"all" | "singles" | "playlists">("all");
 
+  // Playlist and Library playback tracking state
+  const [loadingPlaylistId, setLoadingPlaylistId] = useState<string | null>(null);
+  const [activePlayingPlaylistId, setActivePlayingPlaylistId] = useState<string | null>(null);
+  const [activeLibraryPlaylistId, setActiveLibraryPlaylistId] = useState<string | null>(null);
+
   const addToSearchHistory = (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -340,6 +345,14 @@ export default function App() {
   };
 
   const playPlaylistItem = async (playlistItem: SearchPlaylistItem) => {
+    // If this playlist is already the active playlist, toggle play/pause
+    if (activePlayingPlaylistId === playlistItem.id) {
+      togglePlayPause();
+      return;
+    }
+
+    setLoadingPlaylistId(playlistItem.id);
+    setIsLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/playlist?id=${encodeURIComponent(playlistItem.id)}`);
       const data = await res.json();
@@ -347,12 +360,16 @@ export default function App() {
         setPlaylist(data.tracks);
         setQueueTracks(data.tracks);
         setCurrentIndex(0);
+        currentIndexRef.current = 0;
+        setActivePlayingPlaylistId(playlistItem.id);
         loadAndPlayTrack(data.tracks[0], true);
       } else {
         executeSearch(playlistItem.title);
       }
     } catch {
       executeSearch(playlistItem.title);
+    } finally {
+      setLoadingPlaylistId(null);
     }
   };
 
@@ -720,18 +737,18 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         const mappedFavs: Track[] = (data.favorites || []).map((f: any) => ({
-          id: f.id,
-          title: f.title,
-          author: f.author || "Kahoii Music",
-          duration: f.duration || 180,
-          thumbnail: `https://i.ytimg.com/vi/${f.id}/mqdefault.jpg`,
+          id: f.id || f.Id,
+          title: f.title || f.Title,
+          author: f.author || f.Author || f.Artist || "Kahoii Music",
+          duration: Number(f.DurationSeconds ?? f.duration ?? f.durationSeconds ?? f.Duration ?? 0),
+          thumbnail: `https://i.ytimg.com/vi/${f.id || f.Id}/mqdefault.jpg`,
         }));
         const mappedHist: Track[] = (data.history || []).map((h: any) => ({
-          id: h.id,
-          title: h.title,
-          author: h.author || "Kahoii Music",
-          duration: h.duration || 180,
-          thumbnail: `https://i.ytimg.com/vi/${h.id}/mqdefault.jpg`,
+          id: h.id || h.Id,
+          title: h.title || h.Title,
+          author: h.author || h.Author || h.Artist || "Kahoii Music",
+          duration: Number(h.DurationSeconds ?? h.duration ?? h.durationSeconds ?? h.Duration ?? 0),
+          thumbnail: `https://i.ytimg.com/vi/${h.id || h.Id}/mqdefault.jpg`,
         }));
         const rawPlaylists = (data.playlists || []).map((pl: any) => ({
           id: pl.id || pl.Id,
@@ -741,7 +758,7 @@ export default function App() {
             id: it.id || it.Id,
             title: it.title || it.Title,
             author: it.author || it.Author || it.Artist || "",
-            duration: it.duration || it.DurationSeconds || 0,
+            duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
             thumbnail: `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
           })),
         }));
@@ -940,9 +957,22 @@ export default function App() {
       ) {
         try {
           const ct = ytPlayerRef.current.getCurrentTime() || 0;
-          const dur = ytPlayerRef.current.getDuration() || 0;
+          const rawDur = ytPlayerRef.current.getDuration() || 0;
+          const dur = Math.round(rawDur);
           if (ct > 0) setCurrentTime(ct);
-          if (dur > 0 && Math.abs(dur - duration) > 1) setDuration(dur);
+          if (dur > 0 && Math.abs(dur - duration) > 1) {
+            setDuration(dur);
+            setCurrentTrack((prev) => (prev && (!prev.duration || prev.duration <= 0) ? { ...prev, duration: dur } : prev));
+            setQueueTracks((prev) => {
+              const curIdx = currentIndexRef.current;
+              if (prev[curIdx] && (!prev[curIdx].duration || prev[curIdx].duration <= 0)) {
+                const copy = [...prev];
+                copy[curIdx] = { ...copy[curIdx], duration: dur };
+                return copy;
+              }
+              return prev;
+            });
+          }
 
           // Fallback: If video reaches within 0.5s of the end and stops or pauses, advance to next track
           if (dur > 5 && ct >= dur - 0.5 && !isTransitioningRef.current) {
@@ -1009,10 +1039,26 @@ export default function App() {
       if (!res.ok) throw new Error(data.error || "Đăng nhập thất bại");
       setUserSession(data);
       setAvatarKey(Date.now());
+
+      // Auto-sync cloud data from Firestore immediately
+      try {
+        const syncRes = await fetch(`${API_BASE}/api/user/sync`, { method: "POST" });
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          setUserSession(syncData);
+        }
+      } catch (sErr) {
+        console.warn("Auto sync on login error:", sErr);
+      }
+
       await fetchLibraryData();
       setLoginPassword("");
-      setSyncSuccessMsg("Đăng nhập thành công!");
-      setTimeout(() => setSyncSuccessMsg(null), 3000);
+      setSyncSuccessMsg("Đăng nhập và tự động đồng bộ Cloud thành công!");
+      showToast("Đã đăng nhập và tự động đồng bộ thư viện Cloud!", "success");
+      setTimeout(() => {
+        setSyncSuccessMsg(null);
+        setIsAccountOpen(false);
+      }, 1500);
     } catch (err: any) {
       setLoginError(err.message || "Lỗi đăng nhập");
     } finally {
@@ -1524,7 +1570,9 @@ export default function App() {
           .map((t) => ({
             id: t.id,
             title: t.title,
-            subtitle: `${t.author || "Kahoii Music"} • ${formatTime(t.duration)}`,
+            subtitle: t.duration && t.duration > 0
+              ? `${t.author || "Kahoii Music"} • ${formatTime(t.duration)}`
+              : (t.author || "Kahoii Music"),
             thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
             rawTrack: t,
             rawPlaylist: null as any,
@@ -1538,7 +1586,9 @@ export default function App() {
           .map((t) => ({
             id: t.id,
             title: t.title,
-            subtitle: `${t.author || "Kahoii Music"} • ${formatTime(t.duration)}`,
+            subtitle: t.duration && t.duration > 0
+              ? `${t.author || "Kahoii Music"} • ${formatTime(t.duration)}`
+              : (t.author || "Kahoii Music"),
             thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
             rawTrack: t,
             rawPlaylist: null as any,
@@ -1878,35 +1928,63 @@ export default function App() {
                           playTrackDirectly(item.rawTrack);
                         } else if (item.rawPlaylist?.items?.length) {
                           const plTracks: Track[] = item.rawPlaylist.items.map((it: any) => ({
-                            id: it.id,
-                            title: it.title,
-                            author: it.author || "",
-                            duration: it.duration || 0,
-                            thumbnail: `https://i.ytimg.com/vi/${it.id}/mqdefault.jpg`,
+                            id: it.id || it.Id,
+                            title: it.title || it.Title,
+                            author: it.author || it.Author || it.Artist || "",
+                            duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
+                            thumbnail: `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
                           }));
+                          setActiveLibraryPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
+                          setActivePlayingPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
                           setPlaylist(plTracks);
                           setCurrentIndex(0);
+                          currentIndexRef.current = 0;
                           loadAndPlayTrack(plTracks[0], true);
                           setQueueTracks(plTracks);
                         } else if (playlist[idx % playlist.length]) {
                           playTrackDirectly(playlist[idx % playlist.length]);
                         }
                       }}
-                      className="flex items-center gap-3.5 p-2 rounded-2xl hover:bg-white/10 hover:translate-x-1 transition-all duration-200 cursor-pointer group"
+                      className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group ${
+                        (activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                        ((activeLeftTab === "favorites" || activeLeftTab === "history") && currentTrack && currentTrack.id === item.id)
+                          ? "active-queue-beam shadow-md scale-[1.01]"
+                          : "hover:bg-white/10 hover:translate-x-1"
+                      }`}
                       style={{ marginBottom: "2px" }}
                     >
-                      <img
-                        src={item.thumb}
-                        alt=""
-                        onError={(e) => {
-                          e.currentTarget.src = DEFAULT_TRACK_ART;
-                        }}
-                        className="w-11 h-11 rounded-[14px] object-cover flex-shrink-0 border border-white/10 shadow-sm"
-                      />
+                      <div className="relative w-11 h-11 flex-shrink-0">
+                        <img
+                          src={item.thumb}
+                          alt=""
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_TRACK_ART;
+                          }}
+                          className="w-full h-full rounded-[14px] object-cover border border-white/10 shadow-sm"
+                        />
+                        {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                          ((activeLeftTab === "favorites" || activeLeftTab === "history") && currentTrack && currentTrack.id === item.id)) && (
+                          <div className="absolute inset-0 bg-black/55 rounded-[14px] flex items-center justify-center">
+                            {isPlaying ? (
+                              <Volume2 className="w-5 h-5 theme-accent-text animate-pulse" />
+                            ) : (
+                              <Play className="w-4 h-4 fill-current text-white/90" />
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13.5px] font-semibold text-white group-hover:theme-accent-text truncate transition-colors">
-                          {item.title}
-                        </p>
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="text-[13.5px] font-semibold text-white group-hover:theme-accent-text truncate transition-colors">
+                            {item.title}
+                          </p>
+                          {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                            ((activeLeftTab === "favorites" || activeLeftTab === "history") && currentTrack && currentTrack.id === item.id)) && (
+                            <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider flex-shrink-0">
+                              {isPlaying ? "Đang phát" : "Tạm dừng"}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
                           {item.subtitle}
                         </p>
@@ -2037,8 +2115,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Tag Selection Bar (Single / Danh sách phát / Tất cả) */}
-              <div className="flex items-center gap-2 mb-5 flex-wrap flex-shrink-0">
+              {/* Tag Selection Bar (Sticky / Fixed at top when scrolling) */}
+              <div className="sticky top-0 z-30 py-3 mb-5 backdrop-blur-xl bg-[var(--theme-panel-bg)] border-b border-white/10 -mx-3 px-3 flex items-center gap-2 flex-wrap flex-shrink-0 shadow-lg">
                 {[
                   { key: "all", label: "Tất cả", count: artistTracks.length + artistPlaylists.length },
                   { key: "singles", label: "Nhạc Single / Bài hát", count: artistTracks.length },
@@ -2199,9 +2277,17 @@ export default function App() {
                                   }}
                                   className="w-full h-full object-cover"
                                 />
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${
+                                  activePlayingPlaylistId === pl.id || loadingPlaylistId === pl.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                }`}>
                                   <div className="w-11 h-11 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
-                                    <Play className="w-5 h-5 fill-current translate-x-0.5" />
+                                    {loadingPlaylistId === pl.id ? (
+                                      <Loader2 className="w-5 h-5 animate-spin text-white" />
+                                    ) : activePlayingPlaylistId === pl.id && isPlaying ? (
+                                      <Pause className="w-5 h-5 fill-current" />
+                                    ) : (
+                                      <Play className="w-5 h-5 fill-current translate-x-0.5" />
+                                    )}
                                   </div>
                                 </div>
                                 <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
@@ -2259,8 +2345,8 @@ export default function App() {
                 )}
               </div>
 
-              {/* Navigation Tabs: Tất cả / Nhạc / Nhạc sĩ / Playlist */}
-              <div className="flex items-center gap-2 mb-5 flex-wrap flex-shrink-0">
+              {/* Navigation Tabs: Sticky / Fixed at top when scrolling */}
+              <div className="sticky top-0 z-30 py-3 mb-5 backdrop-blur-xl bg-[var(--theme-panel-bg)] border-b border-white/10 -mx-3 px-3 flex items-center gap-2 flex-wrap flex-shrink-0 shadow-lg">
                 {[
                   { key: "all", label: "Tất cả" },
                   {
@@ -2840,9 +2926,15 @@ export default function App() {
                                       playPlaylistItem(pl);
                                     }}
                                     className="w-11 h-11 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                                    title="Phát danh sách này"
+                                    title={activePlayingPlaylistId === pl.id && isPlaying ? "Tạm dừng danh sách này" : "Phát danh sách này"}
                                   >
-                                    <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                    {loadingPlaylistId === pl.id ? (
+                                      <Loader2 className="w-5 h-5 text-white animate-spin" />
+                                    ) : activePlayingPlaylistId === pl.id && isPlaying ? (
+                                      <Pause className="w-5 h-5 text-white fill-current" />
+                                    ) : (
+                                      <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                    )}
                                   </button>
                                 </div>
                                 <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">

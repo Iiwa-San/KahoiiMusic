@@ -219,6 +219,13 @@ export async function loginWithFirebase(email: string, pass: string): Promise<an
   if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
   fs.writeFileSync(path.join(savedDir, "user_session.json"), JSON.stringify(session, null, 2), "utf8");
 
+  // Auto-sync Firestore library data immediately upon login
+  try {
+    await syncCloudUserData();
+  } catch (syncErr) {
+    console.warn("Auto syncCloudUserData failed on login:", syncErr);
+  }
+
   return await getUserSessionData();
 }
 
@@ -279,7 +286,7 @@ export async function syncCloudUserData(): Promise<any> {
       const mappedFavs = favSources.map((t: any) => ({
         id: t.Id || t.id,
         title: t.Title || t.title,
-        duration: t.DurationSeconds || t.duration || 0,
+        duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
         author: t.Author || t.Artist || t.author || "",
       }));
       fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(mappedFavs, null, 2), "utf8");
@@ -289,7 +296,7 @@ export async function syncCloudUserData(): Promise<any> {
         const mappedHist = musicData.history.map((t: any) => ({
           id: t.Id || t.id,
           title: t.Title || t.title,
-          duration: t.DurationSeconds || t.duration || 0,
+          duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
           author: t.Author || t.Artist || t.author || "",
         }));
         fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(mappedHist, null, 2), "utf8");
@@ -309,7 +316,7 @@ export async function syncCloudUserData(): Promise<any> {
           items: (pl.Items || pl.items || []).map((t: any) => ({
             id: t.Id || t.id,
             title: t.Title || t.title,
-            duration: t.DurationSeconds || t.duration || 0,
+            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
             author: t.Author || t.Artist || t.author || "",
           })),
         }));
@@ -359,7 +366,7 @@ export async function getUserLibraryData(): Promise<any> {
           const favorites = favSources.map((t: any) => ({
             id: t.Id || t.id,
             title: t.Title || t.title,
-            duration: t.DurationSeconds || t.duration || 0,
+            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
             author: t.Author || t.Artist || t.author || "",
           }));
 
@@ -367,7 +374,7 @@ export async function getUserLibraryData(): Promise<any> {
           const history = (musicData.history || []).map((t: any) => ({
             id: t.Id || t.id,
             title: t.Title || t.title,
-            duration: t.DurationSeconds || t.duration || 0,
+            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
             author: t.Author || t.Artist || t.author || "",
           }));
 
@@ -384,7 +391,7 @@ export async function getUserLibraryData(): Promise<any> {
             items: (pl.Items || pl.items || []).map((t: any) => ({
               id: t.Id || t.id,
               title: t.Title || t.title,
-              duration: t.DurationSeconds || t.duration || 0,
+              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
               author: t.Author || t.Artist || t.author || "",
             })),
           }));
