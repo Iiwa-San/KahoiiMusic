@@ -27,6 +27,13 @@ import {
   Sparkles,
   Flame,
   Mic2,
+  FolderPlus,
+  FolderHeart,
+  ListMusic,
+  ChevronRight,
+  Download,
+  Plus,
+  Music2,
 } from "lucide-react";
 import type {
   Track,
@@ -182,6 +189,64 @@ const SIDEBAR_TABS: { key: LeftTab; label: string }[] = [
   { key: "favorites", label: "Yêu thích" },
   { key: "history", label: "Lịch sử" },
 ];
+
+// Check if a character belongs to Latin script (includes Vietnamese diacritics, European accents)
+function isLatinLetter(char: string): boolean {
+  return /^\p{Script=Latin}$/u.test(char);
+}
+
+// Check if a string is composed primarily of Latin characters
+function isLatinText(str: string): boolean {
+  if (!str || !str.trim()) return false;
+  const trimmed = str.trim();
+  const lettersOnly = trimmed.replace(/[\p{P}\p{S}\p{N}\s]/gu, "");
+  if (!lettersOnly) return false;
+  if (!isLatinLetter(lettersOnly[0])) return false;
+  const hasNonLatinAlphabet =
+    /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Thai}]/u.test(
+      lettersOnly
+    );
+  return !hasNonLatinAlphabet;
+}
+
+// Sort criteria:
+// 1. Non-Latin characters go to the top (Group 0).
+// 2. If song/playlist title != Latin but author == Latin, sort in Latin section by author (Group 1).
+// 3. Otherwise, sort all Latin by title A-Z (Group 1).
+function getSortCriteria(item: { title?: string; name?: string; author?: string }) {
+  const title = (item.title || item.name || "").trim();
+  const author = (item.author || "").trim();
+
+  const titleFirstChar = title ? title[0] : "";
+  const titleIsLatin = titleFirstChar && isLatinLetter(titleFirstChar) && isLatinText(title);
+
+  if (titleIsLatin) {
+    return { group: 1, key: title };
+  }
+
+  const authorFirstChar = author ? author[0] : "";
+  const authorIsLatin = authorFirstChar && isLatinLetter(authorFirstChar) && isLatinText(author);
+
+  if (authorIsLatin) {
+    return { group: 1, key: `${author} - ${title}` };
+  }
+
+  return { group: 0, key: title || author };
+}
+
+function compareSortItems(a: any, b: any): number {
+  const critA = getSortCriteria(a);
+  const critB = getSortCriteria(b);
+
+  if (critA.group !== critB.group) {
+    return critA.group - critB.group;
+  }
+
+  return critA.key.localeCompare(critB.key, "vi", {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
 
 export default function App() {
   const [playlist, setPlaylist] = useState<Track[]>([]);
@@ -377,19 +442,200 @@ export default function App() {
     }
   };
 
-  // Favorite toggle for current track
-  const toggleCurrentFavorite = () => {
-    if (!currentTrack) return;
-    setLibraryData((prev) => {
-      const isFav = prev.favorites.some((t) => t.id === currentTrack.id);
-      let updatedFavs: Track[];
-      if (isFav) {
-        updatedFavs = prev.favorites.filter((t) => t.id !== currentTrack.id);
-      } else {
-        updatedFavs = [currentTrack, ...prev.favorites];
+  // Sorting state for Left Sidebar and Right Queue
+  const [isLeftSorted, setIsLeftSorted] = useState<boolean>(false);
+  const [isQueueSorted, setIsQueueSorted] = useState<boolean>(false);
+
+  // Hamburger popups on player card
+  const [showPlayerMenu, setShowPlayerMenu] = useState<boolean>(false);
+  const [showLibrarySubmenu, setShowLibrarySubmenu] = useState<boolean>(false);
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState<boolean>(false);
+  const [newPlaylistName, setNewPlaylistName] = useState<string>("");
+  const playerMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Downloaded track IDs (persisted locally)
+  const [downloadedTrackIds, setDownloadedTrackIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("kahoii_downloaded_track_ids");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Modern Toast notification
+  const [toast, setToast] = useState<{ text: string; type: "info" | "success" | "warning" } | null>(null);
+  const toastTimeoutRef = useRef<any>(null);
+
+  const showToast = (text: string, type: "info" | "success" | "warning" = "info") => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ text, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+    }, 3200);
+  };
+
+  // Close player popup menu on click outside
+  useEffect(() => {
+    const handleClickOutsideMenu = (e: MouseEvent) => {
+      if (playerMenuRef.current && !playerMenuRef.current.contains(e.target as Node)) {
+        setShowPlayerMenu(false);
+        setShowLibrarySubmenu(false);
+        setIsCreatingPlaylist(false);
+        setNewPlaylistName("");
       }
-      return { ...prev, favorites: updatedFavs };
+    };
+    document.addEventListener("mousedown", handleClickOutsideMenu);
+    return () => document.removeEventListener("mousedown", handleClickOutsideMenu);
+  }, []);
+
+  // Save library data to server & cloud
+  const persistLibraryData = async (updated: {
+    favorites?: Track[];
+    history?: Track[];
+    playlists?: any[];
+  }) => {
+    try {
+      await fetch(`${API_BASE}/api/user/library`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          favorites: updated.favorites || libraryData.favorites,
+          history: updated.history || libraryData.history,
+          playlists: updated.playlists || libraryData.playlists,
+        }),
+      });
+    } catch (err) {
+      console.warn("Library persist failed:", err);
+    }
+  };
+
+  // Favorite toggle for current track
+  const toggleCurrentFavorite = async () => {
+    if (!currentTrack) return;
+    if (!userSession?.isLoggedIn) {
+      showToast("Vui lòng đăng nhập để lưu bài hát vào danh sách yêu thích!", "warning");
+      setIsAccountOpen(true);
+      return;
+    }
+
+    const isFav = libraryData.favorites.some((t) => t.id === currentTrack.id);
+    let updatedFavs: Track[];
+
+    if (isFav) {
+      updatedFavs = libraryData.favorites.filter((t) => t.id !== currentTrack.id);
+      showToast(`Đã xóa "${currentTrack.title}" khỏi bài hát yêu thích`, "info");
+    } else {
+      updatedFavs = [currentTrack, ...libraryData.favorites];
+      showToast(`Đã thêm "${currentTrack.title}" vào bài hát yêu thích`, "success");
+    }
+
+    setLibraryData((prev) => ({ ...prev, favorites: updatedFavs }));
+    await persistLibraryData({ favorites: updatedFavs });
+  };
+
+  // Download track audio
+  const handleDownloadTrack = async (track: Track) => {
+    if (!track) return;
+    const isDownloaded = downloadedTrackIds.has(track.id);
+    if (isDownloaded) {
+      setDownloadedTrackIds((prev) => {
+        const next = new Set(prev);
+        next.delete(track.id);
+        try {
+          localStorage.setItem("kahoii_downloaded_track_ids", JSON.stringify(Array.from(next)));
+        } catch {}
+        return next;
+      });
+      showToast(`Đã gỡ bài hát "${track.title}" khỏi danh sách tải xuống`, "info");
+      return;
+    }
+
+    setDownloadedTrackIds((prev) => {
+      const next = new Set(prev);
+      next.add(track.id);
+      try {
+        localStorage.setItem("kahoii_downloaded_track_ids", JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
     });
+
+    showToast(`Đang chuẩn bị tải xuống "${track.title}"...`, "success");
+
+    try {
+      const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          const link = document.createElement("a");
+          link.href = data.url;
+          link.target = "_blank";
+          link.download = `${track.title} - ${track.author}.mp3`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast(`Đã bắt đầu tải xuống "${track.title}"!`, "success");
+          return;
+        }
+      }
+      window.open(`https://www.youtube.com/watch?v=${track.id}`, "_blank");
+    } catch {
+      window.open(`https://www.youtube.com/watch?v=${track.id}`, "_blank");
+    }
+  };
+
+  // Create playlist and add current track
+  const handleCreatePlaylistAndAddTrack = async () => {
+    if (!newPlaylistName.trim() || !currentTrack) return;
+    const newPl = {
+      id: `pl_${Date.now()}`,
+      name: newPlaylistName.trim(),
+      created: new Date().toISOString(),
+      items: [currentTrack],
+    };
+    const updatedPlaylists = [newPl, ...libraryData.playlists];
+    setLibraryData((prev) => ({ ...prev, playlists: updatedPlaylists }));
+    setIsCreatingPlaylist(false);
+    setNewPlaylistName("");
+    showToast(`Đã tạo playlist "${newPl.name}" và thêm bài hát!`, "success");
+    await persistLibraryData({ playlists: updatedPlaylists });
+  };
+
+  // Toggle track inside a playlist
+  const handleToggleTrackInPlaylist = async (playlistId: string) => {
+    if (!currentTrack) return;
+    const targetPl = libraryData.playlists.find((pl) => pl.id === playlistId);
+    if (!targetPl) return;
+
+    const isInPl = targetPl.items?.some((it: any) => it.id === currentTrack.id);
+    let updatedPlaylists: any[];
+
+    if (isInPl) {
+      updatedPlaylists = libraryData.playlists.map((pl) => {
+        if (pl.id === playlistId) {
+          return {
+            ...pl,
+            items: (pl.items || []).filter((it: any) => it.id !== currentTrack.id),
+          };
+        }
+        return pl;
+      });
+      showToast(`Đã xóa khỏi playlist "${targetPl.name}"`, "info");
+    } else {
+      updatedPlaylists = libraryData.playlists.map((pl) => {
+        if (pl.id === playlistId) {
+          return {
+            ...pl,
+            items: [currentTrack, ...(pl.items || [])],
+          };
+        }
+        return pl;
+      });
+      showToast(`Đã thêm vào playlist "${targetPl.name}"`, "success");
+    }
+
+    setLibraryData((prev) => ({ ...prev, playlists: updatedPlaylists }));
+    await persistLibraryData({ playlists: updatedPlaylists });
   };
 
   // Close search history dropdown on click outside
@@ -501,22 +747,6 @@ export default function App() {
           history: mappedHist,
           playlists: rawPlaylists,
         });
-
-        // Initialize playlist & queue exclusively with real user tracks
-        const initialTracks: Track[] =
-          mappedHist.length > 0
-            ? mappedHist
-            : mappedFavs.length > 0
-            ? mappedFavs
-            : rawPlaylists[0]?.items?.length > 0
-            ? rawPlaylists[0].items
-            : [];
-
-        if (initialTracks.length > 0) {
-          setPlaylist((prev) => (prev.length === 0 ? initialTracks : prev));
-          setQueueTracks((prev) => (prev.length === 0 ? initialTracks : prev));
-          loadAndPlayTrack(initialTracks[0], false);
-        }
       }
     } catch (err) {
       console.error("Library fetch failed:", err);
@@ -539,8 +769,6 @@ export default function App() {
         if (data) {
           if (Array.isArray(data.trending) && data.trending.length > 0) {
             setTrendingTracks(data.trending);
-            setPlaylist((prev) => (prev.length === 0 ? data.trending : prev));
-            setQueueTracks((prev) => (prev.length === 0 ? data.trending : prev));
           }
           if (Array.isArray(data.newReleases) && data.newReleases.length > 0) {
             setNewReleaseTracks(data.newReleases);
@@ -548,10 +776,6 @@ export default function App() {
         }
       })
       .catch(() => {});
-
-    // Preload initial playlist if empty
-    setPlaylist((prev) => (prev.length === 0 ? INITIAL_TRENDING_TRACKS : prev));
-    setQueueTracks((prev) => (prev.length === 0 ? INITIAL_TRENDING_TRACKS : prev));
 
     // Initialize YouTube Iframe Player
     const loadYtScript = () => {
@@ -824,13 +1048,23 @@ export default function App() {
       } catch {}
     }
 
+    if (!currentTrack) {
+      if (trendingTracks.length > 0) {
+        setPlaylist(trendingTracks);
+        setQueueTracks(trendingTracks);
+        setCurrentIndex(0);
+        loadAndPlayTrack(trendingTracks[0], true);
+      }
+      return;
+    }
+
     if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      if (!audioRef.current.src || !currentTrack) {
-        if (currentTrack) loadAndPlayTrack(currentTrack, true);
+      if (!audioRef.current.src) {
+        loadAndPlayTrack(currentTrack, true);
         return;
       }
       const playPromise = audioRef.current.play();
@@ -838,7 +1072,7 @@ export default function App() {
         playPromise
           .then(() => setIsPlaying(true))
           .catch(() => {
-            if (currentTrack) loadAndPlayTrack(currentTrack, true);
+            loadAndPlayTrack(currentTrack, true);
           });
       }
     }
@@ -983,11 +1217,12 @@ export default function App() {
   // Filtered Left list based on active tab and query
   const getSidebarItems = () => {
     const q = leftSearchQuery.toLowerCase().trim();
+    let items: any[] = [];
 
     if (activeLeftTab === "favorites") {
-      const items = libraryData.favorites;
-      if (items.length > 0) {
-        return items
+      const favs = libraryData.favorites;
+      if (favs.length > 0) {
+        items = favs
           .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
           .map((t) => ({
             id: t.id,
@@ -998,13 +1233,10 @@ export default function App() {
             rawPlaylist: null as any,
           }));
       }
-      return [];
-    }
-
-    if (activeLeftTab === "history") {
-      const items = libraryData.history;
-      if (items.length > 0) {
-        return items
+    } else if (activeLeftTab === "history") {
+      const hist = libraryData.history;
+      if (hist.length > 0) {
+        items = hist
           .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
           .map((t) => ({
             id: t.id,
@@ -1015,12 +1247,8 @@ export default function App() {
             rawPlaylist: null as any,
           }));
       }
-      return [];
-    }
-
-    // Tab "library" (Danh sách phát)
-    if (libraryData.playlists.length > 0) {
-      return libraryData.playlists
+    } else if (libraryData.playlists.length > 0) {
+      items = libraryData.playlists
         .filter((p) => !q || (p.name && p.name.toLowerCase().includes(q)))
         .map((p, idx) => ({
           id: p.id || `pl-${idx}`,
@@ -1032,7 +1260,23 @@ export default function App() {
         }));
     }
 
-    return [];
+    if (isLeftSorted && items.length > 0) {
+      items = [...items].sort((a, b) => {
+        const itemA = {
+          title: a.title,
+          name: a.rawPlaylist?.name || a.title,
+          author: a.rawTrack?.author || "",
+        };
+        const itemB = {
+          title: b.title,
+          name: b.rawPlaylist?.name || b.title,
+          author: b.rawTrack?.author || "",
+        };
+        return compareSortItems(itemA, itemB);
+      });
+    }
+
+    return items;
   };
 
   // Real tracks to display in Discovery Feed (Center Canvas)
@@ -1197,6 +1441,30 @@ export default function App() {
         </div>
       )}
 
+      {/* Global Interactive Notification Toast */}
+      {toast && (
+        <div
+          className={`absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl border backdrop-blur-xl shadow-2xl flex items-center gap-2.5 text-xs font-medium animate-fade-in ${
+            toast.type === "warning"
+              ? "bg-amber-950/90 border-amber-500/60 text-amber-200 shadow-amber-500/20"
+              : toast.type === "success"
+              ? "bg-emerald-950/90 border-emerald-500/60 text-emerald-200 shadow-emerald-500/20"
+              : "bg-purple-950/90 border-pink-500/60 text-pink-200 shadow-pink-500/20"
+          }`}
+        >
+          {toast.type === "warning" && <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+          {toast.type === "success" && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+          {toast.type === "info" && <Sparkles className="w-4 h-4 text-pink-400 flex-shrink-0" />}
+          <span>{toast.text}</span>
+          <button
+            onClick={() => setToast(null)}
+            className="ml-1 text-white/50 hover:text-white cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* 2. MAIN CANVAS (Exact Figma 3-Column Layout with Real Proportions)         */}
       {/* ========================================================================= */}
@@ -1244,89 +1512,115 @@ export default function App() {
             ))}
           </div>
 
-          {/* Search Box in Sidebar with Sort Icon (Matching Figma: Centered text, pink icons) */}
-          <div
-            className="relative flex items-center h-10 px-3.5 rounded-full bg-[#1e053a] border border-purple-500/30 hover:border-pink-500/50 focus-within:border-pink-500 transition-all flex-shrink-0"
-            style={{ marginBottom: "22px" }}
-          >
-            <Search className="w-4 h-4 text-[#e0007b] flex-shrink-0" />
-            <input
-              type="text"
-              placeholder="Search"
-              value={leftSearchQuery}
-              onChange={(e) => setLeftSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent text-xs text-center font-medium text-white placeholder-white/50 focus:outline-none px-2"
-            />
-            <button
-              type="button"
-              title="Sắp xếp"
-              className="text-[#e0007b] hover:text-white transition-colors cursor-pointer flex-shrink-0"
-            >
-              <ArrowDownAZ className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Vertical List of Playlist Items (Matching Figma) */}
-          <div
-            className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
-            style={{ gap: "12px" }}
-          >
-            {getSidebarItems().length > 0 ? (
-              getSidebarItems().map((item, idx) => (
-                <div
-                  key={item.id + idx}
-                  onClick={() => {
-                    if (item.rawTrack) {
-                      playTrackDirectly(item.rawTrack);
-                    } else if (item.rawPlaylist?.items?.length) {
-                      const plTracks: Track[] = item.rawPlaylist.items.map((it: any) => ({
-                        id: it.id,
-                        title: it.title,
-                        author: it.author || "",
-                        duration: it.duration || 0,
-                        thumbnail: `https://i.ytimg.com/vi/${it.id}/mqdefault.jpg`,
-                      }));
-                      setPlaylist(plTracks);
-                      setCurrentIndex(0);
-                      loadAndPlayTrack(plTracks[0], true);
-                      setQueueTracks(plTracks);
-                    } else if (playlist[idx % playlist.length]) {
-                      playTrackDirectly(playlist[idx % playlist.length]);
-                    }
-                  }}
-                  className="flex items-center gap-3.5 p-2 rounded-2xl hover:bg-white/10 hover:translate-x-1 transition-all duration-200 cursor-pointer group"
-                  style={{ marginBottom: "2px" }}
-                >
-                  <img
-                    src={item.thumb}
-                    alt=""
-                    onError={(e) => {
-                      e.currentTarget.src = DEFAULT_TRACK_ART;
-                    }}
-                    className="w-11 h-11 rounded-[14px] object-cover flex-shrink-0 border border-white/10 shadow-sm"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13.5px] font-semibold text-white group-hover:text-pink-300 truncate transition-colors">
-                      {item.title}
-                    </p>
-                    <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
-                      {item.subtitle}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-white/40 text-xs px-2">
-                <p>
-                  {activeLeftTab === "library"
-                    ? "Chưa có danh sách phát nào"
-                    : activeLeftTab === "favorites"
-                    ? "Chưa có bài hát yêu thích nào"
-                    : "Chưa có lịch sử phát nhạc"}
+          {!userSession?.isLoggedIn ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-3 bg-white/5 rounded-2xl border border-white/10 my-auto">
+              <div className="w-12 h-12 rounded-full bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.3)]">
+                <FolderHeart className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Thư viện cá nhân</p>
+                <p className="text-xs text-white/50 mt-1 leading-relaxed">
+                  Đăng nhập để xem danh sách phát, bài hát yêu thích và lịch sử nghe nhạc của bạn.
                 </p>
               </div>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => setIsAccountOpen(true)}
+                className="mt-2 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-semibold hover:opacity-95 active:scale-95 transition-all cursor-pointer shadow-lg shadow-pink-500/30"
+              >
+                Đăng nhập ngay
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Search Box in Sidebar with Sort Icon (Matching Figma: Centered text, pink icons) */}
+              <div
+                className="relative flex items-center h-10 px-3.5 rounded-full bg-[#1e053a] border border-purple-500/30 hover:border-pink-500/50 focus-within:border-pink-500 transition-all flex-shrink-0"
+                style={{ marginBottom: "22px" }}
+              >
+                <Search className="w-4 h-4 text-[#e0007b] flex-shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search"
+                  value={leftSearchQuery}
+                  onChange={(e) => setLeftSearchQuery(e.target.value)}
+                  className="flex-1 bg-transparent text-xs text-center font-medium text-white placeholder-white/50 focus:outline-none px-2"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsLeftSorted(!isLeftSorted)}
+                  title={isLeftSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
+                  className={`p-1 rounded-md transition-all cursor-pointer flex-shrink-0 ${
+                    isLeftSorted ? "text-white bg-pink-500/40 shadow-sm" : "text-[#e0007b] hover:text-white"
+                  }`}
+                >
+                  <ArrowDownAZ className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Vertical List of Playlist Items (Matching Figma) */}
+              <div
+                className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
+                style={{ gap: "12px" }}
+              >
+                {getSidebarItems().length > 0 ? (
+                  getSidebarItems().map((item, idx) => (
+                    <div
+                      key={item.id + idx}
+                      onClick={() => {
+                        if (item.rawTrack) {
+                          playTrackDirectly(item.rawTrack);
+                        } else if (item.rawPlaylist?.items?.length) {
+                          const plTracks: Track[] = item.rawPlaylist.items.map((it: any) => ({
+                            id: it.id,
+                            title: it.title,
+                            author: it.author || "",
+                            duration: it.duration || 0,
+                            thumbnail: `https://i.ytimg.com/vi/${it.id}/mqdefault.jpg`,
+                          }));
+                          setPlaylist(plTracks);
+                          setCurrentIndex(0);
+                          loadAndPlayTrack(plTracks[0], true);
+                          setQueueTracks(plTracks);
+                        } else if (playlist[idx % playlist.length]) {
+                          playTrackDirectly(playlist[idx % playlist.length]);
+                        }
+                      }}
+                      className="flex items-center gap-3.5 p-2 rounded-2xl hover:bg-white/10 hover:translate-x-1 transition-all duration-200 cursor-pointer group"
+                      style={{ marginBottom: "2px" }}
+                    >
+                      <img
+                        src={item.thumb}
+                        alt=""
+                        onError={(e) => {
+                          e.currentTarget.src = DEFAULT_TRACK_ART;
+                        }}
+                        className="w-11 h-11 rounded-[14px] object-cover flex-shrink-0 border border-white/10 shadow-sm"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13.5px] font-semibold text-white group-hover:text-pink-300 truncate transition-colors">
+                          {item.title}
+                        </p>
+                        <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
+                          {item.subtitle}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-center text-white/40 text-xs px-2">
+                    <p>
+                      {activeLeftTab === "library"
+                        ? "Chưa có danh sách phát nào"
+                        : activeLeftTab === "favorites"
+                        ? "Chưa có bài hát yêu thích nào"
+                        : "Chưa có lịch sử phát nhạc"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </aside>
 
         {/* ----------------------------------------------------------------------- */}
@@ -2266,21 +2560,32 @@ export default function App() {
             className="w-full aspect-square rounded-[22px] overflow-hidden relative shadow-2xl bg-[#1b0833] flex-shrink-0 group"
             style={{ marginBottom: "18px" }}
           >
-            {/* Real Dynamic Artwork with HQ Thumbnail & Fallback */}
-            <img
-              src={
-                currentTrack?.thumbnail && !currentTrack.thumbnail.includes("figma")
-                  ? (currentTrack.thumbnail.includes("i.ytimg.com")
-                      ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                      : currentTrack.thumbnail)
-                  : (currentTrack?.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
-              }
-              alt={currentTrack?.title || "Track Artwork"}
-              onError={(e) => {
-                e.currentTarget.src = DEFAULT_TRACK_ART;
-              }}
-              className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
-            />
+            {/* Real Dynamic Artwork or Idle Standby Display */}
+            {!currentTrack ? (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden select-none">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.15)_0%,transparent_70%)]" />
+                <div className="w-16 h-16 rounded-full bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 shadow-[0_0_25px_rgba(236,72,153,0.25)] mb-2.5">
+                  <Music2 className="w-8 h-8" />
+                </div>
+                <p className="text-xs font-bold text-white tracking-wide">Kahoii Music</p>
+                <p className="text-[10.5px] text-white/50 mt-0.5">Sẵn sàng phát nhạc</p>
+              </div>
+            ) : (
+              <img
+                src={
+                  currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+                    ? (currentTrack.thumbnail.includes("i.ytimg.com")
+                        ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+                        : currentTrack.thumbnail)
+                    : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
+                }
+                alt={currentTrack.title || "Track Artwork"}
+                onError={(e) => {
+                  e.currentTarget.src = DEFAULT_TRACK_ART;
+                }}
+                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+              />
+            )}
 
             {/* Dark gradient fade over lower half to mask controls & provide high contrast */}
             <div className="absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
@@ -2288,23 +2593,179 @@ export default function App() {
             {/* Track Title and Artist floating gently over the gradient */}
             <div className="absolute bottom-[92px] left-4 right-4 z-20 pointer-events-none">
               <p className="text-[13px] font-bold text-white truncate drop-shadow-md">
-                {currentTrack?.title || "Kahoii Music"}
+                {currentTrack ? currentTrack.title : "Chưa chọn bài hát"}
               </p>
               <p className="text-[11px] text-white/70 truncate drop-shadow">
-                {currentTrack?.author || "Đang phát"}
+                {currentTrack ? (currentTrack.author || "Kahoii Music") : "Chọn bài hát bất kỳ để phát"}
               </p>
             </div>
 
             {/* Top-left Menu & Volume Controls */}
             <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
-              <button
-                type="button"
-                onClick={() => setActiveLeftTab("library")}
-                className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-all cursor-pointer"
-                title="Thư viện nhạc"
-              >
-                <Menu className="w-4 h-4" />
-              </button>
+              <div className="relative" ref={playerMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!currentTrack) {
+                      showToast("Vui lòng phát một bài hát trước khi lưu hoặc tải xuống!", "warning");
+                      return;
+                    }
+                    setShowPlayerMenu(!showPlayerMenu);
+                    if (showPlayerMenu) {
+                      setShowLibrarySubmenu(false);
+                      setIsCreatingPlaylist(false);
+                    }
+                  }}
+                  className={`w-7 h-7 rounded-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${
+                    showPlayerMenu
+                      ? "bg-pink-600 text-white shadow-[0_0_12px_rgba(236,72,153,0.6)]"
+                      : "bg-black/40 text-white/80 hover:text-white hover:bg-black/60"
+                  }`}
+                  title="Tùy chọn bài hát"
+                >
+                  <Menu className="w-4 h-4" />
+                </button>
+
+                {/* Popup 1 (Menu chính: Combobox) */}
+                {showPlayerMenu && currentTrack && (
+                  <div className="absolute top-9 left-0 z-40 bg-[#160430]/95 border border-pink-500/50 backdrop-blur-xl rounded-xl shadow-2xl p-1.5 min-w-[175px] flex flex-col gap-1 text-xs animate-fade-in">
+                    {/* Option 1: Lưu vào thư viện */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowLibrarySubmenu(!showLibrarySubmenu);
+                      }}
+                      className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${
+                        showLibrarySubmenu ? "bg-white/15 text-pink-300" : "hover:bg-white/10 text-white/90"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <FolderPlus className="w-4 h-4 text-pink-400" />
+                        <span>Lưu vào thư viện</span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        )}
+                        <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+                      </div>
+                    </button>
+
+                    {/* Option 2: Tải xuống */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadTrack(currentTrack)}
+                      className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Download className="w-4 h-4 text-pink-400" />
+                        <span>Tải xuống</span>
+                      </span>
+                      {downloadedTrackIds.has(currentTrack.id) && (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Popup 2 (Submenu cạnh bên - side-by-side) */}
+                {showPlayerMenu && showLibrarySubmenu && currentTrack && (
+                  <div className="absolute top-9 left-[185px] z-40 bg-[#160430]/95 border border-purple-500/50 backdrop-blur-xl rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in">
+                    <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider text-purple-300">
+                      <span>Thêm vào playlist</span>
+                    </div>
+
+                    {!userSession?.isLoggedIn ? (
+                      <div className="p-2 text-center flex flex-col gap-2">
+                        <p className="text-[11px] text-white/60">Đăng nhập để quản lý danh sách phát của bạn</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowPlayerMenu(false);
+                            setShowLibrarySubmenu(false);
+                            setIsAccountOpen(true);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-pink-500 hover:bg-pink-600 text-white text-xs font-semibold cursor-pointer transition-colors"
+                        >
+                          Đăng nhập ngay
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Option Tạo playlist mới */}
+                        {!isCreatingPlaylist ? (
+                          <button
+                            type="button"
+                            onClick={() => setIsCreatingPlaylist(true)}
+                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 text-pink-300 font-medium transition-colors cursor-pointer text-left"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Tạo playlist mới</span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg border border-pink-500/40">
+                            <input
+                              type="text"
+                              placeholder="Tên playlist..."
+                              value={newPlaylistName}
+                              onChange={(e) => setNewPlaylistName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleCreatePlaylistAndAddTrack();
+                              }}
+                              className="flex-1 bg-transparent text-[11px] text-white focus:outline-none px-1"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={handleCreatePlaylistAndAddTrack}
+                              className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                              title="Tạo"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCreatingPlaylist(false);
+                                setNewPlaylistName("");
+                              }}
+                              className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
+                              title="Hủy"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="h-[1px] bg-white/10 my-0.5" />
+
+                        {/* List of existing playlists */}
+                        <div className="max-h-40 overflow-y-auto flex flex-col gap-1 pr-0.5">
+                          {libraryData.playlists.length > 0 ? (
+                            libraryData.playlists.map((pl) => {
+                              const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
+                              return (
+                                <button
+                                  key={pl.id}
+                                  type="button"
+                                  onClick={() => handleToggleTrackInPlaylist(pl.id)}
+                                  className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors text-left group cursor-pointer"
+                                >
+                                  <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
+                                  {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <span className="text-[11px] text-white/40 italic px-2 py-1">Chưa có playlist nào</span>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="relative">
                 <button
                   type="button"
@@ -2339,19 +2800,30 @@ export default function App() {
             {/* Top-right Bright Red Heart Icon (Matching Figma) */}
             <button
               type="button"
+              disabled={!currentTrack}
               onClick={toggleCurrentFavorite}
               title={
-                currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                !currentTrack
+                  ? "Chưa phát bài hát nào"
+                  : !userSession?.isLoggedIn
+                  ? "Đăng nhập để yêu thích"
+                  : libraryData.favorites.some((t) => t.id === currentTrack.id)
                   ? "Bỏ yêu thích"
                   : "Thêm vào yêu thích"
               }
-              className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center z-20 cursor-pointer group hover:bg-black/60 transition-all"
+              className={`absolute top-3 right-3 w-8 h-8 rounded-lg backdrop-blur-md flex items-center justify-center z-20 transition-all ${
+                !currentTrack
+                  ? "opacity-30 cursor-not-allowed bg-black/20"
+                  : "bg-black/40 hover:bg-black/60 cursor-pointer group"
+              }`}
             >
               <Heart
-                className={`w-5 h-5 transition-transform group-hover:scale-115 ${
-                  currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
-                    ? "fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)]"
-                    : "text-white/60 hover:text-red-400"
+                className={`w-5 h-5 transition-transform ${
+                  !currentTrack
+                    ? "text-white/40"
+                    : userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                    ? "fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)] group-hover:scale-115"
+                    : "text-white/60 hover:text-red-400 group-hover:scale-115"
                 }`}
               />
             </button>
@@ -2495,6 +2967,36 @@ export default function App() {
             </div>
           </div>
 
+          {/* Bottom Part: Queue Header with Track Count & Sorter */}
+          <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0">
+            <span className="text-xs font-semibold text-white/70">
+              Hàng đợi phát {queueTracks.length > 0 && `(${queueTracks.length})`}
+            </span>
+            {queueTracks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const nextSorted = !isQueueSorted;
+                  setIsQueueSorted(nextSorted);
+                  if (nextSorted) {
+                    setQueueTracks((prev) => [...prev].sort(compareSortItems));
+                  } else {
+                    setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
+                  }
+                }}
+                title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${
+                  isQueueSorted
+                    ? "border-pink-500 bg-pink-500/30 text-pink-300 shadow-[0_0_10px_rgba(236,72,153,0.4)]"
+                    : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
+                }`}
+              >
+                <ArrowDownAZ className="w-3.5 h-3.5" />
+                <span>Sort</span>
+              </button>
+            )}
+          </div>
+
           {/* Bottom Part: Queue List (Starting directly with Active Highlight Beam) */}
           <div
             className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
@@ -2544,8 +3046,10 @@ export default function App() {
                 );
               })
             ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs">
-                <p>Hàng đợi đang trống</p>
+              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2">
+                <ListMusic className="w-8 h-8 opacity-30" />
+                <p className="font-medium">Hàng đợi đang trống</p>
+                <p className="text-[11px] text-white/30">Chọn bài hát bất kỳ từ trang chủ để bắt đầu nghe nhạc</p>
               </div>
             )}
           </div>

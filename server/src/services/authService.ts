@@ -328,76 +328,83 @@ export async function getUserLibraryData(): Promise<any> {
   const sessionPath = path.join(savedDir, "user_session.json");
   const session = readJsonClean(sessionPath);
 
-  // If user is logged in, try direct live fetch from Firestore Database
-  if (session && session.localId) {
-    try {
-      const token = await getValidIdToken(session);
-      if (token) {
-        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?key=${FIREBASE_API_KEY}`;
-        const docRes = await fetch(docUrl, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (docRes.ok) {
-          const docData = await docRes.json();
-          if (docData.fields?.musicDataJson?.stringValue) {
-            const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
-
-            // Favorites directly from DB
-            const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
-              ? musicData.favorites
-              : Array.isArray(musicData.savedTracks)
-              ? musicData.savedTracks
-              : [];
-            const favorites = favSources.map((t: any) => ({
-              id: t.Id || t.id,
-              title: t.Title || t.title,
-              duration: t.DurationSeconds || t.duration || 0,
-              author: t.Author || t.Artist || t.author || "",
-            }));
-
-            // History directly from DB
-            const history = (musicData.history || []).map((t: any) => ({
-              id: t.Id || t.id,
-              title: t.Title || t.title,
-              duration: t.DurationSeconds || t.duration || 0,
-              author: t.Author || t.Artist || t.author || "",
-            }));
-
-            // Collections / Playlists directly from DB
-            const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
-              ? musicData.collections
-              : Array.isArray(musicData.playlists)
-              ? musicData.playlists
-              : [];
-            const playlists = plSources.map((pl: any) => ({
-              id: pl.Id || pl.id,
-              name: pl.Name || pl.name || "Danh sách phát",
-              created: pl.CreatedAt || pl.created,
-              items: (pl.Items || pl.items || []).map((t: any) => ({
-                id: t.Id || t.id,
-                title: t.Title || t.title,
-                duration: t.DurationSeconds || t.duration || 0,
-                author: t.Author || t.Artist || t.author || "",
-              })),
-            }));
-
-            // Update local disk cache
-            try {
-              fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(favorites, null, 2), "utf8");
-              fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(history, null, 2), "utf8");
-              fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(playlists, null, 2), "utf8");
-            } catch {}
-
-            return { favorites, history, playlists };
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("[Direct Firestore DB Fetch Error, fallback to local]:", err);
-    }
+  // If user is not logged in, unauthenticated visitor has no library
+  if (!session || !session.localId) {
+    return {
+      favorites: [],
+      history: [],
+      playlists: [],
+    };
   }
 
-  // Fallback to local cache if offline or unauthenticated
+  // If user is logged in, try direct live fetch from Firestore Database
+  try {
+    const token = await getValidIdToken(session);
+    if (token) {
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?key=${FIREBASE_API_KEY}`;
+      const docRes = await fetch(docUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (docRes.ok) {
+        const docData = await docRes.json();
+        if (docData.fields?.musicDataJson?.stringValue) {
+          const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
+
+          // Favorites directly from DB
+          const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
+            ? musicData.favorites
+            : Array.isArray(musicData.savedTracks)
+            ? musicData.savedTracks
+            : [];
+          const favorites = favSources.map((t: any) => ({
+            id: t.Id || t.id,
+            title: t.Title || t.title,
+            duration: t.DurationSeconds || t.duration || 0,
+            author: t.Author || t.Artist || t.author || "",
+          }));
+
+          // History directly from DB
+          const history = (musicData.history || []).map((t: any) => ({
+            id: t.Id || t.id,
+            title: t.Title || t.title,
+            duration: t.DurationSeconds || t.duration || 0,
+            author: t.Author || t.Artist || t.author || "",
+          }));
+
+          // Collections / Playlists directly from DB
+          const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
+            ? musicData.collections
+            : Array.isArray(musicData.playlists)
+            ? musicData.playlists
+            : [];
+          const playlists = plSources.map((pl: any) => ({
+            id: pl.Id || pl.id,
+            name: pl.Name || pl.name || "Danh sách phát",
+            created: pl.CreatedAt || pl.created,
+            items: (pl.Items || pl.items || []).map((t: any) => ({
+              id: t.Id || t.id,
+              title: t.Title || t.title,
+              duration: t.DurationSeconds || t.duration || 0,
+              author: t.Author || t.Artist || t.author || "",
+            })),
+          }));
+
+          // Update local disk cache
+          try {
+            fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(favorites, null, 2), "utf8");
+            fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(history, null, 2), "utf8");
+            fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(playlists, null, 2), "utf8");
+          } catch {}
+
+          return { favorites, history, playlists };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[Direct Firestore DB Fetch Error, fallback to local]:", err);
+  }
+
+  // Fallback to local cache only if authenticated
   const favorites = readJsonClean(path.join(savedDir, "favorites.json")) || [];
   const history = readJsonClean(path.join(savedDir, "history.json")) || [];
   const playlists = readJsonClean(path.join(savedDir, "playlists.json")) || [];
@@ -407,4 +414,58 @@ export async function getUserLibraryData(): Promise<any> {
     history: Array.isArray(history) ? history : [],
     playlists: Array.isArray(playlists) ? playlists : [],
   };
+}
+
+export async function saveUserLibraryData(data: {
+  favorites?: any[];
+  history?: any[];
+  playlists?: any[];
+}): Promise<void> {
+  const savedDir = getSavedDir();
+  const sessionPath = path.join(savedDir, "user_session.json");
+  const session = readJsonClean(sessionPath);
+
+  const favorites = Array.isArray(data.favorites) ? data.favorites : [];
+  const history = Array.isArray(data.history) ? data.history : [];
+  const playlists = Array.isArray(data.playlists) ? data.playlists : [];
+
+  // Update local disk cache
+  try {
+    fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(favorites, null, 2), "utf8");
+    fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(history, null, 2), "utf8");
+    fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(playlists, null, 2), "utf8");
+  } catch {}
+
+  // If user is logged in, sync to Firestore
+  if (session && session.localId) {
+    try {
+      const token = await getValidIdToken(session);
+      if (token) {
+        const musicDataJson = JSON.stringify({
+          favorites,
+          history,
+          playlists,
+          collections: playlists,
+        });
+
+        const patchUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?updateMask.fieldPaths=musicDataJson&key=${FIREBASE_API_KEY}`;
+        await fetch(patchUrl, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            fields: {
+              musicDataJson: {
+                stringValue: musicDataJson,
+              },
+            },
+          }),
+        });
+      }
+    } catch (err) {
+      console.warn("[Save Library to Firestore Error]:", err);
+    }
+  }
 }

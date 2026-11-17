@@ -9,6 +9,7 @@ import {
   loginWithFirebase,
   logoutUser,
   getUserLibraryData,
+  saveUserLibraryData,
   syncCloudUserData,
 } from "./services/authService.js";
 
@@ -209,6 +210,15 @@ app.get(["/api/user/library", "/user/library"], async (_req, res) => {
     return res.json(data);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to fetch library" });
+  }
+});
+
+app.post(["/api/user/library", "/user/library"], async (req, res) => {
+  try {
+    await saveUserLibraryData(req.body);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Failed to save library" });
   }
 });
 
