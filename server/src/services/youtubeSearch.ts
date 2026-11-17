@@ -42,6 +42,7 @@ export interface StructuredSearchResponse {
   query: string;
   topResult: SearchTopResult | null;
   tracks: SearchTrackResult[];
+  videos?: SearchTrackResult[];
   artists: SearchArtistItem[];
   playlists: SearchPlaylistItem[];
   results: SearchTrackResult[]; // backward compatibility
@@ -295,6 +296,67 @@ async function searchViaYtDlp(query: string, maxResults = 50): Promise<SearchTra
  * Main structured search endpoint:
  * Strictly retrieves 100% YouTube Music categorized items (songs, artists, playlists, hero card).
  */
+async function searchYouTubeWebVideos(query: string): Promise<SearchTrackResult[]> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const res = await fetch("https://www.youtube.com/youtubei/v1/search", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: "WEB",
+            clientVersion: "2.20241101.00.00",
+            hl: "vi",
+            gl: "VN",
+          },
+        },
+        query,
+      }),
+    });
+    clearTimeout(timer);
+    if (!res.ok) return [];
+
+    const data: any = await res.json();
+    const sections: any[] =
+      data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    const results: SearchTrackResult[] = [];
+    const seen = new Set<string>();
+
+    for (const sec of sections) {
+      const items: any[] = sec?.itemSectionRenderer?.contents || [];
+      for (const item of items) {
+        const vr = item?.videoRenderer;
+        if (!vr || !vr.videoId || seen.has(vr.videoId)) continue;
+        seen.add(vr.videoId);
+
+        const title = extractRunsText(vr.title?.runs) || vr.title?.simpleText || "";
+        if (!title) continue;
+        const author = extractRunsText(vr.ownerText?.runs) || extractRunsText(vr.longBylineText?.runs) || "YouTube";
+        const durationText = vr.lengthText?.simpleText || "";
+
+        results.push({
+          id: vr.videoId,
+          title,
+          author,
+          duration: parseDuration(durationText),
+          durationText,
+          thumbnail: `https://i.ytimg.com/vi/${vr.videoId}/mqdefault.jpg`,
+        });
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 export async function searchYouTubeMusicStructured(query: string): Promise<StructuredSearchResponse> {
   const trimmed = query.trim();
   if (!trimmed) {
@@ -302,6 +364,7 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       query: "",
       topResult: null,
       tracks: [],
+      videos: [],
       artists: [],
       playlists: [],
       results: [],
@@ -309,8 +372,9 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
   }
 
   try {
-    // Run 4 queries in parallel for high speed (~700ms total)
-    const [overviewData, songsData, artistsData, playlistsData] = await Promise.all([
+    // Run YouTube Web Video search + YouTube Music queries in parallel
+    const [webVideos, overviewData, songsData, artistsData, playlistsData] = await Promise.all([
+      searchYouTubeWebVideos(trimmed),
       requestYTM(trimmed, undefined),
       requestYTM(trimmed, "EgWKAQIIAWoSEAUQAxAJEAQQChAVEBAQERAO"), // Songs filter
       requestYTM(trimmed, "EgWKAQIgAWoSEAUQAxAJEAQQChAVEBAQERAO"), // Artists filter
@@ -483,8 +547,20 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       }
     }
 
-    // If no song topResult from card, pick the first track from tracks list
-    if (!topResult && tracks.length > 0) {
+    // If no song topResult from card, pick from webVideos or tracks list
+    if (!topResult && webVideos.length > 0) {
+      const first = webVideos[0];
+      topResult = {
+        id: first.id,
+        title: first.title,
+        subtitle: `${first.author}${first.durationText ? " • " + first.durationText : ""}`,
+        author: first.author,
+        duration: first.duration,
+        durationText: first.durationText,
+        thumbnail: first.thumbnail,
+        type: "video",
+      };
+    } else if (!topResult && tracks.length > 0) {
       const first = tracks[0];
       topResult = {
         id: first.id,
@@ -498,14 +574,19 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       };
     }
 
-    if (tracks.length > 0 || artists.length > 0 || playlists.length > 0) {
+    const mergedResults = webVideos.length > 0
+      ? [...webVideos, ...tracks.filter((t) => !webVideos.some((v) => v.id === t.id))]
+      : tracks;
+
+    if (webVideos.length > 0 || tracks.length > 0 || artists.length > 0 || playlists.length > 0) {
       return {
         query: trimmed,
         topResult,
         tracks,
+        videos: webVideos,
         artists,
         playlists,
-        results: tracks,
+        results: mergedResults,
       };
     }
   } catch (err: any) {

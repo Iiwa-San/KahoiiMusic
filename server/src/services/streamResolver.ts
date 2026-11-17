@@ -65,9 +65,9 @@ async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
 
   return new Promise((resolve) => {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const cmd = `"${ytDlpPath}" -J --no-playlist --no-warnings --force-ipv4 "${url}"`;
+    const cmd = `"${ytDlpPath}" -J --no-playlist --no-warnings --no-check-certificates --force-ipv4 "${url}"`;
 
-    exec(cmd, { timeout: 20000, maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => {
+    exec(cmd, { timeout: 30000, maxBuffer: 15 * 1024 * 1024 }, (error, stdout) => {
       if (error || !stdout) {
         resolve(null);
         return;
@@ -120,27 +120,30 @@ async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
           }
         }
 
-        // Second pass: adaptive mp4 https video-only formats (prefer avc1 H.264 over vp09/av01)
+        // Second pass: adaptive https video-only formats (prefer mp4 avc1, fallback to webm vp9)
         if (bestAudioUrl) {
-          const adaptiveMp4 = formats
+          const adaptiveVideo = formats
             .filter(
               (f) =>
                 f.vcodec &&
                 f.vcodec !== "none" &&
                 (!f.acodec || f.acodec === "none") &&
-                f.ext === "mp4" &&
+                (f.ext === "mp4" || f.ext === "webm") &&
                 (!f.protocol || f.protocol === "https") &&
                 f.height &&
                 f.height <= 2160 &&
                 f.url
             )
             .sort((a, b) => {
+              const aMp4 = a.ext === "mp4" ? 1 : 0;
+              const bMp4 = b.ext === "mp4" ? 1 : 0;
+              if (aMp4 !== bMp4) return bMp4 - aMp4;
               const aAvc = String(a.vcodec).startsWith("avc1") ? 1 : 0;
               const bAvc = String(b.vcodec).startsWith("avc1") ? 1 : 0;
               return bAvc - aAvc;
             });
 
-          for (const f of adaptiveMp4) {
+          for (const f of adaptiveVideo) {
             if (!qualityMap.has(f.height)) {
               qualityMap.set(f.height, {
                 quality: buildQualityLabel(f.height),

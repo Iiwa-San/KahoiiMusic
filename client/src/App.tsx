@@ -479,7 +479,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [searchStructured, setSearchStructured] = useState<StructuredSearchResult | null>(null);
-  const [activeSearchTab, setActiveSearchTab] = useState<"all" | "tracks" | "artists" | "playlists">("all");
+  const [activeSearchTab, setActiveSearchTab] = useState<"all" | "videos" | "tracks" | "artists" | "playlists">("all");
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
@@ -541,12 +541,13 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
-      const tracksList: Track[] = data.tracks || data.results || [];
+      const tracksList: Track[] = data.results || data.videos || data.tracks || [];
       setSearchResults(tracksList);
       setSearchStructured({
         query: data.query || trimmed,
         topResult: data.topResult || null,
-        tracks: tracksList,
+        tracks: data.tracks || tracksList,
+        videos: data.videos || [],
         artists: data.artists || [],
         playlists: data.playlists || [],
       });
@@ -1627,6 +1628,15 @@ export default function App() {
         } else if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => {});
         }
+      } else if (key === "i") {
+        e.preventDefault();
+        if (activePlayerType.current === "video" && videoRef.current && document.pictureInPictureEnabled) {
+          if (document.pictureInPictureElement) {
+            document.exitPictureInPicture().catch(() => {});
+          } else if (videoRef.current.readyState > 0) {
+            videoRef.current.requestPictureInPicture().catch(() => {});
+          }
+        }
       } else if (key === "n" && e.shiftKey) {
         e.preventDefault();
         h.handleNext();
@@ -1837,9 +1847,12 @@ export default function App() {
             }}
             className="flex items-center gap-2 cursor-pointer group"
           >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-              <Film className="w-4 h-4 text-white" />
-            </div>
+            <img
+              src="./app-logo.png"
+              alt="ThuongTube"
+              onError={(e) => { e.currentTarget.src = "./app.ico"; }}
+              className="w-8 h-8 rounded-lg object-cover shadow-lg group-hover:scale-105 transition-transform"
+            />
             <span className="font-extrabold text-sm md:text-base tracking-tight bg-gradient-to-r from-pink-400 to-purple-300 bg-clip-text text-transparent hidden sm:inline">
               ThuongTube
             </span>
@@ -2316,23 +2329,28 @@ export default function App() {
                 </div>
                 {searchResults.length > 0 && (
                   <span className="text-xs text-purple-200/60 font-mono">
-                    {searchResults.length} bài hát
+                    {searchResults.length} kết quả
                   </span>
                 )}
               </div>
 
-              {/* Navigation Tabs: Tất cả / Nhạc / Nhạc sĩ / Playlist */}
+              {/* Navigation Tabs: Tất cả / Video / Nhạc / Kênh / Playlist */}
               <div className="flex items-center gap-2 mb-5 flex-wrap flex-shrink-0">
                 {[
                   { key: "all", label: "Tất cả" },
                   {
+                    key: "videos",
+                    label: "Video",
+                    count: searchStructured?.videos?.length || 0,
+                  },
+                  {
                     key: "tracks",
                     label: "Nhạc",
-                    count: searchStructured?.tracks?.length || searchResults.length,
+                    count: searchStructured?.tracks?.length || 0,
                   },
                   {
                     key: "artists",
-                    label: "Nhạc sĩ",
+                    label: "Kênh / Nghệ sĩ",
                     count: searchStructured?.artists?.length || 0,
                   },
                   {
@@ -2347,7 +2365,7 @@ export default function App() {
                       key={tab.key}
                       type="button"
                       onClick={() =>
-                        setActiveSearchTab(tab.key as "all" | "tracks" | "artists" | "playlists")
+                        setActiveSearchTab(tab.key as "all" | "videos" | "tracks" | "artists" | "playlists")
                       }
                       className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
                         isActive
@@ -2747,15 +2765,22 @@ export default function App() {
                   {/* ========================================================================= */}
                   {/* TAB: NHẠC (Tất cả bài hát)                                                */}
                   {/* ========================================================================= */}
-                  {activeSearchTab === "tracks" && (
+                  {(activeSearchTab === "videos" || activeSearchTab === "tracks") && (() => {
+                    const itemsToRender =
+                      activeSearchTab === "videos"
+                        ? searchStructured?.videos || searchResults
+                        : searchStructured?.tracks || searchResults;
+                    return (
                     <div>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-[18px] font-bold text-white tracking-wide">
-                          Tất cả bài hát ({searchResults.length})
+                          {activeSearchTab === "videos"
+                            ? `Tất cả Video (${itemsToRender.length})`
+                            : `Tất cả bài hát (${itemsToRender.length})`}
                         </h3>
                       </div>
-                      <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
-                        {searchResults.map((item) => {
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 w-full" style={{ gap: "16px" }}>
+                        {itemsToRender.map((item) => {
                           const isCurrentPlaying = currentTrack?.id === item.id;
                           return (
                             <div
@@ -2836,7 +2861,8 @@ export default function App() {
                         })}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* ========================================================================= */}
                   {/* TAB: NHẠC SĨ (Tất cả nghệ sĩ - Enlarged Grid)                             */}
@@ -3372,10 +3398,21 @@ export default function App() {
               }
             }}
             onVideoPlay={() => {
-              if (activePlayerType.current === "video") setIsPlaying(true);
+              if (activePlayerType.current === "video") {
+                setIsPlaying(true);
+                if (isAdaptiveSyncedRef.current && audioRef.current && audioRef.current.paused) {
+                  if (videoRef.current) audioRef.current.currentTime = videoRef.current.currentTime;
+                  audioRef.current.play().catch(() => {});
+                }
+              }
             }}
             onVideoPause={() => {
-              if (activePlayerType.current === "video") setIsPlaying(false);
+              if (activePlayerType.current === "video") {
+                setIsPlaying(false);
+                if (isAdaptiveSyncedRef.current && audioRef.current && !audioRef.current.paused && !videoRef.current?.seeking) {
+                  audioRef.current.pause();
+                }
+              }
             }}
             onAddToPlaylist={() => currentTrack && setPlaylistTargetTrack(currentTrack)}
             onVideoError={() => {

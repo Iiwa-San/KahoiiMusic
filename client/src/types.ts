@@ -51,6 +51,7 @@ export interface StructuredSearchResult {
   query: string;
   topResult: SearchTopResult | null;
   tracks: Track[];
+  videos?: Track[];
   artists: SearchArtistItem[];
   playlists: SearchPlaylistItem[];
 }

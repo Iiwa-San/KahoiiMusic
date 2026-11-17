@@ -20,6 +20,7 @@ import {
   Music,
   X,
   ListPlus,
+  PictureInPicture2,
 } from "lucide-react";
 import type { Track, VideoQualityOption } from "../types";
 import { formatTime } from "../utils/lyricsParser";
@@ -105,6 +106,7 @@ export const VideoPlayerStage: React.FC<VideoPlayerStageProps> = ({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showSleepMenu, setShowSleepMenu] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [isPiP, setIsPiP] = useState(false);
   const [dragTime, setDragTime] = useState<number | null>(null);
   const isDraggingRef = useRef(false);
 
@@ -116,6 +118,19 @@ export const VideoPlayerStage: React.FC<VideoPlayerStageProps> = ({
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onEnter = () => setIsPiP(true);
+    const onLeave = () => setIsPiP(false);
+    video.addEventListener("enterpictureinpicture", onEnter);
+    video.addEventListener("leavepictureinpicture", onLeave);
+    return () => {
+      video.removeEventListener("enterpictureinpicture", onEnter);
+      video.removeEventListener("leavepictureinpicture", onLeave);
+    };
+  }, [videoRef]);
+
   const toggleFullscreen = async () => {
     try {
       if (!document.fullscreenElement && containerRef.current) {
@@ -125,6 +140,21 @@ export const VideoPlayerStage: React.FC<VideoPlayerStageProps> = ({
       }
     } catch (err) {
       console.warn("Fullscreen error:", err);
+    }
+  };
+
+  const togglePiP = async () => {
+    try {
+      const video = videoRef.current;
+      if (!video || !document.pictureInPictureEnabled) return;
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        if (video.readyState === 0) return;
+        await video.requestPictureInPicture();
+      }
+    } catch (err) {
+      console.warn("Picture-in-Picture error:", err);
     }
   };
 
@@ -222,15 +252,16 @@ export const VideoPlayerStage: React.FC<VideoPlayerStageProps> = ({
           }`}
         />
 
-        {/* Visible YouTube Iframe Container (visible when activePlayerType === 'youtube') */}
+        {/* Visible YouTube Iframe Container (wrapped so YT.Player iframe swap keeps React layout intact) */}
         <div
-          id="kahoii-yt-iframe"
           className={
             currentTrack && activePlayerType === "youtube"
               ? "w-full h-full"
               : "fixed -bottom-[9999px] -right-[9999px] w-px h-px opacity-0 pointer-events-none"
           }
-        />
+        >
+          <div id="kahoii-yt-iframe" className="w-full h-full" />
+        </div>
 
         {/* Audio-Only or Idle Poster View */}
         {(!currentTrack || activePlayerType === "audio") && (
@@ -551,6 +582,22 @@ export const VideoPlayerStage: React.FC<VideoPlayerStageProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Picture-in-Picture (PiP) Button */}
+            {activePlayerType === "video" && currentTrack && (
+              <button
+                type="button"
+                onClick={togglePiP}
+                title={isPiP ? "Tắt cửa sổ nổi (PiP)" : "Thu nhỏ nổi trên màn hình (PiP)"}
+                className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                  isPiP
+                    ? "bg-pink-500/30 border-pink-500/60 text-pink-300"
+                    : "bg-white/5 hover:bg-pink-500/30 border-white/10 text-white/90 hover:text-white"
+                }`}
+              >
+                <PictureInPicture2 className="w-4 h-4" />
+              </button>
+            )}
 
             {/* Fullscreen Button */}
             <button
