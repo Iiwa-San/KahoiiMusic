@@ -34,7 +34,6 @@ import {
   ChevronRight,
   Download,
   Plus,
-  Music2,
 } from "lucide-react";
 import type {
   Track,
@@ -44,9 +43,8 @@ import type {
 import { formatTime } from "./utils/lyricsParser";
 import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/colorExtractor";
 
-// Clean, robust SVG placeholder used only when a song has no thumbnail
-const DEFAULT_TRACK_ART =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='16' fill='%23240a50'/%3E%3Ccircle cx='50' cy='50' r='30' fill='%23381078'/%3E%3Cpath d='M44 36v20.5a6.5 6.5 0 1 1-3-5.5V40l18-4v16.5a6.5 6.5 0 1 1-3-5.5V32z' fill='%23e6007e'/%3E%3C/svg%3E";
+// Official App Logo & Favicon placeholder
+const DEFAULT_TRACK_ART = "/logo_icon.png";
 
 // Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
@@ -1617,8 +1615,17 @@ export default function App() {
       {/* 1. TOP BAR (Seamless & Centered matching Figma mockup)                     */}
       {/* ========================================================================= */}
       <header className="h-[54px] w-full px-5 flex items-center justify-between flex-shrink-0 z-30">
-        {/* Left spacer for perfect balance */}
-        <div className="w-[140px]" />
+        {/* Left: App Logo & Brand Identity */}
+        <div className="w-[160px] flex items-center gap-2.5">
+          <img
+            src="/logo_icon.png"
+            alt="Kahoii Music"
+            className="w-7 h-7 rounded-lg object-contain shadow-md shadow-pink-500/20"
+          />
+          <span className="font-extrabold text-sm tracking-wide bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
+            Kahoii Music
+          </span>
+        </div>
 
         {/* Center: Search Pill with Search History Suggestions Dropdown */}
         <div ref={searchDropdownRef} className="relative flex-1 max-w-[580px]">
@@ -2974,8 +2981,8 @@ export default function App() {
             {!currentTrack ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden select-none">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.15)_0%,transparent_70%)]" />
-                <div className="w-16 h-16 rounded-full bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 shadow-[0_0_25px_rgba(236,72,153,0.25)] mb-2.5">
-                  <Music2 className="w-8 h-8" />
+                <div className="w-16 h-16 rounded-full bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 shadow-[0_0_25px_rgba(236,72,153,0.25)] mb-2.5 p-3 overflow-hidden">
+                  <img src="/logo_icon.png" alt="Kahoii Music" className="w-full h-full object-contain drop-shadow" />
                 </div>
                 <p className="text-xs font-bold text-white tracking-wide">Kahoii Music</p>
                 <p className="text-[10.5px] text-white/50 mt-0.5">Sẵn sàng phát nhạc</p>
