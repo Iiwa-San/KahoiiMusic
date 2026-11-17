@@ -4,9 +4,21 @@ import path from "path";
 const FIREBASE_API_KEY = "AIzaSyB4fUCZZN41WmnxGeH8jSdz1M5mi2LhLX8";
 const PROJECT_ID = "kahoiimusic";
 
+export const isProduction = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NODE_ENV === "production";
+
+export function extractBearerToken(req: any): string | null {
+  const authHeader = req.headers?.authorization || req.headers?.Authorization;
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  if (typeof req.query?.token === "string" && req.query.token) {
+    return req.query.token.trim();
+  }
+  return null;
+}
+
 function getSavedDir(): string {
-  // If running in Vercel or cloud serverless, use /tmp which is the only writable directory
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  if (isProduction) {
     const tmpDir = path.join("/tmp", "Saved");
     if (!fs.existsSync(tmpDir)) {
       try {
@@ -46,16 +58,39 @@ function readJsonClean(filePath: string): any {
   }
 }
 
+export async function verifyFirebaseIdToken(token: string): Promise<{ localId: string; email: string; displayName?: string } | null> {
+  if (!token || typeof token !== "string" || token.length < 10) return null;
+  try {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: token }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as any;
+    const user = data.users?.[0];
+    if (user && user.localId) {
+      return {
+        localId: user.localId,
+        email: user.email || "",
+        displayName: user.displayName,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getValidIdToken(session: any): Promise<string | null> {
   if (!session) return null;
   const now = Math.floor(Date.now() / 1000);
 
-  // If token is still valid (with 60s buffer)
   if (session.expiryTimestamp && now < session.expiryTimestamp - 60 && session.idToken) {
     return session.idToken;
   }
 
-  // Refresh token if expired
   if (session.refreshToken) {
     try {
       const refreshUrl = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
@@ -77,12 +112,13 @@ export async function getValidIdToken(session: any): Promise<string | null> {
         session.refreshToken = data.refresh_token || session.refreshToken;
         session.expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn;
 
-        // Save updated session
-        const savedDir = getSavedDir();
-        const sessionPath = path.join(savedDir, "user_session.json");
-        try {
-          fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), "utf8");
-        } catch {}
+        if (!isProduction) {
+          const savedDir = getSavedDir();
+          const sessionPath = path.join(savedDir, "user_session.json");
+          try {
+            fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), "utf8");
+          } catch {}
+        }
 
         return session.idToken;
       }
@@ -94,36 +130,75 @@ export async function getValidIdToken(session: any): Promise<string | null> {
   return session.idToken || null;
 }
 
-export async function getUserSessionData(): Promise<any> {
-  const savedDir = getSavedDir();
-  const sessionPath = path.join(savedDir, "user_session.json");
-  const session = readJsonClean(sessionPath);
+export async function getUserSessionData(clientToken?: string | null): Promise<any> {
+  // 1. If client provided a Bearer token, look up that specific user securely from Firebase
+  if (clientToken) {
+    const verified = await verifyFirebaseIdToken(clientToken);
+    if (verified) {
+      let avatarBase64: string | null = null;
+      let favCount = 0;
+      let histCount = 0;
+      let plCount = 0;
 
-  if (!session || !session.localId) {
+      try {
+        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
+        const docRes = await fetch(docUrl, {
+          headers: { Authorization: `Bearer ${clientToken}` },
+        });
+        if (docRes.ok) {
+          const docData = (await docRes.json()) as any;
+          if (docData.fields?.avatarBase64?.stringValue) {
+            avatarBase64 = docData.fields.avatarBase64.stringValue;
+          }
+          if (docData.fields?.musicDataJson?.stringValue) {
+            try {
+              const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
+              const favs = Array.isArray(musicData.favorites) ? musicData.favorites : Array.isArray(musicData.savedTracks) ? musicData.savedTracks : [];
+              const hist = Array.isArray(musicData.history) ? musicData.history : [];
+              const pls = Array.isArray(musicData.collections) ? musicData.collections : Array.isArray(musicData.playlists) ? musicData.playlists : [];
+              favCount = favs.length;
+              histCount = hist.length;
+              plCount = pls.length;
+            } catch {}
+          }
+        }
+      } catch {}
+
+      return {
+        isLoggedIn: true,
+        user: {
+          localId: verified.localId,
+          email: verified.email,
+          name: verified.displayName || (verified.email ? verified.email.split("@")[0] : "Kahoii User"),
+          avatarUrl: avatarBase64 ? `data:image/png;base64,${avatarBase64}` : "/api/user/avatar",
+          avatarBase64: avatarBase64 || null,
+          stats: {
+            favoritesCount: favCount,
+            historyCount: histCount,
+            playlistsCount: plCount,
+          },
+        },
+      };
+    }
+  }
+
+  // 2. If in production or on Vercel, unauthenticated visitor NEVER sees any session
+  if (isProduction) {
     return {
       isLoggedIn: false,
       user: null,
     };
   }
 
-  // Check valid token & optionally fetch latest Firestore doc
-  const token = await getValidIdToken(session);
-  let avatarBase64 = session.avatarBase64;
-
-  if (token && session.localId) {
-    try {
-      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?key=${FIREBASE_API_KEY}`;
-      const docRes = await fetch(docUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (docRes.ok) {
-        const docData = await docRes.json();
-        if (docData.fields?.avatarBase64?.stringValue) {
-          avatarBase64 = docData.fields.avatarBase64.stringValue;
-          session.avatarBase64 = avatarBase64;
-        }
-      }
-    } catch {}
+  // 3. In local development ONLY:
+  const savedDir = getSavedDir();
+  const sessionPath = path.join(savedDir, "user_session.json");
+  const session = readJsonClean(sessionPath);
+  if (!session || !session.localId) {
+    return {
+      isLoggedIn: false,
+      user: null,
+    };
   }
 
   const favorites = readJsonClean(path.join(savedDir, "favorites.json")) || [];
@@ -137,7 +212,7 @@ export async function getUserSessionData(): Promise<any> {
       email: session.email,
       name: session.email ? session.email.split("@")[0] : "Kahoii User",
       avatarUrl: "/api/user/avatar",
-      avatarBase64: avatarBase64 ? `data:image/png;base64,${avatarBase64}` : null,
+      avatarBase64: session.avatarBase64 ? `data:image/png;base64,${session.avatarBase64}` : null,
       stats: {
         favoritesCount: Array.isArray(favorites) ? favorites.length : 0,
         historyCount: Array.isArray(history) ? history.length : 0,
@@ -147,19 +222,34 @@ export async function getUserSessionData(): Promise<any> {
   };
 }
 
-export function getUserAvatarBuffer(): Buffer | null {
-  const savedDir = getSavedDir();
-  const avatarPath = path.join(savedDir, "avatar.png");
-
-  if (fs.existsSync(avatarPath)) {
-    return fs.readFileSync(avatarPath);
+export async function getUserAvatarBuffer(clientToken?: string | null): Promise<Buffer | null> {
+  if (clientToken) {
+    const verified = await verifyFirebaseIdToken(clientToken);
+    if (verified) {
+      try {
+        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
+        const docRes = await fetch(docUrl, {
+          headers: { Authorization: `Bearer ${clientToken}` },
+        });
+        if (docRes.ok) {
+          const docData = await docRes.json();
+          if (docData.fields?.avatarBase64?.stringValue) {
+            return Buffer.from(docData.fields.avatarBase64.stringValue, "base64");
+          }
+        }
+      } catch {}
+    }
   }
 
-  const session = readJsonClean(path.join(savedDir, "user_session.json"));
-  if (session?.avatarBase64) {
-    return Buffer.from(session.avatarBase64, "base64");
+  if (!isProduction) {
+    const savedDir = getSavedDir();
+    const avatarPath = path.join(savedDir, "avatar.png");
+    if (fs.existsSync(avatarPath)) {
+      try {
+        return fs.readFileSync(avatarPath);
+      } catch {}
+    }
   }
-
   return null;
 }
 
@@ -181,21 +271,18 @@ export async function loginWithFirebase(email: string, pass: string): Promise<an
     if (msg.includes("EMAIL_NOT_FOUND") || msg.includes("INVALID_LOGIN_CREDENTIALS") || msg.includes("INVALID_PASSWORD")) {
       throw new Error("Email hoặc mật khẩu không chính xác.");
     }
+    if (msg.includes("USER_DISABLED")) {
+      throw new Error("Tài khoản này đã bị tạm khóa.");
+    }
     throw new Error(msg);
   }
 
   const expiresIn = Number(data.expiresIn) || 3600;
-  const session = {
-    localId: data.localId,
-    email: data.email,
-    idToken: data.idToken,
-    refreshToken: data.refreshToken,
-    expiryTimestamp: Math.floor(Date.now() / 1000) + expiresIn,
-    rememberMe: true,
-    avatarBase64: null as string | null,
-  };
+  let avatarBase64: string | null = null;
+  let favCount = 0;
+  let histCount = 0;
+  let plCount = 0;
 
-  // Fetch avatar and user document from Firestore
   try {
     const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${data.localId}?key=${FIREBASE_API_KEY}`;
     const docRes = await fetch(docUrl, {
@@ -204,29 +291,61 @@ export async function loginWithFirebase(email: string, pass: string): Promise<an
     if (docRes.ok) {
       const docData = await docRes.json();
       if (docData.fields?.avatarBase64?.stringValue) {
-        const b64 = docData.fields.avatarBase64.stringValue as string;
-        session.avatarBase64 = b64;
-        // Save avatar.png to disk
-        const savedDir = getSavedDir();
-        if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
-        fs.writeFileSync(path.join(savedDir, "avatar.png"), Buffer.from(b64, "base64"));
+        avatarBase64 = docData.fields.avatarBase64.stringValue;
+      }
+      if (docData.fields?.musicDataJson?.stringValue) {
+        try {
+          const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
+          const favs = Array.isArray(musicData.favorites) ? musicData.favorites : Array.isArray(musicData.savedTracks) ? musicData.savedTracks : [];
+          const hist = Array.isArray(musicData.history) ? musicData.history : [];
+          const pls = Array.isArray(musicData.collections) ? musicData.collections : Array.isArray(musicData.playlists) ? musicData.playlists : [];
+          favCount = favs.length;
+          histCount = hist.length;
+          plCount = pls.length;
+        } catch {}
       }
     }
   } catch {}
 
-  // Save session
-  const savedDir = getSavedDir();
-  if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
-  fs.writeFileSync(path.join(savedDir, "user_session.json"), JSON.stringify(session, null, 2), "utf8");
+  const session = {
+    isLoggedIn: true,
+    user: {
+      localId: data.localId,
+      email: data.email,
+      name: data.displayName || (data.email ? data.email.split("@")[0] : "Kahoii User"),
+      avatarUrl: avatarBase64 ? `data:image/png;base64,${avatarBase64}` : "/api/user/avatar",
+      avatarBase64: avatarBase64 || null,
+      idToken: data.idToken,
+      refreshToken: data.refreshToken,
+      expiryTimestamp: Math.floor(Date.now() / 1000) + expiresIn,
+      stats: {
+        favoritesCount: favCount,
+        historyCount: histCount,
+        playlistsCount: plCount,
+      },
+    },
+  };
 
-  // Auto-sync Firestore library data immediately upon login
-  try {
-    await syncCloudUserData();
-  } catch (syncErr) {
-    console.warn("Auto syncCloudUserData failed on login:", syncErr);
+  // In local development ONLY: also save to local Saved/ folder
+  if (!isProduction) {
+    try {
+      const savedDir = getSavedDir();
+      if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
+      fs.writeFileSync(path.join(savedDir, "user_session.json"), JSON.stringify({
+        localId: data.localId,
+        email: data.email,
+        idToken: data.idToken,
+        refreshToken: data.refreshToken,
+        expiryTimestamp: Math.floor(Date.now() / 1000) + expiresIn,
+        avatarBase64: avatarBase64 || null,
+      }, null, 2), "utf8");
+      if (avatarBase64) {
+        fs.writeFileSync(path.join(savedDir, "avatar.png"), Buffer.from(avatarBase64, "base64"));
+      }
+    } catch {}
   }
 
-  return await getUserSessionData();
+  return session;
 }
 
 export async function registerWithFirebase(email: string, pass: string): Promise<any> {
@@ -257,17 +376,8 @@ export async function registerWithFirebase(email: string, pass: string): Promise
   }
 
   const expiresIn = Number(data.expiresIn) || 3600;
-  const session = {
-    localId: data.localId,
-    email: data.email,
-    idToken: data.idToken,
-    refreshToken: data.refreshToken,
-    expiryTimestamp: Math.floor(Date.now() / 1000) + expiresIn,
-    rememberMe: true,
-    avatarBase64: null as string | null,
-  };
 
-  // Create initial empty user document in Firestore
+  // Create initial user document in Firestore
   try {
     const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${data.localId}?key=${FIREBASE_API_KEY}`;
     await fetch(docUrl, {
@@ -278,7 +388,7 @@ export async function registerWithFirebase(email: string, pass: string): Promise
       },
       body: JSON.stringify({
         fields: {
-          email: { stringValue: data.email },
+          email: { stringValue: email },
           createdAt: { stringValue: new Date().toISOString() },
           musicDataJson: {
             stringValue: JSON.stringify({
@@ -292,130 +402,132 @@ export async function registerWithFirebase(email: string, pass: string): Promise
       }),
     });
   } catch (err) {
-    console.warn("Failed to initialize firestore doc for new user:", err);
+    console.warn("Init user Firestore doc error:", err);
   }
 
-  // Save session
-  const savedDir = getSavedDir();
-  if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
-  fs.writeFileSync(path.join(savedDir, "user_session.json"), JSON.stringify(session, null, 2), "utf8");
+  const session = {
+    isLoggedIn: true,
+    user: {
+      localId: data.localId,
+      email: data.email,
+      name: data.email ? data.email.split("@")[0] : "Kahoii User",
+      avatarUrl: "/api/user/avatar",
+      avatarBase64: null,
+      idToken: data.idToken,
+      refreshToken: data.refreshToken,
+      expiryTimestamp: Math.floor(Date.now() / 1000) + expiresIn,
+      stats: {
+        favoritesCount: 0,
+        historyCount: 0,
+        playlistsCount: 0,
+      },
+    },
+  };
 
-  // Save empty local files
-  fs.writeFileSync(path.join(savedDir, "favorites.json"), "[]", "utf8");
-  fs.writeFileSync(path.join(savedDir, "history.json"), "[]", "utf8");
-  fs.writeFileSync(path.join(savedDir, "playlists.json"), "[]", "utf8");
-
-  return await getUserSessionData();
-}
-
-export function logoutUser(): void {
-  const savedDir = getSavedDir();
-  const sessionPath = path.join(savedDir, "user_session.json");
-  if (fs.existsSync(sessionPath)) {
+  // In local development ONLY: also save to local Saved/ folder
+  if (!isProduction) {
     try {
-      fs.unlinkSync(sessionPath);
+      const savedDir = getSavedDir();
+      if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
+      fs.writeFileSync(path.join(savedDir, "user_session.json"), JSON.stringify(session.user, null, 2), "utf8");
+      fs.writeFileSync(path.join(savedDir, "favorites.json"), "[]", "utf8");
+      fs.writeFileSync(path.join(savedDir, "history.json"), "[]", "utf8");
+      fs.writeFileSync(path.join(savedDir, "playlists.json"), "[]", "utf8");
     } catch {}
   }
+
+  return session;
 }
 
-export async function syncCloudUserData(): Promise<any> {
+export function logoutUser(clientToken?: string | null): void {
+  if (!isProduction) {
+    const savedDir = getSavedDir();
+    const sessionPath = path.join(savedDir, "user_session.json");
+    if (fs.existsSync(sessionPath)) {
+      try {
+        fs.unlinkSync(sessionPath);
+      } catch {}
+    }
+  }
+}
+
+export async function syncCloudUserData(clientToken?: string | null): Promise<any> {
+  if (clientToken) {
+    return await getUserSessionData(clientToken);
+  }
+  if (isProduction) {
+    throw new Error("Chưa đăng nhập.");
+  }
   const savedDir = getSavedDir();
   const sessionPath = path.join(savedDir, "user_session.json");
   const session = readJsonClean(sessionPath);
-
   if (!session || !session.localId) {
     throw new Error("Chưa đăng nhập.");
   }
-
-  const token = await getValidIdToken(session);
-  if (!token) {
-    throw new Error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
-  }
-
-  const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?key=${FIREBASE_API_KEY}`;
-  const docRes = await fetch(docUrl, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!docRes.ok) {
-    throw new Error("Không thể kết nối đến Firestore Cloud.");
-  }
-
-  const docData = await docRes.json();
-
-  // 1. Sync Avatar
-  if (docData.fields?.avatarBase64?.stringValue) {
-    const b64 = docData.fields.avatarBase64.stringValue as string;
-    session.avatarBase64 = b64;
-    fs.writeFileSync(path.join(savedDir, "avatar.png"), Buffer.from(b64, "base64"));
-    fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), "utf8");
-  }
-
-  // 2. Sync musicDataJson
-  if (docData.fields?.musicDataJson?.stringValue) {
-    try {
-      const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
-
-      // Favorites directly from DB
-      const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
-        ? musicData.favorites
-        : Array.isArray(musicData.savedTracks)
-        ? musicData.savedTracks
-        : [];
-      const mappedFavs = favSources.map((t: any) => ({
-        id: t.Id || t.id,
-        title: t.Title || t.title,
-        duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-        author: t.Author || t.Artist || t.author || "",
-      }));
-      fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(mappedFavs, null, 2), "utf8");
-
-      // History directly from DB
-      if (Array.isArray(musicData.history) && musicData.history.length > 0) {
-        const mappedHist = musicData.history.map((t: any) => ({
-          id: t.Id || t.id,
-          title: t.Title || t.title,
-          duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-          author: t.Author || t.Artist || t.author || "",
-        }));
-        fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(mappedHist, null, 2), "utf8");
-      }
-
-      // Collections / Playlists directly from DB
-      const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
-        ? musicData.collections
-        : Array.isArray(musicData.playlists)
-        ? musicData.playlists
-        : [];
-      if (plSources.length > 0) {
-        const mappedPlaylists = plSources.map((pl: any) => ({
-          id: pl.Id || pl.id,
-          name: pl.Name || pl.name || "Danh sách phát",
-          created: pl.CreatedAt || pl.created,
-          items: (pl.Items || pl.items || []).map((t: any) => ({
-            id: t.Id || t.id,
-            title: t.Title || t.title,
-            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-            author: t.Author || t.Artist || t.author || "",
-          })),
-        }));
-        fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(mappedPlaylists, null, 2), "utf8");
-      }
-    } catch (parseErr) {
-      console.warn("Failed to parse musicDataJson:", parseErr);
-    }
-  }
-
   return await getUserSessionData();
 }
 
-export async function getUserLibraryData(): Promise<any> {
-  const savedDir = getSavedDir();
-  const sessionPath = path.join(savedDir, "user_session.json");
-  const session = readJsonClean(sessionPath);
+export async function getUserLibraryData(clientToken?: string | null): Promise<any> {
+  // 1. If client provided a Bearer token, fetch that specific user's Firestore document
+  if (clientToken) {
+    const verified = await verifyFirebaseIdToken(clientToken);
+    if (verified) {
+      try {
+        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
+        const docRes = await fetch(docUrl, {
+          headers: { Authorization: `Bearer ${clientToken}` },
+        });
+        if (docRes.ok) {
+          const docData = (await docRes.json()) as any;
+          if (docData.fields?.musicDataJson?.stringValue) {
+            const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
+            const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
+              ? musicData.favorites
+              : Array.isArray(musicData.savedTracks)
+              ? musicData.savedTracks
+              : [];
+            const favorites = favSources.map((t: any) => ({
+              id: t.Id || t.id,
+              title: t.Title || t.title,
+              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+              author: t.Author || t.Artist || t.author || "",
+            }));
 
-  // If user is not logged in, unauthenticated visitor has no library
-  if (!session || !session.localId) {
+            const histSources = Array.isArray(musicData.history) ? musicData.history : [];
+            const history = histSources.map((t: any) => ({
+              id: t.Id || t.id,
+              title: t.Title || t.title,
+              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+              author: t.Author || t.Artist || t.author || "",
+            }));
+
+            const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
+              ? musicData.collections
+              : Array.isArray(musicData.playlists)
+              ? musicData.playlists
+              : [];
+            const playlists = plSources.map((pl: any) => ({
+              id: pl.Id || pl.id || pl.Name || pl.name,
+              name: pl.Name || pl.name,
+              tracks: (pl.Tracks || pl.tracks || []).map((t: any) => ({
+                id: t.Id || t.id,
+                title: t.Title || t.title,
+                duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+                author: t.Author || t.Artist || t.author || "",
+              })),
+            }));
+
+            return { favorites, history, playlists };
+          }
+        }
+      } catch (err) {
+        console.warn("[getUserLibraryData Firestore Error]", err);
+      }
+    }
+  }
+
+  // 2. If in production or unauthenticated guest:
+  if (isProduction || !clientToken) {
     return {
       favorites: [],
       history: [],
@@ -423,110 +535,34 @@ export async function getUserLibraryData(): Promise<any> {
     };
   }
 
-  // If user is logged in, try direct live fetch from Firestore Database
-  try {
-    const token = await getValidIdToken(session);
-    if (token) {
-      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?key=${FIREBASE_API_KEY}`;
-      const docRes = await fetch(docUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (docRes.ok) {
-        const docData = await docRes.json();
-        if (docData.fields?.musicDataJson?.stringValue) {
-          const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
-
-          // Favorites directly from DB
-          const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
-            ? musicData.favorites
-            : Array.isArray(musicData.savedTracks)
-            ? musicData.savedTracks
-            : [];
-          const favorites = favSources.map((t: any) => ({
-            id: t.Id || t.id,
-            title: t.Title || t.title,
-            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-            author: t.Author || t.Artist || t.author || "",
-          }));
-
-          // History directly from DB
-          const history = (musicData.history || []).map((t: any) => ({
-            id: t.Id || t.id,
-            title: t.Title || t.title,
-            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-            author: t.Author || t.Artist || t.author || "",
-          }));
-
-          // Collections / Playlists directly from DB
-          const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
-            ? musicData.collections
-            : Array.isArray(musicData.playlists)
-            ? musicData.playlists
-            : [];
-          const playlists = plSources.map((pl: any) => ({
-            id: pl.Id || pl.id,
-            name: pl.Name || pl.name || "Danh sách phát",
-            created: pl.CreatedAt || pl.created,
-            items: (pl.Items || pl.items || []).map((t: any) => ({
-              id: t.Id || t.id,
-              title: t.Title || t.title,
-              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-              author: t.Author || t.Artist || t.author || "",
-            })),
-          }));
-
-          // Update local disk cache
-          try {
-            fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(favorites, null, 2), "utf8");
-            fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(history, null, 2), "utf8");
-            fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(playlists, null, 2), "utf8");
-          } catch {}
-
-          return { favorites, history, playlists };
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("[Direct Firestore DB Fetch Error, fallback to local]:", err);
+  // 3. In local development ONLY:
+  const savedDir = getSavedDir();
+  const sessionPath = path.join(savedDir, "user_session.json");
+  const session = readJsonClean(sessionPath);
+  if (!session || !session.localId) {
+    return { favorites: [], history: [], playlists: [] };
   }
 
-  // Fallback to local cache only if authenticated
   const favorites = readJsonClean(path.join(savedDir, "favorites.json")) || [];
   const history = readJsonClean(path.join(savedDir, "history.json")) || [];
   const playlists = readJsonClean(path.join(savedDir, "playlists.json")) || [];
 
-  return {
-    favorites: Array.isArray(favorites) ? favorites : [],
-    history: Array.isArray(history) ? history : [],
-    playlists: Array.isArray(playlists) ? playlists : [],
-  };
+  return { favorites, history, playlists };
 }
 
-export async function saveUserLibraryData(data: {
-  favorites?: any[];
-  history?: any[];
-  playlists?: any[];
-}): Promise<void> {
-  const savedDir = getSavedDir();
-  const sessionPath = path.join(savedDir, "user_session.json");
-  const session = readJsonClean(sessionPath);
-
+export async function saveUserLibraryData(
+  data: { favorites?: any[]; history?: any[]; playlists?: any[] },
+  clientToken?: string | null
+): Promise<void> {
   const favorites = Array.isArray(data.favorites) ? data.favorites : [];
   const history = Array.isArray(data.history) ? data.history : [];
   const playlists = Array.isArray(data.playlists) ? data.playlists : [];
 
-  // Update local disk cache
-  try {
-    fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(favorites, null, 2), "utf8");
-    fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(history, null, 2), "utf8");
-    fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(playlists, null, 2), "utf8");
-  } catch {}
-
-  // If user is logged in, sync to Firestore
-  if (session && session.localId) {
-    try {
-      const token = await getValidIdToken(session);
-      if (token) {
+  // 1. If client provided a Bearer token, save directly to user's Firestore document
+  if (clientToken) {
+    const verified = await verifyFirebaseIdToken(clientToken);
+    if (verified) {
+      try {
         const musicDataJson = JSON.stringify({
           favorites,
           history,
@@ -534,11 +570,11 @@ export async function saveUserLibraryData(data: {
           collections: playlists,
         });
 
-        const patchUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?updateMask.fieldPaths=musicDataJson&key=${FIREBASE_API_KEY}`;
+        const patchUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?updateMask.fieldPaths=musicDataJson&key=${FIREBASE_API_KEY}`;
         await fetch(patchUrl, {
           method: "PATCH",
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${clientToken}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -549,9 +585,20 @@ export async function saveUserLibraryData(data: {
             },
           }),
         });
+        return;
+      } catch (err) {
+        console.warn("[Save Library to Firestore Error]", err);
       }
-    } catch (err) {
-      console.warn("[Save Library to Firestore Error]:", err);
     }
+  }
+
+  // 2. In local development ONLY:
+  if (!isProduction) {
+    const savedDir = getSavedDir();
+    try {
+      fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(favorites, null, 2), "utf8");
+      fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(history, null, 2), "utf8");
+      fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(playlists, null, 2), "utf8");
+    } catch {}
   }
 }

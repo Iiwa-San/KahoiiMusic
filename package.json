@@ -1,6 +1,7 @@
 {
   "name": "kahoiimusic-webapp",
   "version": "1.0.0",
+  "type": "module",
   "description": "Kahoii Music Web Application - Cyberpunk Ad-Free Streaming Player",
   "scripts": {
     "build": "cd client && npm install && npm run build",

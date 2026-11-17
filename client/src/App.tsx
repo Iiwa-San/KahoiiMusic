@@ -49,6 +49,18 @@ const DEFAULT_TRACK_ART = "./logo_icon.png";
 
 // Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const STORAGE_USER_SESSION_KEY = "kahoii_user_session";
+
+const getAuthToken = (): string | null => {
+  try {
+    const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.user?.idToken || parsed?.idToken || null;
+  } catch {
+    return null;
+  }
+};
 
 // Initial Curated Tracks (Empty by default, skeleton loader displays until live data arrives)
 const INITIAL_TRENDING_TRACKS: Track[] = [];
@@ -301,7 +313,7 @@ export default function App() {
   const [leftSearchQuery, setLeftSearchQuery] = useState<string>("");
   const activeTabIndex = Math.max(0, SIDEBAR_TABS.findIndex((t) => t.key === activeLeftTab));
 
-  // User Profile & Real Database Session
+  // User Profile & Real Database Session (Secured & Isolated per-user)
   const [isAccountOpen, setIsAccountOpen] = useState<boolean>(false);
   const [userSession, setUserSession] = useState<{
     isLoggedIn: boolean;
@@ -311,13 +323,26 @@ export default function App() {
       name?: string;
       avatarUrl?: string;
       avatarBase64?: string | null;
+      idToken?: string;
+      refreshToken?: string;
       stats?: {
         favoritesCount: number;
         historyCount: number;
         playlistsCount: number;
       };
     } | null;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.isLoggedIn && (parsed?.user?.idToken || parsed?.idToken)) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
 
   const [libraryData, setLibraryData] = useState<{
     favorites: Track[];
@@ -614,16 +639,20 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handleClickOutsideMenu);
   }, []);
 
-  // Save library data to server & cloud
+  // Save library data to server & cloud (Authenticated per user)
   const persistLibraryData = async (updated: {
     favorites?: Track[];
     history?: Track[];
     playlists?: any[];
   }) => {
+    const token = getAuthToken();
     try {
       await fetch(`${API_BASE}/api/user/library`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           favorites: updated.favorites || libraryData.favorites,
           history: updated.history || libraryData.history,
@@ -821,23 +850,62 @@ export default function App() {
     }
   }, [volume, isMuted]);
 
-  // Fetch User Session & Library Data
+  // Fetch User Session & Library Data (Token-authenticated & Multi-User Isolated)
   const fetchUserSession = async () => {
+    const token = getAuthToken();
+    if (!token) {
+      setUserSession({ isLoggedIn: false, user: null });
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE}/api/user/session`);
+      const res = await fetch(`${API_BASE}/api/user/session`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
-        setUserSession(data);
+        if (data.isLoggedIn && data.user) {
+          const updatedSession = {
+            ...data,
+            user: {
+              ...data.user,
+              idToken: token,
+              refreshToken: userSession?.user?.refreshToken || data.user.refreshToken,
+            },
+          };
+          setUserSession(updatedSession);
+          try {
+            localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(updatedSession));
+          } catch {}
+        } else {
+          try {
+            localStorage.removeItem(STORAGE_USER_SESSION_KEY);
+          } catch {}
+          setUserSession({ isLoggedIn: false, user: null });
+        }
+      } else if (res.status === 401) {
+        try {
+          localStorage.removeItem(STORAGE_USER_SESSION_KEY);
+        } catch {}
+        setUserSession({ isLoggedIn: false, user: null });
       }
     } catch (err) {
-      console.error("Session fetch failed:", err);
+      console.warn("Session fetch failed:", err);
     }
   };
 
   const fetchLibraryData = async () => {
+    const token = getAuthToken();
+    if (!token) {
+      setLibraryData({ favorites: [], history: [], playlists: [] });
+      return;
+    }
+
     setIsLibraryLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/user/library`);
+      const res = await fetch(`${API_BASE}/api/user/library`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         const mappedFavs: Track[] = (data.favorites || []).map((f: any) => ({
@@ -854,11 +922,11 @@ export default function App() {
           duration: Number(h.DurationSeconds ?? h.duration ?? h.durationSeconds ?? h.Duration ?? 0),
           thumbnail: `https://i.ytimg.com/vi/${h.id || h.Id}/mqdefault.jpg`,
         }));
-        const rawPlaylists = (data.playlists || []).map((pl: any) => ({
-          id: pl.id || pl.Id,
+        const rawPlaylists = (data.playlists || data.collections || []).map((pl: any) => ({
+          id: pl.id || pl.Id || pl.Name || pl.name,
           name: pl.name || pl.Name || "Danh sách phát",
           created: pl.created || pl.CreatedAt,
-          items: (pl.items || pl.Items || []).map((it: any) => ({
+          items: (pl.items || pl.tracks || pl.Tracks || []).map((it: any) => ({
             id: it.id || it.Id,
             title: it.title || it.Title,
             author: it.author || it.Author || it.Artist || "",
@@ -1107,19 +1175,39 @@ export default function App() {
   }, [volume, isMuted]);
 
   const handleSyncCloud = async () => {
+    const token = getAuthToken();
+    if (!token) {
+      showToast("Vui lòng đăng nhập để đồng bộ Cloud", "warning");
+      return;
+    }
     setIsSyncing(true);
     setSyncSuccessMsg(null);
     try {
-      const res = await fetch(`${API_BASE}/api/user/sync`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/user/sync`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Đồng bộ thất bại");
-      setUserSession(data);
+      const updatedSession = {
+        ...data,
+        user: {
+          ...data.user,
+          idToken: token,
+          refreshToken: userSession?.user?.refreshToken || data.user?.refreshToken,
+        },
+      };
+      setUserSession(updatedSession);
+      try {
+        localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(updatedSession));
+      } catch {}
       setAvatarKey(Date.now());
       await fetchLibraryData();
       setSyncSuccessMsg("Đã đồng bộ dữ liệu mới nhất từ Cloud thành công!");
+      showToast("Đã đồng bộ dữ liệu từ Cloud Firestore!", "success");
       setTimeout(() => setSyncSuccessMsg(null), 4000);
     } catch (err: any) {
-      alert("Lỗi đồng bộ: " + err.message);
+      showToast("Lỗi đồng bộ: " + err.message, "warning");
     } finally {
       setIsSyncing(false);
     }
@@ -1142,23 +1230,15 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Đăng nhập thất bại");
       setUserSession(data);
-      setAvatarKey(Date.now());
-
-      // Auto-sync cloud data from Firestore immediately
       try {
-        const syncRes = await fetch(`${API_BASE}/api/user/sync`, { method: "POST" });
-        if (syncRes.ok) {
-          const syncData = await syncRes.json();
-          setUserSession(syncData);
-        }
-      } catch (sErr) {
-        console.warn("Auto sync on login error:", sErr);
-      }
+        localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(data));
+      } catch {}
+      setAvatarKey(Date.now());
 
       await fetchLibraryData();
       setLoginPassword("");
       setSyncSuccessMsg("Đăng nhập và tự động đồng bộ Cloud thành công!");
-      showToast("Đã đăng nhập và tự động đồng bộ thư viện Cloud!", "success");
+      showToast("Đã đăng nhập và đồng bộ thư viện cá nhân!", "success");
       setTimeout(() => {
         setSyncSuccessMsg(null);
         setIsAccountOpen(false);
@@ -1176,23 +1256,29 @@ export default function App() {
 
   const confirmLogout = async () => {
     setShowLogoutConfirm(false);
+    const token = getAuthToken();
     try {
-      await fetch(`${API_BASE}/api/user/logout`, { method: "POST" });
-      setUserSession({ isLoggedIn: false, user: null });
-      setLibraryData({ favorites: [], history: [], playlists: [] });
-      pausePlayback();
-      setCurrentTrack(null);
-      currentTrackRef.current = null;
-      setQueueTracks([]);
-      queueTracksRef.current = [];
-      setPlaylist([]);
-      playlistRef.current = [];
-      setIsAccountOpen(false);
-      showToast("Đã đăng xuất tài khoản thành công!", "info");
+      await fetch(`${API_BASE}/api/user/logout`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
     } catch (err) {
-      console.error("Logout error:", err);
-      showToast("Đăng xuất thất bại", "warning");
+      console.warn("Logout error:", err);
     }
+    try {
+      localStorage.removeItem(STORAGE_USER_SESSION_KEY);
+    } catch {}
+    setUserSession({ isLoggedIn: false, user: null });
+    setLibraryData({ favorites: [], history: [], playlists: [] });
+    pausePlayback();
+    setCurrentTrack(null);
+    currentTrackRef.current = null;
+    setQueueTracks([]);
+    queueTracksRef.current = [];
+    setPlaylist([]);
+    playlistRef.current = [];
+    setIsAccountOpen(false);
+    showToast("Đã đăng xuất tài khoản thành công!", "info");
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -1223,6 +1309,9 @@ export default function App() {
         throw new Error(data.error || "Đăng ký thất bại");
       }
       setUserSession(data);
+      try {
+        localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(data));
+      } catch {}
       setAvatarKey(Date.now());
       await fetchLibraryData();
       setLoginPassword("");
@@ -1247,6 +1336,16 @@ export default function App() {
     setIsLoading(true);
     setErrorMessage(null);
     setCurrentTime(0);
+
+    // Record to history if user is logged in
+    if (userSession?.isLoggedIn) {
+      setLibraryData((prev) => {
+        const filtered = prev.history.filter((h) => h.id !== track.id);
+        const updated = [track, ...filtered].slice(0, 100);
+        persistLibraryData({ history: updated });
+        return { ...prev, history: updated };
+      });
+    }
 
     // If active player is already YouTube, transition track immediately with ZERO delay
     if (
@@ -1956,7 +2055,11 @@ export default function App() {
               className="flex items-center gap-2 pl-1.5 pr-3.5 py-1 rounded-full theme-badge hover:theme-btn-primary hover:text-white text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 border theme-accent-border group"
             >
               <img
-                src={`${API_BASE}/api/user/avatar?t=${avatarKey}`}
+                src={
+                  userSession?.user?.avatarBase64
+                    ? `data:image/png;base64,${userSession.user.avatarBase64}`
+                    : `${API_BASE}/api/user/avatar?t=${avatarKey}${getAuthToken() ? `&token=${getAuthToken()}` : ""}`
+                }
                 alt="Avatar"
                 onError={(e) => {
                   e.currentTarget.src = DEFAULT_TRACK_ART;
@@ -4098,7 +4201,11 @@ export default function App() {
                 <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-black/25 border border-white/10 backdrop-blur-md shadow-inner">
                   <div className="relative flex-shrink-0">
                     <img
-                      src={`${API_BASE}/api/user/avatar?t=${avatarKey}`}
+                      src={
+                        userSession.user?.avatarBase64
+                          ? `data:image/png;base64,${userSession.user.avatarBase64}`
+                          : `${API_BASE}/api/user/avatar?t=${avatarKey}${getAuthToken() ? `&token=${getAuthToken()}` : ""}`
+                      }
                       alt="Avatar"
                       onError={(e) => {
                         e.currentTarget.src = DEFAULT_TRACK_ART;

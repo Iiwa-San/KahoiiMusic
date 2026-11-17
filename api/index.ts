@@ -4,6 +4,7 @@ import { resolveAudioStream } from "./services/streamResolver.js";
 import { searchYouTubeMusicStructured, getPlaylistTracks } from "./services/youtubeSearch.js";
 import { fetchLyrics } from "./services/lyricsService.js";
 import {
+  extractBearerToken,
   getUserSessionData,
   getUserAvatarBuffer,
   loginWithFirebase,
@@ -154,9 +155,10 @@ app.get(["/api/proxy-audio", "/proxy-audio"], async (req, res) => {
 });
 
 // 5. User Session & Profile
-app.get(["/api/user/session", "/user/session"], async (_req, res) => {
+app.get(["/api/user/session", "/user/session"], async (req, res) => {
   try {
-    const session = await getUserSessionData();
+    const token = extractBearerToken(req);
+    const session = await getUserSessionData(token);
     return res.json(session);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -164,11 +166,12 @@ app.get(["/api/user/session", "/user/session"], async (_req, res) => {
 });
 
 // 6. User Avatar Stream
-app.get(["/api/user/avatar", "/user/avatar"], (_req, res) => {
-  const buf = getUserAvatarBuffer();
+app.get(["/api/user/avatar", "/user/avatar"], async (req, res) => {
+  const token = extractBearerToken(req);
+  const buf = await getUserAvatarBuffer(token);
   if (buf) {
     res.setHeader("Content-Type", "image/png");
-    res.setHeader("Cache-Control", "public, max-age=60");
+    res.setHeader("Cache-Control", "private, max-age=60");
     return res.send(buf);
   }
   return res.status(404).send("No avatar found");
@@ -203,15 +206,17 @@ app.post(["/api/user/register", "/user/register"], async (req, res) => {
 });
 
 // 8. User Logout
-app.post(["/api/user/logout", "/user/logout"], (_req, res) => {
-  logoutUser();
+app.post(["/api/user/logout", "/user/logout"], (req, res) => {
+  const token = extractBearerToken(req);
+  logoutUser(token);
   return res.json({ success: true });
 });
 
 // 8b. Sync from Cloud
-app.post(["/api/user/sync", "/user/sync"], async (_req, res) => {
+app.post(["/api/user/sync", "/user/sync"], async (req, res) => {
   try {
-    const updatedSession = await syncCloudUserData();
+    const token = extractBearerToken(req);
+    const updatedSession = await syncCloudUserData(token);
     return res.json(updatedSession);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Đồng bộ thất bại" });
@@ -219,9 +224,10 @@ app.post(["/api/user/sync", "/user/sync"], async (_req, res) => {
 });
 
 // 9. User Library (Favorites, History, Playlists directly from Firestore DB)
-app.get(["/api/user/library", "/user/library"], async (_req, res) => {
+app.get(["/api/user/library", "/user/library"], async (req, res) => {
   try {
-    const data = await getUserLibraryData();
+    const token = extractBearerToken(req);
+    const data = await getUserLibraryData(token);
     return res.json(data);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to fetch library" });
@@ -230,7 +236,8 @@ app.get(["/api/user/library", "/user/library"], async (_req, res) => {
 
 app.post(["/api/user/library", "/user/library"], async (req, res) => {
   try {
-    await saveUserLibraryData(req.body);
+    const token = extractBearerToken(req);
+    await saveUserLibraryData(req.body, token);
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to save library" });
