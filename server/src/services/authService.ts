@@ -17,6 +17,20 @@ export function extractBearerToken(req: any): string | null {
   return null;
 }
 
+export function extractRefreshToken(req: any): string | null {
+  const refHeader = req.headers?.["x-refresh-token"] || req.headers?.["X-Refresh-Token"];
+  if (typeof refHeader === "string" && refHeader) {
+    return refHeader.trim();
+  }
+  if (typeof req.body?.refreshToken === "string" && req.body.refreshToken) {
+    return req.body.refreshToken.trim();
+  }
+  if (typeof req.query?.refreshToken === "string" && req.query.refreshToken) {
+    return req.query.refreshToken.trim();
+  }
+  return null;
+}
+
 function getSavedDir(): string {
   if (isProduction) {
     const tmpDir = path.join("/tmp", "Saved");
@@ -83,6 +97,32 @@ export async function verifyFirebaseIdToken(token: string): Promise<{ localId: s
   }
 }
 
+export async function refreshFirebaseToken(refreshToken: string): Promise<{ idToken: string; refreshToken: string; expiresIn: number; localId?: string } | null> {
+  if (!refreshToken || typeof refreshToken !== "string" || refreshToken.length < 10) return null;
+  try {
+    const refreshUrl = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
+    const params = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    });
+    const res = await fetch(refreshUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      idToken: data.id_token,
+      refreshToken: data.refresh_token || refreshToken,
+      expiresIn: Number(data.expires_in) || 3600,
+      localId: data.user_id,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getValidIdToken(session: any): Promise<string | null> {
   if (!session) return null;
   const now = Math.floor(Date.now() / 1000);
@@ -93,24 +133,11 @@ export async function getValidIdToken(session: any): Promise<string | null> {
 
   if (session.refreshToken) {
     try {
-      const refreshUrl = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
-      const params = new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: session.refreshToken,
-      });
-
-      const res = await fetch(refreshUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: params.toString(),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const expiresIn = Number(data.expires_in) || 3600;
-        session.idToken = data.id_token;
-        session.refreshToken = data.refresh_token || session.refreshToken;
-        session.expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn;
+      const refreshed = await refreshFirebaseToken(session.refreshToken);
+      if (refreshed) {
+        session.idToken = refreshed.idToken;
+        session.refreshToken = refreshed.refreshToken;
+        session.expiryTimestamp = Math.floor(Date.now() / 1000) + refreshed.expiresIn;
 
         if (!isProduction) {
           const savedDir = getSavedDir();
@@ -130,56 +157,117 @@ export async function getValidIdToken(session: any): Promise<string | null> {
   return session.idToken || null;
 }
 
-export async function getUserSessionData(clientToken?: string | null): Promise<any> {
-  // 1. If client provided a Bearer token, look up that specific user securely from Firebase
-  if (clientToken) {
-    const verified = await verifyFirebaseIdToken(clientToken);
+export async function getVerifiedUserAndTokens(
+  clientToken?: string | null,
+  clientRefreshToken?: string | null
+): Promise<{
+  verified: { localId: string; email: string; displayName?: string } | null;
+  idToken: string | null;
+  newRefreshToken?: string | null;
+}> {
+  let token = clientToken || null;
+
+  // 1. If we have a token, check if it's currently valid
+  if (token) {
+    const verified = await verifyFirebaseIdToken(token);
     if (verified) {
-      let avatarBase64: string | null = null;
-      let favCount = 0;
-      let histCount = 0;
-      let plCount = 0;
-
-      try {
-        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
-        const docRes = await fetch(docUrl, {
-          headers: { Authorization: `Bearer ${clientToken}` },
-        });
-        if (docRes.ok) {
-          const docData = (await docRes.json()) as any;
-          if (docData.fields?.avatarBase64?.stringValue) {
-            avatarBase64 = docData.fields.avatarBase64.stringValue;
-          }
-          if (docData.fields?.musicDataJson?.stringValue) {
-            try {
-              const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
-              const favs = Array.isArray(musicData.favorites) ? musicData.favorites : Array.isArray(musicData.savedTracks) ? musicData.savedTracks : [];
-              const hist = Array.isArray(musicData.history) ? musicData.history : [];
-              const pls = Array.isArray(musicData.collections) ? musicData.collections : Array.isArray(musicData.playlists) ? musicData.playlists : [];
-              favCount = favs.length;
-              histCount = hist.length;
-              plCount = pls.length;
-            } catch {}
-          }
-        }
-      } catch {}
-
-      return {
-        isLoggedIn: true,
-        user: {
-          localId: verified.localId,
-          email: verified.email,
-          name: verified.displayName || (verified.email ? verified.email.split("@")[0] : "Kahoii User"),
-          avatarUrl: avatarBase64 ? `data:image/png;base64,${avatarBase64}` : "/api/user/avatar",
-          avatarBase64: avatarBase64 || null,
-          stats: {
-            favoritesCount: favCount,
-            historyCount: histCount,
-            playlistsCount: plCount,
-          },
-        },
-      };
+      return { verified, idToken: token };
     }
+  }
+
+  // 2. If token verification failed or no token, attempt refresh with clientRefreshToken
+  let refreshToken = clientRefreshToken || null;
+  if (!refreshToken && !isProduction) {
+    const savedDir = getSavedDir();
+    const session = readJsonClean(path.join(savedDir, "user_session.json"));
+    if (session?.refreshToken) {
+      refreshToken = session.refreshToken;
+    }
+  }
+
+  if (refreshToken) {
+    const refreshed = await refreshFirebaseToken(refreshToken);
+    if (refreshed?.idToken) {
+      const verified = await verifyFirebaseIdToken(refreshed.idToken);
+      if (verified) {
+        if (!isProduction) {
+          const savedDir = getSavedDir();
+          const sessionPath = path.join(savedDir, "user_session.json");
+          const session = readJsonClean(sessionPath) || {};
+          session.idToken = refreshed.idToken;
+          session.refreshToken = refreshed.refreshToken;
+          session.expiryTimestamp = Math.floor(Date.now() / 1000) + refreshed.expiresIn;
+          try {
+            fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), "utf8");
+          } catch {}
+        }
+        return {
+          verified,
+          idToken: refreshed.idToken,
+          newRefreshToken: refreshed.refreshToken,
+        };
+      }
+    }
+  }
+
+  return { verified: null, idToken: null };
+}
+
+export async function getUserSessionData(
+  clientToken?: string | null,
+  clientRefreshToken?: string | null
+): Promise<any> {
+  // 1. If client provided a Bearer token or refresh token, look up that specific user securely from Firebase
+  const { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
+  if (verified && idToken) {
+    let avatarBase64: string | null = null;
+    let favCount = 0;
+    let histCount = 0;
+    let plCount = 0;
+
+    try {
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
+      const docRes = await fetch(docUrl, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (docRes.ok) {
+        const docData = (await docRes.json()) as any;
+        if (docData.fields?.avatarBase64?.stringValue) {
+          avatarBase64 = docData.fields.avatarBase64.stringValue;
+        }
+        if (docData.fields?.musicDataJson?.stringValue) {
+          try {
+            const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
+            const favs = Array.isArray(musicData.favorites) ? musicData.favorites : Array.isArray(musicData.savedTracks) ? musicData.savedTracks : [];
+            const hist = Array.isArray(musicData.history) ? musicData.history : [];
+            const pls = Array.isArray(musicData.collections) ? musicData.collections : Array.isArray(musicData.playlists) ? musicData.playlists : [];
+            favCount = favs.length;
+            histCount = hist.length;
+            plCount = pls.length;
+          } catch {}
+        }
+      }
+    } catch {}
+
+    return {
+      isLoggedIn: true,
+      user: {
+        localId: verified.localId,
+        email: verified.email,
+        name: verified.displayName || (verified.email ? verified.email.split("@")[0] : "Kahoii User"),
+        avatarUrl: avatarBase64 ? `data:image/png;base64,${avatarBase64}` : "/api/user/avatar",
+        avatarBase64: avatarBase64 || null,
+        idToken,
+        refreshToken: newRefreshToken || clientRefreshToken || undefined,
+        stats: {
+          favoritesCount: favCount,
+          historyCount: histCount,
+          playlistsCount: plCount,
+        },
+      },
+      _newIdToken: newRefreshToken ? idToken : null,
+      _newRefreshToken: newRefreshToken || null,
+    };
   }
 
   // 2. If in production or on Vercel, unauthenticated visitor NEVER sees any session
@@ -213,6 +301,8 @@ export async function getUserSessionData(clientToken?: string | null): Promise<a
       name: session.email ? session.email.split("@")[0] : "Kahoii User",
       avatarUrl: "/api/user/avatar",
       avatarBase64: session.avatarBase64 ? `data:image/png;base64,${session.avatarBase64}` : null,
+      idToken: session.idToken,
+      refreshToken: session.refreshToken,
       stats: {
         favoritesCount: Array.isArray(favorites) ? favorites.length : 0,
         historyCount: Array.isArray(history) ? history.length : 0,
@@ -222,23 +312,24 @@ export async function getUserSessionData(clientToken?: string | null): Promise<a
   };
 }
 
-export async function getUserAvatarBuffer(clientToken?: string | null): Promise<Buffer | null> {
-  if (clientToken) {
-    const verified = await verifyFirebaseIdToken(clientToken);
-    if (verified) {
-      try {
-        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
-        const docRes = await fetch(docUrl, {
-          headers: { Authorization: `Bearer ${clientToken}` },
-        });
-        if (docRes.ok) {
-          const docData = await docRes.json();
-          if (docData.fields?.avatarBase64?.stringValue) {
-            return Buffer.from(docData.fields.avatarBase64.stringValue, "base64");
-          }
+export async function getUserAvatarBuffer(
+  clientToken?: string | null,
+  clientRefreshToken?: string | null
+): Promise<Buffer | null> {
+  const { verified, idToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
+  if (verified && idToken) {
+    try {
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
+      const docRes = await fetch(docUrl, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (docRes.ok) {
+        const docData = await docRes.json();
+        if (docData.fields?.avatarBase64?.stringValue) {
+          return Buffer.from(docData.fields.avatarBase64.stringValue, "base64");
         }
-      } catch {}
-    }
+      }
+    } catch {}
   }
 
   if (!isProduction) {
@@ -451,9 +542,12 @@ export function logoutUser(clientToken?: string | null): void {
   }
 }
 
-export async function syncCloudUserData(clientToken?: string | null): Promise<any> {
-  if (clientToken) {
-    return await getUserSessionData(clientToken);
+export async function syncCloudUserData(
+  clientToken?: string | null,
+  clientRefreshToken?: string | null
+): Promise<any> {
+  if (clientToken || clientRefreshToken) {
+    return await getUserSessionData(clientToken, clientRefreshToken);
   }
   if (isProduction) {
     throw new Error("Chưa đăng nhập.");
@@ -467,74 +561,87 @@ export async function syncCloudUserData(clientToken?: string | null): Promise<an
   return await getUserSessionData();
 }
 
-export async function getUserLibraryData(clientToken?: string | null): Promise<any> {
-  // 1. If client provided a Bearer token, fetch that specific user's Firestore document
-  if (clientToken) {
-    const verified = await verifyFirebaseIdToken(clientToken);
-    if (verified) {
-      try {
-        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
-        const docRes = await fetch(docUrl, {
-          headers: { Authorization: `Bearer ${clientToken}` },
-        });
-        if (docRes.ok) {
-          const docData = (await docRes.json()) as any;
-          if (docData.fields?.musicDataJson?.stringValue) {
-            const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
-            const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
-              ? musicData.favorites
-              : Array.isArray(musicData.savedTracks)
-              ? musicData.savedTracks
-              : [];
-            const favorites = favSources.map((t: any) => ({
+export async function getUserLibraryData(
+  clientToken?: string | null,
+  clientRefreshToken?: string | null
+): Promise<{
+  favorites: any[];
+  history: any[];
+  playlists: any[];
+  _newIdToken?: string | null;
+  _newRefreshToken?: string | null;
+}> {
+  // 1. If client provided a Bearer token or refresh token, fetch that specific user's Firestore document
+  const { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
+  if (verified && idToken) {
+    try {
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
+      const docRes = await fetch(docUrl, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (docRes.ok) {
+        const docData = (await docRes.json()) as any;
+        if (docData.fields?.musicDataJson?.stringValue) {
+          const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
+          const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
+            ? musicData.favorites
+            : Array.isArray(musicData.savedTracks)
+            ? musicData.savedTracks
+            : [];
+          const favorites = favSources.map((t: any) => ({
+            id: t.Id || t.id,
+            title: t.Title || t.title,
+            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+            author: t.Author || t.Artist || t.author || "",
+          }));
+
+          const histSources = Array.isArray(musicData.history) ? musicData.history : [];
+          const history = histSources.map((t: any) => ({
+            id: t.Id || t.id,
+            title: t.Title || t.title,
+            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+            author: t.Author || t.Artist || t.author || "",
+          }));
+
+          const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
+            ? musicData.collections
+            : Array.isArray(musicData.playlists)
+            ? musicData.playlists
+            : [];
+          const playlists = plSources.map((pl: any) => {
+            const rawItems = pl.Items || pl.items || pl.Tracks || pl.tracks || [];
+            const mapped = rawItems.map((t: any) => ({
               id: t.Id || t.id,
               title: t.Title || t.title,
               duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
               author: t.Author || t.Artist || t.author || "",
+              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
             }));
+            return {
+              id: pl.Id || pl.id || pl.Name || pl.name,
+              name: pl.Name || pl.name,
+              created: pl.CreatedAt || pl.created,
+              items: mapped,
+              tracks: mapped,
+            };
+          });
 
-            const histSources = Array.isArray(musicData.history) ? musicData.history : [];
-            const history = histSources.map((t: any) => ({
-              id: t.Id || t.id,
-              title: t.Title || t.title,
-              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-              author: t.Author || t.Artist || t.author || "",
-            }));
-
-            const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
-              ? musicData.collections
-              : Array.isArray(musicData.playlists)
-              ? musicData.playlists
-              : [];
-            const playlists = plSources.map((pl: any) => {
-              const rawItems = pl.Items || pl.items || pl.Tracks || pl.tracks || [];
-              const mapped = rawItems.map((t: any) => ({
-                id: t.Id || t.id,
-                title: t.Title || t.title,
-                duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-                author: t.Author || t.Artist || t.author || "",
-                thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
-              }));
-              return {
-                id: pl.Id || pl.id || pl.Name || pl.name,
-                name: pl.Name || pl.name,
-                created: pl.CreatedAt || pl.created,
-                items: mapped,
-                tracks: mapped,
-              };
-            });
-
-            return { favorites, history, playlists };
-          }
+          return {
+            favorites,
+            history,
+            playlists,
+            _newIdToken: newRefreshToken ? idToken : null,
+            _newRefreshToken: newRefreshToken || null,
+          };
         }
-      } catch (err) {
-        console.warn("[getUserLibraryData Firestore Error]", err);
       }
+    } catch (err) {
+      console.warn("[getUserLibraryData Firestore Error]", err);
     }
   }
 
-  // 2. If in production or unauthenticated guest:
-  if (isProduction || !clientToken) {
+  // 2. If in production and not authenticated:
+  if (isProduction) {
     return {
       favorites: [],
       history: [],
@@ -559,67 +666,77 @@ export async function getUserLibraryData(clientToken?: string | null): Promise<a
 
 export async function saveUserLibraryData(
   data: { favorites?: any[]; history?: any[]; playlists?: any[] },
-  clientToken?: string | null
-): Promise<void> {
+  clientToken?: string | null,
+  clientRefreshToken?: string | null
+): Promise<{ success: boolean; newIdToken?: string | null; newRefreshToken?: string | null }> {
   const favorites = Array.isArray(data.favorites) ? data.favorites : [];
   const history = Array.isArray(data.history) ? data.history : [];
   const playlists = Array.isArray(data.playlists) ? data.playlists : [];
 
-  // 1. If client provided a Bearer token, save directly to user's Firestore document
-  if (clientToken) {
-    const verified = await verifyFirebaseIdToken(clientToken);
-    if (verified) {
-      try {
-        const collections = playlists.map((pl: any) => ({
-          Id: pl.id || pl.Id,
-          Name: pl.name || pl.Name,
-          CreatedAt: pl.created || pl.CreatedAt || Date.now(),
-          Items: (pl.items || pl.tracks || []).map((t: any) => ({
-            Id: t.id || t.Id,
-            Title: t.title || t.Title,
-            Author: t.author || t.Author || t.Artist || "",
-            Artist: t.author || t.Author || t.Artist || "",
-            DurationSeconds: t.duration || t.DurationSeconds || 0,
-            Url: `https://www.youtube.com/watch?v=${t.id || t.Id}`,
-          })),
-        }));
+  // 1. If client provided a Bearer token or refresh token, save directly to user's Firestore document
+  const { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
+  if (verified && idToken) {
+    try {
+      const collections = playlists.map((pl: any) => ({
+        Id: pl.id || pl.Id,
+        Name: pl.name || pl.Name,
+        CreatedAt: pl.created || pl.CreatedAt || Date.now(),
+        Items: (pl.items || pl.tracks || []).map((t: any) => ({
+          Id: t.id || t.Id,
+          Title: t.title || t.Title,
+          Author: t.author || t.Author || t.Artist || "",
+          Duration: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
+          DurationSeconds: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
+        })),
+      }));
 
-        const musicDataJson = JSON.stringify({
-          favorites,
-          history,
-          playlists,
-          collections,
-        });
+      const musicDataJson = JSON.stringify({
+        favorites: favorites.map((t: any) => ({
+          Id: t.id || t.Id,
+          Title: t.title || t.Title,
+          Author: t.author || t.Author || t.Artist || "",
+          Duration: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
+          DurationSeconds: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
+        })),
+        history: history.map((t: any) => ({
+          Id: t.id || t.Id,
+          Title: t.title || t.Title,
+          Author: t.author || t.Author || t.Artist || "",
+          Duration: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
+          DurationSeconds: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
+        })),
+        playlists: collections,
+        collections: collections,
+      });
 
-        const patchUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?updateMask.fieldPaths=musicDataJson&key=${FIREBASE_API_KEY}`;
-        await fetch(patchUrl, {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${clientToken}`,
-            "Content-Type": "application/json",
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?updateMask.fieldPaths=musicDataJson&key=${FIREBASE_API_KEY}`;
+      await fetch(docUrl, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fields: {
+            musicDataJson: { stringValue: musicDataJson },
           },
-          body: JSON.stringify({
-            fields: {
-              musicDataJson: {
-                stringValue: musicDataJson,
-              },
-            },
-          }),
-        });
-        return;
-      } catch (err) {
-        console.warn("[Save Library to Firestore Error]", err);
-      }
+        }),
+      });
+      return { success: true, newIdToken: newRefreshToken ? idToken : null, newRefreshToken };
+    } catch (err) {
+      console.warn("[saveUserLibraryData Firestore Error]", err);
     }
   }
 
   // 2. In local development ONLY:
   if (!isProduction) {
-    const savedDir = getSavedDir();
     try {
+      const savedDir = getSavedDir();
+      if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
       fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(favorites, null, 2), "utf8");
       fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(history, null, 2), "utf8");
       fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(playlists, null, 2), "utf8");
     } catch {}
   }
+  return { success: true };
 }

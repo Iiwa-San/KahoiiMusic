@@ -5,6 +5,7 @@ import { searchYouTubeMusicStructured, getPlaylistTracks } from "./services/yout
 import { fetchLyrics } from "./services/lyricsService.js";
 import {
   extractBearerToken,
+  extractRefreshToken,
   getUserSessionData,
   getUserAvatarBuffer,
   loginWithFirebase,
@@ -13,6 +14,7 @@ import {
   getUserLibraryData,
   saveUserLibraryData,
   syncCloudUserData,
+  refreshFirebaseToken,
 } from "./services/authService.js";
 
 const app = express();
@@ -267,12 +269,42 @@ app.get(["/api/downloads", "/downloads"], async (req, res) => {
   }
 });
 
+// Helper to set refreshed token headers if auto-refreshed
+const attachRefreshedHeaders = (res: any, newIdToken?: string | null, newRefreshToken?: string | null) => {
+  if (newIdToken) {
+    res.setHeader("x-refreshed-id-token", newIdToken);
+  }
+  if (newRefreshToken) {
+    res.setHeader("x-refreshed-refresh-token", newRefreshToken);
+  }
+  if (newIdToken || newRefreshToken) {
+    res.setHeader("Access-Control-Expose-Headers", "x-refreshed-id-token, x-refreshed-refresh-token");
+  }
+};
+
+// 4c. Token Refresh Endpoint
+app.post(["/api/user/refresh", "/user/refresh"], async (req, res) => {
+  try {
+    const refreshToken = extractRefreshToken(req);
+    if (!refreshToken) return res.status(400).json({ error: "Missing refresh token" });
+    const refreshed = await refreshFirebaseToken(refreshToken);
+    if (!refreshed) return res.status(401).json({ error: "Invalid refresh token" });
+    attachRefreshedHeaders(res, refreshed.idToken, refreshed.refreshToken);
+    return res.json(refreshed);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Failed to refresh token" });
+  }
+});
+
 // 5. User Session & Profile
 app.get(["/api/user/session", "/user/session"], async (req, res) => {
   try {
     const token = extractBearerToken(req);
-    const session = await getUserSessionData(token);
-    return res.json(session);
+    const refreshToken = extractRefreshToken(req);
+    const sessionResult = await getUserSessionData(token, refreshToken);
+    attachRefreshedHeaders(res, sessionResult._newIdToken, sessionResult._newRefreshToken);
+    const { _newIdToken, _newRefreshToken, ...cleanSession } = sessionResult;
+    return res.json(cleanSession);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -281,7 +313,8 @@ app.get(["/api/user/session", "/user/session"], async (req, res) => {
 // 6. User Avatar Stream
 app.get(["/api/user/avatar", "/user/avatar"], async (req, res) => {
   const token = extractBearerToken(req);
-  const buf = await getUserAvatarBuffer(token);
+  const refreshToken = extractRefreshToken(req);
+  const buf = await getUserAvatarBuffer(token, refreshToken);
   if (buf) {
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "private, max-age=60");
@@ -329,8 +362,11 @@ app.post(["/api/user/logout", "/user/logout"], (req, res) => {
 app.post(["/api/user/sync", "/user/sync"], async (req, res) => {
   try {
     const token = extractBearerToken(req);
-    const updatedSession = await syncCloudUserData(token);
-    return res.json(updatedSession);
+    const refreshToken = extractRefreshToken(req);
+    const updatedSession = await syncCloudUserData(token, refreshToken);
+    attachRefreshedHeaders(res, updatedSession._newIdToken, updatedSession._newRefreshToken);
+    const { _newIdToken, _newRefreshToken, ...cleanSession } = updatedSession;
+    return res.json(cleanSession);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Đồng bộ thất bại" });
   }
@@ -340,8 +376,11 @@ app.post(["/api/user/sync", "/user/sync"], async (req, res) => {
 app.get(["/api/user/library", "/user/library"], async (req, res) => {
   try {
     const token = extractBearerToken(req);
-    const data = await getUserLibraryData(token);
-    return res.json(data);
+    const refreshToken = extractRefreshToken(req);
+    const result = await getUserLibraryData(token, refreshToken);
+    attachRefreshedHeaders(res, result._newIdToken, result._newRefreshToken);
+    const { _newIdToken, _newRefreshToken, ...library } = result;
+    return res.json(library);
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to fetch library" });
   }
@@ -350,7 +389,9 @@ app.get(["/api/user/library", "/user/library"], async (req, res) => {
 app.post(["/api/user/library", "/user/library"], async (req, res) => {
   try {
     const token = extractBearerToken(req);
-    await saveUserLibraryData(req.body, token);
+    const refreshToken = extractRefreshToken(req);
+    const result = await saveUserLibraryData(req.body, token, refreshToken);
+    attachRefreshedHeaders(res, result.newIdToken, result.newRefreshToken);
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to save library" });

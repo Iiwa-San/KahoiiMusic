@@ -57,16 +57,58 @@ const DEFAULT_TRACK_ART = "./logo_icon.png";
 // Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const STORAGE_USER_SESSION_KEY = "kahoii_user_session";
+const STORAGE_LIBRARY_KEY = "kahoii_cached_library";
 
-const getAuthToken = (): string | null => {
+const getAuthSession = (): { idToken: string | null; refreshToken: string | null } => {
   try {
     const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
-    if (!raw) return null;
+    if (!raw) return { idToken: null, refreshToken: null };
     const parsed = JSON.parse(raw);
-    return parsed?.user?.idToken || parsed?.idToken || null;
+    return {
+      idToken: parsed?.user?.idToken || parsed?.idToken || null,
+      refreshToken: parsed?.user?.refreshToken || parsed?.refreshToken || null,
+    };
   } catch {
-    return null;
+    return { idToken: null, refreshToken: null };
   }
+};
+
+const getAuthToken = (): string | null => getAuthSession().idToken;
+const getRefreshToken = (): string | null => getAuthSession().refreshToken;
+
+// Helper to make authenticated requests with transparent token auto-refresh
+const authenticatedFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const { idToken, refreshToken } = getAuthSession();
+  const headers = new Headers(options.headers || {});
+  if (idToken) {
+    headers.set("Authorization", `Bearer ${idToken}`);
+  }
+  if (refreshToken) {
+    headers.set("X-Refresh-Token", refreshToken);
+  }
+
+  const res = await fetch(url, { ...options, headers });
+
+  // If server auto-refreshed the token, capture it and update localStorage
+  const refreshedIdToken = res.headers.get("x-refreshed-id-token");
+  const refreshedRefreshToken = res.headers.get("x-refreshed-refresh-token");
+  if (refreshedIdToken) {
+    try {
+      const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
+      if (raw) {
+        const session = JSON.parse(raw);
+        if (session && session.user) {
+          session.user.idToken = refreshedIdToken;
+          if (refreshedRefreshToken) {
+            session.user.refreshToken = refreshedRefreshToken;
+          }
+          localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(session));
+        }
+      }
+    } catch {}
+  }
+
+  return res;
 };
 
 // Initial Curated Tracks (Empty by default, skeleton loader displays until live data arrives)
@@ -362,10 +404,23 @@ export default function App() {
     favorites: Track[];
     history: Track[];
     playlists: any[];
-  }>({
-    favorites: [],
-    history: [],
-    playlists: [],
+  }>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_LIBRARY_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
+          history: Array.isArray(parsed.history) ? parsed.history : [],
+          playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
+        };
+      }
+    } catch {}
+    return {
+      favorites: [],
+      history: [],
+      playlists: [],
+    };
   });
 
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -770,25 +825,26 @@ export default function App() {
     fetchLatestDownloads();
   }, []);
 
-  // Save library data to server & cloud (Authenticated per user)
+  // Save library data to server & cloud (Authenticated per user with offline cache)
   const persistLibraryData = async (updated: {
     favorites?: Track[];
     history?: Track[];
     playlists?: any[];
   }) => {
-    const token = getAuthToken();
+    const payload = {
+      favorites: updated.favorites || libraryData.favorites,
+      history: updated.history || libraryData.history,
+      playlists: updated.playlists || libraryData.playlists,
+    };
     try {
-      await fetch(`${API_BASE}/api/user/library`, {
+      localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(payload));
+    } catch {}
+
+    try {
+      await authenticatedFetch(`${API_BASE}/api/user/library`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          favorites: updated.favorites || libraryData.favorites,
-          history: updated.history || libraryData.history,
-          playlists: updated.playlists || libraryData.playlists,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
     } catch (err) {
       console.warn("Library persist failed:", err);
@@ -981,27 +1037,28 @@ export default function App() {
     }
   }, [volume, isMuted]);
 
-  // Fetch User Session & Library Data (Token-authenticated & Multi-User Isolated)
+  // Fetch User Session & Library Data (Token-authenticated & Multi-User Isolated with auto-refresh)
   const fetchUserSession = async () => {
     const token = getAuthToken();
-    if (!token) {
+    const refreshToken = getRefreshToken();
+    if (!token && !refreshToken) {
       setUserSession({ isLoggedIn: false, user: null });
       return;
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/user/session`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authenticatedFetch(`${API_BASE}/api/user/session`);
       if (res.ok) {
         const data = await res.json();
         if (data.isLoggedIn && data.user) {
+          const freshIdToken = res.headers.get("x-refreshed-id-token") || data.user.idToken || token;
+          const freshRefreshToken = res.headers.get("x-refreshed-refresh-token") || userSession?.user?.refreshToken || data.user.refreshToken || refreshToken;
           const updatedSession = {
             ...data,
             user: {
               ...data.user,
-              idToken: token,
-              refreshToken: userSession?.user?.refreshToken || data.user.refreshToken,
+              idToken: freshIdToken,
+              refreshToken: freshRefreshToken,
             },
           };
           setUserSession(updatedSession);
@@ -1009,12 +1066,14 @@ export default function App() {
             localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(updatedSession));
           } catch {}
         } else {
-          try {
-            localStorage.removeItem(STORAGE_USER_SESSION_KEY);
-          } catch {}
-          setUserSession({ isLoggedIn: false, user: null });
+          if (!getRefreshToken()) {
+            try {
+              localStorage.removeItem(STORAGE_USER_SESSION_KEY);
+            } catch {}
+            setUserSession({ isLoggedIn: false, user: null });
+          }
         }
-      } else if (res.status === 401) {
+      } else if (res.status === 401 && !getRefreshToken()) {
         try {
           localStorage.removeItem(STORAGE_USER_SESSION_KEY);
         } catch {}
@@ -1027,16 +1086,14 @@ export default function App() {
 
   const fetchLibraryData = async () => {
     const token = getAuthToken();
-    if (!token) {
-      setLibraryData({ favorites: [], history: [], playlists: [] });
+    const refreshToken = getRefreshToken();
+    if (!token && !refreshToken) {
       return;
     }
 
     setIsLibraryLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/user/library`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authenticatedFetch(`${API_BASE}/api/user/library`);
       if (res.ok) {
         const data = await res.json();
         const mappedFavs: Track[] = (data.favorites || []).map((f: any) => ({
@@ -1070,11 +1127,15 @@ export default function App() {
             tracks: mapped,
           };
         });
-        setLibraryData({
+        const nextLibrary = {
           favorites: mappedFavs,
           history: mappedHist,
           playlists: rawPlaylists,
-        });
+        };
+        setLibraryData(nextLibrary);
+        try {
+          localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
+        } catch {}
       }
     } catch (err) {
       console.error("Library fetch failed:", err);
@@ -1312,25 +1373,27 @@ export default function App() {
 
   const handleSyncCloud = async () => {
     const token = getAuthToken();
-    if (!token) {
+    const refreshToken = getRefreshToken();
+    if (!token && !refreshToken) {
       showToast("Vui lòng đăng nhập để đồng bộ Cloud", "warning");
       return;
     }
     setIsSyncing(true);
     setSyncSuccessMsg(null);
     try {
-      const res = await fetch(`${API_BASE}/api/user/sync`, {
+      const res = await authenticatedFetch(`${API_BASE}/api/user/sync`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Đồng bộ thất bại");
+      const freshIdToken = res.headers.get("x-refreshed-id-token") || data.user?.idToken || token;
+      const freshRefreshToken = res.headers.get("x-refreshed-refresh-token") || userSession?.user?.refreshToken || data.user?.refreshToken || refreshToken;
       const updatedSession = {
         ...data,
         user: {
           ...data.user,
-          idToken: token,
-          refreshToken: userSession?.user?.refreshToken || data.user?.refreshToken,
+          idToken: freshIdToken,
+          refreshToken: freshRefreshToken,
         },
       };
       setUserSession(updatedSession);
@@ -1403,6 +1466,7 @@ export default function App() {
     }
     try {
       localStorage.removeItem(STORAGE_USER_SESSION_KEY);
+      localStorage.removeItem(STORAGE_LIBRARY_KEY);
     } catch {}
     setUserSession({ isLoggedIn: false, user: null });
     setLibraryData({ favorites: [], history: [], playlists: [] });
@@ -4739,7 +4803,7 @@ export default function App() {
                   >
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
                     <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
-                      {libraryData.favorites.length}
+                      {libraryData.favorites.length || userSession?.user?.stats?.favoritesCount || 0}
                     </p>
                     <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
                       Yêu thích
@@ -4757,7 +4821,7 @@ export default function App() {
                   >
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
                     <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
-                      {libraryData.history.length}
+                      {libraryData.history.length || userSession?.user?.stats?.historyCount || 0}
                     </p>
                     <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
                       Lịch sử
@@ -4775,7 +4839,7 @@ export default function App() {
                   >
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
                     <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
-                      {libraryData.playlists.length}
+                      {libraryData.playlists.length || userSession?.user?.stats?.playlistsCount || 0}
                     </p>
                     <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
                       Playlists
