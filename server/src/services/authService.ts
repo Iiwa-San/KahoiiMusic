@@ -5,6 +5,17 @@ const FIREBASE_API_KEY = "AIzaSyB4fUCZZN41WmnxGeH8jSdz1M5mi2LhLX8";
 const PROJECT_ID = "kahoiimusic";
 
 function getSavedDir(): string {
+  // If running in Vercel or cloud serverless, use /tmp which is the only writable directory
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const tmpDir = path.join("/tmp", "Saved");
+    if (!fs.existsSync(tmpDir)) {
+      try {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      } catch {}
+    }
+    return tmpDir;
+  }
+
   const candidateDirs = [
     path.resolve(process.cwd(), "../../KahoiiMusic/bin/Debug/Saved"),
     path.resolve(process.cwd(), "../../KahoiiMusic/publish/Saved"),
