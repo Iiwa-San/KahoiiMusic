@@ -3,7 +3,7 @@ import cors from "cors";
 import path from "path";
 import fs from "fs";
 import { resolveAudioStream } from "./services/streamResolver.js";
-import { searchYouTubeTracks } from "./services/youtubeSearch.js";
+import { searchYouTubeMusicStructured, searchYouTubeTracks, getPlaylistTracks } from "./services/youtubeSearch.js";
 import { fetchLyrics } from "./services/lyricsService.js";
 import {
   getUserSessionData,
@@ -36,19 +36,42 @@ app.get("/api/stream", async (req, res) => {
   }
 });
 
-// 2. Search Tracks on YouTube
+// 2. Search Tracks on YouTube (Structured with 100% YouTube Music Tags)
 app.get("/api/search", async (req, res) => {
   const query = req.query.q as string;
   if (!query) {
-    return res.json({ results: [] });
+    return res.json({
+      query: "",
+      topResult: null,
+      tracks: [],
+      artists: [],
+      playlists: [],
+      results: [],
+    });
   }
 
   try {
-    const results = await searchYouTubeTracks(query);
-    return res.json({ results });
+    const data = await searchYouTubeMusicStructured(query);
+    return res.json(data);
   } catch (err: any) {
     console.error("[API Search Error]", err.message);
     return res.status(500).json({ error: "Failed to search tracks" });
+  }
+});
+
+// 2b. Get Playlist Tracks
+app.get("/api/playlist", async (req, res) => {
+  const playlistId = req.query.id as string;
+  if (!playlistId) {
+    return res.status(400).json({ error: "Missing playlist ID parameter ('id')" });
+  }
+
+  try {
+    const tracks = await getPlaylistTracks(playlistId);
+    return res.json({ tracks });
+  } catch (err: any) {
+    console.error("[API Playlist Error]", err.message);
+    return res.status(500).json({ error: "Failed to load playlist tracks" });
   }
 });
 

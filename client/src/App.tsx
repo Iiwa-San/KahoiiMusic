@@ -24,8 +24,13 @@ import {
   LogIn,
   AlertCircle,
   ArrowLeft,
+  Sparkles,
 } from "lucide-react";
-import type { Track } from "./types";
+import type {
+  Track,
+  StructuredSearchResult,
+  SearchPlaylistItem,
+} from "./types";
 import { formatTime } from "./utils/lyricsParser";
 import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/colorExtractor";
 
@@ -143,6 +148,8 @@ export default function App() {
   const [searchQueryTitle, setSearchQueryTitle] = useState<string>("");
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [searchStructured, setSearchStructured] = useState<StructuredSearchResult | null>(null);
+  const [activeSearchTab, setActiveSearchTab] = useState<"all" | "tracks" | "artists" | "playlists">("all");
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
@@ -187,19 +194,57 @@ export default function App() {
     } catch {}
   };
 
-  const handleHistoryItemClick = (query: string) => {
-    setTopSearchText(query);
-    setSearchQueryTitle(query);
+  const executeSearch = async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+
+    setTopSearchText(trimmed);
+    setSearchQueryTitle(trimmed);
+    addToSearchHistory(trimmed);
     setIsSearchFocused(false);
     setIsSearchOpen(true);
     setIsSearching(true);
+    setActiveSearchTab("all");
     setSearchResults([]);
-    addToSearchHistory(query);
-    fetch(`/api/search?q=${encodeURIComponent(query)}`)
-      .then((r) => r.json())
-      .then((data) => setSearchResults(data.results || []))
-      .catch((err) => console.error(err))
-      .finally(() => setIsSearching(false));
+    setSearchStructured(null);
+
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      const data = await res.json();
+      const tracksList: Track[] = data.tracks || data.results || [];
+      setSearchResults(tracksList);
+      setSearchStructured({
+        query: data.query || trimmed,
+        topResult: data.topResult || null,
+        tracks: tracksList,
+        artists: data.artists || [],
+        playlists: data.playlists || [],
+      });
+    } catch (err) {
+      console.error("Search error:", err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleHistoryItemClick = (query: string) => {
+    executeSearch(query);
+  };
+
+  const playPlaylistItem = async (playlistItem: SearchPlaylistItem) => {
+    try {
+      const res = await fetch(`/api/playlist?id=${encodeURIComponent(playlistItem.id)}`);
+      const data = await res.json();
+      if (data.tracks && data.tracks.length > 0) {
+        setPlaylist(data.tracks);
+        setCurrentIndex(0);
+        loadAndPlayTrack(data.tracks[0], true);
+      } else {
+        executeSearch(playlistItem.title);
+      }
+    } catch {
+      executeSearch(playlistItem.title);
+    }
   };
 
   // Close search history dropdown on click outside
@@ -333,23 +378,8 @@ export default function App() {
     }
   };
 
-  const searchArtistSongs = async (artistName: string) => {
-    setTopSearchText(artistName);
-    setSearchQueryTitle(artistName);
-    addToSearchHistory(artistName);
-    setIsSearchFocused(false);
-    setIsSearchOpen(true);
-    setIsSearching(true);
-    setSearchResults([]);
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(artistName + " top songs")}`);
-      const data = await res.json();
-      setSearchResults(data.results || []);
-    } catch (err) {
-      console.error("Search error:", err);
-    } finally {
-      setIsSearching(false);
-    }
+  const searchArtistSongs = (artistName: string) => {
+    executeSearch(artistName);
   };
 
   // Preload initial track metadata & user data on mount
@@ -563,21 +593,7 @@ export default function App() {
       return;
     }
 
-    setSearchQueryTitle(topSearchText);
-    addToSearchHistory(topSearchText);
-    setIsSearchFocused(false);
-    setIsSearchOpen(true);
-    setIsSearching(true);
-    setSearchResults([]);
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(topSearchText)}`);
-      const data = await res.json();
-      setSearchResults(data.results || []);
-    } catch (err) {
-      console.error("Search error:", err);
-    } finally {
-      setIsSearching(false);
-    }
+    executeSearch(topSearchText);
   };
 
   // Paste action
@@ -982,9 +998,9 @@ export default function App() {
             /* ===================================================================== */
             /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
             /* ===================================================================== */
-            <div className="flex flex-col h-full min-h-0">
-              {/* Header with Back button and search title */}
-              <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-5 flex-shrink-0">
+            <div className="flex flex-col h-full min-h-0 overflow-y-auto pr-1 custom-scrollbar">
+              {/* Header with Back button, search title and result count */}
+              <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-4 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -992,6 +1008,7 @@ export default function App() {
                       setIsSearchOpen(false);
                       setTopSearchText("");
                       setSearchQueryTitle("");
+                      setActiveSearchTab("all");
                     }}
                     className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-pink-500/20 text-white/80 hover:text-white border border-white/10 transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
                   >
@@ -1009,64 +1026,528 @@ export default function App() {
                 )}
               </div>
 
-              {/* Body: Loading / Results Grid / Empty state */}
+              {/* Navigation Tabs: Tất cả / Nhạc / Nhạc sĩ / Playlist */}
+              <div className="flex items-center gap-2 mb-5 flex-wrap flex-shrink-0">
+                {[
+                  { key: "all", label: "Tất cả" },
+                  {
+                    key: "tracks",
+                    label: "Nhạc",
+                    count: searchStructured?.tracks?.length || searchResults.length,
+                  },
+                  {
+                    key: "artists",
+                    label: "Nhạc sĩ",
+                    count: searchStructured?.artists?.length || 0,
+                  },
+                  {
+                    key: "playlists",
+                    label: "Playlist",
+                    count: searchStructured?.playlists?.length || 0,
+                  },
+                ].map((tab) => {
+                  const isActive = activeSearchTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() =>
+                        setActiveSearchTab(tab.key as "all" | "tracks" | "artists" | "playlists")
+                      }
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                        isActive
+                          ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25 scale-[1.02]"
+                          : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      {typeof tab.count === "number" && tab.count > 0 && (
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                            isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
+                          }`}
+                        >
+                          {tab.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Body: Loading / Results Multi-tier Grid / Empty state */}
               {isSearching ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-pink-400" />
                   <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
                 </div>
-              ) : searchResults.length > 0 ? (
-                <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
-                  {searchResults.map((item) => {
-                    const isCurrentPlaying = currentTrack?.id === item.id;
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => playSearchResult(item)}
-                        className="w-full flex flex-col cursor-pointer group"
-                      >
-                        <div className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
-                          isCurrentPlaying
-                            ? "border-pink-500 shadow-pink-500/30"
-                            : "border-white/5 bg-purple-900/30"
-                        }`}>
-                          <img
-                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                            alt={item.title}
-                            onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
-                            }}
-                            className="w-full h-full object-cover"
-                          />
-                          {/* Play overlay on hover or active playing */}
-                          <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-                            isCurrentPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                          }`}>
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
-                              {isCurrentPlaying && isPlaying ? (
-                                <Pause className="w-5 h-5 text-white fill-current" />
-                              ) : (
-                                <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                              )}
+              ) : searchResults.length > 0 || (searchStructured && (searchStructured.artists.length > 0 || searchStructured.playlists.length > 0)) ? (
+                <div className="flex flex-col gap-6 pb-8">
+                  {/* ========================================================================= */}
+                  {/* TAB: TẤT CẢ                                                               */}
+                  {/* ========================================================================= */}
+                  {activeSearchTab === "all" && (
+                    <>
+                      {/* TẦNG 1: Hero Top Match Card (Kết quả khớp nhất / Bài hát phù hợp nhất) */}
+                      {(() => {
+                        const top =
+                          searchStructured?.topResult ||
+                          (searchResults.length > 0
+                            ? {
+                                id: searchResults[0].id,
+                                title: searchResults[0].title,
+                                author: searchResults[0].author,
+                                subtitle: `${searchResults[0].author}${
+                                  searchResults[0].duration > 0
+                                    ? " • " + formatTime(searchResults[0].duration)
+                                    : ""
+                                }`,
+                                duration: searchResults[0].duration,
+                                durationText:
+                                  searchResults[0].duration > 0
+                                    ? formatTime(searchResults[0].duration)
+                                    : "",
+                                thumbnail: searchResults[0].thumbnail,
+                                type: "song" as const,
+                              }
+                            : null);
+
+                        if (!top) return null;
+                        const isCurrentPlaying = currentTrack?.id === top.id;
+
+                        return (
+                          <div className="w-full">
+                            <div className="w-full rounded-[20px] p-4 bg-gradient-to-r from-[#2f1647]/95 via-[#1e1335]/95 to-[#140d24]/95 border border-pink-500/35 hover:border-pink-500/70 shadow-xl shadow-pink-500/10 transition-all flex items-center justify-between gap-4 group">
+                              <div className="flex items-center gap-4 min-w-0">
+                                {/* Large Artwork */}
+                                <div className="relative w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
+                                  <img
+                                    src={top.thumbnail || DEFAULT_TRACK_ART}
+                                    alt={top.title}
+                                    onError={(e) => {
+                                      e.currentTarget.src = DEFAULT_TRACK_ART;
+                                    }}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                  {top.duration > 0 && (
+                                    <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono text-white/90">
+                                      {top.durationText || formatTime(top.duration)}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Track Info */}
+                                <div className="min-w-0 flex flex-col justify-center">
+                                  <span className="text-[10px] uppercase font-bold tracking-widest text-pink-400 mb-1 flex items-center gap-1.5">
+                                    <Sparkles className="w-3 h-3 text-pink-400" />
+                                    BÀI HÁT PHÙ HỢP NHẤT
+                                  </span>
+                                  <h3 className="text-base sm:text-lg font-bold text-white tracking-wide truncate group-hover:text-pink-300 transition-colors">
+                                    {top.title}
+                                  </h3>
+                                  <p className="text-xs text-purple-200/70 truncate mt-1">
+                                    {top.author} •{" "}
+                                    {top.durationText ||
+                                      (top.duration > 0
+                                        ? formatTime(top.duration)
+                                        : "YouTube Music")}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Play Action Button */}
+                              <div className="flex items-center gap-3 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    playSearchResult({
+                                      id: top.id,
+                                      title: top.title,
+                                      author: top.author,
+                                      duration: top.duration,
+                                      thumbnail: top.thumbnail,
+                                    })
+                                  }
+                                  className="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                                >
+                                  {isCurrentPlaying && isPlaying ? (
+                                    <>
+                                      <Pause className="w-4 h-4 fill-current" />
+                                      <span>Tạm dừng</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                                      <span>Phát ngay</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           </div>
-                          {item.duration > 0 && (
-                            <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
-                              {formatTime(item.duration)}
-                            </span>
-                          )}
+                        );
+                      })()}
+
+                      {/* TẦNG 2: Nhạc sĩ (Row of Artists) */}
+                      {searchStructured?.artists && searchStructured.artists.length > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-[16px] font-bold text-white tracking-wide flex items-center gap-2">
+                              <span>Nhạc sĩ</span>
+                            </h3>
+                            {searchStructured.artists.length > 6 && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveSearchTab("artists")}
+                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              >
+                                Xem tất cả ({searchStructured.artists.length})
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-6 gap-3">
+                            {searchStructured.artists.slice(0, 6).map((artist) => (
+                              <div
+                                key={artist.id || artist.name}
+                                onClick={() => executeSearch(artist.name)}
+                                className="flex flex-col items-center p-2.5 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
+                              >
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-pink-500 group-hover:shadow-lg group-hover:shadow-pink-500/25 transition-all shadow-md bg-purple-950/60 mb-2">
+                                  <img
+                                    src={artist.thumbnail || DEFAULT_TRACK_ART}
+                                    alt={artist.name}
+                                    onError={(e) => {
+                                      e.currentTarget.src = DEFAULT_TRACK_ART;
+                                    }}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                </div>
+                                <p className="text-xs font-semibold text-white group-hover:text-pink-300 text-center truncate w-full">
+                                  {artist.name}
+                                </p>
+                                <p className="text-[10px] text-purple-200/50 text-center truncate w-full mt-0.5">
+                                  {artist.subscribers || "Nghệ sĩ"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <p className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
-                          isCurrentPlaying ? "text-pink-300 font-bold" : "text-white/90 group-hover:text-pink-300"
-                        }`}>
-                          {item.title}
-                        </p>
-                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                          {item.author || "Kahoii Music"}
-                        </p>
+                      )}
+
+                      {/* TẦNG 3: Playlist (Row of Playlists) */}
+                      {searchStructured?.playlists && searchStructured.playlists.length > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-[16px] font-bold text-white tracking-wide flex items-center gap-2">
+                              <span>Playlist</span>
+                            </h3>
+                            {searchStructured.playlists.length > 6 && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveSearchTab("playlists")}
+                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              >
+                                Xem tất cả ({searchStructured.playlists.length})
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-6 gap-4">
+                            {searchStructured.playlists.slice(0, 6).map((pl) => (
+                              <div
+                                key={pl.id || pl.title}
+                                onClick={() => playPlaylistItem(pl)}
+                                className="flex flex-col cursor-pointer group"
+                              >
+                                <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
+                                  <img
+                                    src={pl.thumbnail || DEFAULT_TRACK_ART}
+                                    alt={pl.title}
+                                    onError={(e) => {
+                                      e.currentTarget.src = DEFAULT_TRACK_ART;
+                                    }}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                      <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                    </div>
+                                  </div>
+                                  <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                    Playlist
+                                  </span>
+                                </div>
+                                <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5">
+                                  {pl.title}
+                                </p>
+                                <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                  {pl.author || "YouTube Music"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* TẦNG 4: Bài hát (Songs Grid) */}
+                      {searchResults.length > 0 && (
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-[16px] font-bold text-white tracking-wide flex items-center gap-2">
+                              <span>Bài hát</span>
+                            </h3>
+                            {searchResults.length > 12 && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveSearchTab("tracks")}
+                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              >
+                                Xem tất cả ({searchResults.length})
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
+                            {searchResults.slice(0, 12).map((item) => {
+                              const isCurrentPlaying = currentTrack?.id === item.id;
+                              return (
+                                <div
+                                  key={item.id}
+                                  onClick={() => playSearchResult(item)}
+                                  className="w-full flex flex-col cursor-pointer group"
+                                >
+                                  <div
+                                    className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
+                                      isCurrentPlaying
+                                        ? "border-pink-500 shadow-pink-500/30"
+                                        : "border-white/5 bg-purple-900/30"
+                                    }`}
+                                  >
+                                    <img
+                                      src={
+                                        item.thumbnail ||
+                                        `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
+                                      }
+                                      alt={item.title}
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                                      }}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div
+                                      className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+                                        isCurrentPlaying
+                                          ? "opacity-100"
+                                          : "opacity-0 group-hover:opacity-100"
+                                      }`}
+                                    >
+                                      <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                        {isCurrentPlaying && isPlaying ? (
+                                          <Pause className="w-5 h-5 text-white fill-current" />
+                                        ) : (
+                                          <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                        )}
+                                      </div>
+                                    </div>
+                                    {item.duration > 0 && (
+                                      <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                        {formatTime(item.duration)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p
+                                    className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
+                                      isCurrentPlaying
+                                        ? "text-pink-300 font-bold"
+                                        : "text-white/90 group-hover:text-pink-300"
+                                    }`}
+                                  >
+                                    {item.title}
+                                  </p>
+                                  <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                    {item.author || "Kahoii Music"}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* ========================================================================= */}
+                  {/* TAB: NHẠC (Tất cả bài hát)                                                */}
+                  {/* ========================================================================= */}
+                  {activeSearchTab === "tracks" && (
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-[18px] font-bold text-white tracking-wide">
+                          Tất cả bài hát ({searchResults.length})
+                        </h3>
                       </div>
-                    );
-                  })}
+                      <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
+                        {searchResults.map((item) => {
+                          const isCurrentPlaying = currentTrack?.id === item.id;
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => playSearchResult(item)}
+                              className="w-full flex flex-col cursor-pointer group"
+                            >
+                              <div
+                                className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
+                                  isCurrentPlaying
+                                    ? "border-pink-500 shadow-pink-500/30"
+                                    : "border-white/5 bg-purple-900/30"
+                                }`}
+                              >
+                                <img
+                                  src={
+                                    item.thumbnail ||
+                                    `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
+                                  }
+                                  alt={item.title}
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_TRACK_ART;
+                                  }}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div
+                                  className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+                                    isCurrentPlaying
+                                      ? "opacity-100"
+                                      : "opacity-0 group-hover:opacity-100"
+                                  }`}
+                                >
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                    {isCurrentPlaying && isPlaying ? (
+                                      <Pause className="w-5 h-5 text-white fill-current" />
+                                    ) : (
+                                      <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                    )}
+                                  </div>
+                                </div>
+                                {item.duration > 0 && (
+                                  <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                    {formatTime(item.duration)}
+                                  </span>
+                                )}
+                              </div>
+                              <p
+                                className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
+                                  isCurrentPlaying
+                                    ? "text-pink-300 font-bold"
+                                    : "text-white/90 group-hover:text-pink-300"
+                                }`}
+                              >
+                                {item.title}
+                              </p>
+                              <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                {item.author || "Kahoii Music"}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ========================================================================= */}
+                  {/* TAB: NHẠC SĨ (Tất cả nghệ sĩ)                                             */}
+                  {/* ========================================================================= */}
+                  {activeSearchTab === "artists" && (
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-[18px] font-bold text-white tracking-wide">
+                          Tất cả nhạc sĩ ({searchStructured?.artists?.length || 0})
+                        </h3>
+                      </div>
+                      {searchStructured?.artists && searchStructured.artists.length > 0 ? (
+                        <div className="grid grid-cols-6 gap-5">
+                          {searchStructured.artists.map((artist) => (
+                            <div
+                              key={artist.id || artist.name}
+                              onClick={() => executeSearch(artist.name)}
+                              className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
+                            >
+                              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-pink-500 group-hover:shadow-lg group-hover:shadow-pink-500/25 transition-all shadow-md bg-purple-950/60 mb-2">
+                                <img
+                                  src={artist.thumbnail || DEFAULT_TRACK_ART}
+                                  alt={artist.name}
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_TRACK_ART;
+                                  }}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                />
+                              </div>
+                              <p className="text-sm font-semibold text-white group-hover:text-pink-300 text-center truncate w-full">
+                                {artist.name}
+                              </p>
+                              <p className="text-xs text-purple-200/50 text-center truncate w-full mt-0.5">
+                                {artist.subscribers || "Nghệ sĩ"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-white/50 italic py-10 text-center">
+                          Không tìm thấy thông tin nhạc sĩ phù hợp.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ========================================================================= */}
+                  {/* TAB: PLAYLIST (Tất cả danh sách phát)                                      */}
+                  {/* ========================================================================= */}
+                  {activeSearchTab === "playlists" && (
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-[18px] font-bold text-white tracking-wide">
+                          Tất cả danh sách phát ({searchStructured?.playlists?.length || 0})
+                        </h3>
+                      </div>
+                      {searchStructured?.playlists && searchStructured.playlists.length > 0 ? (
+                        <div className="grid grid-cols-6 gap-4">
+                          {searchStructured.playlists.map((pl) => (
+                            <div
+                              key={pl.id || pl.title}
+                              onClick={() => playPlaylistItem(pl)}
+                              className="flex flex-col cursor-pointer group"
+                            >
+                              <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
+                                <img
+                                  src={pl.thumbnail || DEFAULT_TRACK_ART}
+                                  alt={pl.title}
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_TRACK_ART;
+                                  }}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                    <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                  </div>
+                                </div>
+                                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                  Playlist
+                                </span>
+                              </div>
+                              <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5">
+                                {pl.title}
+                              </p>
+                              <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                {pl.author || "YouTube Music"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-white/50 italic py-10 text-center">
+                          Không tìm thấy danh sách phát phù hợp.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
@@ -1077,6 +1558,7 @@ export default function App() {
                       setIsSearchOpen(false);
                       setTopSearchText("");
                       setSearchQueryTitle("");
+                      setActiveSearchTab("all");
                     }}
                     className="px-4 py-2 rounded-xl bg-white/10 hover:bg-pink-600 text-xs font-semibold text-white transition-all cursor-pointer"
                   >
