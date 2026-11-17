@@ -9,6 +9,7 @@ import {
   getUserSessionData,
   getUserAvatarBuffer,
   loginWithFirebase,
+  registerWithFirebase,
   logoutUser,
   getUserLibraryData,
   saveUserLibraryData,
@@ -188,6 +189,20 @@ app.post("/api/user/login", async (req, res) => {
     return res.json(session);
   } catch (err: any) {
     return res.status(401).json({ error: err.message || "Đăng nhập thất bại" });
+  }
+});
+
+// 7b. User Register with Firebase
+app.post("/api/user/register", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Vui lòng nhập đầy đủ email và mật khẩu" });
+  }
+  try {
+    const session = await registerWithFirebase(email, password);
+    return res.json(session);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || "Đăng ký thất bại" });
   }
 });
 

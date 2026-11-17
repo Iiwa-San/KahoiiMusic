@@ -229,6 +229,85 @@ export async function loginWithFirebase(email: string, pass: string): Promise<an
   return await getUserSessionData();
 }
 
+export async function registerWithFirebase(email: string, pass: string): Promise<any> {
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      password: pass,
+      returnSecureToken: true,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data.error?.message || "Đăng ký thất bại";
+    if (msg.includes("EMAIL_EXISTS")) {
+      throw new Error("Email này đã được sử dụng. Vui lòng đăng nhập hoặc chọn email khác.");
+    }
+    if (msg.includes("WEAK_PASSWORD")) {
+      throw new Error("Mật khẩu quá yếu (yêu cầu tối thiểu 6 ký tự).");
+    }
+    if (msg.includes("INVALID_EMAIL")) {
+      throw new Error("Định dạng email không hợp lệ.");
+    }
+    throw new Error(msg);
+  }
+
+  const expiresIn = Number(data.expiresIn) || 3600;
+  const session = {
+    localId: data.localId,
+    email: data.email,
+    idToken: data.idToken,
+    refreshToken: data.refreshToken,
+    expiryTimestamp: Math.floor(Date.now() / 1000) + expiresIn,
+    rememberMe: true,
+    avatarBase64: null as string | null,
+  };
+
+  // Create initial empty user document in Firestore
+  try {
+    const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${data.localId}?key=${FIREBASE_API_KEY}`;
+    await fetch(docUrl, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${data.idToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fields: {
+          email: { stringValue: data.email },
+          createdAt: { stringValue: new Date().toISOString() },
+          musicDataJson: {
+            stringValue: JSON.stringify({
+              favorites: [],
+              history: [],
+              playlists: [],
+              collections: [],
+            }),
+          },
+        },
+      }),
+    });
+  } catch (err) {
+    console.warn("Failed to initialize firestore doc for new user:", err);
+  }
+
+  // Save session
+  const savedDir = getSavedDir();
+  if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
+  fs.writeFileSync(path.join(savedDir, "user_session.json"), JSON.stringify(session, null, 2), "utf8");
+
+  // Save empty local files
+  fs.writeFileSync(path.join(savedDir, "favorites.json"), "[]", "utf8");
+  fs.writeFileSync(path.join(savedDir, "history.json"), "[]", "utf8");
+  fs.writeFileSync(path.join(savedDir, "playlists.json"), "[]", "utf8");
+
+  return await getUserSessionData();
+}
+
 export function logoutUser(): void {
   const savedDir = getSavedDir();
   const sessionPath = path.join(savedDir, "user_session.json");

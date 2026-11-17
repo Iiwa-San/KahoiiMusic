@@ -161,6 +161,46 @@ function compareSortItems(a: any, b: any): number {
 }
 
 
+// Smart Artist Extractor: prevents "Kahoii Music" placeholder and extracts real artist from title if needed
+function formatTrackArtist(title?: string, author?: string): string {
+  const cleanAuthor = (author || "").trim();
+  if (cleanAuthor && cleanAuthor !== "Kahoii Music" && cleanAuthor !== "YouTube Music") {
+    return cleanAuthor;
+  }
+
+  const rawTitle = (title || "").trim();
+  if (!rawTitle) return "Nghệ sĩ";
+
+  // Check " / ": e.g. "『ラベンダー』 / MIMI feat. saewool (Music Video)" -> "MIMI feat. saewool"
+  if (rawTitle.includes(" / ")) {
+    const parts = rawTitle.split(" / ");
+    if (parts.length >= 2) {
+      let candidate = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").replace(/\(.*?\)/g, "").trim();
+      if (candidate) return candidate;
+    }
+  }
+
+  // Check " - ": e.g. "Orangestar - 花筏 (feat. 夏背)" -> "Orangestar"
+  if (rawTitle.includes(" - ")) {
+    const parts = rawTitle.split(" - ");
+    if (parts.length >= 2) {
+      let candidate = parts[0].trim();
+      candidate = candidate.replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "").trim();
+      if (candidate) return candidate;
+    }
+  }
+
+  // Check " | ": e.g. "Title | Artist"
+  if (rawTitle.includes(" | ")) {
+    const parts = rawTitle.split(" | ");
+    if (parts.length >= 2) {
+      return parts[1].trim();
+    }
+  }
+
+  return cleanAuthor && cleanAuthor !== "Kahoii Music" ? cleanAuthor : "Nghệ sĩ";
+}
+
 interface UnifiedPlayOverlayProps {
   isCurrent: boolean;
   isPlaying: boolean;
@@ -215,6 +255,7 @@ const UnifiedPlayOverlay: React.FC<UnifiedPlayOverlayProps> = ({
           <Play className={`${iconSizes} fill-current text-white translate-x-0.5`} />
         )}
       </button>
+
     </div>
   );
 };
@@ -291,9 +332,13 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+  const [isRegistering, setIsRegistering] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [loginEmail, setLoginEmail] = useState<string>("");
   const [loginPassword, setLoginPassword] = useState<string>("");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState<string>("");
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
   const [avatarKey, setAvatarKey] = useState<number>(Date.now());
 
   // Top Search State & History
@@ -1125,8 +1170,12 @@ export default function App() {
     }
   };
 
-  const handleLogout = async () => {
-    if (!window.confirm("Bạn có chắc chắn muốn đăng xuất?")) return;
+  const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
     try {
       await fetch(`${API_BASE}/api/user/logout`, { method: "POST" });
       setUserSession({ isLoggedIn: false, user: null });
@@ -1138,8 +1187,56 @@ export default function App() {
       queueTracksRef.current = [];
       setPlaylist([]);
       playlistRef.current = [];
+      setIsAccountOpen(false);
+      showToast("Đã đăng xuất tài khoản thành công!", "info");
     } catch (err) {
       console.error("Logout error:", err);
+      showToast("Đăng xuất thất bại", "warning");
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setLoginError("Vui lòng điền đầy đủ email và mật khẩu.");
+      return;
+    }
+    if (loginPassword.length < 6) {
+      setLoginError("Mật khẩu phải có tối thiểu 6 ký tự.");
+      return;
+    }
+    if (loginPassword !== registerConfirmPassword) {
+      setLoginError("Mật khẩu xác nhận không khớp.");
+      return;
+    }
+
+    setIsRegistering(true);
+    setLoginError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/user/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Đăng ký thất bại");
+      }
+      setUserSession(data);
+      setAvatarKey(Date.now());
+      await fetchLibraryData();
+      setLoginPassword("");
+      setRegisterConfirmPassword("");
+      showToast("Đăng ký tài khoản thành công!", "success");
+      setSyncSuccessMsg("Đăng ký tài khoản mới thành công!");
+      setTimeout(() => {
+        setSyncSuccessMsg(null);
+        setIsAccountOpen(false);
+      }, 1500);
+    } catch (err: any) {
+      setLoginError(err.message || "Đăng ký thất bại");
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -1657,32 +1754,38 @@ export default function App() {
       if (favs.length > 0) {
         items = favs
           .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
-          .map((t) => ({
-            id: t.id,
-            title: t.title,
-            subtitle: t.duration && t.duration > 0
-              ? `${t.author || "Kahoii Music"} • ${formatTime(t.duration)}`
-              : (t.author || "Kahoii Music"),
-            thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
-            rawTrack: t,
-            rawPlaylist: null as any,
-          }));
+          .map((t) => {
+            const artistName = formatTrackArtist(t.title, t.author);
+            return {
+              id: t.id,
+              title: t.title,
+              subtitle: t.duration && t.duration > 0
+                ? `${artistName} • ${formatTime(t.duration)}`
+                : artistName,
+              thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+              rawTrack: t,
+              rawPlaylist: null as any,
+            };
+          });
       }
     } else if (activeLeftTab === "history") {
       const hist = libraryData.history;
       if (hist.length > 0) {
         items = hist
           .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
-          .map((t) => ({
-            id: t.id,
-            title: t.title,
-            subtitle: t.duration && t.duration > 0
-              ? `${t.author || "Kahoii Music"} • ${formatTime(t.duration)}`
-              : (t.author || "Kahoii Music"),
-            thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
-            rawTrack: t,
-            rawPlaylist: null as any,
-          }));
+          .map((t) => {
+            const artistName = formatTrackArtist(t.title, t.author);
+            return {
+              id: t.id,
+              title: t.title,
+              subtitle: t.duration && t.duration > 0
+                ? `${artistName} • ${formatTime(t.duration)}`
+                : artistName,
+              thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+              rawTrack: t,
+              rawPlaylist: null as any,
+            };
+          });
       }
     } else if (libraryData.playlists.length > 0) {
       items = libraryData.playlists
@@ -1850,7 +1953,7 @@ export default function App() {
             <button
               onClick={() => setIsAccountOpen(true)}
               title={`Tài khoản: ${userSession.user?.name || "Kahoii User"}`}
-              className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-[#f1f1f5] hover:bg-white text-black font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 group"
+              className="flex items-center gap-2 pl-1.5 pr-3.5 py-1 rounded-full theme-badge hover:theme-btn-primary hover:text-white text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 border theme-accent-border group"
             >
               <img
                 src={`${API_BASE}/api/user/avatar?t=${avatarKey}`}
@@ -1860,7 +1963,7 @@ export default function App() {
                 }}
                 className="w-6 h-6 rounded-full object-cover border border-white/20 shadow-sm"
               />
-              <span className="max-w-[70px] truncate text-black font-semibold">
+              <span className="max-w-[75px] truncate text-white/90 group-hover:text-white font-semibold">
                 {userSession.user?.name || "avatar"}
               </span>
             </button>
@@ -2015,7 +2118,15 @@ export default function App() {
                       key={item.id + idx}
                       onClick={() => {
                         if (item.rawTrack) {
-                          playTrackDirectly(item.rawTrack);
+                          if (activeLeftTab === "favorites") {
+                            const favList = libraryData.favorites;
+                            handlePlaySongItem(item.rawTrack, favList);
+                          } else if (activeLeftTab === "history") {
+                            const histList = libraryData.history;
+                            handlePlaySongItem(item.rawTrack, histList);
+                          } else {
+                            playTrackDirectly(item.rawTrack);
+                          }
                         } else if (item.rawPlaylist?.items?.length) {
                           const plTracks: Track[] = item.rawPlaylist.items.map((it: any) => ({
                             id: it.id || it.Id,
@@ -3483,7 +3594,7 @@ export default function App() {
                   {currentTrack.title}
                 </p>
                 <p className="text-[11px] text-white/70 truncate drop-shadow">
-                  {currentTrack.author || "Kahoii Music"}
+                  {formatTrackArtist(currentTrack.title, currentTrack.author)}
                 </p>
               </div>
             )}
@@ -4071,10 +4182,44 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              /* Login Form for Non-Logged-in State */
-              <form onSubmit={handleLogin} className="flex flex-col gap-3.5 mt-4">
+              /* Auth Form (Login or Register) */
+              <div className="flex flex-col gap-3.5 mt-3">
+                {/* Tabs to switch between Login and Register */}
+                <div className="flex items-center p-1 rounded-xl bg-white/5 border border-white/10 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("login");
+                      setLoginError(null);
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      authMode === "login"
+                        ? "theme-btn-primary text-white shadow-md"
+                        : "text-white/60 hover:text-white"
+                    }`}
+                  >
+                    Đăng nhập
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("register");
+                      setLoginError(null);
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      authMode === "register"
+                        ? "theme-btn-primary text-white shadow-md"
+                        : "text-white/60 hover:text-white"
+                    }`}
+                  >
+                    Đăng ký
+                  </button>
+                </div>
+
                 <p className="text-xs text-white/70">
-                  Đăng nhập tài khoản Kahoii Music để đồng bộ danh sách phát và bài hát yêu thích.
+                  {authMode === "login"
+                    ? "Đăng nhập tài khoản Kahoii Music để đồng bộ danh sách phát và bài hát yêu thích."
+                    : "Tạo tài khoản Kahoii Music mới để lưu trữ và đồng bộ kho nhạc của bạn lên Cloud."}
                 </p>
 
                 {loginError && (
@@ -4084,47 +4229,135 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-semibold text-white/80">Email</label>
-                  <input
-                    type="email"
-                    placeholder="nhap-email@gmail.com"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
-                  />
-                </div>
+                <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-semibold text-white/80">Email</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="nhap-email@gmail.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                    />
+                  </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-semibold text-white/80">Mật khẩu</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
-                  />
-                </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-semibold text-white/80">Mật khẩu</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                    />
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  className="w-full mt-2 py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {isLoggingIn ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin text-white" />
-                      <span>Đang xác thực...</span>
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="w-4 h-4" />
-                      <span>Đăng nhập</span>
-                    </>
+                  {authMode === "register" && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-semibold text-white/80">Nhập lại mật khẩu</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={registerConfirmPassword}
+                        onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                      />
+                    </div>
                   )}
-                </button>
-              </form>
+
+                  <button
+                    type="submit"
+                    disabled={isLoggingIn || isRegistering}
+                    className="w-full mt-2 py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLoggingIn || isRegistering ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>{authMode === "login" ? "Đang xác thực..." : "Đang tạo tài khoản..."}</span>
+                      </>
+                    ) : authMode === "login" ? (
+                      <>
+                        <LogIn className="w-4 h-4" />
+                        <span>Đăng nhập</span>
+                      </>
+                    ) : (
+                      <>
+                        <User className="w-4 h-4" />
+                        <span>Đăng ký tài khoản</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="text-center mt-1">
+                    {authMode === "login" ? (
+                      <p className="text-[11px] text-white/60">
+                        Chưa có tài khoản?{" "}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthMode("register");
+                            setLoginError(null);
+                          }}
+                          className="theme-accent-text hover:underline font-semibold cursor-pointer"
+                        >
+                          Đăng ký ngay
+                        </button>
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-white/60">
+                        Đã có tài khoản?{" "}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthMode("login");
+                            setLoginError(null);
+                          }}
+                          className="theme-accent-text hover:underline font-semibold cursor-pointer"
+                        >
+                          Đăng nhập ngay
+                        </button>
+                      </p>
+                    )}
+                  </div>
+                </form>
+              </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Custom Sleek Logout Confirmation Dialog */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[60] animate-fade-in">
+          <div className="figma-panel w-full max-w-[360px] flex flex-col p-6 relative shadow-2xl border theme-accent-border text-center gap-4">
+            <div className="w-12 h-12 rounded-full theme-badge border theme-accent-border flex items-center justify-center mx-auto text-red-400 shadow-lg">
+              <LogOut className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Xác nhận đăng xuất</h3>
+              <p className="text-xs text-white/70 mt-1.5 leading-relaxed">
+                Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Kahoii Music?
+              </p>
+            </div>
+            <div className="flex items-center gap-3 mt-1">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={confirmLogout}
+                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg transition-all cursor-pointer"
+              >
+                Đăng xuất
+              </button>
+            </div>
           </div>
         </div>
       )}
