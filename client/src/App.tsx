@@ -2101,15 +2101,17 @@ export default function App() {
         {/* COLUMN 2 (CENTER): Main Discovery Feed / Search View (~58% Width)        */}
         {/* ----------------------------------------------------------------------- */}
         <section
-          className="flex-1 h-full figma-panel flex flex-col justify-between min-h-0 overflow-y-auto"
-          style={{ padding: "26px 28px" }}
+          className="flex-1 h-full figma-panel flex flex-col min-h-0 overflow-hidden"
+          style={{ padding: "24px 28px" }}
         >
           {selectedArtist ? (
             /* ===================================================================== */
             /* ARTIST DETAIL VIEW (Session giữa lấy data của đúng artist đó)         */
             /* ===================================================================== */
-            <div className="flex flex-col h-full min-h-0 overflow-y-auto pr-1 custom-scrollbar">
-              {/* Back Bar */}
+            <div className="flex flex-col h-full min-h-0 overflow-hidden">
+              {/* FIXED ARTIST HEADER CLUSTER (Back Bar + Hero Banner + Tags) */}
+              <div className="flex-shrink-0">
+                {/* Back Bar */}
               <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-5 flex-shrink-0">
                 <button
                   type="button"
@@ -2205,50 +2207,52 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Tag Selection Bar (Sticky / Fixed at top when scrolling) */}
-              <div className="sticky top-0 z-30 py-3 mb-5 backdrop-blur-xl bg-[var(--theme-panel-bg)] border-b border-white/10 -mx-3 px-3 flex items-center gap-2 flex-wrap flex-shrink-0 shadow-lg">
-                {[
-                  { key: "all", label: "Tất cả", count: artistTracks.length + artistPlaylists.length },
-                  { key: "singles", label: "Nhạc Single / Bài hát", count: artistTracks.length },
-                  { key: "playlists", label: "Danh sách phát", count: artistPlaylists.length },
-                ].map((tab) => {
-                  const isActive = activeArtistTab === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => setActiveArtistTab(tab.key as any)}
-                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
-                        isActive
-                          ? "theme-badge-active scale-[1.02]"
-                          : "theme-badge hover:theme-accent-border"
-                      }`}
-                    >
-                      <span>{tab.label}</span>
-                      {typeof tab.count === "number" && tab.count > 0 && (
-                        <span
-                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                            isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
-                          }`}
-                        >
-                          {tab.count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+              {/* Tag Selection Bar (Fixed together in this header cluster) */}
+                <div className="py-2.5 mb-4 border-b border-white/10 flex items-center gap-2 flex-wrap flex-shrink-0">
+                  {[
+                    { key: "all", label: "Tất cả", count: artistTracks.length + artistPlaylists.length },
+                    { key: "singles", label: "Nhạc Single / Bài hát", count: artistTracks.length },
+                    { key: "playlists", label: "Danh sách phát", count: artistPlaylists.length },
+                  ].map((tab) => {
+                    const isActive = activeArtistTab === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setActiveArtistTab(tab.key as any)}
+                        className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                          isActive
+                            ? "theme-badge-active scale-[1.02]"
+                            : "theme-badge hover:theme-accent-border"
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        {typeof tab.count === "number" && tab.count > 0 && (
+                          <span
+                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                              isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
+                            }`}
+                          >
+                            {tab.count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Body Content */}
-              {isArtistLoading ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
-                  <p className="text-sm font-medium text-white/70">
-                    Đang tải dữ liệu của {selectedArtist.name}...
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-7 pb-8">
+              {/* SCROLLABLE BODY CONTENT (Singles & Playlists) */}
+              <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-8">
+                {isArtistLoading ? (
+                  <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
+                    <p className="text-sm font-medium text-white/70">
+                      Đang tải dữ liệu của {selectedArtist.name}...
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-7">
                   {/* Section Singles */}
                   {(activeArtistTab === "all" || activeArtistTab === "singles") && (
                     <div>
@@ -2396,12 +2400,15 @@ export default function App() {
                   )}
                 </div>
               )}
+              </div>
             </div>
           ) : isSearchOpen ? (
             /* ===================================================================== */
             /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
             /* ===================================================================== */
-            <div className="flex flex-col h-full min-h-0 overflow-y-auto pr-1 custom-scrollbar">
+            <div className="flex flex-col h-full min-h-0 overflow-hidden">
+              {/* FIXED SEARCH HEADER CLUSTER (Back Bar + Navigation Tabs + Top Match) */}
+              <div className="flex-shrink-0">
               {/* Header with Back button, search title and result count */}
               <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-4 flex-shrink-0">
                 <div className="flex items-center gap-3">
@@ -2429,8 +2436,8 @@ export default function App() {
                 )}
               </div>
 
-              {/* Navigation Tabs: Sticky / Fixed at top when scrolling */}
-              <div className="sticky top-0 z-30 py-3 mb-5 backdrop-blur-xl bg-[var(--theme-panel-bg)] border-b border-white/10 -mx-3 px-3 flex items-center gap-2 flex-wrap flex-shrink-0 shadow-lg">
+              {/* Navigation Tabs */}
+                <div className="py-2.5 mb-4 border-b border-white/10 flex items-center gap-2 flex-wrap flex-shrink-0">
                 {[
                   { key: "all", label: "Tất cả" },
                   {
@@ -2478,138 +2485,142 @@ export default function App() {
                 })}
               </div>
 
-              {/* Body: Loading / Results Multi-tier Grid / Empty state */}
-              {isSearching ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
-                  <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
-                </div>
-              ) : searchResults.length > 0 || (searchStructured && (searchStructured.artists.length > 0 || searchStructured.playlists.length > 0)) ? (
-                <div className="flex flex-col gap-6 pb-8">
-                  {/* ========================================================================= */}
-                  {/* TAB: TẤT CẢ                                                               */}
-                  {/* ========================================================================= */}
-                  {activeSearchTab === "all" && (
-                    <>
-                      {/* TẦNG 1: Hero Top Match Card (Kết quả khớp nhất / Bài hát phù hợp nhất) */}
-                      {(() => {
-                        const top =
-                          searchStructured?.topResult ||
-                          (searchResults.length > 0
-                            ? {
-                                id: searchResults[0].id,
-                                title: searchResults[0].title,
-                                author: searchResults[0].author,
-                                subtitle: `${searchResults[0].author}${
-                                  searchResults[0].duration > 0
-                                    ? " • " + formatTime(searchResults[0].duration)
-                                    : ""
-                                }`,
-                                duration: searchResults[0].duration,
-                                durationText:
-                                  searchResults[0].duration > 0
-                                    ? formatTime(searchResults[0].duration)
-                                    : "",
-                                thumbnail: searchResults[0].thumbnail,
-                                type: "song" as const,
-                              }
-                            : null);
+                {/* Fixed Top Match Card (Pinned at top together with header in "Tất cả" tab) */}
+                {!isSearching && activeSearchTab === "all" && (() => {
+                  const top =
+                    searchStructured?.topResult ||
+                    (searchResults.length > 0
+                      ? {
+                          id: searchResults[0].id,
+                          title: searchResults[0].title,
+                          author: searchResults[0].author,
+                          subtitle: `${searchResults[0].author}${
+                            searchResults[0].duration > 0
+                              ? " • " + formatTime(searchResults[0].duration)
+                              : ""
+                          }`,
+                          duration: searchResults[0].duration,
+                          durationText:
+                            searchResults[0].duration > 0
+                              ? formatTime(searchResults[0].duration)
+                              : "",
+                          thumbnail: searchResults[0].thumbnail,
+                          type: "song" as const,
+                        }
+                      : null);
 
-                        if (!top) return null;
-                        const isCurrentPlaying = currentTrack?.id === top.id;
+                  if (!top) return null;
+                  const isCurrentPlaying = currentTrack?.id === top.id;
 
-                        return (
-                          <div className="w-full">
-                            <div
-                              onClick={() => {
-                                if (isCurrentPlaying) {
-                                  togglePlayPause();
-                                } else {
-                                  playSearchResult({
-                                    id: top.id,
-                                    title: top.title,
-                                    author: top.author,
-                                    duration: top.duration,
-                                    thumbnail: top.thumbnail,
-                                  });
-                                }
+                  return (
+                    <div className="w-full mb-4 flex-shrink-0">
+                      <div
+                        onClick={() => {
+                          if (isCurrentPlaying) {
+                            togglePlayPause();
+                          } else {
+                            playSearchResult({
+                              id: top.id,
+                              title: top.title,
+                              author: top.author,
+                              duration: top.duration,
+                              thumbnail: top.thumbnail,
+                            });
+                          }
+                        }}
+                        className="w-full rounded-[20px] p-4 theme-card-bg shadow-xl transition-all flex items-center justify-between gap-4 group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-4 min-w-0">
+                          {/* Large Artwork */}
+                          <div className="relative w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
+                            <img
+                              src={top.thumbnail || DEFAULT_TRACK_ART}
+                              alt={top.title}
+                              onError={(e) => {
+                                e.currentTarget.src = DEFAULT_TRACK_ART;
                               }}
-                              className="w-full rounded-[20px] p-4 theme-card-bg shadow-xl transition-all flex items-center justify-between gap-4 group cursor-pointer"
-                            >
-                              <div className="flex items-center gap-4 min-w-0">
-                                {/* Large Artwork */}
-                                <div className="relative w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
-                                  <img
-                                    src={top.thumbnail || DEFAULT_TRACK_ART}
-                                    alt={top.title}
-                                    onError={(e) => {
-                                      e.currentTarget.src = DEFAULT_TRACK_ART;
-                                    }}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                  />
-                                  {top.duration > 0 && (
-                                    <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono text-white/90">
-                                      {top.durationText || formatTime(top.duration)}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Track Info */}
-                                <div className="min-w-0 flex flex-col justify-center">
-                                  <span className="text-[10px] uppercase font-bold tracking-widest theme-accent-text mb-1 flex items-center gap-1.5">
-                                    <Sparkles className="w-3 h-3 theme-accent-text" />
-                                    BÀI HÁT PHÙ HỢP NHẤT
-                                  </span>
-                                  <h3 className="text-base sm:text-lg font-bold text-white tracking-wide truncate group-hover:theme-accent-text transition-colors">
-                                    {top.title}
-                                  </h3>
-                                  <p className="text-xs text-purple-200/70 truncate mt-1">
-                                    {top.author} •{" "}
-                                    {top.durationText ||
-                                      (top.duration > 0
-                                        ? formatTime(top.duration)
-                                        : "YouTube Music")}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {/* Play Action Button */}
-                              <div className="flex items-center gap-3 flex-shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isCurrentPlaying) {
-                                      togglePlayPause();
-                                    } else {
-                                      playSearchResult({
-                                        id: top.id,
-                                        title: top.title,
-                                        author: top.author,
-                                        duration: top.duration,
-                                        thumbnail: top.thumbnail,
-                                      });
-                                    }
-                                  }}
-                                  className="px-5 py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                                >
-                                  {isCurrentPlaying && isPlaying ? (
-                                    <>
-                                      <Pause className="w-4 h-4 fill-current" />
-                                      <span>Tạm dừng</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Play className="w-4 h-4 fill-current translate-x-0.5" />
-                                      <span>Phát ngay</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            {top.duration > 0 && (
+                              <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono text-white/90">
+                                {top.durationText || formatTime(top.duration)}
+                              </span>
+                            )}
                           </div>
-                        );
-                      })()}
+
+                          {/* Track Info */}
+                          <div className="min-w-0 flex flex-col justify-center">
+                            <span className="text-[10px] uppercase font-bold tracking-widest theme-accent-text mb-1 flex items-center gap-1.5">
+                              <Sparkles className="w-3 h-3 theme-accent-text" />
+                              BÀI HÁT PHÙ HỢP NHẤT
+                            </span>
+                            <h3 className="text-base sm:text-lg font-bold text-white tracking-wide truncate group-hover:theme-accent-text transition-colors">
+                              {top.title}
+                            </h3>
+                            <p className="text-xs text-purple-200/70 truncate mt-1">
+                              {top.author} •{" "}
+                              {top.durationText ||
+                                (top.duration > 0
+                                  ? formatTime(top.duration)
+                                  : "YouTube Music")}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Play Action Button */}
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isCurrentPlaying) {
+                                togglePlayPause();
+                              } else {
+                                playSearchResult({
+                                  id: top.id,
+                                  title: top.title,
+                                  author: top.author,
+                                  duration: top.duration,
+                                  thumbnail: top.thumbnail,
+                                });
+                              }
+                            }}
+                            className="px-5 py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                          >
+                            {isCurrentPlaying && isPlaying ? (
+                              <>
+                                <Pause className="w-4 h-4 fill-current" />
+                                <span>Tạm dừng</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                                <span>Phát ngay</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* SCROLLABLE SEARCH BODY (Artists, Playlists, Tracks) */}
+              <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-8">
+                {isSearching ? (
+                  <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
+                    <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
+                  </div>
+                ) : searchResults.length > 0 || (searchStructured && (searchStructured.artists.length > 0 || searchStructured.playlists.length > 0)) ? (
+                  <div className="flex flex-col gap-6">
+                    {/* ========================================================================= */}
+                    {/* TAB: TẤT CẢ                                                               */}
+                    {/* ========================================================================= */}
+                    {activeSearchTab === "all" && (
+                      <>
+
 
                       {/* TẦNG 2: Nhạc sĩ (Row of Artists - Enlarged Items) */}
                       {searchStructured?.artists && searchStructured.artists.length > 0 && (
@@ -3009,12 +3020,13 @@ export default function App() {
                   </button>
                 </div>
               )}
+              </div>
             </div>
           ) : (
             /* ===================================================================== */
             /* DISCOVERY VIEW (Nhạc Trending, Mới Phát Hành, Nhạc Sĩ Nổi Bật, ...)   */
             /* ===================================================================== */
-            <div className="flex flex-col gap-8 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-6">
+            <div className="flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-6">
               {/* Section 1: Nhạc Trending */}
               <div>
                 <div className="flex items-center justify-between mb-3.5">
