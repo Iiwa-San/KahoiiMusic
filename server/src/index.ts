@@ -158,6 +158,119 @@ app.get("/api/proxy-audio", async (req, res) => {
   }
 });
 
+// 4b. Latest App Downloads (PC, Android, iOS, Extension - Always latest from GitHub)
+let downloadsCache: { data: any; expiry: number } | null = null;
+
+app.get("/api/downloads", async (req, res) => {
+  const now = Date.now();
+  if (downloadsCache && downloadsCache.expiry > now) {
+    return res.json(downloadsCache.data);
+  }
+
+  try {
+    const ghRes = await fetch("https://api.github.com/repos/Iiwa-San/KahoiiMusic/releases", {
+      headers: { "User-Agent": "KahoiiMusic-WebApp" },
+    });
+    if (!ghRes.ok) throw new Error("GitHub Releases fetch failed");
+    const releases = (await ghRes.json()) as any[];
+
+    const pcRelease = releases.find((r) => /^v\d+/i.test(r.tag_name));
+    const pcAsset = pcRelease?.assets?.find((a: any) => a.name.endsWith(".exe"));
+
+    const androidRelease = releases.find(
+      (r) => r.tag_name === "latest-android" || r.assets?.some((a: any) => a.name.endsWith(".apk"))
+    );
+    const androidAsset = androidRelease?.assets?.find((a: any) => a.name.endsWith(".apk"));
+
+    const iosRelease = releases.find(
+      (r) => r.tag_name === "latest-ios" || r.assets?.some((a: any) => a.name.endsWith(".ipa"))
+    );
+    const iosAsset = iosRelease?.assets?.find((a: any) => a.name.endsWith(".ipa"));
+
+    const extRelease = releases.find((r) =>
+      r.assets?.some((a: any) => a.name.toLowerCase().includes("extension") && a.name.endsWith(".zip"))
+    );
+    const extAsset = extRelease?.assets?.find(
+      (a: any) => a.name.toLowerCase().includes("extension") && a.name.endsWith(".zip")
+    );
+
+    const formatBytes = (bytes: number) => {
+      if (!bytes) return "";
+      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    };
+
+    const data = {
+      pc: {
+        version: pcRelease?.tag_name || "v1.0.34",
+        fileName: pcAsset?.name || "KahoiiMusic_Setup.exe",
+        downloadUrl:
+          pcAsset?.browser_download_url ||
+          "https://github.com/Iiwa-San/KahoiiMusic/releases/download/v1.0.34/KahoiiMusic_Setup_v1.0.34.exe",
+        size: pcAsset?.size ? formatBytes(pcAsset.size) : "24.2 MB",
+        updatedAt: pcRelease?.published_at || new Date().toISOString(),
+      },
+      android: {
+        version: "Bản mới nhất",
+        fileName: androidAsset?.name || "KahoiiMusic.apk",
+        downloadUrl:
+          androidAsset?.browser_download_url ||
+          "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
+        size: androidAsset?.size ? formatBytes(androidAsset.size) : "14.6 MB",
+        updatedAt: androidRelease?.published_at || new Date().toISOString(),
+      },
+      ios: {
+        version: "Bản mới nhất",
+        fileName: iosAsset?.name || "KahoiiMusic.ipa",
+        downloadUrl:
+          iosAsset?.browser_download_url ||
+          "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-ios/KahoiiMusic.ipa",
+        size: iosAsset?.size ? formatBytes(iosAsset.size) : "1.4 MB",
+        updatedAt: iosRelease?.published_at || new Date().toISOString(),
+      },
+      extension: {
+        version: "Bản mới nhất",
+        fileName: extAsset?.name || "Extension.zip",
+        downloadUrl:
+          extAsset?.browser_download_url ||
+          "https://github.com/Iiwa-San/KahoiiMusic/archive/refs/heads/Extension.zip",
+        size: extAsset?.size ? formatBytes(extAsset.size) : "Source ZIP",
+        updatedAt: extRelease?.published_at || new Date().toISOString(),
+      },
+    };
+
+    downloadsCache = { data, expiry: now + 5 * 60 * 1000 };
+    return res.json(data);
+  } catch (err: any) {
+    if (downloadsCache) return res.json(downloadsCache.data);
+    return res.json({
+      pc: {
+        version: "v1.0.34",
+        fileName: "KahoiiMusic_Setup_v1.0.34.exe",
+        downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/v1.0.34/KahoiiMusic_Setup_v1.0.34.exe",
+        size: "24.2 MB",
+      },
+      android: {
+        version: "Bản mới nhất",
+        fileName: "KahoiiMusic.apk",
+        downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
+        size: "14.6 MB",
+      },
+      ios: {
+        version: "Bản mới nhất",
+        fileName: "KahoiiMusic.ipa",
+        downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-ios/KahoiiMusic.ipa",
+        size: "1.4 MB",
+      },
+      extension: {
+        version: "Bản mới nhất",
+        fileName: "Extension.zip",
+        downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/archive/refs/heads/Extension.zip",
+        size: "Source ZIP",
+      },
+    });
+  }
+});
+
 // 5. User Session & Profile
 app.get("/api/user/session", async (req, res) => {
   try {

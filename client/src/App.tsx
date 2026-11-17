@@ -37,6 +37,11 @@ import {
   Download,
   Plus,
   Music,
+  Laptop,
+  Smartphone,
+  Tablet,
+  Puzzle,
+  ExternalLink,
 } from "lucide-react";
 import type {
   Track,
@@ -643,9 +648,126 @@ export default function App() {
         setIsCreatingPlaylist(false);
         setNewPlaylistName("");
       }
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutsideMenu);
     return () => document.removeEventListener("mousedown", handleClickOutsideMenu);
+  }, []);
+
+  // Multi-platform App Downloads (Auto-synced with latest GitHub releases)
+  const [showDownloadMenu, setShowDownloadMenu] = useState<boolean>(false);
+  const downloadMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const [downloadData, setDownloadData] = useState<{
+    pc: { version: string; fileName: string; downloadUrl: string; size?: string };
+    android: { version: string; fileName: string; downloadUrl: string; size?: string };
+    ios: { version: string; fileName: string; downloadUrl: string; size?: string };
+    extension: { version: string; fileName: string; downloadUrl: string; size?: string };
+  }>({
+    pc: {
+      version: "v1.0.34",
+      fileName: "KahoiiMusic_Setup_v1.0.34.exe",
+      downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/v1.0.34/KahoiiMusic_Setup_v1.0.34.exe",
+      size: "24.2 MB",
+    },
+    android: {
+      version: "Bản mới nhất",
+      fileName: "KahoiiMusic.apk",
+      downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
+      size: "14.6 MB",
+    },
+    ios: {
+      version: "Bản mới nhất",
+      fileName: "KahoiiMusic.ipa",
+      downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-ios/KahoiiMusic.ipa",
+      size: "1.4 MB",
+    },
+    extension: {
+      version: "Bản mới nhất",
+      fileName: "Extension.zip",
+      downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/archive/refs/heads/Extension.zip",
+      size: "Source ZIP",
+    },
+  });
+
+  useEffect(() => {
+    const fetchLatestDownloads = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/downloads`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.pc?.downloadUrl) {
+            setDownloadData(json);
+            return;
+          }
+        }
+        // Direct GitHub API fallback
+        const ghRes = await fetch("https://api.github.com/repos/Iiwa-San/KahoiiMusic/releases");
+        if (ghRes.ok) {
+          const releases = (await ghRes.json()) as any[];
+          const pcRelease = releases.find((r) => /^v\d+/i.test(r.tag_name));
+          const pcAsset = pcRelease?.assets?.find((a: any) => a.name.endsWith(".exe"));
+          const androidRelease = releases.find(
+            (r) => r.tag_name === "latest-android" || r.assets?.some((a: any) => a.name.endsWith(".apk"))
+          );
+          const androidAsset = androidRelease?.assets?.find((a: any) => a.name.endsWith(".apk"));
+          const iosRelease = releases.find(
+            (r) => r.tag_name === "latest-ios" || r.assets?.some((a: any) => a.name.endsWith(".ipa"))
+          );
+          const iosAsset = iosRelease?.assets?.find((a: any) => a.name.endsWith(".ipa"));
+          const extRelease = releases.find((r) =>
+            r.assets?.some((a: any) => a.name.toLowerCase().includes("extension") && a.name.endsWith(".zip"))
+          );
+          const extAsset = extRelease?.assets?.find(
+            (a: any) => a.name.toLowerCase().includes("extension") && a.name.endsWith(".zip")
+          );
+
+          const formatBytes = (bytes: number) => {
+            if (!bytes) return "";
+            return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+          };
+
+          setDownloadData({
+            pc: {
+              version: pcRelease?.tag_name || "v1.0.34",
+              fileName: pcAsset?.name || "KahoiiMusic_Setup.exe",
+              downloadUrl:
+                pcAsset?.browser_download_url ||
+                "https://github.com/Iiwa-San/KahoiiMusic/releases/download/v1.0.34/KahoiiMusic_Setup_v1.0.34.exe",
+              size: pcAsset?.size ? formatBytes(pcAsset.size) : "24.2 MB",
+            },
+            android: {
+              version: "Bản mới nhất",
+              fileName: androidAsset?.name || "KahoiiMusic.apk",
+              downloadUrl:
+                androidAsset?.browser_download_url ||
+                "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
+              size: androidAsset?.size ? formatBytes(androidAsset.size) : "14.6 MB",
+            },
+            ios: {
+              version: "Bản mới nhất",
+              fileName: iosAsset?.name || "KahoiiMusic.ipa",
+              downloadUrl:
+                iosAsset?.browser_download_url ||
+                "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-ios/KahoiiMusic.ipa",
+              size: iosAsset?.size ? formatBytes(iosAsset.size) : "1.4 MB",
+            },
+            extension: {
+              version: "Bản mới nhất",
+              fileName: extAsset?.name || "Extension.zip",
+              downloadUrl:
+                extAsset?.browser_download_url ||
+                "https://github.com/Iiwa-San/KahoiiMusic/archive/refs/heads/Extension.zip",
+              size: "Source ZIP",
+            },
+          });
+        }
+      } catch {}
+    };
+
+    fetchLatestDownloads();
   }, []);
 
   // Save library data to server & cloud (Authenticated per user)
@@ -2098,8 +2220,180 @@ export default function App() {
           )}
         </div>
 
-        {/* Right: User Avatar Pill Button (Real avatar from database) */}
-        <div className="flex justify-end flex-shrink-0">
+        {/* Right: Download Apps & User Avatar Pill Buttons */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Download App Button & Dropdown */}
+          <div className="relative" ref={downloadMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+              title="Tải ứng dụng Kahoii Music (PC, Extension, Android, iOS)"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer shadow-md border ${
+                showDownloadMenu
+                  ? "theme-badge-active scale-105"
+                  : "theme-badge hover:theme-btn-primary hover:text-white text-white/90 hover:scale-105 border-white/10"
+              }`}
+            >
+              <Download className="w-3.5 h-3.5 theme-accent-text" />
+              <span className="hidden sm:inline text-xs font-semibold">Tải ứng dụng</span>
+            </button>
+
+            {/* Download Dropdown Popover */}
+            {showDownloadMenu && (
+              <div className="absolute top-[44px] right-0 z-50 w-[310px] sm:w-[350px] theme-card-bg backdrop-blur-2xl rounded-2xl shadow-2xl p-3 border theme-accent-border animate-fade-in flex flex-col gap-2">
+                <div className="flex items-center justify-between px-1 pb-1.5 border-b border-white/10">
+                  <div>
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Download className="w-3.5 h-3.5 theme-accent-text" />
+                      <span>Tải ứng dụng Kahoii Music</span>
+                    </p>
+                    <p className="text-[10px] text-white/50">Tự động lấy bản mới nhất từ GitHub</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDownloadMenu(false)}
+                    className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* 4 Platforms List */}
+                <div className="flex flex-col gap-1.5">
+                  {/* 1. PC (Windows) */}
+                  <a
+                    href={downloadData.pc.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                        <Laptop className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                          <span>Windows PC</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-300 font-mono flex-shrink-0">
+                            {downloadData.pc.version}
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">
+                          {downloadData.pc.fileName} {downloadData.pc.size ? `• ${downloadData.pc.size}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
+                      <Download className="w-3.5 h-3.5" />
+                    </div>
+                  </a>
+
+                  {/* 2. Chrome Extension */}
+                  <a
+                    href={downloadData.extension.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                        <Puzzle className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                          <span>Extension</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono flex-shrink-0">
+                            {downloadData.extension.version}
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">
+                          Chrome, Edge, Cốc Cốc (.zip)
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
+                      <Download className="w-3.5 h-3.5" />
+                    </div>
+                  </a>
+
+                  {/* 3. Android */}
+                  <a
+                    href={downloadData.android.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                        <Smartphone className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                          <span>Android</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono flex-shrink-0">
+                            APK
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">
+                          Cài trực tiếp {downloadData.android.size ? `• ${downloadData.android.size}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
+                      <Download className="w-3.5 h-3.5" />
+                    </div>
+                  </a>
+
+                  {/* 4. iOS */}
+                  <a
+                    href={downloadData.ios.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                        <Tablet className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                          <span>iOS (iPhone/iPad)</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-mono flex-shrink-0">
+                            IPA
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">
+                          Sideloadly / AltStore / TrollStore
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
+                      <Download className="w-3.5 h-3.5" />
+                    </div>
+                  </a>
+                </div>
+
+                {/* Footer */}
+                <div className="pt-1.5 border-t border-white/10 flex items-center justify-between text-[10px] text-white/40 px-1">
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Tự động lấy bản mới nhất
+                  </span>
+                  <a
+                    href="https://github.com/Iiwa-San/KahoiiMusic/releases"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="theme-accent-text hover:underline flex items-center gap-0.5"
+                  >
+                    <span>Releases</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* User Avatar Pill Button (Real avatar from database) */}
           {userSession?.isLoggedIn ? (
             <button
               onClick={() => setIsAccountOpen(true)}
