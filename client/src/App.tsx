@@ -922,18 +922,23 @@ export default function App() {
           duration: Number(h.DurationSeconds ?? h.duration ?? h.durationSeconds ?? h.Duration ?? 0),
           thumbnail: `https://i.ytimg.com/vi/${h.id || h.Id}/mqdefault.jpg`,
         }));
-        const rawPlaylists = (data.playlists || data.collections || []).map((pl: any) => ({
-          id: pl.id || pl.Id || pl.Name || pl.name,
-          name: pl.name || pl.Name || "Danh sách phát",
-          created: pl.created || pl.CreatedAt,
-          items: (pl.items || pl.tracks || pl.Tracks || []).map((it: any) => ({
+        const rawPlaylists = (data.playlists || data.collections || []).map((pl: any) => {
+          const rawItems = pl.Items || pl.items || pl.Tracks || pl.tracks || [];
+          const mapped = rawItems.map((it: any) => ({
             id: it.id || it.Id,
             title: it.title || it.Title,
             author: it.author || it.Author || it.Artist || "",
             duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
-            thumbnail: `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
-          })),
-        }));
+            thumbnail: it.thumbnail || `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
+          }));
+          return {
+            id: pl.id || pl.Id || pl.Name || pl.name,
+            name: pl.name || pl.Name || "Danh sách phát",
+            created: pl.created || pl.CreatedAt,
+            items: mapped,
+            tracks: mapped,
+          };
+        });
         setLibraryData({
           favorites: mappedFavs,
           history: mappedHist,
@@ -1889,14 +1894,17 @@ export default function App() {
     } else if (libraryData.playlists.length > 0) {
       items = libraryData.playlists
         .filter((p) => !q || (p.name && p.name.toLowerCase().includes(q)))
-        .map((p, idx) => ({
-          id: p.id || `pl-${idx}`,
-          title: p.name || "Danh sách phát",
-          subtitle: `${p.items ? p.items.length : 0} bài hát`,
-          thumb: p.items?.[0] ? `https://i.ytimg.com/vi/${p.items[0].id}/mqdefault.jpg` : DEFAULT_TRACK_ART,
-          rawTrack: null as any,
-          rawPlaylist: p,
-        }));
+        .map((p, idx) => {
+          const list = p.items || p.tracks || [];
+          return {
+            id: p.id || `pl-${idx}`,
+            title: p.name || "Danh sách phát",
+            subtitle: `${list.length} bài hát`,
+            thumb: list[0]?.thumbnail || (list[0]?.id ? `https://i.ytimg.com/vi/${list[0].id}/mqdefault.jpg` : DEFAULT_TRACK_ART),
+            rawTrack: null as any,
+            rawPlaylist: p,
+          };
+        });
     }
 
     if (isLeftSorted && items.length > 0) {

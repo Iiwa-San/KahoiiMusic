@@ -506,16 +506,23 @@ export async function getUserLibraryData(clientToken?: string | null): Promise<a
               : Array.isArray(musicData.playlists)
               ? musicData.playlists
               : [];
-            const playlists = plSources.map((pl: any) => ({
-              id: pl.Id || pl.id || pl.Name || pl.name,
-              name: pl.Name || pl.name,
-              tracks: (pl.Tracks || pl.tracks || []).map((t: any) => ({
+            const playlists = plSources.map((pl: any) => {
+              const rawItems = pl.Items || pl.items || pl.Tracks || pl.tracks || [];
+              const mapped = rawItems.map((t: any) => ({
                 id: t.Id || t.id,
                 title: t.Title || t.title,
                 duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
                 author: t.Author || t.Artist || t.author || "",
-              })),
-            }));
+                thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
+              }));
+              return {
+                id: pl.Id || pl.id || pl.Name || pl.name,
+                name: pl.Name || pl.name,
+                created: pl.CreatedAt || pl.created,
+                items: mapped,
+                tracks: mapped,
+              };
+            });
 
             return { favorites, history, playlists };
           }
@@ -563,11 +570,25 @@ export async function saveUserLibraryData(
     const verified = await verifyFirebaseIdToken(clientToken);
     if (verified) {
       try {
+        const collections = playlists.map((pl: any) => ({
+          Id: pl.id || pl.Id,
+          Name: pl.name || pl.Name,
+          CreatedAt: pl.created || pl.CreatedAt || Date.now(),
+          Items: (pl.items || pl.tracks || []).map((t: any) => ({
+            Id: t.id || t.Id,
+            Title: t.title || t.Title,
+            Author: t.author || t.Author || t.Artist || "",
+            Artist: t.author || t.Author || t.Artist || "",
+            DurationSeconds: t.duration || t.DurationSeconds || 0,
+            Url: `https://www.youtube.com/watch?v=${t.id || t.Id}`,
+          })),
+        }));
+
         const musicDataJson = JSON.stringify({
           favorites,
           history,
           playlists,
-          collections: playlists,
+          collections,
         });
 
         const patchUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?updateMask.fieldPaths=musicDataJson&key=${FIREBASE_API_KEY}`;
