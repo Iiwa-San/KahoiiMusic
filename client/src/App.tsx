@@ -224,7 +224,18 @@ export default function App() {
           duration: h.duration || 180,
           thumbnail: `https://i.ytimg.com/vi/${h.id}/mqdefault.jpg`,
         }));
-        const rawPlaylists = data.playlists || [];
+        const rawPlaylists = (data.playlists || []).map((pl: any) => ({
+          id: pl.id || pl.Id,
+          name: pl.name || pl.Name || "Danh sách phát",
+          created: pl.created || pl.CreatedAt,
+          items: (pl.items || pl.Items || []).map((it: any) => ({
+            id: it.id || it.Id,
+            title: it.title || it.Title,
+            author: it.author || it.Author || it.Artist || "",
+            duration: it.duration || it.DurationSeconds || 0,
+            thumbnail: `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
+          })),
+        }));
         setLibraryData({
           favorites: mappedFavs,
           history: mappedHist,
@@ -238,13 +249,7 @@ export default function App() {
             : mappedFavs.length > 0
             ? mappedFavs
             : rawPlaylists[0]?.items?.length > 0
-            ? rawPlaylists[0].items.map((it: any) => ({
-                id: it.id,
-                title: it.title,
-                author: it.author || "",
-                duration: it.duration || 180,
-                thumbnail: `https://i.ytimg.com/vi/${it.id}/mqdefault.jpg`,
-              }))
+            ? rawPlaylists[0].items
             : [];
 
         if (initialTracks.length > 0) {

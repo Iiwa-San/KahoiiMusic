@@ -252,17 +252,51 @@ export async function syncCloudUserData(): Promise<any> {
   if (docData.fields?.musicDataJson?.stringValue) {
     try {
       const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
-      if (musicData.savedTracks && Array.isArray(musicData.savedTracks)) {
-        const mappedFavs = musicData.savedTracks.map((t: any) => ({
+
+      // Favorites directly from DB
+      const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
+        ? musicData.favorites
+        : Array.isArray(musicData.savedTracks)
+        ? musicData.savedTracks
+        : [];
+      const mappedFavs = favSources.map((t: any) => ({
+        id: t.Id || t.id,
+        title: t.Title || t.title,
+        duration: t.DurationSeconds || t.duration || 0,
+        author: t.Author || t.Artist || t.author || "",
+      }));
+      fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(mappedFavs, null, 2), "utf8");
+
+      // History directly from DB
+      if (Array.isArray(musicData.history) && musicData.history.length > 0) {
+        const mappedHist = musicData.history.map((t: any) => ({
           id: t.Id || t.id,
           title: t.Title || t.title,
           duration: t.DurationSeconds || t.duration || 0,
           author: t.Author || t.Artist || t.author || "",
         }));
-        fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(mappedFavs, null, 2), "utf8");
+        fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(mappedHist, null, 2), "utf8");
       }
-      if (musicData.playlists && Array.isArray(musicData.playlists) && musicData.playlists.length > 0) {
-        fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(musicData.playlists, null, 2), "utf8");
+
+      // Collections / Playlists directly from DB
+      const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
+        ? musicData.collections
+        : Array.isArray(musicData.playlists)
+        ? musicData.playlists
+        : [];
+      if (plSources.length > 0) {
+        const mappedPlaylists = plSources.map((pl: any) => ({
+          id: pl.Id || pl.id,
+          name: pl.Name || pl.name || "Danh sách phát",
+          created: pl.CreatedAt || pl.created,
+          items: (pl.Items || pl.items || []).map((t: any) => ({
+            id: t.Id || t.id,
+            title: t.Title || t.title,
+            duration: t.DurationSeconds || t.duration || 0,
+            author: t.Author || t.Artist || t.author || "",
+          })),
+        }));
+        fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(mappedPlaylists, null, 2), "utf8");
       }
     } catch (parseErr) {
       console.warn("Failed to parse musicDataJson:", parseErr);
@@ -272,8 +306,81 @@ export async function syncCloudUserData(): Promise<any> {
   return await getUserSessionData();
 }
 
-export function getUserLibraryData(): any {
+export async function getUserLibraryData(): Promise<any> {
   const savedDir = getSavedDir();
+  const sessionPath = path.join(savedDir, "user_session.json");
+  const session = readJsonClean(sessionPath);
+
+  // If user is logged in, try direct live fetch from Firestore Database
+  if (session && session.localId) {
+    try {
+      const token = await getValidIdToken(session);
+      if (token) {
+        const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${session.localId}?key=${FIREBASE_API_KEY}`;
+        const docRes = await fetch(docUrl, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (docRes.ok) {
+          const docData = await docRes.json();
+          if (docData.fields?.musicDataJson?.stringValue) {
+            const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
+
+            // Favorites directly from DB
+            const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
+              ? musicData.favorites
+              : Array.isArray(musicData.savedTracks)
+              ? musicData.savedTracks
+              : [];
+            const favorites = favSources.map((t: any) => ({
+              id: t.Id || t.id,
+              title: t.Title || t.title,
+              duration: t.DurationSeconds || t.duration || 0,
+              author: t.Author || t.Artist || t.author || "",
+            }));
+
+            // History directly from DB
+            const history = (musicData.history || []).map((t: any) => ({
+              id: t.Id || t.id,
+              title: t.Title || t.title,
+              duration: t.DurationSeconds || t.duration || 0,
+              author: t.Author || t.Artist || t.author || "",
+            }));
+
+            // Collections / Playlists directly from DB
+            const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
+              ? musicData.collections
+              : Array.isArray(musicData.playlists)
+              ? musicData.playlists
+              : [];
+            const playlists = plSources.map((pl: any) => ({
+              id: pl.Id || pl.id,
+              name: pl.Name || pl.name || "Danh sách phát",
+              created: pl.CreatedAt || pl.created,
+              items: (pl.Items || pl.items || []).map((t: any) => ({
+                id: t.Id || t.id,
+                title: t.Title || t.title,
+                duration: t.DurationSeconds || t.duration || 0,
+                author: t.Author || t.Artist || t.author || "",
+              })),
+            }));
+
+            // Update local disk cache
+            try {
+              fs.writeFileSync(path.join(savedDir, "favorites.json"), JSON.stringify(favorites, null, 2), "utf8");
+              fs.writeFileSync(path.join(savedDir, "history.json"), JSON.stringify(history, null, 2), "utf8");
+              fs.writeFileSync(path.join(savedDir, "playlists.json"), JSON.stringify(playlists, null, 2), "utf8");
+            } catch {}
+
+            return { favorites, history, playlists };
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[Direct Firestore DB Fetch Error, fallback to local]:", err);
+    }
+  }
+
+  // Fallback to local cache if offline or unauthenticated
   const favorites = readJsonClean(path.join(savedDir, "favorites.json")) || [];
   const history = readJsonClean(path.join(savedDir, "history.json")) || [];
   const playlists = readJsonClean(path.join(savedDir, "playlists.json")) || [];

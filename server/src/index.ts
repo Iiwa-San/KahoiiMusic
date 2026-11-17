@@ -183,10 +183,14 @@ app.post("/api/user/sync", async (req, res) => {
   }
 });
 
-// 9. User Library (Favorites, History, Playlists from DB/Local)
-app.get("/api/user/library", (req, res) => {
-  const data = getUserLibraryData();
-  return res.json(data);
+// 9. User Library (Favorites, History, Playlists directly from Firestore DB)
+app.get("/api/user/library", async (req, res) => {
+  try {
+    const data = await getUserLibraryData();
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Failed to fetch library" });
+  }
 });
 
 // Serve frontend dist in production
