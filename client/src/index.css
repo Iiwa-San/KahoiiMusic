@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+:root {
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  line-height: 1.4;
+  font-weight: 400;
+  color-scheme: dark;
+  color: #ffffff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Dynamic Theme Variables from KahoiiMusic Desktop */
+  --theme-bg-0: #200C4B;
+  --theme-bg-1: #341487;
+  --theme-bg-2: #B90F8C;
+  --theme-bg-3: #FA0091;
+  --theme-accent: #FA0091;
+  --theme-sec-accent: #B032DC;
+  --theme-panel-bg: rgba(45, 12, 85, 0.78);
+  --theme-panel-border: rgba(220, 20, 140, 0.35);
+  --theme-btn-gradient: linear-gradient(90deg, #990066 0%, #c20078 50%, #e6007e 100%);
+}
+
+html, body, #root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  user-select: none;
+  background: linear-gradient(180deg, var(--theme-bg-0) 0%, var(--theme-bg-1) 28%, var(--theme-bg-2) 70%, var(--theme-bg-3) 100%);
+  transition: background 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  color: #ffffff;
+}
+
+/* Exact Figma Panel Glass Card with dynamic tone & adaptive border */
+.figma-panel {
+  background-color: var(--theme-panel-bg);
+  border: 1.5px solid var(--theme-panel-border);
+  border-radius: 28px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  transition: background-color 1.2s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.8s ease, box-shadow 0.2s ease;
+  backdrop-filter: blur(20px);
+}
+
+.figma-panel:hover {
+  border-color: var(--theme-accent);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--theme-panel-border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-accent);
+}
+
+/* Active Queue Item Gradient Highlight (Dynamic Horizontal Beam) */
+.active-queue-beam {
+  background: var(--theme-btn-gradient);
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+  transition: background 0.8s ease;
+}
+
+/* Smooth horizontal scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Modal animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
