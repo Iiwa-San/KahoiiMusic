@@ -253,6 +253,8 @@ export default function App() {
   const [playlist, setPlaylist] = useState<Track[]>([]);
   const [queueTracks, setQueueTracks] = useState<Track[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
+  const currentTrackRef = useRef<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -267,6 +269,8 @@ export default function App() {
   const queueTracksRef = useRef<Track[]>([]);
   const currentIndexRef = useRef<number>(0);
   const shuffleHistoryRef = useRef<number[]>([]);
+  const isTransitioningRef = useRef<boolean>(false);
+  const handleTrackEndedRef = useRef<() => void>(() => {});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -507,6 +511,14 @@ export default function App() {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
+  useEffect(() => {
+    handleTrackEndedRef.current = handleTrackEnded;
+  });
+
   // Sorting state for Left Sidebar and Right Queue
   const [isLeftSorted, setIsLeftSorted] = useState<boolean>(false);
   const [isQueueSorted, setIsQueueSorted] = useState<boolean>(false);
@@ -722,8 +734,6 @@ export default function App() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const currentTrack = playlist[currentIndex] || null;
-
   // Apply theme CSS custom variables to document root for seamless 1.2s color transitions
   useEffect(() => {
     const root = document.documentElement;
@@ -882,13 +892,16 @@ export default function App() {
                 } else if (event.data === 2) {
                   setIsPlaying(false);
                 } else if (event.data === 0) {
-                  handleTrackEnded();
+                  handleTrackEndedRef.current();
                 } else if (event.data === 3) {
                   setIsLoading(true);
                 }
               },
               onError: () => {
                 setIsLoading(false);
+                setTimeout(() => {
+                  handleTrackEndedRef.current();
+                }, 1000);
               },
             },
           });
@@ -906,7 +919,7 @@ export default function App() {
     }
   }, []);
 
-  // Time Tracker ticker for YouTube Player
+  // Time Tracker ticker for YouTube Player with natural end detection fallback
   useEffect(() => {
     const timer = setInterval(() => {
       if (
@@ -919,6 +932,14 @@ export default function App() {
           const dur = ytPlayerRef.current.getDuration() || 0;
           if (ct > 0) setCurrentTime(ct);
           if (dur > 0 && Math.abs(dur - duration) > 1) setDuration(dur);
+
+          // Fallback: If video reaches within 0.5s of the end and stops or pauses, advance to next track
+          if (dur > 5 && ct >= dur - 0.5 && !isTransitioningRef.current) {
+            const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
+            if (playerState === 0 || playerState === 2) {
+              handleTrackEndedRef.current();
+            }
+          }
         } catch {}
       }
     }, 250);
@@ -994,6 +1015,13 @@ export default function App() {
       await fetch(`${API_BASE}/api/user/logout`, { method: "POST" });
       setUserSession({ isLoggedIn: false, user: null });
       setLibraryData({ favorites: [], history: [], playlists: [] });
+      pausePlayback();
+      setCurrentTrack(null);
+      currentTrackRef.current = null;
+      setQueueTracks([]);
+      queueTracksRef.current = [];
+      setPlaylist([]);
+      playlistRef.current = [];
     } catch (err) {
       console.error("Logout error:", err);
     }
@@ -1001,9 +1029,48 @@ export default function App() {
 
   const loadAndPlayTrack = async (track: Track, autoPlay = true) => {
     if (!track) return;
+    setCurrentTrack(track);
+    currentTrackRef.current = track;
     setIsLoading(true);
     setErrorMessage(null);
     setCurrentTime(0);
+
+    // If active player is already YouTube, transition track immediately with ZERO delay
+    if (
+      activePlayerType.current === "youtube" &&
+      ytPlayerRef.current &&
+      typeof ytPlayerRef.current.loadVideoById === "function"
+    ) {
+      try {
+        ytPlayerRef.current.loadVideoById({
+          videoId: track.id,
+          startSeconds: 0,
+        });
+        if (autoPlay) {
+          ytPlayerRef.current.playVideo();
+          setIsPlaying(true);
+        } else {
+          ytPlayerRef.current.pauseVideo();
+          setIsPlaying(false);
+        }
+        setErrorMessage(null);
+        setIsLoading(false);
+
+        // Fetch Lyrics in background without delaying playback
+        fetch(
+          `${API_BASE}/api/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+        )
+          .then((res) => (res.ok ? res.json() : null))
+          .then((lyricsData) => {
+            if (lyricsData) setLyrics(lyricsData);
+          })
+          .catch(() => {});
+
+        return;
+      } catch (ytErr) {
+        console.warn("YouTube instant transition warning:", ytErr);
+      }
+    }
 
     // Stop current audio and YouTube player
     if (audioRef.current) {
@@ -1021,7 +1088,7 @@ export default function App() {
     let streamPlayed = false;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s fast check
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s fast check
 
       const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
         signal: controller.signal,
@@ -1163,11 +1230,19 @@ export default function App() {
   };
 
   const handleTrackEnded = () => {
-    const mode = repeatModeRef.current;
-    const currentList = playlistRef.current.length > 0 ? playlistRef.current : queueTracksRef.current;
-    const curIdx = currentIndexRef.current;
+    if (isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 1200);
 
-    if (currentList.length === 0) return;
+    const mode = repeatModeRef.current;
+    const activeQueue = queueTracksRef.current.length > 0 ? queueTracksRef.current : playlistRef.current;
+    if (activeQueue.length === 0) return;
+
+    let curIdx = activeQueue.findIndex((t) => t.id === currentTrackRef.current?.id);
+    if (curIdx === -1) curIdx = currentIndexRef.current;
+    if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
 
     if (mode === "one") {
       // Loop current track at position 0
@@ -1190,80 +1265,90 @@ export default function App() {
     }
 
     if (mode === "shuffle") {
-      if (currentList.length <= 1) {
-        loadAndPlayTrack(currentList[0], true);
+      if (activeQueue.length <= 1) {
+        loadAndPlayTrack(activeQueue[0], true);
         return;
       }
-      let randIdx = Math.floor(Math.random() * currentList.length);
+      let randIdx = Math.floor(Math.random() * activeQueue.length);
       let attempts = 0;
-      while (randIdx === curIdx && attempts < 10) {
-        randIdx = Math.floor(Math.random() * currentList.length);
+      while (randIdx === curIdx && attempts < 15) {
+        randIdx = Math.floor(Math.random() * activeQueue.length);
         attempts++;
       }
       shuffleHistoryRef.current.push(curIdx);
       setCurrentIndex(randIdx);
-      loadAndPlayTrack(currentList[randIdx], true);
+      currentIndexRef.current = randIdx;
+      loadAndPlayTrack(activeQueue[randIdx], true);
       return;
     }
 
     if (mode === "off") {
-      if (curIdx >= currentList.length - 1) {
+      if (curIdx >= activeQueue.length - 1) {
         pausePlayback();
         showToast("Đã phát hết danh sách bài hát", "info");
         return;
       }
       const nextIdx = curIdx + 1;
       setCurrentIndex(nextIdx);
-      loadAndPlayTrack(currentList[nextIdx], true);
+      currentIndexRef.current = nextIdx;
+      loadAndPlayTrack(activeQueue[nextIdx], true);
       return;
     }
 
-    // Default: mode === "all"
-    const nextIdx = (curIdx + 1) % currentList.length;
+    // Default: mode === "all" (Sequential playback through the queue)
+    const nextIdx = (curIdx + 1) % activeQueue.length;
     setCurrentIndex(nextIdx);
-    loadAndPlayTrack(currentList[nextIdx], true);
+    currentIndexRef.current = nextIdx;
+    loadAndPlayTrack(activeQueue[nextIdx], true);
   };
 
   const handleNext = () => {
-    const currentList = playlist.length > 0 ? playlist : queueTracks;
-    if (currentList.length === 0) return;
+    const activeQueue = queueTracks.length > 0 ? queueTracks : playlist;
+    if (activeQueue.length === 0) return;
+
+    let curIdx = activeQueue.findIndex((t) => t.id === currentTrack?.id);
+    if (curIdx === -1) curIdx = currentIndex;
+    if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
 
     if (repeatModeRef.current === "shuffle") {
-      if (currentList.length <= 1) {
-        loadAndPlayTrack(currentList[0], true);
+      if (activeQueue.length <= 1) {
+        loadAndPlayTrack(activeQueue[0], true);
         return;
       }
-      let randIdx = Math.floor(Math.random() * currentList.length);
+      let randIdx = Math.floor(Math.random() * activeQueue.length);
       let attempts = 0;
-      while (randIdx === currentIndex && attempts < 10) {
-        randIdx = Math.floor(Math.random() * currentList.length);
+      while (randIdx === curIdx && attempts < 15) {
+        randIdx = Math.floor(Math.random() * activeQueue.length);
         attempts++;
       }
-      shuffleHistoryRef.current.push(currentIndex);
+      shuffleHistoryRef.current.push(curIdx);
       setCurrentIndex(randIdx);
-      loadAndPlayTrack(currentList[randIdx], true);
+      currentIndexRef.current = randIdx;
+      loadAndPlayTrack(activeQueue[randIdx], true);
       return;
     }
 
     if (repeatModeRef.current === "off") {
-      if (currentIndex + 1 < currentList.length) {
-        const nextIdx = currentIndex + 1;
+      if (curIdx + 1 < activeQueue.length) {
+        const nextIdx = curIdx + 1;
         setCurrentIndex(nextIdx);
-        loadAndPlayTrack(currentList[nextIdx], true);
+        currentIndexRef.current = nextIdx;
+        loadAndPlayTrack(activeQueue[nextIdx], true);
       } else {
         showToast("Đã đến cuối danh sách phát", "info");
       }
       return;
     }
 
-    const nextIdx = (currentIndex + 1) % currentList.length;
+    const nextIdx = (curIdx + 1) % activeQueue.length;
     setCurrentIndex(nextIdx);
-    loadAndPlayTrack(currentList[nextIdx], true);
+    currentIndexRef.current = nextIdx;
+    loadAndPlayTrack(activeQueue[nextIdx], true);
   };
 
   const handlePrev = () => {
-    const currentList = playlist.length > 0 ? playlist : queueTracks;
-    if (currentList.length === 0) return;
+    const activeQueue = queueTracks.length > 0 ? queueTracks : playlist;
+    if (activeQueue.length === 0) return;
 
     if (currentTime > 3) {
       if (
@@ -1279,16 +1364,22 @@ export default function App() {
       return;
     }
 
+    let curIdx = activeQueue.findIndex((t) => t.id === currentTrack?.id);
+    if (curIdx === -1) curIdx = currentIndex;
+    if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
+
     if (repeatModeRef.current === "shuffle" && shuffleHistoryRef.current.length > 0) {
       const prevIdx = shuffleHistoryRef.current.pop()!;
       setCurrentIndex(prevIdx);
-      loadAndPlayTrack(currentList[prevIdx], true);
+      currentIndexRef.current = prevIdx;
+      loadAndPlayTrack(activeQueue[prevIdx], true);
       return;
     }
 
-    const prevIdx = (currentIndex - 1 + currentList.length) % currentList.length;
+    const prevIdx = (curIdx - 1 + activeQueue.length) % activeQueue.length;
     setCurrentIndex(prevIdx);
-    loadAndPlayTrack(currentList[prevIdx], true);
+    currentIndexRef.current = prevIdx;
+    loadAndPlayTrack(activeQueue[prevIdx], true);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1360,26 +1451,51 @@ export default function App() {
   };
 
   const playSearchResult = (track: Track) => {
-    const updated = [track, ...playlist.filter((t) => t.id !== track.id)];
-    setPlaylist(updated);
-    setCurrentIndex(0);
-    // Keep search view open so user can continue viewing and listening without disruption
-    loadAndPlayTrack(track, true);
-    setQueueTracks((prev) => [track, ...prev.filter((t) => t.id !== track.id)]);
+    if (searchResults && searchResults.length > 0) {
+      setPlaylist(searchResults);
+      playlistRef.current = searchResults;
+      setQueueTracks(searchResults);
+      queueTracksRef.current = searchResults;
+      const idx = searchResults.findIndex((t) => t.id === track.id);
+      const playIdx = idx !== -1 ? idx : 0;
+      setCurrentIndex(playIdx);
+      currentIndexRef.current = playIdx;
+      loadAndPlayTrack(track, true);
+    } else {
+      const existingIdx = queueTracks.findIndex((t) => t.id === track.id);
+      if (existingIdx !== -1) {
+        setCurrentIndex(existingIdx);
+        currentIndexRef.current = existingIdx;
+        loadAndPlayTrack(track, true);
+      } else {
+        const updated = [track, ...queueTracks];
+        setQueueTracks(updated);
+        queueTracksRef.current = updated;
+        setPlaylist(updated);
+        playlistRef.current = updated;
+        setCurrentIndex(0);
+        currentIndexRef.current = 0;
+        loadAndPlayTrack(track, true);
+      }
+    }
   };
 
   const playTrackDirectly = (track: Track) => {
-    const existsIdx = playlist.findIndex((t) => t.id === track.id);
-    if (existsIdx >= 0) {
-      setCurrentIndex(existsIdx);
-      loadAndPlayTrack(playlist[existsIdx], true);
+    const existingIdx = queueTracks.findIndex((t) => t.id === track.id);
+    if (existingIdx !== -1) {
+      setCurrentIndex(existingIdx);
+      currentIndexRef.current = existingIdx;
+      loadAndPlayTrack(track, true);
     } else {
-      const updated = [track, ...playlist];
+      const updated = [track, ...queueTracks];
+      setQueueTracks(updated);
+      queueTracksRef.current = updated;
       setPlaylist(updated);
+      playlistRef.current = updated;
       setCurrentIndex(0);
+      currentIndexRef.current = 0;
       loadAndPlayTrack(track, true);
     }
-    setQueueTracks((prev) => [track, ...prev.filter((t) => t.id !== track.id)]);
   };
 
   // Filtered Left list based on active tab and query
@@ -1457,7 +1573,7 @@ export default function App() {
         ref={audioRef}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={() => setDuration(audioRef.current?.duration || currentTrack?.duration || 207)}
-        onEnded={handleTrackEnded}
+        onEnded={() => handleTrackEndedRef.current()}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       />
@@ -3201,13 +3317,9 @@ export default function App() {
                   <div
                     key={track.id + i}
                     onClick={() => {
-                      const plIdx = playlist.findIndex((t) => t.id === track.id);
-                      if (plIdx >= 0) {
-                        setCurrentIndex(plIdx);
-                        loadAndPlayTrack(playlist[plIdx], true);
-                      } else {
-                        playTrackDirectly(track);
-                      }
+                      setCurrentIndex(i);
+                      currentIndexRef.current = i;
+                      loadAndPlayTrack(track, true);
                     }}
                     className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group ${
                       isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
