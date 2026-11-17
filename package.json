@@ -1,0 +1,28 @@
+{
+  "name": "kahoiimusic-webapp",
+  "version": "1.0.0",
+  "description": "Kahoii Music Web Application - Cyberpunk Ad-Free Streaming Player",
+  "scripts": {
+    "build": "cd client && npm install && npm run build",
+    "build:all": "npm run build:client && npm run build:server",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"magenta,cyan\" \"npm run dev:server\" \"npm run dev:client\"",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build",
+    "start": "cd server && npm start"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "concurrently": "^8.2.2",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@distube/ytdl-core": "^5.2.1",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0"
+  }
+}
