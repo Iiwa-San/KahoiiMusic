@@ -4095,7 +4095,7 @@ export default function App() {
             {userSession?.isLoggedIn ? (
               <div className="flex flex-col gap-4 mt-4">
                 {/* User Info Header Card */}
-                <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-black/25 border border-white/10 backdrop-blur-md shadow-inner">
                   <div className="relative flex-shrink-0">
                     <img
                       src={`${API_BASE}/api/user/avatar?t=${avatarKey}`}
@@ -4106,7 +4106,7 @@ export default function App() {
                       className="w-14 h-14 rounded-full object-cover border-2 theme-accent-border shadow-lg shadow-black/40"
                     />
                     <div
-                      className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#1e053a]"
+                      className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[var(--theme-panel-bg)] shadow-sm"
                       title="Đang hoạt động"
                     />
                   </div>
@@ -4117,7 +4117,7 @@ export default function App() {
                       </h3>
                       <ShieldCheck className="w-4 h-4 theme-accent-text flex-shrink-0" />
                     </div>
-                    <p className="text-xs text-purple-200/70 truncate mt-0.5">
+                    <p className="text-xs text-white/70 truncate mt-0.5">
                       {userSession.user?.email || "danlanga26@gmail.com"}
                     </p>
                     <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full theme-badge">
@@ -4126,26 +4126,61 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* User Stats Grid (Real Database Counts) */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/20">
-                    <p className="text-lg font-bold theme-accent-text">
-                      {userSession.user?.stats?.favoritesCount ?? libraryData.favorites.length}
+                {/* User Stats Grid (Synced Live with Library & Dynamic Theme Palette) */}
+                <div className="grid grid-cols-3 gap-2.5 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveLeftTab("favorites");
+                      setIsAccountOpen(false);
+                    }}
+                    className="p-3 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                    title="Xem danh sách bài hát yêu thích"
+                  >
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
+                    <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                      {libraryData.favorites.length}
                     </p>
-                    <p className="text-[11px] text-white/70 mt-0.5">Yêu thích</p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/20">
-                    <p className="text-lg font-bold theme-accent-text">
-                      {userSession.user?.stats?.historyCount ?? libraryData.history.length}
+                    <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
+                      Yêu thích
                     </p>
-                    <p className="text-[11px] text-white/70 mt-0.5">Lịch sử</p>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/20">
-                    <p className="text-lg font-bold theme-accent-text">
-                      {userSession.user?.stats?.playlistsCount ?? libraryData.playlists.length}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveLeftTab("history");
+                      setIsAccountOpen(false);
+                    }}
+                    className="p-3 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                    title="Xem lịch sử phát nhạc"
+                  >
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
+                    <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                      {libraryData.history.length}
                     </p>
-                    <p className="text-[11px] text-white/70 mt-0.5">Playlists</p>
-                  </div>
+                    <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
+                      Lịch sử
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveLeftTab("library");
+                      setIsAccountOpen(false);
+                    }}
+                    className="p-3 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                    title="Xem danh sách phát cá nhân"
+                  >
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
+                    <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                      {libraryData.playlists.length}
+                    </p>
+                    <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
+                      Playlists
+                    </p>
+                  </button>
                 </div>
 
                 {/* Success Banner */}
