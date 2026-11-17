@@ -31,7 +31,9 @@ import {
   FolderPlus,
   FolderHeart,
   ListMusic,
-  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  Compass,
   Download,
   Plus,
   Music,
@@ -296,6 +298,13 @@ export default function App() {
   const handleTrackEndedRef = useRef<() => void>(() => {});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Mobile Navigation Tab: 'explore' (Center) | 'library' (Left Sidebar) | 'player' (Right Player)
+  const [mobileTab, setMobileTab] = useState<"explore" | "library" | "player">("explore");
+
+  // Playback Debounce Timer & Abort Controller (Prevents rapid track spam stutter)
+  const playDebounceTimerRef = useRef<any>(null);
+  const playAbortControllerRef = useRef<AbortController | null>(null);
 
   // Home Discovery Feed (Trending & New Releases)
   const [isHomeLoading, setIsHomeLoading] = useState<boolean>(true);
@@ -1334,116 +1343,45 @@ export default function App() {
     }
   };
 
-  const loadAndPlayTrack = async (track: Track, autoPlay = true) => {
+  const loadAndPlayTrack = async (track: Track, autoPlay = true, immediate = false) => {
     if (!track) return;
+
+    // Instant UI update: title, artwork, active queue beam update immediately with zero lag
     setCurrentTrack(track);
     currentTrackRef.current = track;
     setIsLoading(true);
     setErrorMessage(null);
     setCurrentTime(0);
 
-    // Record to history if user is logged in
-    if (userSession?.isLoggedIn) {
-      setLibraryData((prev) => {
-        const filtered = prev.history.filter((h) => h.id !== track.id);
-        const updated = [track, ...filtered].slice(0, 100);
-        persistLibraryData({ history: updated });
-        return { ...prev, history: updated };
-      });
+    // Cancel existing pending debounce timer
+    if (playDebounceTimerRef.current) {
+      clearTimeout(playDebounceTimerRef.current);
+      playDebounceTimerRef.current = null;
     }
 
-    // If active player is already YouTube, transition track immediately with ZERO delay
-    if (
-      activePlayerType.current === "youtube" &&
-      ytPlayerRef.current &&
-      typeof ytPlayerRef.current.loadVideoById === "function"
-    ) {
-      try {
-        ytPlayerRef.current.loadVideoById({
-          videoId: track.id,
-          startSeconds: 0,
+    // Cancel in-flight audio stream fetch
+    if (playAbortControllerRef.current) {
+      playAbortControllerRef.current.abort();
+      playAbortControllerRef.current = null;
+    }
+
+    const executePlayback = async () => {
+      // Record to history if user is logged in (only when actually played)
+      if (userSession?.isLoggedIn) {
+        setLibraryData((prev) => {
+          const filtered = prev.history.filter((h) => h.id !== track.id);
+          const updated = [track, ...filtered].slice(0, 100);
+          persistLibraryData({ history: updated });
+          return { ...prev, history: updated };
         });
-        if (autoPlay) {
-          ytPlayerRef.current.playVideo();
-          setIsPlaying(true);
-        } else {
-          ytPlayerRef.current.pauseVideo();
-          setIsPlaying(false);
-        }
-        setErrorMessage(null);
-        setIsLoading(false);
-
-        // Fetch Lyrics in background without delaying playback
-        fetch(
-          `${API_BASE}/api/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
-        )
-          .then((res) => (res.ok ? res.json() : null))
-          .then((lyricsData) => {
-            if (lyricsData) setLyrics(lyricsData);
-          })
-          .catch(() => {});
-
-        return;
-      } catch (ytErr) {
-        console.warn("YouTube instant transition warning:", ytErr);
       }
-    }
 
-    // Stop current audio and YouTube player
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-      } catch {}
-    }
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
-      try {
-        ytPlayerRef.current.stopVideo();
-      } catch {}
-    }
-
-    // Strategy 1: Attempt to resolve direct audio stream from server
-    let streamPlayed = false;
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s fast check
-
-      const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.streamUrl && audioRef.current) {
-          const playableUrl = data.streamUrl.includes("googlevideo.com")
-            ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
-            : data.streamUrl;
-
-          audioRef.current.src = playableUrl;
-          audioRef.current.load();
-          activePlayerType.current = "audio";
-          streamPlayed = true;
-
-          if (autoPlay) {
-            const playPromise = audioRef.current.play();
-            if (playPromise !== undefined) {
-              playPromise
-                .then(() => setIsPlaying(true))
-                .catch(() => setIsPlaying(false));
-            }
-          } else {
-            setIsPlaying(false);
-          }
-        }
-      }
-    } catch {
-      // Backend stream unavailable or blocked
-    }
-
-    // Strategy 2: Zero-failure YouTube Web Player fallback (plays 100% on Vercel)
-    if (!streamPlayed) {
-      activePlayerType.current = "youtube";
-      if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+      // If active player is already YouTube, transition track smoothly
+      if (
+        activePlayerType.current === "youtube" &&
+        ytPlayerRef.current &&
+        typeof ytPlayerRef.current.loadVideoById === "function"
+      ) {
         try {
           ytPlayerRef.current.loadVideoById({
             videoId: track.id,
@@ -1457,24 +1395,130 @@ export default function App() {
             setIsPlaying(false);
           }
           setErrorMessage(null);
+          setIsLoading(false);
+
+          // Fetch Lyrics in background without delaying playback
+          fetch(
+            `${API_BASE}/api/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+          )
+            .then((res) => (res.ok ? res.json() : null))
+            .then((lyricsData) => {
+              if (lyricsData) setLyrics(lyricsData);
+            })
+            .catch(() => {});
+
+          return;
         } catch (ytErr) {
-          console.warn("YouTube player fallback warning:", ytErr);
+          console.warn("YouTube instant transition warning:", ytErr);
         }
       }
-    }
 
-    // Fetch Lyrics in background
-    try {
-      const lyricsRes = await fetch(
-        `${API_BASE}/api/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
-      );
-      if (lyricsRes.ok) {
-        const lyricsData = await lyricsRes.json();
-        setLyrics(lyricsData);
+      // Stop current audio and YouTube player
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch {}
       }
-    } catch {}
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+        try {
+          ytPlayerRef.current.stopVideo();
+        } catch {}
+      }
 
-    setIsLoading(false);
+      // Strategy 1: Attempt to resolve direct audio stream from server
+      let streamPlayed = false;
+      try {
+        const controller = new AbortController();
+        playAbortControllerRef.current = controller;
+        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s fast check
+
+        const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.streamUrl && audioRef.current) {
+            const playableUrl = data.streamUrl.includes("googlevideo.com")
+              ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
+              : data.streamUrl;
+
+            audioRef.current.src = playableUrl;
+            audioRef.current.load();
+            activePlayerType.current = "audio";
+            streamPlayed = true;
+
+            if (autoPlay) {
+              const playPromise = audioRef.current.play();
+              if (playPromise !== undefined) {
+                playPromise
+                  .then(() => {
+                    setIsPlaying(true);
+                    setIsLoading(false);
+                  })
+                  .catch(() => {
+                    setIsPlaying(false);
+                    setIsLoading(false);
+                  });
+              }
+            } else {
+              setIsPlaying(false);
+              setIsLoading(false);
+            }
+          }
+        }
+      } catch {
+        // Backend stream unavailable or blocked
+      }
+
+      // Strategy 2: Zero-failure YouTube Web Player fallback (plays 100% on Vercel)
+      if (!streamPlayed) {
+        activePlayerType.current = "youtube";
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+          try {
+            ytPlayerRef.current.loadVideoById({
+              videoId: track.id,
+              startSeconds: 0,
+            });
+            if (autoPlay) {
+              ytPlayerRef.current.playVideo();
+              setIsPlaying(true);
+            } else {
+              ytPlayerRef.current.pauseVideo();
+              setIsPlaying(false);
+            }
+            setErrorMessage(null);
+            setIsLoading(false);
+          } catch (ytErr) {
+            console.warn("YouTube player fallback warning:", ytErr);
+            setIsLoading(false);
+          }
+        } else {
+          setIsLoading(false);
+        }
+      }
+
+      // Fetch Lyrics in background
+      try {
+        const lyricsRes = await fetch(
+          `${API_BASE}/api/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+        );
+        if (lyricsRes.ok) {
+          const lyricsData = await lyricsRes.json();
+          setLyrics(lyricsData);
+        }
+      } catch {}
+    };
+
+    if (immediate) {
+      executePlayback();
+    } else {
+      // 600ms debounce ensures rapid clicks/spam settle smoothly before playing sound
+      playDebounceTimerRef.current = setTimeout(() => {
+        executePlayback();
+      }, 600);
+    }
   };
 
   const handleTimeUpdate = () => {
@@ -1585,7 +1629,7 @@ export default function App() {
 
     if (mode === "shuffle") {
       if (activeQueue.length <= 1) {
-        loadAndPlayTrack(activeQueue[0], true);
+        loadAndPlayTrack(activeQueue[0], true, true);
         return;
       }
       let randIdx = Math.floor(Math.random() * activeQueue.length);
@@ -1597,7 +1641,7 @@ export default function App() {
       shuffleHistoryRef.current.push(curIdx);
       setCurrentIndex(randIdx);
       currentIndexRef.current = randIdx;
-      loadAndPlayTrack(activeQueue[randIdx], true);
+      loadAndPlayTrack(activeQueue[randIdx], true, true);
       return;
     }
 
@@ -1610,7 +1654,7 @@ export default function App() {
       const nextIdx = curIdx + 1;
       setCurrentIndex(nextIdx);
       currentIndexRef.current = nextIdx;
-      loadAndPlayTrack(activeQueue[nextIdx], true);
+      loadAndPlayTrack(activeQueue[nextIdx], true, true);
       return;
     }
 
@@ -1618,7 +1662,7 @@ export default function App() {
     const nextIdx = (curIdx + 1) % activeQueue.length;
     setCurrentIndex(nextIdx);
     currentIndexRef.current = nextIdx;
-    loadAndPlayTrack(activeQueue[nextIdx], true);
+    loadAndPlayTrack(activeQueue[nextIdx], true, true);
   };
 
   const handleNext = () => {
@@ -1931,7 +1975,7 @@ export default function App() {
   const recommendedTracksToDisplay = libraryData.favorites.slice(0, 12);
 
   return (
-    <div className="w-screen h-screen flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
+    <div className="w-screen h-screen h-[100dvh] flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
       <audio
         ref={audioRef}
         onTimeUpdate={handleTimeUpdate}
@@ -1958,24 +2002,24 @@ export default function App() {
       {/* ========================================================================= */}
       {/* 1. TOP BAR (Seamless & Centered matching Figma mockup)                     */}
       {/* ========================================================================= */}
-      <header className="h-[54px] w-full px-5 flex items-center justify-between flex-shrink-0 z-30">
+      <header className="h-[54px] w-full px-3 lg:px-5 flex items-center justify-between flex-shrink-0 z-30">
         {/* Left: App Logo & Brand Identity */}
-        <div className="w-[160px] flex items-center gap-2.5">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <img
             src="./logo_icon.png"
             alt="Kahoii Music"
             className="w-7 h-7 rounded-lg object-contain shadow-md shadow-black/40"
           />
-          <span className="font-extrabold text-sm tracking-wide bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
+          <span className="hidden sm:inline font-extrabold text-sm tracking-wide bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
             Kahoii Music
           </span>
         </div>
 
         {/* Center: Search Pill with Search History Suggestions Dropdown */}
-        <div ref={searchDropdownRef} className="relative flex-1 max-w-[580px]">
+        <div ref={searchDropdownRef} className="relative flex-1 max-w-[580px] mx-2 sm:mx-4">
           <form
             onSubmit={handleTopSearchSubmit}
-            className="w-full h-[36px] px-4 rounded-full theme-input-pill flex items-center gap-2.5 shadow-inner transition-all"
+            className="w-full h-[36px] px-3 sm:px-4 rounded-full theme-input-pill flex items-center gap-2 sm:gap-2.5 shadow-inner transition-all"
           >
             <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
             <input
@@ -1984,7 +2028,7 @@ export default function App() {
               value={topSearchText}
               onFocus={() => setIsSearchFocused(true)}
               onChange={(e) => setTopSearchText(e.target.value)}
-              className="flex-1 bg-transparent text-sm text-white placeholder-white/40 focus:outline-none"
+              className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none min-w-0"
             />
             {(topSearchText || isSearchOpen) && (
               <button
@@ -2005,7 +2049,7 @@ export default function App() {
               type="button"
               onClick={handlePasteClick}
               title="Dán từ Clipboard"
-              className="px-4 py-0.5 rounded-full bg-white/10 hover:theme-accent-bg hover:text-white border border-white/20 text-xs font-semibold text-white transition-all cursor-pointer flex items-center gap-1"
+              className="hidden sm:flex px-4 py-0.5 rounded-full bg-white/10 hover:theme-accent-bg hover:text-white border border-white/20 text-xs font-semibold text-white transition-all cursor-pointer items-center gap-1"
             >
               <ClipboardPaste className="w-3 h-3 text-white/80" />
               <span>Dán</span>
@@ -2055,12 +2099,12 @@ export default function App() {
         </div>
 
         {/* Right: User Avatar Pill Button (Real avatar from database) */}
-        <div className="w-[140px] flex justify-end">
+        <div className="flex justify-end flex-shrink-0">
           {userSession?.isLoggedIn ? (
             <button
               onClick={() => setIsAccountOpen(true)}
               title={`Tài khoản: ${userSession.user?.name || "Kahoii User"}`}
-              className="flex items-center gap-2 pl-1.5 pr-3.5 py-1 rounded-full theme-badge hover:theme-btn-primary hover:text-white text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 border theme-accent-border group"
+              className="flex items-center gap-1.5 p-1 sm:pl-1.5 sm:pr-3.5 sm:py-1 rounded-full theme-badge hover:theme-btn-primary hover:text-white text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 border theme-accent-border group"
             >
               <img
                 src={
@@ -2074,7 +2118,7 @@ export default function App() {
                 }}
                 className="w-6 h-6 rounded-full object-cover border border-white/20 shadow-sm"
               />
-              <span className="max-w-[75px] truncate text-white/90 group-hover:text-white font-semibold">
+              <span className="hidden sm:inline max-w-[75px] truncate text-white/90 group-hover:text-white font-semibold">
                 {userSession.user?.name || "avatar"}
               </span>
             </button>
@@ -2082,10 +2126,10 @@ export default function App() {
             <button
               onClick={() => setIsAccountOpen(true)}
               title="Đăng nhập"
-              className="px-3.5 py-1.5 rounded-full theme-btn-primary hover:opacity-90 text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
+              className="px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-full theme-btn-primary hover:opacity-90 text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
             >
               <User className="w-3.5 h-3.5" />
-              <span>Đăng nhập</span>
+              <span className="hidden sm:inline">Đăng nhập</span>
             </button>
           )}
         </div>
@@ -2128,13 +2172,14 @@ export default function App() {
       {/* ========================================================================= */}
       {/* 2. MAIN CANVAS (Exact Figma 3-Column Layout with Real Proportions)         */}
       {/* ========================================================================= */}
-      <main className="flex-1 w-full px-5 pb-5 pt-1 flex gap-4 overflow-hidden min-h-0">
+      <main className="flex-1 w-full px-2 sm:px-4 lg:px-5 pb-[76px] lg:pb-5 pt-1 flex gap-3 lg:gap-4 overflow-hidden min-h-0 relative">
         {/* ----------------------------------------------------------------------- */}
         {/* COLUMN 1 (LEFT): Sidebar / Library Panel (~19% Width)                   */}
         {/* ----------------------------------------------------------------------- */}
         <aside
-          className="w-[290px] xl:w-[320px] flex-shrink-0 figma-panel flex flex-col min-h-0 overflow-hidden"
-          style={{ padding: "30px 18px 22px 18px" }}
+          className={`${
+            mobileTab === "library" ? "flex w-full" : "hidden"
+          } lg:flex lg:w-[290px] xl:w-[320px] flex-shrink-0 figma-panel flex-col min-h-0 overflow-hidden p-4 sm:p-5 lg:px-[18px] lg:pt-[30px] lg:pb-[22px]`}
         >
           {/* Top 3 Tabs Row: Silky Smooth Sliding Indicator Animation */}
           <div className="relative grid grid-cols-3 gap-2.5" style={{ marginBottom: "20px" }}>
@@ -2323,8 +2368,9 @@ export default function App() {
         {/* COLUMN 2 (CENTER): Main Discovery Feed / Search View (~58% Width)        */}
         {/* ----------------------------------------------------------------------- */}
         <section
-          className="flex-1 h-full figma-panel flex flex-col min-h-0 overflow-hidden"
-          style={{ padding: "24px 28px" }}
+          className={`${
+            mobileTab === "explore" ? "flex w-full" : "hidden"
+          } lg:flex flex-1 h-full figma-panel flex-col min-h-0 overflow-hidden p-3.5 sm:p-5 lg:p-7`}
         >
           {selectedArtist ? (
             /* ===================================================================== */
@@ -2915,7 +2961,7 @@ export default function App() {
                               Xem tất cả ({searchStructured.playlists.length})
                             </button>
                           </div>
-                          <div className="grid grid-cols-6 gap-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                             {searchStructured.playlists.slice(0, 6).map((pl) => (
                               <div
                                 key={pl.id || pl.title}
@@ -2971,7 +3017,7 @@ export default function App() {
                               Xem tất cả ({searchResults.length})
                             </button>
                           </div>
-                          <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
                             {searchResults.slice(0, 12).map((item) => {
                               const isCurrentPlaying = currentTrack?.id === item.id;
                               return (
@@ -3052,7 +3098,7 @@ export default function App() {
                           Tất cả bài hát ({searchResults.length})
                         </h3>
                       </div>
-                      <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
                         {searchResults.map((item) => {
                           const isCurrentPlaying = currentTrack?.id === item.id;
                           return (
@@ -3182,7 +3228,7 @@ export default function App() {
                         </h3>
                       </div>
                       {searchStructured?.playlists && searchStructured.playlists.length > 0 ? (
-                        <div className="grid grid-cols-6 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                           {searchStructured.playlists.map((pl) => (
                             <div
                               key={pl.id || pl.title}
@@ -3660,43 +3706,60 @@ export default function App() {
         {/* COLUMN 3 (RIGHT): Now Playing & Queue Player (~23% Width)               */}
         {/* ----------------------------------------------------------------------- */}
         <aside
-          className="w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex flex-col min-h-0 overflow-hidden"
-          style={{ padding: "26px 18px 20px 18px" }}
+          className={`${
+            mobileTab === "player" ? "flex w-full" : "hidden"
+          } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-4 sm:p-5 lg:px-[18px] lg:pt-[26px] lg:pb-[20px]`}
         >
+          {/* Mobile Collapse / Back Header */}
+          <div className="lg:hidden flex items-center justify-between pb-2 mb-2 border-b border-white/10 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setMobileTab("explore")}
+              className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white cursor-pointer"
+            >
+              <ChevronDown className="w-4 h-4" />
+              <span>Thu nhỏ trình phát</span>
+            </button>
+            <span className="text-[11px] font-bold theme-accent-text uppercase tracking-wider">Đang phát</span>
+          </div>
+
           {/* Top Part: Now Playing Artwork Card with Dynamic Artwork & Glow */}
           <div
-            className="w-full aspect-square rounded-[22px] overflow-hidden relative shadow-2xl bg-[#1b0833] flex-shrink-0 group"
+            className="w-full aspect-square rounded-[22px] relative shadow-2xl bg-[#1b0833] flex-shrink-0 group max-w-[340px] mx-auto lg:max-w-none"
             style={{ marginBottom: "18px" }}
           >
-            {/* Real Dynamic Artwork or Idle Standby Display */}
-            {!currentTrack ? (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden select-none">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.15)_0%,transparent_70%)]" />
-                <div className="w-16 h-16 rounded-full theme-badge flex items-center justify-center theme-accent-text mb-2.5 p-3 overflow-hidden shadow-md">
-                  <img src="./logo_icon.png" alt="Kahoii Music" className="w-full h-full object-contain drop-shadow" />
+            {/* Clamped container for artwork & gradient so popups can overflow cleanly */}
+            <div className="absolute inset-0 rounded-[22px] overflow-hidden pointer-events-none">
+              {/* Real Dynamic Artwork or Idle Standby Display */}
+              {!currentTrack ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden select-none">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.15)_0%,transparent_70%)]" />
+                  <div className="w-16 h-16 rounded-full theme-badge flex items-center justify-center theme-accent-text mb-2.5 p-3 overflow-hidden shadow-md">
+                    <img src="./logo_icon.png" alt="Kahoii Music" className="w-full h-full object-contain drop-shadow" />
+                  </div>
+                  <p className="text-xs font-bold text-white tracking-wide">Kahoii Music</p>
+                  <p className="text-[10.5px] text-white/50 mt-0.5">Sẵn sàng phát nhạc</p>
                 </div>
-                <p className="text-xs font-bold text-white tracking-wide">Kahoii Music</p>
-                <p className="text-[10.5px] text-white/50 mt-0.5">Sẵn sàng phát nhạc</p>
-              </div>
-            ) : (
-              <img
-                src={
-                  currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                    ? (currentTrack.thumbnail.includes("i.ytimg.com")
-                        ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                        : currentTrack.thumbnail)
-                    : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
-                }
-                alt={currentTrack.title || "Track Artwork"}
-                onError={(e) => {
-                  e.currentTarget.src = DEFAULT_TRACK_ART;
-                }}
-                className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
-              />
-            )}
+              ) : (
+                <img
+                  src={
+                    currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+                      ? (currentTrack.thumbnail.includes("i.ytimg.com")
+                          ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+                          : currentTrack.thumbnail)
+                      : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
+                  }
+                  alt={currentTrack.title || "Track Artwork"}
+                  onError={(e) => {
+                    e.currentTarget.src = DEFAULT_TRACK_ART;
+                  }}
+                  className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+                />
+              )}
 
-            {/* Dark gradient fade over lower half to mask controls & provide high contrast */}
-            <div className="absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
+              {/* Dark gradient fade over lower half to mask controls & provide high contrast */}
+              <div className="absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
+            </div>
 
             {/* Track Title and Artist floating gently over the gradient (only rendered when track is active) */}
             {currentTrack && (
@@ -3757,7 +3820,7 @@ export default function App() {
                         {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
                           <Check className="w-3.5 h-3.5 text-emerald-400" />
                         )}
-                        <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+                        <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
                       </div>
                     </button>
 
@@ -3778,10 +3841,18 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Popup 2 (Submenu cạnh bên - side-by-side) */}
+                {/* Popup 2 (Submenu mở sang bên trái trên Desktop, và responsive trên Mobile) */}
                 {showPlayerMenu && showLibrarySubmenu && currentTrack && (
-                  <div className="absolute top-9 left-[185px] z-40 theme-card-bg backdrop-blur-xl rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in">
+                  <div className="absolute top-9 left-0 lg:left-auto lg:right-[calc(100%+8px)] z-50 theme-card-bg backdrop-blur-xl rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
                     <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
+                      <button
+                        type="button"
+                        onClick={() => setShowLibrarySubmenu(false)}
+                        className="lg:hidden flex items-center gap-1 text-[10px] text-white/60 hover:text-white cursor-pointer mr-1"
+                      >
+                        <ChevronLeft className="w-3 h-3" />
+                        <span>Quay lại</span>
+                      </button>
                       <span>Thêm vào playlist</span>
                     </div>
 
@@ -4177,11 +4248,131 @@ export default function App() {
       </main>
 
       {/* ========================================================================= */}
+      {/* MOBILE MINI-PLAYER BAR (Floating above bottom nav when not in 'player' tab)*/}
+      {/* ========================================================================= */}
+      {currentTrack && mobileTab !== "player" && (
+        <div
+          onClick={() => setMobileTab("player")}
+          className="lg:hidden fixed bottom-[62px] left-2.5 right-2.5 z-40 bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border theme-accent-border rounded-2xl p-2 flex items-center gap-2.5 shadow-2xl cursor-pointer animate-fade-in"
+        >
+          <img
+            src={
+              currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+                ? (currentTrack.thumbnail.includes("i.ytimg.com")
+                    ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+                    : currentTrack.thumbnail)
+                : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
+            }
+            alt=""
+            onError={(e) => {
+              e.currentTarget.src = DEFAULT_TRACK_ART;
+            }}
+            className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md"
+          />
+          <div className="flex-1 min-w-0 pr-1">
+            <p className="text-xs font-bold text-white truncate drop-shadow-sm">{currentTrack.title}</p>
+            <p className="text-[10px] text-white/60 truncate">{formatTrackArtist(currentTrack.title, currentTrack.author)}</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={toggleCurrentFavorite}
+              className="p-1.5 text-white/70 hover:text-white cursor-pointer"
+              title="Yêu thích"
+            >
+              <Heart
+                className={`w-4 h-4 ${
+                  userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                    ? "fill-red-500 text-red-500"
+                    : "text-white/60"
+                }`}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={togglePlayPause}
+              className="w-8 h-8 rounded-full theme-btn-primary flex items-center justify-center text-white shadow-md cursor-pointer hover:scale-105 active:scale-95 transition-all"
+              title={isPlaying ? "Tạm dừng" : "Phát"}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+              ) : isPlaying ? (
+                <Pause className="w-4 h-4 fill-current" />
+              ) : (
+                <Play className="w-4 h-4 fill-current translate-x-0.5" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleNext}
+              className="p-1.5 text-white/70 hover:text-white cursor-pointer"
+              title="Bài tiếp theo"
+            >
+              <SkipForward className="w-4 h-4 fill-current" />
+            </button>
+          </div>
+          {/* Micro progress line at the bottom */}
+          <div className="absolute bottom-0 left-3 right-3 h-[2px] bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full"
+              style={{
+                width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                background: "var(--theme-btn-gradient)",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MOBILE BOTTOM NAVIGATION BAR (lg:hidden)                                  */}
+      {/* ========================================================================= */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-[56px] bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border-t border-white/10 z-40 flex items-center justify-around px-2 shadow-2xl">
+        <button
+          type="button"
+          onClick={() => setMobileTab("explore")}
+          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${
+            mobileTab === "explore" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
+          }`}
+        >
+          <Compass className="w-5 h-5" />
+          <span className="text-[10px]">Khám phá</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileTab("library")}
+          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${
+            mobileTab === "library" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
+          }`}
+        >
+          <FolderHeart className="w-5 h-5" />
+          <span className="text-[10px]">Thư viện</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileTab("player")}
+          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer relative ${
+            mobileTab === "player" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
+          }`}
+        >
+          <div className="relative">
+            <Music className="w-5 h-5" />
+            {isPlaying && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </div>
+          <span className="text-[10px]">Đang phát</span>
+        </button>
+      </nav>
+
+      {/* ========================================================================= */}
       {/* 3. USER PROFILE MODAL (Clicked from "avatar" button)                      */}
       {/* ========================================================================= */}
       {isAccountOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="w-full max-w-[430px] flex flex-col p-6 rounded-[28px] relative shadow-2xl border theme-accent-border overflow-hidden backdrop-blur-2xl bg-[var(--theme-panel-bg)]/90 transition-all duration-300">
+          <div className="w-full max-w-[430px] flex flex-col p-6 rounded-[28px] relative shadow-2xl border theme-accent-border overflow-hidden backdrop-blur-2xl bg-[var(--theme-panel-bg)]/90 transition-all duration-300 max-h-[90vh] overflow-y-auto">
             {/* Ambient dynamic glowing orbs */}
             <div className="absolute -top-16 -right-16 w-52 h-52 rounded-full blur-3xl opacity-35 pointer-events-none theme-accent-bg" />
             <div className="absolute -bottom-16 -left-16 w-52 h-52 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
