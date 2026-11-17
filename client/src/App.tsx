@@ -275,8 +275,10 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Home Discovery Feed (Trending & New Releases)
-  const [trendingTracks, setTrendingTracks] = useState<Track[]>(INITIAL_TRENDING_TRACKS);
-  const [newReleaseTracks, setNewReleaseTracks] = useState<Track[]>(INITIAL_NEW_RELEASES);
+  const [isHomeLoading, setIsHomeLoading] = useState<boolean>(true);
+  const [isLibraryLoading, setIsLibraryLoading] = useState<boolean>(true);
+  const [trendingTracks, setTrendingTracks] = useState<Track[]>([]);
+  const [newReleaseTracks, setNewReleaseTracks] = useState<Track[]>([]);
 
   // Dual-Engine Playback (Audio Element + Zero-Fail YouTube Iframe Player Fallback)
   const ytPlayerRef = useRef<any>(null);
@@ -787,6 +789,7 @@ export default function App() {
   };
 
   const fetchLibraryData = async () => {
+    setIsLibraryLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/user/library`);
       if (res.ok) {
@@ -825,6 +828,8 @@ export default function App() {
       }
     } catch (err) {
       console.error("Library fetch failed:", err);
+    } finally {
+      setIsLibraryLoading(false);
     }
   };
 
@@ -838,19 +843,33 @@ export default function App() {
     fetchLibraryData();
 
     // Fetch Live Home Feed (Trending & New Releases)
+    setIsHomeLoading(true);
     fetch(`${API_BASE}/api/home`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data) {
           if (Array.isArray(data.trending) && data.trending.length > 0) {
             setTrendingTracks(data.trending);
+          } else {
+            setTrendingTracks(INITIAL_TRENDING_TRACKS);
           }
           if (Array.isArray(data.newReleases) && data.newReleases.length > 0) {
             setNewReleaseTracks(data.newReleases);
+          } else {
+            setNewReleaseTracks(INITIAL_NEW_RELEASES);
           }
+        } else {
+          setTrendingTracks(INITIAL_TRENDING_TRACKS);
+          setNewReleaseTracks(INITIAL_NEW_RELEASES);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setTrendingTracks(INITIAL_TRENDING_TRACKS);
+        setNewReleaseTracks(INITIAL_NEW_RELEASES);
+      })
+      .finally(() => {
+        setIsHomeLoading(false);
+      });
 
     // Initialize YouTube Iframe Player
     const loadYtScript = () => {
@@ -1186,6 +1205,8 @@ export default function App() {
         setQueueTracks(trendingTracks);
         setCurrentIndex(0);
         loadAndPlayTrack(trendingTracks[0], true);
+      } else {
+        showToast("Đang tải dữ liệu, vui lòng đợi trong giây lát...", "info");
       }
       return;
     }
@@ -2584,60 +2605,83 @@ export default function App() {
                     <h2 className="text-[20px] font-bold text-white tracking-wide">
                       Nhạc Trending
                     </h2>
+                    {isHomeLoading && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pink-500/10 border border-pink-500/30 text-[11px] text-pink-300 animate-pulse font-medium">
+                        <Loader2 className="w-3 h-3 animate-spin text-pink-400" />
+                        <span>Đang tải...</span>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (trendingTracks.length > 0) {
-                        setPlaylist(trendingTracks);
-                        setQueueTracks(trendingTracks);
-                        setCurrentIndex(0);
-                        loadAndPlayTrack(trendingTracks[0], true);
-                      }
-                    }}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-pink-500/10 hover:bg-pink-500 text-pink-400 hover:text-white border border-pink-500/30 transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Phát tất cả</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                  {trendingTracks.slice(0, 12).map((item) => (
-                    <div
-                      key={item.id}
+                  {!isHomeLoading && trendingTracks.length > 0 && (
+                    <button
+                      type="button"
                       onClick={() => {
-                        setPlaylist(trendingTracks);
-                        setQueueTracks(trendingTracks);
-                        const idx = trendingTracks.findIndex((t) => t.id === item.id);
-                        setCurrentIndex(idx !== -1 ? idx : 0);
-                        loadAndPlayTrack(item, true);
+                        if (trendingTracks.length > 0) {
+                          setPlaylist(trendingTracks);
+                          setQueueTracks(trendingTracks);
+                          setCurrentIndex(0);
+                          loadAndPlayTrack(trendingTracks[0], true);
+                        }
                       }}
-                      className="w-full flex flex-col cursor-pointer group"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full bg-pink-500/10 hover:bg-pink-500 text-pink-400 hover:text-white border border-pink-500/30 transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                        <img
-                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                          alt={item.title}
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_TRACK_ART;
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <div className="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/40 text-white">
-                            <Play className="w-5 h-5 fill-white ml-0.5" />
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Phát tất cả</span>
+                    </button>
+                  )}
+                </div>
+
+                {isHomeLoading ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <div key={idx} className="w-full flex flex-col animate-pulse">
+                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-pink-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                          <Sparkles className="w-8 h-8 text-pink-400/20 animate-pulse" />
+                        </div>
+                        <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                        <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {trendingTracks.slice(0, 12).map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setPlaylist(trendingTracks);
+                          setQueueTracks(trendingTracks);
+                          const idx = trendingTracks.findIndex((t) => t.id === item.id);
+                          setCurrentIndex(idx !== -1 ? idx : 0);
+                          loadAndPlayTrack(item, true);
+                        }}
+                        className="w-full flex flex-col cursor-pointer group"
+                      >
+                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                          <img
+                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                            alt={item.title}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/40 text-white">
+                              <Play className="w-5 h-5 fill-white ml-0.5" />
+                            </div>
                           </div>
                         </div>
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                          {item.author || "Kahoii Music"}
+                        </p>
                       </div>
-                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
-                        {item.title}
-                      </p>
-                      <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                        {item.author || "Kahoii Music"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Section 2: Mới Phát Hành */}
@@ -2648,60 +2692,83 @@ export default function App() {
                     <h2 className="text-[20px] font-bold text-white tracking-wide">
                       Mới Phát Hành
                     </h2>
+                    {isHomeLoading && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/30 text-[11px] text-orange-300 animate-pulse font-medium">
+                        <Loader2 className="w-3 h-3 animate-spin text-orange-400" />
+                        <span>Đang tải...</span>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (newReleaseTracks.length > 0) {
-                        setPlaylist(newReleaseTracks);
-                        setQueueTracks(newReleaseTracks);
-                        setCurrentIndex(0);
-                        loadAndPlayTrack(newReleaseTracks[0], true);
-                      }
-                    }}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Phát tất cả</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                  {newReleaseTracks.slice(0, 12).map((item) => (
-                    <div
-                      key={item.id}
+                  {!isHomeLoading && newReleaseTracks.length > 0 && (
+                    <button
+                      type="button"
                       onClick={() => {
-                        setPlaylist(newReleaseTracks);
-                        setQueueTracks(newReleaseTracks);
-                        const idx = newReleaseTracks.findIndex((t) => t.id === item.id);
-                        setCurrentIndex(idx !== -1 ? idx : 0);
-                        loadAndPlayTrack(item, true);
+                        if (newReleaseTracks.length > 0) {
+                          setPlaylist(newReleaseTracks);
+                          setQueueTracks(newReleaseTracks);
+                          setCurrentIndex(0);
+                          loadAndPlayTrack(newReleaseTracks[0], true);
+                        }
                       }}
-                      className="w-full flex flex-col cursor-pointer group"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                        <img
-                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                          alt={item.title}
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_TRACK_ART;
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/40 text-white">
-                            <Play className="w-5 h-5 fill-white ml-0.5" />
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Phát tất cả</span>
+                    </button>
+                  )}
+                </div>
+
+                {isHomeLoading ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <div key={idx} className="w-full flex flex-col animate-pulse">
+                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-orange-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                          <Flame className="w-8 h-8 text-orange-400/20 animate-pulse" />
+                        </div>
+                        <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                        <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {newReleaseTracks.slice(0, 12).map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setPlaylist(newReleaseTracks);
+                          setQueueTracks(newReleaseTracks);
+                          const idx = newReleaseTracks.findIndex((t) => t.id === item.id);
+                          setCurrentIndex(idx !== -1 ? idx : 0);
+                          loadAndPlayTrack(item, true);
+                        }}
+                        className="w-full flex flex-col cursor-pointer group"
+                      >
+                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                          <img
+                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                            alt={item.title}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/40 text-white">
+                              <Play className="w-5 h-5 fill-white ml-0.5" />
+                            </div>
                           </div>
                         </div>
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                          {item.author || "Kahoii Music"}
+                        </p>
                       </div>
-                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
-                        {item.title}
-                      </p>
-                      <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                        {item.author || "Kahoii Music"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Section 3: Nhạc Sĩ Nổi Bật (Đổi từ Nhạc Sĩ) */}
@@ -2711,33 +2778,54 @@ export default function App() {
                   <h2 className="text-[20px] font-bold text-white tracking-wide">
                     Nhạc Sĩ Nổi Bật
                   </h2>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                  {FEATURED_ARTISTS.map((artist, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => searchArtistSongs(artist.query)}
-                      className="w-full flex flex-col items-center cursor-pointer group"
-                    >
-                      <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.04] transition-all duration-200">
-                        <img
-                          src={artist.avatar}
-                          alt={artist.name}
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_TRACK_ART;
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 text-center w-full transition-colors">
-                        {artist.name}
-                      </p>
-                      <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
-                        {artist.genre}
-                      </p>
+                  {isHomeLoading && (
+                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-[11px] text-purple-300 animate-pulse font-medium">
+                      <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
+                      <span>Đang tải...</span>
                     </div>
-                  ))}
+                  )}
                 </div>
+
+                {isHomeLoading ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <div key={idx} className="w-full flex flex-col items-center animate-pulse">
+                        <div className="w-full aspect-square rounded-full bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border-2 border-white/5 flex items-center justify-center">
+                          <Mic2 className="w-8 h-8 text-purple-400/20 animate-pulse" />
+                        </div>
+                        <div className="h-3 w-1/2 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                        <div className="h-2.5 w-1/3 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {FEATURED_ARTISTS.map((artist, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => searchArtistSongs(artist.query)}
+                        className="w-full flex flex-col items-center cursor-pointer group"
+                      >
+                        <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.04] transition-all duration-200">
+                          <img
+                            src={artist.avatar}
+                            alt={artist.name}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 text-center w-full transition-colors">
+                          {artist.name}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
+                          {artist.genre}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Section 4 & 5: Gần đây & Có thể bạn sẽ thích (CHỈ XUẤT HIỆN KHI ĐÃ ĐĂNG NHẬP) */}
@@ -2750,8 +2838,27 @@ export default function App() {
                       <h2 className="text-[20px] font-bold text-white tracking-wide">
                         Gần đây
                       </h2>
+                      {isLibraryLoading && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300 animate-pulse font-medium">
+                          <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                          <span>Đang tải...</span>
+                        </div>
+                      )}
                     </div>
-                    {recentTracksToDisplay.length > 0 ? (
+
+                    {isLibraryLoading ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                        {Array.from({ length: 6 }).map((_, idx) => (
+                          <div key={idx} className="w-full flex flex-col animate-pulse">
+                            <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-emerald-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                              <Clock className="w-8 h-8 text-emerald-400/20 animate-pulse" />
+                            </div>
+                            <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                            <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : recentTracksToDisplay.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
                         {recentTracksToDisplay.map((item) => (
                           <div
@@ -2792,8 +2899,27 @@ export default function App() {
                       <h2 className="text-[20px] font-bold text-white tracking-wide">
                         Có thể bạn sẽ thích
                       </h2>
+                      {isLibraryLoading && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-300 animate-pulse font-medium">
+                          <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                          <span>Đang tải...</span>
+                        </div>
+                      )}
                     </div>
-                    {recommendedTracksToDisplay.length > 0 ? (
+
+                    {isLibraryLoading ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                        {Array.from({ length: 6 }).map((_, idx) => (
+                          <div key={idx} className="w-full flex flex-col animate-pulse">
+                            <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-rose-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                              <Heart className="w-8 h-8 text-rose-400/20 animate-pulse" />
+                            </div>
+                            <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                            <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : recommendedTracksToDisplay.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
                         {recommendedTracksToDisplay.map((item) => (
                           <div
@@ -2874,15 +3000,17 @@ export default function App() {
             {/* Dark gradient fade over lower half to mask controls & provide high contrast */}
             <div className="absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
 
-            {/* Track Title and Artist floating gently over the gradient */}
-            <div className="absolute bottom-[92px] left-4 right-4 z-20 pointer-events-none">
-              <p className="text-[13px] font-bold text-white truncate drop-shadow-md">
-                {currentTrack ? currentTrack.title : "Chưa chọn bài hát"}
-              </p>
-              <p className="text-[11px] text-white/70 truncate drop-shadow">
-                {currentTrack ? (currentTrack.author || "Kahoii Music") : "Chọn bài hát bất kỳ để phát"}
-              </p>
-            </div>
+            {/* Track Title and Artist floating gently over the gradient (only rendered when track is active) */}
+            {currentTrack && (
+              <div className="absolute bottom-[92px] left-4 right-4 z-20 pointer-events-none">
+                <p className="text-[13px] font-bold text-white truncate drop-shadow-md">
+                  {currentTrack.title}
+                </p>
+                <p className="text-[11px] text-white/70 truncate drop-shadow">
+                  {currentTrack.author || "Kahoii Music"}
+                </p>
+              </div>
+            )}
 
             {/* Top-left Menu & Volume Controls */}
             <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
