@@ -6,6 +6,7 @@ import {
   SkipForward,
   Repeat,
   Repeat1,
+  Shuffle,
   Volume2,
   VolumeX,
   Search,
@@ -260,7 +261,12 @@ export default function App() {
     return saved ? parseFloat(saved) : 0.8;
   });
   const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [repeatMode, setRepeatMode] = useState<"off" | "all" | "one">("all");
+  const [repeatMode, setRepeatMode] = useState<"all" | "one" | "shuffle" | "off">("all");
+  const repeatModeRef = useRef<"all" | "one" | "shuffle" | "off">("all");
+  const playlistRef = useRef<Track[]>([]);
+  const queueTracksRef = useRef<Track[]>([]);
+  const currentIndexRef = useRef<number>(0);
+  const shuffleHistoryRef = useRef<number[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -419,28 +425,87 @@ export default function App() {
     }
   };
 
-  // Sleep Timer State & Controller
+  // Pause any active playback safely (both Audio element and YouTube player)
+  const pausePlayback = () => {
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {}
+    }
+    if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
+      try {
+        ytPlayerRef.current.pauseVideo();
+      } catch {}
+    }
+    setIsPlaying(false);
+  };
+
+  // Sleep Timer State & Controller (with live countdown and full audio+yt shutdown)
   const [showSleepTimerMenu, setShowSleepTimerMenu] = useState<boolean>(false);
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
-  const sleepTimerRef = useRef<any>(null);
+  const [sleepTimerSecondsLeft, setSleepTimerSecondsLeft] = useState<number | null>(null);
+  const sleepTimerIntervalRef = useRef<any>(null);
 
   const startSleepTimer = (minutes: number | null) => {
-    if (sleepTimerRef.current) {
-      clearTimeout(sleepTimerRef.current);
-      sleepTimerRef.current = null;
+    if (sleepTimerIntervalRef.current) {
+      clearInterval(sleepTimerIntervalRef.current);
+      sleepTimerIntervalRef.current = null;
     }
-    setSleepTimerMinutes(minutes);
     setShowSleepTimerMenu(false);
-    if (minutes && minutes > 0) {
-      sleepTimerRef.current = setTimeout(() => {
-        if (audioRef.current) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-        }
-        setSleepTimerMinutes(null);
-      }, minutes * 60 * 1000);
+
+    if (!minutes || minutes <= 0) {
+      setSleepTimerMinutes(null);
+      setSleepTimerSecondsLeft(null);
+      showToast("Đã tắt hẹn giờ tắt nhạc", "info");
+      return;
     }
+
+    const targetEndTime = Date.now() + minutes * 60 * 1000;
+    setSleepTimerMinutes(minutes);
+    setSleepTimerSecondsLeft(minutes * 60);
+    showToast(`Đã hẹn giờ tắt nhạc sau ${minutes} phút`, "success");
+
+    sleepTimerIntervalRef.current = setInterval(() => {
+      const remainingMs = targetEndTime - Date.now();
+      if (remainingMs <= 0) {
+        clearInterval(sleepTimerIntervalRef.current);
+        sleepTimerIntervalRef.current = null;
+        setSleepTimerMinutes(null);
+        setSleepTimerSecondsLeft(null);
+        pausePlayback();
+        showToast("Hẹn giờ đã hết. Nhạc đã tự động dừng!", "info");
+      } else {
+        const remainingSec = Math.ceil(remainingMs / 1000);
+        setSleepTimerSecondsLeft(remainingSec);
+        setSleepTimerMinutes(Math.ceil(remainingSec / 60));
+      }
+    }, 1000);
   };
+
+  useEffect(() => {
+    return () => {
+      if (sleepTimerIntervalRef.current) {
+        clearInterval(sleepTimerIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Sync refs to avoid stale closure in YouTube Player event listeners
+  useEffect(() => {
+    repeatModeRef.current = repeatMode;
+  }, [repeatMode]);
+
+  useEffect(() => {
+    playlistRef.current = playlist;
+  }, [playlist]);
+
+  useEffect(() => {
+    queueTracksRef.current = queueTracks;
+  }, [queueTracks]);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
 
   // Sorting state for Left Sidebar and Right Queue
   const [isLeftSorted, setIsLeftSorted] = useState<boolean>(false);
@@ -1078,27 +1143,152 @@ export default function App() {
     }
   };
 
-  const handleNext = () => {
-    if (playlist.length === 0) return;
-    const nextIdx = (currentIndex + 1) % playlist.length;
+  const cycleRepeatMode = () => {
+    let nextMode: "all" | "one" | "shuffle" | "off";
+    if (repeatMode === "all") nextMode = "one";
+    else if (repeatMode === "one") nextMode = "shuffle";
+    else if (repeatMode === "shuffle") nextMode = "off";
+    else nextMode = "all";
+
+    setRepeatMode(nextMode);
+    repeatModeRef.current = nextMode;
+
+    const labelMap = {
+      all: "Lặp lại toàn bộ danh sách",
+      one: "Lặp lại bài hát hiện tại",
+      shuffle: "Phát ngẫu nhiên (Shuffle)",
+      off: "Tắt chế độ lặp lại",
+    };
+    showToast(labelMap[nextMode], "info");
+  };
+
+  const handleTrackEnded = () => {
+    const mode = repeatModeRef.current;
+    const currentList = playlistRef.current.length > 0 ? playlistRef.current : queueTracksRef.current;
+    const curIdx = currentIndexRef.current;
+
+    if (currentList.length === 0) return;
+
+    if (mode === "one") {
+      // Loop current track at position 0
+      if (
+        activePlayerType.current === "youtube" &&
+        ytPlayerRef.current &&
+        typeof ytPlayerRef.current.seekTo === "function"
+      ) {
+        try {
+          ytPlayerRef.current.seekTo(0, true);
+          ytPlayerRef.current.playVideo();
+          setIsPlaying(true);
+        } catch {}
+      } else if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    if (mode === "shuffle") {
+      if (currentList.length <= 1) {
+        loadAndPlayTrack(currentList[0], true);
+        return;
+      }
+      let randIdx = Math.floor(Math.random() * currentList.length);
+      let attempts = 0;
+      while (randIdx === curIdx && attempts < 10) {
+        randIdx = Math.floor(Math.random() * currentList.length);
+        attempts++;
+      }
+      shuffleHistoryRef.current.push(curIdx);
+      setCurrentIndex(randIdx);
+      loadAndPlayTrack(currentList[randIdx], true);
+      return;
+    }
+
+    if (mode === "off") {
+      if (curIdx >= currentList.length - 1) {
+        pausePlayback();
+        showToast("Đã phát hết danh sách bài hát", "info");
+        return;
+      }
+      const nextIdx = curIdx + 1;
+      setCurrentIndex(nextIdx);
+      loadAndPlayTrack(currentList[nextIdx], true);
+      return;
+    }
+
+    // Default: mode === "all"
+    const nextIdx = (curIdx + 1) % currentList.length;
     setCurrentIndex(nextIdx);
-    loadAndPlayTrack(playlist[nextIdx], true);
+    loadAndPlayTrack(currentList[nextIdx], true);
+  };
+
+  const handleNext = () => {
+    const currentList = playlist.length > 0 ? playlist : queueTracks;
+    if (currentList.length === 0) return;
+
+    if (repeatModeRef.current === "shuffle") {
+      if (currentList.length <= 1) {
+        loadAndPlayTrack(currentList[0], true);
+        return;
+      }
+      let randIdx = Math.floor(Math.random() * currentList.length);
+      let attempts = 0;
+      while (randIdx === currentIndex && attempts < 10) {
+        randIdx = Math.floor(Math.random() * currentList.length);
+        attempts++;
+      }
+      shuffleHistoryRef.current.push(currentIndex);
+      setCurrentIndex(randIdx);
+      loadAndPlayTrack(currentList[randIdx], true);
+      return;
+    }
+
+    if (repeatModeRef.current === "off") {
+      if (currentIndex + 1 < currentList.length) {
+        const nextIdx = currentIndex + 1;
+        setCurrentIndex(nextIdx);
+        loadAndPlayTrack(currentList[nextIdx], true);
+      } else {
+        showToast("Đã đến cuối danh sách phát", "info");
+      }
+      return;
+    }
+
+    const nextIdx = (currentIndex + 1) % currentList.length;
+    setCurrentIndex(nextIdx);
+    loadAndPlayTrack(currentList[nextIdx], true);
   };
 
   const handlePrev = () => {
-    if (playlist.length === 0) return;
+    const currentList = playlist.length > 0 ? playlist : queueTracks;
+    if (currentList.length === 0) return;
+
     if (currentTime > 3) {
-      if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
+      if (
+        activePlayerType.current === "youtube" &&
+        ytPlayerRef.current &&
+        typeof ytPlayerRef.current.seekTo === "function"
+      ) {
         try { ytPlayerRef.current.seekTo(0, true); } catch {}
       } else if (audioRef.current) {
         audioRef.current.currentTime = 0;
       }
       setCurrentTime(0);
-    } else {
-      const prevIdx = (currentIndex - 1 + playlist.length) % playlist.length;
-      setCurrentIndex(prevIdx);
-      loadAndPlayTrack(playlist[prevIdx], true);
+      return;
     }
+
+    if (repeatModeRef.current === "shuffle" && shuffleHistoryRef.current.length > 0) {
+      const prevIdx = shuffleHistoryRef.current.pop()!;
+      setCurrentIndex(prevIdx);
+      loadAndPlayTrack(currentList[prevIdx], true);
+      return;
+    }
+
+    const prevIdx = (currentIndex - 1 + currentList.length) % currentList.length;
+    setCurrentIndex(prevIdx);
+    loadAndPlayTrack(currentList[prevIdx], true);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1108,28 +1298,6 @@ export default function App() {
       try { ytPlayerRef.current.seekTo(newTime, true); } catch {}
     } else if (audioRef.current) {
       audioRef.current.currentTime = newTime;
-    }
-  };
-
-  const cycleRepeatMode = () => {
-    if (repeatMode === "off") setRepeatMode("all");
-    else if (repeatMode === "all") setRepeatMode("one");
-    else setRepeatMode("off");
-  };
-
-  const handleTrackEnded = () => {
-    if (repeatMode === "one") {
-      if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
-        try {
-          ytPlayerRef.current.seekTo(0, true);
-          ytPlayerRef.current.playVideo();
-        } catch {}
-      } else if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => {});
-      }
-    } else {
-      handleNext();
     }
   };
 
@@ -2863,16 +3031,36 @@ export default function App() {
 
             {/* 5 Playback Control Buttons Row - Enlarged & Beautifully Spaced */}
             <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between px-1 z-20">
-              {/* Loop */}
+              {/* Loop / Shuffle Button */}
               <button
                 type="button"
                 onClick={cycleRepeatMode}
-                title={`Lặp: ${repeatMode === "off" ? "Tắt" : repeatMode === "one" ? "1 bài" : "Tất cả"}`}
-                className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 ${
-                  repeatMode !== "off" ? "text-pink-400" : "text-white/60 hover:text-white"
+                title={
+                  repeatMode === "all"
+                    ? "Lặp danh sách"
+                    : repeatMode === "one"
+                    ? "Lặp 1 bài"
+                    : repeatMode === "shuffle"
+                    ? "Phát ngẫu nhiên"
+                    : "Tắt lặp lại"
+                }
+                className={`p-1.5 transition-all cursor-pointer hover:scale-115 active:scale-90 ${
+                  repeatMode === "all"
+                    ? "text-pink-400 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]"
+                    : repeatMode === "one"
+                    ? "text-pink-400 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]"
+                    : repeatMode === "shuffle"
+                    ? "text-purple-300 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]"
+                    : "text-white/40 hover:text-white"
                 }`}
               >
-                {repeatMode === "one" ? <Repeat1 className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
+                {repeatMode === "one" ? (
+                  <Repeat1 className="w-5 h-5" />
+                ) : repeatMode === "shuffle" ? (
+                  <Shuffle className="w-5 h-5" />
+                ) : (
+                  <Repeat className="w-5 h-5" />
+                )}
               </button>
 
               {/* Prev */}
@@ -2921,20 +3109,24 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
-                  title={sleepTimerMinutes ? `Hẹn giờ: ${sleepTimerMinutes} phút` : "Hẹn giờ tắt nhạc"}
+                  title={
+                    sleepTimerSecondsLeft
+                      ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
+                      : "Hẹn giờ tắt nhạc"
+                  }
                   className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${
-                    sleepTimerMinutes ? "text-pink-400 font-bold" : "text-white/60 hover:text-white"
+                    sleepTimerSecondsLeft ? "text-pink-400 font-bold" : "text-white/60 hover:text-white"
                   }`}
                 >
                   <Clock className="w-5 h-5" />
                   {sleepTimerMinutes && (
-                    <span className="absolute -top-1 -right-1 px-1 rounded-full bg-pink-500 text-[8px] text-white font-mono font-bold">
+                    <span className="absolute -top-1 -right-1 px-1 rounded-full bg-pink-500 text-[8px] text-white font-mono font-bold animate-pulse">
                       {sleepTimerMinutes}m
                     </span>
                   )}
                 </button>
                 {showSleepTimerMenu && (
-                  <div className="absolute bottom-9 right-0 p-2 rounded-xl bg-black/95 border border-pink-500/50 backdrop-blur-xl shadow-2xl flex flex-col gap-1 z-30 min-w-[125px]">
+                  <div className="absolute bottom-9 right-0 p-2 rounded-xl bg-black/95 border border-pink-500/50 backdrop-blur-xl shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in">
                     <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider px-2 py-0.5">
                       Hẹn giờ tắt
                     </span>
