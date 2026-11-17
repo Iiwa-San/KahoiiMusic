@@ -138,12 +138,80 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [avatarKey, setAvatarKey] = useState<number>(Date.now());
 
-  // Top Search State
+  // Top Search State & History
   const [topSearchText, setTopSearchText] = useState<string>("");
   const [searchQueryTitle, setSearchQueryTitle] = useState<string>("");
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("kahoii_search_history");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+  const searchDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const addToSearchHistory = (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setSearchHistory((prev) => {
+      const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
+      const updated = [trimmed, ...filtered].slice(0, 10);
+      try {
+        localStorage.setItem("kahoii_search_history", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const removeFromSearchHistory = (itemToRemove: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSearchHistory((prev) => {
+      const updated = prev.filter((item) => item !== itemToRemove);
+      try {
+        localStorage.setItem("kahoii_search_history", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const clearSearchHistory = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSearchHistory([]);
+    try {
+      localStorage.removeItem("kahoii_search_history");
+    } catch {}
+  };
+
+  const handleHistoryItemClick = (query: string) => {
+    setTopSearchText(query);
+    setSearchQueryTitle(query);
+    setIsSearchFocused(false);
+    setIsSearchOpen(true);
+    setIsSearching(true);
+    setSearchResults([]);
+    addToSearchHistory(query);
+    fetch(`/api/search?q=${encodeURIComponent(query)}`)
+      .then((r) => r.json())
+      .then((data) => setSearchResults(data.results || []))
+      .catch((err) => console.error(err))
+      .finally(() => setIsSearching(false));
+  };
+
+  // Close search history dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target as Node)) {
+        setIsSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Dynamic Theme Palette matching KahoiiMusic desktop ColorExtractorService
   const [currentTheme, setCurrentTheme] = useState<ThemePalette>(DEFAULT_THEME);
@@ -268,6 +336,8 @@ export default function App() {
   const searchArtistSongs = async (artistName: string) => {
     setTopSearchText(artistName);
     setSearchQueryTitle(artistName);
+    addToSearchHistory(artistName);
+    setIsSearchFocused(false);
     setIsSearchOpen(true);
     setIsSearching(true);
     setSearchResults([]);
@@ -494,6 +564,8 @@ export default function App() {
     }
 
     setSearchQueryTitle(topSearchText);
+    addToSearchHistory(topSearchText);
+    setIsSearchFocused(false);
     setIsSearchOpen(true);
     setIsSearching(true);
     setSearchResults([]);
@@ -641,43 +713,88 @@ export default function App() {
         {/* Left spacer for perfect balance */}
         <div className="w-[140px]" />
 
-        {/* Center: Search Pill with Search icon and "Dán" Button */}
-        <form
-          onSubmit={handleTopSearchSubmit}
-          className="flex-1 max-w-[580px] h-[36px] px-4 rounded-full bg-[#390f8d]/60 border border-purple-500/40 hover:border-pink-500/70 focus-within:border-pink-500 flex items-center gap-2.5 shadow-inner transition-all"
-        >
-          <Search className="w-4 h-4 text-pink-400 flex-shrink-0" />
-          <input
-            type="text"
-            placeholder="Search"
-            value={topSearchText}
-            onChange={(e) => setTopSearchText(e.target.value)}
-            className="flex-1 bg-transparent text-sm text-white placeholder-white/40 focus:outline-none"
-          />
-          {(topSearchText || isSearchOpen) && (
+        {/* Center: Search Pill with Search History Suggestions Dropdown */}
+        <div ref={searchDropdownRef} className="relative flex-1 max-w-[580px]">
+          <form
+            onSubmit={handleTopSearchSubmit}
+            className="w-full h-[36px] px-4 rounded-full bg-[#390f8d]/60 border border-purple-500/40 hover:border-pink-500/70 focus-within:border-pink-500 flex items-center gap-2.5 shadow-inner transition-all"
+          >
+            <Search className="w-4 h-4 text-pink-400 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Search"
+              value={topSearchText}
+              onFocus={() => setIsSearchFocused(true)}
+              onChange={(e) => setTopSearchText(e.target.value)}
+              className="flex-1 bg-transparent text-sm text-white placeholder-white/40 focus:outline-none"
+            />
+            {(topSearchText || isSearchOpen) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTopSearchText("");
+                  setSearchQueryTitle("");
+                  setIsSearchOpen(false);
+                  setIsSearchFocused(false);
+                }}
+                title="Xóa tìm kiếm"
+                className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => {
-                setTopSearchText("");
-                setSearchQueryTitle("");
-                setIsSearchOpen(false);
-              }}
-              title="Xóa tìm kiếm"
-              className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
+              onClick={handlePasteClick}
+              title="Dán từ Clipboard"
+              className="px-4 py-0.5 rounded-full bg-[#200645] hover:bg-pink-600 border border-white/20 text-xs font-semibold text-white transition-all cursor-pointer flex items-center gap-1"
             >
-              <X className="w-3.5 h-3.5" />
+              <ClipboardPaste className="w-3 h-3 text-pink-300" />
+              <span>Dán</span>
             </button>
+          </form>
+
+          {/* Quick Search History Dropdown Popover */}
+          {isSearchFocused && searchHistory.length > 0 && (
+            <div className="absolute top-[42px] left-0 right-0 rounded-2xl bg-[#160430]/95 border border-purple-500/50 backdrop-blur-xl shadow-2xl p-3 z-50 animate-fade-in flex flex-col gap-1.5">
+              <div className="flex items-center justify-between px-2 pb-1.5 border-b border-white/10 text-[11px] font-semibold text-white/60">
+                <span className="flex items-center gap-1.5 text-pink-300">
+                  <Clock className="w-3.5 h-3.5 text-pink-400" />
+                  Lịch sử tìm kiếm
+                </span>
+                <button
+                  type="button"
+                  onClick={clearSearchHistory}
+                  className="text-white/40 hover:text-red-400 text-[10px] transition-colors cursor-pointer"
+                >
+                  Xóa tất cả
+                </button>
+              </div>
+              <div className="max-h-[250px] overflow-y-auto flex flex-col gap-0.5 pt-1">
+                {searchHistory.map((query, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleHistoryItemClick(query)}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-xs text-white/90 hover:text-pink-300 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2 truncate flex-1 min-w-0 pr-2">
+                      <Clock className="w-3.5 h-3.5 text-white/30 group-hover:text-pink-400 flex-shrink-0" />
+                      <span className="truncate">{query}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => removeFromSearchHistory(query, e)}
+                      title="Xóa mục này"
+                      className="text-white/20 hover:text-white transition-colors p-1 flex-shrink-0"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-          <button
-            type="button"
-            onClick={handlePasteClick}
-            title="Dán từ Clipboard"
-            className="px-4 py-0.5 rounded-full bg-[#200645] hover:bg-pink-600 border border-white/20 text-xs font-semibold text-white transition-all cursor-pointer flex items-center gap-1"
-          >
-            <ClipboardPaste className="w-3 h-3 text-pink-300" />
-            <span>Dán</span>
-          </button>
-        </form>
+        </div>
 
         {/* Right: User Avatar Pill Button (Real avatar from database) */}
         <div className="w-[140px] flex justify-end">
@@ -882,7 +999,7 @@ export default function App() {
                     <span>Quay lại Khám phá</span>
                   </button>
                   <h2 className="text-[20px] font-bold text-white tracking-wide truncate">
-                    {searchQueryTitle ? `Kết quả: "${searchQueryTitle}"` : "Kết quả tìm kiếm trên YouTube"}
+                    {searchQueryTitle ? `Kết quả: "${searchQueryTitle}"` : "Kết quả tìm kiếm"}
                   </h2>
                 </div>
                 {searchResults.length > 0 && (
@@ -896,7 +1013,7 @@ export default function App() {
               {isSearching ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-pink-400" />
-                  <p className="text-sm font-medium text-purple-200/80">Đang tìm kiếm bài hát trên YouTube...</p>
+                  <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
                 </div>
               ) : searchResults.length > 0 ? (
                 <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
@@ -945,7 +1062,7 @@ export default function App() {
                           {item.title}
                         </p>
                         <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                          {item.author || "YouTube"}
+                          {item.author || "Kahoii Music"}
                         </p>
                       </div>
                     );
@@ -953,7 +1070,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
-                  <p className="text-sm text-white/50 italic">Không tìm thấy bài hát nào phù hợp với từ khóa.</p>
+                  <p className="text-sm text-white/50 italic">Không tìm thấy dữ liệu phù hợp.</p>
                   <button
                     type="button"
                     onClick={() => {

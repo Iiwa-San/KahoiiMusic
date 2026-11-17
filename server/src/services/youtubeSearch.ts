@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import path from "path";
 import fs from "fs";
 
@@ -20,6 +20,7 @@ function getLocalYtDlpPath(): string | null {
   const possiblePaths = [
     path.resolve(process.cwd(), "../../KahoiiMusic/yt-dlp.exe"),
     path.resolve(process.cwd(), "../KahoiiMusic/yt-dlp.exe"),
+    "D:/KahoiiProjects/MusicApp/KahoiiMusic/yt-dlp.exe",
     path.resolve(process.cwd(), "yt-dlp.exe"),
   ];
 
@@ -29,40 +30,61 @@ function getLocalYtDlpPath(): string | null {
   return null;
 }
 
-async function searchViaYtDlp(query: string, maxResults = 10): Promise<SearchTrackResult[]> {
+async function searchViaYtDlp(query: string, maxResults = 50): Promise<SearchTrackResult[]> {
   const ytDlpPath = getLocalYtDlpPath();
   if (!ytDlpPath) return [];
 
   return new Promise((resolve) => {
-    // Escape quotes in query
-    const safeQuery = query.replace(/"/g, '\\"');
-    const cmd = `"${ytDlpPath}" --flat-playlist --print "%(id)s||%(title)s||%(uploader)s||%(duration)s||%(thumbnail)s" "ytsearch${maxResults}:${safeQuery}"`;
+    const args = [
+      "--flat-playlist",
+      "--encoding", "utf-8",
+      "--no-warnings",
+      "--print", "%(id)s||%(title)s||%(uploader)s||%(duration)s||%(thumbnail)s",
+      `ytsearch${maxResults}:${query}`,
+    ];
 
-    exec(cmd, { timeout: 10000 }, (error, stdout) => {
-      if (error || !stdout) {
-        resolve([]);
-        return;
-      }
-
-      const lines = stdout.trim().split("\n");
-      const results: SearchTrackResult[] = [];
-
-      for (const line of lines) {
-        const parts = line.split("||");
-        if (parts.length >= 2 && parts[0].trim().length > 0) {
-          const id = parts[0].trim();
-          const title = parts[1]?.trim() || "Chưa có tiêu đề";
-          const author = parts[2]?.trim() || "Nghệ sĩ không xác định";
-          const durRaw = parts[3]?.trim();
-          const duration = durRaw && !isNaN(Number(durRaw)) ? Math.round(Number(durRaw)) : 0;
-          const rawThumb = parts[4]?.trim();
-          const thumbnail = rawThumb && rawThumb !== "NA" ? rawThumb : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
-
-          results.push({ id, title, author, duration, thumbnail });
+    execFile(
+      ytDlpPath,
+      args,
+      {
+        timeout: 25000,
+        encoding: "utf8",
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+        maxBuffer: 10 * 1024 * 1024,
+      },
+      (error, stdout) => {
+        if (error && (!stdout || stdout.trim().length === 0)) {
+          console.warn("[yt-dlp search error]:", error.message);
+          resolve([]);
+          return;
         }
+
+        const lines = (stdout || "").trim().split("\n");
+        const results: SearchTrackResult[] = [];
+        const seenIds = new Set<string>();
+
+        for (const line of lines) {
+          const parts = line.split("||");
+          if (parts.length >= 2 && parts[0].trim().length > 0) {
+            const id = parts[0].trim();
+            if (id.startsWith("UC") || seenIds.has(id)) continue;
+            seenIds.add(id);
+
+            const title = parts[1]?.trim() || "Chưa có tiêu đề";
+            const author = parts[2]?.trim() || "Kahoii Music";
+            const durRaw = parts[3]?.trim();
+            const duration = durRaw && !isNaN(Number(durRaw)) ? Math.round(Number(durRaw)) : 0;
+            const rawThumb = parts[4]?.trim();
+            const thumbnail = rawThumb && rawThumb !== "NA" && rawThumb.startsWith("http")
+              ? rawThumb
+              : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+
+            results.push({ id, title, author, duration, thumbnail });
+          }
+        }
+        resolve(results);
       }
-      resolve(results);
-    });
+    );
   });
 }
 
@@ -121,8 +143,8 @@ export async function searchYouTubeTracks(query: string): Promise<SearchTrackRes
     ];
   }
 
-  // 1. Try yt-dlp first
-  const ytDlpResults = await searchViaYtDlp(query, 12);
+  // 1. Try yt-dlp first with up to 50 results
+  const ytDlpResults = await searchViaYtDlp(query, 50);
   if (ytDlpResults.length > 0) {
     return ytDlpResults;
   }
