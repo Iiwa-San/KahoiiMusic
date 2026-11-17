@@ -23,6 +23,7 @@ import {
   Check,
   LogIn,
   AlertCircle,
+  ArrowLeft,
 } from "lucide-react";
 import type { Track } from "./types";
 import { formatTime } from "./utils/lyricsParser";
@@ -139,6 +140,7 @@ export default function App() {
 
   // Top Search State
   const [topSearchText, setTopSearchText] = useState<string>("");
+  const [searchQueryTitle, setSearchQueryTitle] = useState<string>("");
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
@@ -265,6 +267,7 @@ export default function App() {
 
   const searchArtistSongs = async (artistName: string) => {
     setTopSearchText(artistName);
+    setSearchQueryTitle(artistName);
     setIsSearchOpen(true);
     setIsSearching(true);
     setSearchResults([]);
@@ -490,6 +493,7 @@ export default function App() {
       return;
     }
 
+    setSearchQueryTitle(topSearchText);
     setIsSearchOpen(true);
     setIsSearching(true);
     setSearchResults([]);
@@ -650,6 +654,20 @@ export default function App() {
             onChange={(e) => setTopSearchText(e.target.value)}
             className="flex-1 bg-transparent text-sm text-white placeholder-white/40 focus:outline-none"
           />
+          {(topSearchText || isSearchOpen) && (
+            <button
+              type="button"
+              onClick={() => {
+                setTopSearchText("");
+                setSearchQueryTitle("");
+                setIsSearchOpen(false);
+              }}
+              title="Xóa tìm kiếm"
+              className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={handlePasteClick}
@@ -837,122 +855,236 @@ export default function App() {
         </aside>
 
         {/* ----------------------------------------------------------------------- */}
-        {/* COLUMN 2 (CENTER): Main Discovery Feed (~58% Width - Full Height)       */}
+        {/* COLUMN 2 (CENTER): Main Discovery Feed / Search View (~58% Width)        */}
         {/* ----------------------------------------------------------------------- */}
         <section
           className="flex-1 h-full figma-panel flex flex-col justify-between min-h-0 overflow-y-auto"
           style={{ padding: "26px 28px" }}
         >
-          {/* Section 1: "Gần đây" (Full Width 6-Column Grid - Real History) */}
-          <div style={{ marginBottom: "22px" }}>
-            <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
-              Gần đây
-            </h2>
-            {recentTracksToDisplay.length > 0 ? (
-              <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
-                {recentTracksToDisplay.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => playTrackDirectly(item)}
-                    className="w-full flex flex-col cursor-pointer group"
+          {isSearchOpen ? (
+            /* ===================================================================== */
+            /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
+            /* ===================================================================== */
+            <div className="flex flex-col h-full min-h-0">
+              {/* Header with Back button and search title */}
+              <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-5 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSearchOpen(false);
+                      setTopSearchText("");
+                      setSearchQueryTitle("");
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-pink-500/20 text-white/80 hover:text-white border border-white/10 transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
                   >
-                    <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                      <img
-                        src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                        alt={item.title}
-                        onError={(e) => {
-                          e.currentTarget.src = DEFAULT_TRACK_ART;
-                        }}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 transition-colors">
-                      {item.title}
-                    </p>
-                    <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                      {item.author || "Kahoii Music"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-8 text-center text-white/40 text-xs italic">
-                Chưa có bài hát nào gần đây. Hãy chọn hoặc tìm kiếm bài hát để phát.
-              </div>
-            )}
-          </div>
-
-          {/* Section 2: "Có thể bạn sẽ thích" (Full Width 6-Column Grid - Real Favorites) */}
-          <div style={{ marginBottom: "22px" }}>
-            <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
-              Có thể bạn sẽ thích
-            </h2>
-            {recommendedTracksToDisplay.length > 0 ? (
-              <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
-                {recommendedTracksToDisplay.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => playTrackDirectly(item)}
-                    className="w-full flex flex-col cursor-pointer group"
-                  >
-                    <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                      <img
-                        src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                        alt={item.title}
-                        onError={(e) => {
-                          e.currentTarget.src = DEFAULT_TRACK_ART;
-                        }}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 transition-colors">
-                      {item.title}
-                    </p>
-                    <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                      {item.author || "Kahoii Music"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-8 text-center text-white/40 text-xs italic">
-                Chưa có bài hát yêu thích nào.
-              </div>
-            )}
-          </div>
-
-          {/* Section 3: "Nghệ sĩ" (Full Width 6-Column Circular Grid - World-famous Artists) */}
-          <div>
-            <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
-              Nghệ sĩ
-            </h2>
-            <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
-              {WORLD_FAMOUS_ARTISTS.map((artist, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => searchArtistSongs(artist.query)}
-                  className="w-full flex flex-col items-center cursor-pointer group"
-                >
-                  <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.03] transition-all duration-200">
-                    <img
-                      src={artist.avatar}
-                      alt={artist.name}
-                      onError={(e) => {
-                        e.currentTarget.src = DEFAULT_TRACK_ART;
-                      }}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 text-center w-full transition-colors">
-                    {artist.name}
-                  </p>
-                  <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
-                    {artist.genre}
-                  </p>
+                    <ArrowLeft className="w-4 h-4 text-pink-400 group-hover:-translate-x-0.5 transition-transform" />
+                    <span>Quay lại Khám phá</span>
+                  </button>
+                  <h2 className="text-[20px] font-bold text-white tracking-wide truncate">
+                    {searchQueryTitle ? `Kết quả: "${searchQueryTitle}"` : "Kết quả tìm kiếm trên YouTube"}
+                  </h2>
                 </div>
-              ))}
+                {searchResults.length > 0 && (
+                  <span className="text-xs text-purple-200/60 font-mono">
+                    {searchResults.length} bài hát
+                  </span>
+                )}
+              </div>
+
+              {/* Body: Loading / Results Grid / Empty state */}
+              {isSearching ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-pink-400" />
+                  <p className="text-sm font-medium text-purple-200/80">Đang tìm kiếm bài hát trên YouTube...</p>
+                </div>
+              ) : searchResults.length > 0 ? (
+                <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
+                  {searchResults.map((item) => {
+                    const isCurrentPlaying = currentTrack?.id === item.id;
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => playSearchResult(item)}
+                        className="w-full flex flex-col cursor-pointer group"
+                      >
+                        <div className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
+                          isCurrentPlaying
+                            ? "border-pink-500 shadow-pink-500/30"
+                            : "border-white/5 bg-purple-900/30"
+                        }`}>
+                          <img
+                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                            alt={item.title}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                          {/* Play overlay on hover or active playing */}
+                          <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+                            isCurrentPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                          }`}>
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                              {isCurrentPlaying && isPlaying ? (
+                                <Pause className="w-5 h-5 text-white fill-current" />
+                              ) : (
+                                <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                              )}
+                            </div>
+                          </div>
+                          {item.duration > 0 && (
+                            <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                              {formatTime(item.duration)}
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
+                          isCurrentPlaying ? "text-pink-300 font-bold" : "text-white/90 group-hover:text-pink-300"
+                        }`}>
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                          {item.author || "YouTube"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
+                  <p className="text-sm text-white/50 italic">Không tìm thấy bài hát nào phù hợp với từ khóa.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSearchOpen(false);
+                      setTopSearchText("");
+                      setSearchQueryTitle("");
+                    }}
+                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-pink-600 text-xs font-semibold text-white transition-all cursor-pointer"
+                  >
+                    Quay lại Khám phá
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            /* ===================================================================== */
+            /* DISCOVERY VIEW (Gần đây, Có thể bạn sẽ thích, Nghệ sĩ)                */
+            /* ===================================================================== */
+            <div className="flex flex-col justify-between h-full min-h-0">
+              {/* Section 1: "Gần đây" (Full Width 6-Column Grid - Real History) */}
+              <div style={{ marginBottom: "22px" }}>
+                <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
+                  Gần đây
+                </h2>
+                {recentTracksToDisplay.length > 0 ? (
+                  <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
+                    {recentTracksToDisplay.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => playTrackDirectly(item)}
+                        className="w-full flex flex-col cursor-pointer group"
+                      >
+                        <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                          <img
+                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                            alt={item.title}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 transition-colors">
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                          {item.author || "Kahoii Music"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-white/40 text-xs italic">
+                    Chưa có bài hát nào gần đây. Hãy chọn hoặc tìm kiếm bài hát để phát.
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: "Có thể bạn sẽ thích" (Full Width 6-Column Grid - Real Favorites) */}
+              <div style={{ marginBottom: "22px" }}>
+                <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
+                  Có thể bạn sẽ thích
+                </h2>
+                {recommendedTracksToDisplay.length > 0 ? (
+                  <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
+                    {recommendedTracksToDisplay.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => playTrackDirectly(item)}
+                        className="w-full flex flex-col cursor-pointer group"
+                      >
+                        <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                          <img
+                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                            alt={item.title}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 transition-colors">
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                          {item.author || "Kahoii Music"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-white/40 text-xs italic">
+                    Chưa có bài hát yêu thích nào.
+                  </div>
+                )}
+              </div>
+
+              {/* Section 3: "Nghệ sĩ" (Full Width 6-Column Circular Grid - World-famous Artists) */}
+              <div>
+                <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
+                  Nghệ sĩ
+                </h2>
+                <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
+                  {WORLD_FAMOUS_ARTISTS.map((artist, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => searchArtistSongs(artist.query)}
+                      className="w-full flex flex-col items-center cursor-pointer group"
+                    >
+                      <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.03] transition-all duration-200">
+                        <img
+                          src={artist.avatar}
+                          alt={artist.name}
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_TRACK_ART;
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 text-center w-full transition-colors">
+                        {artist.name}
+                      </p>
+                      <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
+                        {artist.genre}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ----------------------------------------------------------------------- */}
@@ -1198,68 +1330,7 @@ export default function App() {
       </main>
 
       {/* ========================================================================= */}
-      {/* 3. SEARCH & YOUTUBE MODAL                                                 */}
-      {/* ========================================================================= */}
-      {isSearchOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="figma-panel w-full max-w-[560px] max-h-[85vh] flex flex-col p-5 relative shadow-2xl border border-pink-500/50">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <span className="font-bold text-sm text-pink-400 flex items-center gap-2">
-                <Search className="w-4 h-4" />
-                Kết quả tìm kiếm trên YouTube
-              </span>
-              <button
-                onClick={() => setIsSearchOpen(false)}
-                className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="mt-3.5 flex-1 overflow-y-auto flex flex-col gap-2 min-h-[200px] max-h-[400px] pr-1">
-              {searchResults.length > 0 ? (
-                searchResults.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => playSearchResult(item)}
-                    className="flex items-center gap-3.5 p-2 rounded-xl bg-white/5 hover:bg-pink-500/10 border border-white/5 hover:border-pink-500/30 cursor-pointer transition-all group"
-                  >
-                    <img
-                      src={item.thumbnail || DEFAULT_TRACK_ART}
-                      alt=""
-                      onError={(e) => {
-                        e.currentTarget.src = DEFAULT_TRACK_ART;
-                      }}
-                      className="w-11 h-11 rounded-lg object-cover flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-white group-hover:text-pink-300 truncate transition-colors">
-                        {item.title}
-                      </p>
-                      <p className="text-[10px] text-white/60 truncate mt-0.5">{item.author}</p>
-                    </div>
-                    <span className="text-[10px] text-white/40 font-mono pr-2">
-                      {item.duration ? formatTime(item.duration) : "--:--"}
-                    </span>
-                  </div>
-                ))
-              ) : isSearching ? (
-                <div className="h-full flex flex-col items-center justify-center text-xs text-white/40 gap-2.5 py-16">
-                  <Loader2 className="w-6 h-6 animate-spin text-pink-400" />
-                  <span>Đang tìm kiếm trên YouTube...</span>
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-xs text-white/30 italic py-16 text-center">
-                  Không tìm thấy bài hát phù hợp
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 4. USER PROFILE MODAL (Clicked from "avatar" button)                      */}
+      {/* 3. USER PROFILE MODAL (Clicked from "avatar" button)                      */}
       {/* ========================================================================= */}
       {isAccountOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
