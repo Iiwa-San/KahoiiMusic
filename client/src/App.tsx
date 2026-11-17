@@ -38,6 +38,9 @@ import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/c
 const DEFAULT_TRACK_ART =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='16' fill='%23240a50'/%3E%3Ccircle cx='50' cy='50' r='30' fill='%23381078'/%3E%3Cpath d='M44 36v20.5a6.5 6.5 0 1 1-3-5.5V40l18-4v16.5a6.5 6.5 0 1 1-3-5.5V32z' fill='%23e6007e'/%3E%3C/svg%3E";
 
+// Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
 // World-Famous Artists (Real artists currently dominating worldwide charts)
 const WORLD_FAMOUS_ARTISTS = [
   {
@@ -209,7 +212,7 @@ export default function App() {
     setSearchStructured(null);
 
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
       const tracksList: Track[] = data.tracks || data.results || [];
       setSearchResults(tracksList);
@@ -233,7 +236,7 @@ export default function App() {
 
   const playPlaylistItem = async (playlistItem: SearchPlaylistItem) => {
     try {
-      const res = await fetch(`/api/playlist?id=${encodeURIComponent(playlistItem.id)}`);
+      const res = await fetch(`${API_BASE}/api/playlist?id=${encodeURIComponent(playlistItem.id)}`);
       const data = await res.json();
       if (data.tracks && data.tracks.length > 0) {
         setPlaylist(data.tracks);
@@ -349,7 +352,7 @@ export default function App() {
   // Fetch User Session & Library Data
   const fetchUserSession = async () => {
     try {
-      const res = await fetch("/api/user/session");
+      const res = await fetch(`${API_BASE}/api/user/session`);
       if (res.ok) {
         const data = await res.json();
         setUserSession(data);
@@ -361,7 +364,7 @@ export default function App() {
 
   const fetchLibraryData = async () => {
     try {
-      const res = await fetch("/api/user/library");
+      const res = await fetch(`${API_BASE}/api/user/library`);
       if (res.ok) {
         const data = await res.json();
         const mappedFavs: Track[] = (data.favorites || []).map((f: any) => ({
@@ -434,7 +437,7 @@ export default function App() {
     setIsSyncing(true);
     setSyncSuccessMsg(null);
     try {
-      const res = await fetch("/api/user/sync", { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/user/sync`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Đồng bộ thất bại");
       setUserSession(data);
@@ -458,7 +461,7 @@ export default function App() {
     setIsLoggingIn(true);
     setLoginError(null);
     try {
-      const res = await fetch("/api/user/login", {
+      const res = await fetch(`${API_BASE}/api/user/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -481,7 +484,7 @@ export default function App() {
   const handleLogout = async () => {
     if (!window.confirm("Bạn có chắc chắn muốn đăng xuất?")) return;
     try {
-      await fetch("/api/user/logout", { method: "POST" });
+      await fetch(`${API_BASE}/api/user/logout`, { method: "POST" });
       setUserSession({ isLoggedIn: false, user: null });
       setLibraryData({ favorites: [], history: [], playlists: [] });
     } catch (err) {
@@ -502,7 +505,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`/api/stream?id=${track.id}`);
+      const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "Không thể trích xuất luồng âm thanh");
@@ -511,7 +514,7 @@ export default function App() {
 
       if (data.streamUrl && audioRef.current) {
         const playableUrl = data.streamUrl.includes("googlevideo.com")
-          ? `/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
+          ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
           : data.streamUrl;
 
         audioRef.current.src = playableUrl;
@@ -860,7 +863,7 @@ export default function App() {
               className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-[#f1f1f5] hover:bg-white text-black font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 group"
             >
               <img
-                src={`/api/user/avatar?t=${avatarKey}`}
+                src={`${API_BASE}/api/user/avatar?t=${avatarKey}`}
                 alt="Avatar"
                 onError={(e) => {
                   e.currentTarget.src = DEFAULT_TRACK_ART;
@@ -2136,7 +2139,7 @@ export default function App() {
                 <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/5 border border-pink-500/30">
                   <div className="relative flex-shrink-0">
                     <img
-                      src={`/api/user/avatar?t=${avatarKey}`}
+                      src={`${API_BASE}/api/user/avatar?t=${avatarKey}`}
                       alt="Avatar"
                       onError={(e) => {
                         e.currentTarget.src = DEFAULT_TRACK_ART;
