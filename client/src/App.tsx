@@ -26,6 +26,7 @@ import {
   ArrowLeft,
   Sparkles,
   Flame,
+  Mic2,
 } from "lucide-react";
 import type {
   Track,
@@ -134,42 +135,42 @@ const INITIAL_NEW_RELEASES: Track[] = [
   },
 ];
 
-// Nhạc Sĩ Nổi Bật (Featured Artists)
+// Nhạc Sĩ Nổi Bật (Featured Artists - High-res local avatars)
 const FEATURED_ARTISTS = [
   {
     name: "Sơn Tùng M-TP",
     genre: "Pop / R&B",
-    avatar: "https://i.ytimg.com/vi/abPmZCZZrFA/mqdefault.jpg",
+    avatar: "./artists/son_tung.jpg",
     query: "Sơn Tùng M-TP",
   },
   {
     name: "Vũ.",
     genre: "Indie / Acoustic",
-    avatar: "https://i.ytimg.com/vi/q0m0o5H0uS8/mqdefault.jpg",
+    avatar: "./artists/vu.jpg",
     query: "Vũ",
   },
   {
     name: "Đen",
     genre: "Rap / Hip-Hop",
-    avatar: "https://i.ytimg.com/vi/vUVtTBM3iM4/mqdefault.jpg",
+    avatar: "./artists/den.jpg",
     query: "Đen Vâu",
   },
   {
     name: "Soobin Hoàng Sơn",
     genre: "R&B / Ballad",
-    avatar: "https://i.ytimg.com/vi/yV9w8k2n1pM/mqdefault.jpg",
+    avatar: "./artists/soobin.jpg",
     query: "Soobin Hoàng Sơn",
   },
   {
     name: "Taylor Swift",
     genre: "Pop Superstar",
-    avatar: "/artists/taylor_swift.jpg",
+    avatar: "./artists/taylor_swift.jpg",
     query: "Taylor Swift",
   },
   {
     name: "The Weeknd",
     genre: "R&B / Pop",
-    avatar: "/artists/the_weeknd.jpg",
+    avatar: "./artists/the_weeknd.jpg",
     query: "The Weeknd",
   },
 ];
@@ -2127,9 +2128,12 @@ export default function App() {
 
               {/* Section 3: Nhạc Sĩ Nổi Bật (Đổi từ Nhạc Sĩ) */}
               <div>
-                <h2 className="text-[20px] font-bold text-white tracking-wide mb-3.5">
-                  Nhạc Sĩ Nổi Bật
-                </h2>
+                <div className="flex items-center gap-2.5 mb-3.5">
+                  <Mic2 className="w-5 h-5 text-purple-400" />
+                  <h2 className="text-[20px] font-bold text-white tracking-wide">
+                    Nhạc Sĩ Nổi Bật
+                  </h2>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
                   {FEATURED_ARTISTS.map((artist, idx) => (
                     <div
@@ -2163,9 +2167,12 @@ export default function App() {
                 <>
                   {/* Section 4: Gần đây */}
                   <div>
-                    <h2 className="text-[20px] font-bold text-white tracking-wide mb-3.5">
-                      Gần đây
-                    </h2>
+                    <div className="flex items-center gap-2.5 mb-3.5">
+                      <Clock className="w-5 h-5 text-emerald-400" />
+                      <h2 className="text-[20px] font-bold text-white tracking-wide">
+                        Gần đây
+                      </h2>
+                    </div>
                     {recentTracksToDisplay.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
                         {recentTracksToDisplay.map((item) => (
@@ -2202,9 +2209,12 @@ export default function App() {
 
                   {/* Section 5: Có thể bạn sẽ thích */}
                   <div>
-                    <h2 className="text-[20px] font-bold text-white tracking-wide mb-3.5">
-                      Có thể bạn sẽ thích
-                    </h2>
+                    <div className="flex items-center gap-2.5 mb-3.5">
+                      <Heart className="w-5 h-5 text-rose-400 fill-rose-500/20" />
+                      <h2 className="text-[20px] font-bold text-white tracking-wide">
+                        Có thể bạn sẽ thích
+                      </h2>
+                    </div>
                     {recommendedTracksToDisplay.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
                         {recommendedTracksToDisplay.map((item) => (
