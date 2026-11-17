@@ -141,6 +141,23 @@ function parseSongItem(renderer: any): SearchTrackResult | null {
     }
   }
 
+  // Check fixedColumns for duration (standard in YouTube Music playlist items)
+  if (!durationText) {
+    const fixedCols = renderer.fixedColumns || [];
+    for (const fCol of fixedCols) {
+      const runs = fCol?.musicResponsiveListItemFixedColumnRenderer?.text?.runs || [];
+      for (const r of runs) {
+        const txt = r?.text?.trim();
+        if (txt && /^\d+:\d+(?::\d+)?$/.test(txt)) {
+          durationText = txt;
+          duration = parseDuration(txt);
+          break;
+        }
+      }
+      if (durationText) break;
+    }
+  }
+
   const videoId =
     renderer.playlistItemData?.videoId ||
     renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer

@@ -237,6 +237,7 @@ export default function App() {
       const data = await res.json();
       if (data.tracks && data.tracks.length > 0) {
         setPlaylist(data.tracks);
+        setQueueTracks(data.tracks);
         setCurrentIndex(0);
         loadAndPlayTrack(data.tracks[0], true);
       } else {
@@ -245,6 +246,44 @@ export default function App() {
     } catch {
       executeSearch(playlistItem.title);
     }
+  };
+
+  // Sleep Timer State & Controller
+  const [showSleepTimerMenu, setShowSleepTimerMenu] = useState<boolean>(false);
+  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
+  const sleepTimerRef = useRef<any>(null);
+
+  const startSleepTimer = (minutes: number | null) => {
+    if (sleepTimerRef.current) {
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
+    setSleepTimerMinutes(minutes);
+    setShowSleepTimerMenu(false);
+    if (minutes && minutes > 0) {
+      sleepTimerRef.current = setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
+        setSleepTimerMinutes(null);
+      }, minutes * 60 * 1000);
+    }
+  };
+
+  // Favorite toggle for current track
+  const toggleCurrentFavorite = () => {
+    if (!currentTrack) return;
+    setLibraryData((prev) => {
+      const isFav = prev.favorites.some((t) => t.id === currentTrack.id);
+      let updatedFavs: Track[];
+      if (isFav) {
+        updatedFavs = prev.favorites.filter((t) => t.id !== currentTrack.id);
+      } else {
+        updatedFavs = [currentTrack, ...prev.favorites];
+      }
+      return { ...prev, favorites: updatedFavs };
+    });
   };
 
   // Close search history dropdown on click outside
@@ -633,7 +672,7 @@ export default function App() {
     const updated = [track, ...playlist.filter((t) => t.id !== track.id)];
     setPlaylist(updated);
     setCurrentIndex(0);
-    setIsSearchOpen(false);
+    // Keep search view open so user can continue viewing and listening without disruption
     loadAndPlayTrack(track, true);
     setQueueTracks((prev) => [track, ...prev.filter((t) => t.id !== track.id)]);
   };
@@ -1117,7 +1156,22 @@ export default function App() {
 
                         return (
                           <div className="w-full">
-                            <div className="w-full rounded-[20px] p-4 bg-gradient-to-r from-[#2f1647]/95 via-[#1e1335]/95 to-[#140d24]/95 border border-pink-500/35 hover:border-pink-500/70 shadow-xl shadow-pink-500/10 transition-all flex items-center justify-between gap-4 group">
+                            <div
+                              onClick={() => {
+                                if (isCurrentPlaying) {
+                                  togglePlayPause();
+                                } else {
+                                  playSearchResult({
+                                    id: top.id,
+                                    title: top.title,
+                                    author: top.author,
+                                    duration: top.duration,
+                                    thumbnail: top.thumbnail,
+                                  });
+                                }
+                              }}
+                              className="w-full rounded-[20px] p-4 bg-gradient-to-r from-[#2f1647]/95 via-[#1e1335]/95 to-[#140d24]/95 border border-pink-500/35 hover:border-pink-500/70 shadow-xl shadow-pink-500/10 transition-all flex items-center justify-between gap-4 group cursor-pointer"
+                            >
                               <div className="flex items-center gap-4 min-w-0">
                                 {/* Large Artwork */}
                                 <div className="relative w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
@@ -1159,15 +1213,20 @@ export default function App() {
                               <div className="flex items-center gap-3 flex-shrink-0">
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    playSearchResult({
-                                      id: top.id,
-                                      title: top.title,
-                                      author: top.author,
-                                      duration: top.duration,
-                                      thumbnail: top.thumbnail,
-                                    })
-                                  }
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isCurrentPlaying) {
+                                      togglePlayPause();
+                                    } else {
+                                      playSearchResult({
+                                        id: top.id,
+                                        title: top.title,
+                                        author: top.author,
+                                        duration: top.duration,
+                                        thumbnail: top.thumbnail,
+                                      });
+                                    }
+                                  }}
                                   className="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                                 >
                                   {isCurrentPlaying && isPlaying ? (
@@ -1188,44 +1247,51 @@ export default function App() {
                         );
                       })()}
 
-                      {/* TẦNG 2: Nhạc sĩ (Row of Artists) */}
+                      {/* TẦNG 2: Nhạc sĩ (Row of Artists - Enlarged Items) */}
                       {searchStructured?.artists && searchStructured.artists.length > 0 && (
                         <div>
                           <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-[16px] font-bold text-white tracking-wide flex items-center gap-2">
+                            <h3
+                              onClick={() => setActiveSearchTab("artists")}
+                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                            >
                               <span>Nhạc sĩ</span>
                             </h3>
-                            {searchStructured.artists.length > 6 && (
-                              <button
-                                type="button"
-                                onClick={() => setActiveSearchTab("artists")}
-                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
-                              >
-                                Xem tất cả ({searchStructured.artists.length})
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setActiveSearchTab("artists")}
+                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                            >
+                              Xem tất cả ({searchStructured.artists.length})
+                            </button>
                           </div>
-                          <div className="grid grid-cols-6 gap-3">
-                            {searchStructured.artists.slice(0, 6).map((artist) => (
+                          <div className="flex items-start gap-7 overflow-x-auto pb-2 custom-scrollbar">
+                            {searchStructured.artists.map((artist) => (
                               <div
                                 key={artist.id || artist.name}
                                 onClick={() => executeSearch(artist.name)}
-                                className="flex flex-col items-center p-2.5 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
+                                className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0"
+                                style={{ width: "170px" }}
                               >
-                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-pink-500 group-hover:shadow-lg group-hover:shadow-pink-500/25 transition-all shadow-md bg-purple-950/60 mb-2">
+                                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-[3px] border-pink-500/30 group-hover:border-pink-500 group-hover:shadow-[0_0_22px_rgba(236,72,153,0.45)] group-hover:scale-105 transition-all duration-300 shadow-xl bg-purple-950/60 mb-2.5 relative">
                                   <img
                                     src={artist.thumbnail || DEFAULT_TRACK_ART}
                                     alt={artist.name}
                                     onError={(e) => {
                                       e.currentTarget.src = DEFAULT_TRACK_ART;
                                     }}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                   />
+                                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                    <div className="w-9 h-9 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                      <Search className="w-4 h-4 text-white" />
+                                    </div>
+                                  </div>
                                 </div>
-                                <p className="text-xs font-semibold text-white group-hover:text-pink-300 text-center truncate w-full">
+                                <p className="text-sm font-bold text-white group-hover:text-pink-300 text-center truncate w-full">
                                   {artist.name}
                                 </p>
-                                <p className="text-[10px] text-purple-200/50 text-center truncate w-full mt-0.5">
+                                <p className="text-[11px] text-purple-200/60 text-center truncate w-full mt-0.5">
                                   {artist.subscribers || "Nghệ sĩ"}
                                 </p>
                               </div>
@@ -1238,18 +1304,19 @@ export default function App() {
                       {searchStructured?.playlists && searchStructured.playlists.length > 0 && (
                         <div>
                           <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-[16px] font-bold text-white tracking-wide flex items-center gap-2">
+                            <h3
+                              onClick={() => setActiveSearchTab("playlists")}
+                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                            >
                               <span>Playlist</span>
                             </h3>
-                            {searchStructured.playlists.length > 6 && (
-                              <button
-                                type="button"
-                                onClick={() => setActiveSearchTab("playlists")}
-                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
-                              >
-                                Xem tất cả ({searchStructured.playlists.length})
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setActiveSearchTab("playlists")}
+                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                            >
+                              Xem tất cả ({searchStructured.playlists.length})
+                            </button>
                           </div>
                           <div className="grid grid-cols-6 gap-4">
                             {searchStructured.playlists.slice(0, 6).map((pl) => (
@@ -1268,9 +1335,17 @@ export default function App() {
                                     className="w-full h-full object-cover"
                                   />
                                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        playPlaylistItem(pl);
+                                      }}
+                                      className="w-11 h-11 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                      title="Phát danh sách này"
+                                    >
                                       <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                    </div>
+                                    </button>
                                   </div>
                                   <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
                                     Playlist
@@ -1292,18 +1367,19 @@ export default function App() {
                       {searchResults.length > 0 && (
                         <div>
                           <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-[16px] font-bold text-white tracking-wide flex items-center gap-2">
+                            <h3
+                              onClick={() => setActiveSearchTab("tracks")}
+                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                            >
                               <span>Bài hát</span>
                             </h3>
-                            {searchResults.length > 12 && (
-                              <button
-                                type="button"
-                                onClick={() => setActiveSearchTab("tracks")}
-                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
-                              >
-                                Xem tất cả ({searchResults.length})
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setActiveSearchTab("tracks")}
+                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                            >
+                              Xem tất cả ({searchResults.length})
+                            </button>
                           </div>
                           <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
                             {searchResults.slice(0, 12).map((item) => {
@@ -1311,7 +1387,13 @@ export default function App() {
                               return (
                                 <div
                                   key={item.id}
-                                  onClick={() => playSearchResult(item)}
+                                  onClick={() => {
+                                    if (isCurrentPlaying) {
+                                      togglePlayPause();
+                                    } else {
+                                      playSearchResult(item);
+                                    }
+                                  }}
                                   className="w-full flex flex-col cursor-pointer group"
                                 >
                                   <div
@@ -1339,13 +1421,24 @@ export default function App() {
                                           : "opacity-0 group-hover:opacity-100"
                                       }`}
                                     >
-                                      <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (isCurrentPlaying) {
+                                            togglePlayPause();
+                                          } else {
+                                            playSearchResult(item);
+                                          }
+                                        }}
+                                        className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                      >
                                         {isCurrentPlaying && isPlaying ? (
                                           <Pause className="w-5 h-5 text-white fill-current" />
                                         ) : (
                                           <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
                                         )}
-                                      </div>
+                                      </button>
                                     </div>
                                     {item.duration > 0 && (
                                       <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
@@ -1390,7 +1483,13 @@ export default function App() {
                           return (
                             <div
                               key={item.id}
-                              onClick={() => playSearchResult(item)}
+                              onClick={() => {
+                                if (isCurrentPlaying) {
+                                  togglePlayPause();
+                                } else {
+                                  playSearchResult(item);
+                                }
+                              }}
                               className="w-full flex flex-col cursor-pointer group"
                             >
                               <div
@@ -1418,13 +1517,24 @@ export default function App() {
                                       : "opacity-0 group-hover:opacity-100"
                                   }`}
                                 >
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isCurrentPlaying) {
+                                        togglePlayPause();
+                                      } else {
+                                        playSearchResult(item);
+                                      }
+                                    }}
+                                    className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                  >
                                     {isCurrentPlaying && isPlaying ? (
                                       <Pause className="w-5 h-5 text-white fill-current" />
                                     ) : (
                                       <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
                                     )}
-                                  </div>
+                                  </button>
                                 </div>
                                 {item.duration > 0 && (
                                   <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
@@ -1452,7 +1562,7 @@ export default function App() {
                   )}
 
                   {/* ========================================================================= */}
-                  {/* TAB: NHẠC SĨ (Tất cả nghệ sĩ)                                             */}
+                  {/* TAB: NHẠC SĨ (Tất cả nghệ sĩ - Enlarged Grid)                             */}
                   {/* ========================================================================= */}
                   {activeSearchTab === "artists" && (
                     <div>
@@ -1462,27 +1572,32 @@ export default function App() {
                         </h3>
                       </div>
                       {searchStructured?.artists && searchStructured.artists.length > 0 ? (
-                        <div className="grid grid-cols-6 gap-5">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                           {searchStructured.artists.map((artist) => (
                             <div
                               key={artist.id || artist.name}
                               onClick={() => executeSearch(artist.name)}
-                              className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
+                              className="flex flex-col items-center p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
                             >
-                              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-pink-500 group-hover:shadow-lg group-hover:shadow-pink-500/25 transition-all shadow-md bg-purple-950/60 mb-2">
+                              <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden border-[3px] border-pink-500/30 group-hover:border-pink-500 group-hover:shadow-[0_0_25px_rgba(236,72,153,0.45)] group-hover:scale-105 transition-all duration-300 shadow-xl bg-purple-950/60 mb-3 relative">
                                 <img
                                   src={artist.thumbnail || DEFAULT_TRACK_ART}
                                   alt={artist.name}
                                   onError={(e) => {
                                     e.currentTarget.src = DEFAULT_TRACK_ART;
                                   }}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                 />
+                                <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                    <Search className="w-5 h-5 text-white" />
+                                  </div>
+                                </div>
                               </div>
-                              <p className="text-sm font-semibold text-white group-hover:text-pink-300 text-center truncate w-full">
+                              <p className="text-base font-bold text-white group-hover:text-pink-300 text-center truncate w-full">
                                 {artist.name}
                               </p>
-                              <p className="text-xs text-purple-200/50 text-center truncate w-full mt-0.5">
+                              <p className="text-xs text-purple-200/60 text-center truncate w-full mt-1">
                                 {artist.subscribers || "Nghệ sĩ"}
                               </p>
                             </div>
@@ -1524,9 +1639,17 @@ export default function App() {
                                   className="w-full h-full object-cover"
                                 />
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      playPlaylistItem(pl);
+                                    }}
+                                    className="w-11 h-11 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                    title="Phát danh sách này"
+                                  >
                                     <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                  </div>
+                                  </button>
                                 </div>
                                 <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
                                   Playlist
@@ -1731,7 +1854,9 @@ export default function App() {
             <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
               <button
                 type="button"
+                onClick={() => setActiveLeftTab("library")}
                 className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-all cursor-pointer"
+                title="Thư viện nhạc"
               >
                 <Menu className="w-4 h-4" />
               </button>
@@ -1767,9 +1892,24 @@ export default function App() {
             </div>
 
             {/* Top-right Bright Red Heart Icon (Matching Figma) */}
-            <div className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center z-20 cursor-pointer group">
-              <Heart className="w-5 h-5 fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)] group-hover:scale-115 transition-transform" />
-            </div>
+            <button
+              type="button"
+              onClick={toggleCurrentFavorite}
+              title={
+                currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                  ? "Bỏ yêu thích"
+                  : "Thêm vào yêu thích"
+              }
+              className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center z-20 cursor-pointer group hover:bg-black/60 transition-all"
+            >
+              <Heart
+                className={`w-5 h-5 transition-transform group-hover:scale-115 ${
+                  currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                    ? "fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)]"
+                    : "text-white/60 hover:text-red-400"
+                }`}
+              />
+            </button>
 
             {/* Elevated Seekbar Progress Line with Scrubber Handle & Time (at bottom-[66px]) */}
             <div className="absolute bottom-[66px] left-4 right-4 flex flex-col gap-1 z-20">
@@ -1860,14 +2000,53 @@ export default function App() {
               </button>
 
               {/* Timer */}
-              <button
-                type="button"
-                onClick={() => {}}
-                title="Hẹn giờ"
-                className="p-1.5 text-pink-400 hover:text-white transition-all cursor-pointer hover:scale-110 active:scale-90"
-              >
-                <Clock className="w-5 h-5" />
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
+                  title={sleepTimerMinutes ? `Hẹn giờ: ${sleepTimerMinutes} phút` : "Hẹn giờ tắt nhạc"}
+                  className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${
+                    sleepTimerMinutes ? "text-pink-400 font-bold" : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  <Clock className="w-5 h-5" />
+                  {sleepTimerMinutes && (
+                    <span className="absolute -top-1 -right-1 px-1 rounded-full bg-pink-500 text-[8px] text-white font-mono font-bold">
+                      {sleepTimerMinutes}m
+                    </span>
+                  )}
+                </button>
+                {showSleepTimerMenu && (
+                  <div className="absolute bottom-9 right-0 p-2 rounded-xl bg-black/95 border border-pink-500/50 backdrop-blur-xl shadow-2xl flex flex-col gap-1 z-30 min-w-[125px]">
+                    <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider px-2 py-0.5">
+                      Hẹn giờ tắt
+                    </span>
+                    {[15, 30, 45, 60].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => startSleepTimer(m)}
+                        className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                          sleepTimerMinutes === m
+                            ? "bg-pink-500 text-white font-bold"
+                            : "hover:bg-white/10 text-white/80"
+                        }`}
+                      >
+                        {m} phút
+                      </button>
+                    ))}
+                    {sleepTimerMinutes && (
+                      <button
+                        type="button"
+                        onClick={() => startSleepTimer(null)}
+                        className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
+                      >
+                        Tắt hẹn giờ
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
