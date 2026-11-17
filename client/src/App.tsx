@@ -34,6 +34,7 @@ import {
   ChevronRight,
   Download,
   Plus,
+  Music,
 } from "lucide-react";
 import type {
   Track,
@@ -255,6 +256,19 @@ export default function App() {
   const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
   const searchDropdownRef = useRef<HTMLDivElement | null>(null);
 
+  // Artist Detail Session State
+  const [selectedArtist, setSelectedArtist] = useState<{
+    id?: string;
+    name: string;
+    avatar: string;
+    subscribers?: string;
+    genre?: string;
+  } | null>(null);
+  const [isArtistLoading, setIsArtistLoading] = useState<boolean>(false);
+  const [artistTracks, setArtistTracks] = useState<Track[]>([]);
+  const [artistPlaylists, setArtistPlaylists] = useState<SearchPlaylistItem[]>([]);
+  const [activeArtistTab, setActiveArtistTab] = useState<"all" | "singles" | "playlists">("all");
+
   const addToSearchHistory = (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -295,6 +309,7 @@ export default function App() {
     setSearchQueryTitle(trimmed);
     addToSearchHistory(trimmed);
     setIsSearchFocused(false);
+    setSelectedArtist(null);
     setIsSearchOpen(true);
     setIsSearching(true);
     setActiveSearchTab("all");
@@ -743,8 +758,75 @@ export default function App() {
     }
   };
 
-  const searchArtistSongs = (artistName: string) => {
-    executeSearch(artistName);
+  const openArtistDetail = async (artist: {
+    name: string;
+    avatar?: string;
+    subscribers?: string;
+    genre?: string;
+  }) => {
+    setSelectedArtist({
+      name: artist.name,
+      avatar: artist.avatar || DEFAULT_TRACK_ART,
+      subscribers: artist.subscribers || "Nghệ sĩ",
+      genre: artist.genre,
+    });
+    setActiveArtistTab("all");
+    setIsArtistLoading(true);
+    setArtistTracks([]);
+    setArtistPlaylists([]);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
+      if (!res.ok) throw new Error("Artist search failed");
+      const data: StructuredSearchResult = await res.json();
+
+      const rawTracks: Track[] = data.tracks || [];
+      const lower = artist.name.toLowerCase().trim();
+
+      // Refine tracks: singles/tracks specifically by this artist
+      const matched = rawTracks.filter((t) => {
+        const a = (t.author || "").toLowerCase();
+        const tit = (t.title || "").toLowerCase();
+        return a.includes(lower) || tit.includes(lower);
+      });
+      setArtistTracks(matched.length >= 4 ? matched : rawTracks);
+
+      // Playlists / albums
+      const rawPlaylists = data.playlists || [];
+      const matchedPl = rawPlaylists.filter((p) => {
+        const a = (p.author || "").toLowerCase();
+        const tit = (p.title || "").toLowerCase();
+        return a.includes(lower) || tit.includes(lower);
+      });
+      setArtistPlaylists(matchedPl.length > 0 ? matchedPl : rawPlaylists);
+
+      // Enrich artist info if available
+      if (data.artists && data.artists.length > 0) {
+        const matchedArtist =
+          data.artists.find(
+            (a) => a.name.toLowerCase() === lower || lower.includes(a.name.toLowerCase())
+          ) || data.artists[0];
+
+        if (matchedArtist) {
+          setSelectedArtist((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  avatar:
+                    prev.avatar && !prev.avatar.includes("logo_icon")
+                      ? prev.avatar
+                      : (matchedArtist.thumbnail || prev.avatar),
+                  subscribers: matchedArtist.subscribers || prev.subscribers || "Nghệ sĩ chính thức",
+                }
+              : null
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Artist detail fetch error:", err);
+    } finally {
+      setIsArtistLoading(false);
+    }
   };
 
   // Preload initial track metadata, user data, home feed & YouTube Player API on mount
@@ -1854,7 +1936,298 @@ export default function App() {
           className="flex-1 h-full figma-panel flex flex-col justify-between min-h-0 overflow-y-auto"
           style={{ padding: "26px 28px" }}
         >
-          {isSearchOpen ? (
+          {selectedArtist ? (
+            /* ===================================================================== */
+            /* ARTIST DETAIL VIEW (Session giữa lấy data của đúng artist đó)         */
+            /* ===================================================================== */
+            <div className="flex flex-col h-full min-h-0 overflow-y-auto pr-1 custom-scrollbar">
+              {/* Back Bar */}
+              <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedArtist(null)}
+                  className="px-3.5 py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
+                >
+                  <ArrowLeft className="w-4 h-4 theme-accent-text group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Quay lại</span>
+                </button>
+                <span className="text-xs text-white/50 font-mono">
+                  Thông tin Nghệ sĩ
+                </span>
+              </div>
+
+              {/* Artist Hero Header Card */}
+              <div className="w-full rounded-[24px] p-6 theme-card-bg shadow-2xl mb-6 flex flex-col sm:flex-row items-center sm:items-start gap-6 border theme-accent-border relative overflow-hidden flex-shrink-0">
+                <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
+
+                {/* Big Avatar */}
+                <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden shadow-2xl flex-shrink-0 border-[3px] theme-accent-border bg-black/40">
+                  <img
+                    src={selectedArtist.avatar}
+                    alt={selectedArtist.name}
+                    onError={(e) => {
+                      e.currentTarget.src = DEFAULT_TRACK_ART;
+                    }}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                {/* Info & Action Buttons */}
+                <div className="flex-1 min-w-0 flex flex-col items-center sm:items-start text-center sm:text-left justify-center">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider theme-badge flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 theme-accent-text" />
+                      Nghệ sĩ chính thức
+                    </span>
+                    {selectedArtist.genre && (
+                      <span className="text-[11px] text-white/60">
+                        • {selectedArtist.genre}
+                      </span>
+                    )}
+                  </div>
+
+                  <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-wide truncate max-w-full">
+                    {selectedArtist.name}
+                  </h1>
+
+                  <p className="text-xs text-white/60 mt-1 mb-4">
+                    {selectedArtist.subscribers || "Nghệ sĩ trên YouTube Music"}
+                    {artistTracks.length > 0 && ` • ${artistTracks.length} bài hát single`}
+                    {artistPlaylists.length > 0 && ` • ${artistPlaylists.length} danh sách phát`}
+                  </p>
+
+                  {/* Play Actions */}
+                  <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
+                    <button
+                      type="button"
+                      disabled={artistTracks.length === 0}
+                      onClick={() => {
+                        if (artistTracks.length > 0) {
+                          setPlaylist(artistTracks);
+                          setQueueTracks(artistTracks);
+                          setCurrentIndex(0);
+                          loadAndPlayTrack(artistTracks[0], true);
+                        }
+                      }}
+                      className="px-5 py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                      <span>Phát tất cả</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={artistTracks.length === 0}
+                      onClick={() => {
+                        if (artistTracks.length > 0) {
+                          const shuffled = [...artistTracks].sort(() => Math.random() - 0.5);
+                          setPlaylist(shuffled);
+                          setQueueTracks(shuffled);
+                          setCurrentIndex(0);
+                          loadAndPlayTrack(shuffled[0], true);
+                          setRepeatMode("shuffle");
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all text-xs font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <Shuffle className="w-4 h-4" />
+                      <span>Phát ngẫu nhiên</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tag Selection Bar (Single / Danh sách phát / Tất cả) */}
+              <div className="flex items-center gap-2 mb-5 flex-wrap flex-shrink-0">
+                {[
+                  { key: "all", label: "Tất cả", count: artistTracks.length + artistPlaylists.length },
+                  { key: "singles", label: "Nhạc Single / Bài hát", count: artistTracks.length },
+                  { key: "playlists", label: "Danh sách phát", count: artistPlaylists.length },
+                ].map((tab) => {
+                  const isActive = activeArtistTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setActiveArtistTab(tab.key as any)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                        isActive
+                          ? "theme-badge-active scale-[1.02]"
+                          : "theme-badge hover:theme-accent-border"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      {typeof tab.count === "number" && tab.count > 0 && (
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                            isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
+                          }`}
+                        >
+                          {tab.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Body Content */}
+              {isArtistLoading ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
+                  <p className="text-sm font-medium text-white/70">
+                    Đang tải dữ liệu của {selectedArtist.name}...
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-7 pb-8">
+                  {/* Section Singles */}
+                  {(activeArtistTab === "all" || activeArtistTab === "singles") && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3.5">
+                        <div className="flex items-center gap-2">
+                          <Music className="w-4 h-4 theme-accent-text" />
+                          <h3 className="text-[17px] font-bold text-white tracking-wide">
+                            Nhạc Single & Bài hát ({artistTracks.length})
+                          </h3>
+                        </div>
+                      </div>
+
+                      {artistTracks.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                          {artistTracks.map((item, idx) => {
+                            const isCurrentPlaying = currentTrack?.id === item.id;
+                            return (
+                              <div
+                                key={item.id + idx}
+                                onClick={() => {
+                                  if (isCurrentPlaying) {
+                                    togglePlayPause();
+                                  } else {
+                                    setPlaylist(artistTracks);
+                                    setQueueTracks(artistTracks);
+                                    setCurrentIndex(idx);
+                                    loadAndPlayTrack(item, true);
+                                  }
+                                }}
+                                className="w-full flex flex-col cursor-pointer group"
+                              >
+                                <div
+                                  className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
+                                    isCurrentPlaying
+                                      ? "theme-accent-border shadow-lg"
+                                      : "border-white/5 bg-black/30"
+                                  }`}
+                                >
+                                  <img
+                                    src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                    alt={item.title}
+                                    onError={(e) => {
+                                      e.currentTarget.src = DEFAULT_TRACK_ART;
+                                    }}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <div
+                                    className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+                                      isCurrentPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                    }`}
+                                  >
+                                    <div className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
+                                      {isCurrentPlaying && isPlaying ? (
+                                        <Pause className="w-5 h-5 fill-current" />
+                                      ) : (
+                                        <Play className="w-5 h-5 fill-current translate-x-0.5" />
+                                      )}
+                                    </div>
+                                  </div>
+                                  {item.duration > 0 && (
+                                    <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                      {formatTime(item.duration)}
+                                    </span>
+                                  )}
+                                </div>
+                                <p
+                                  className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
+                                    isCurrentPlaying
+                                      ? "theme-accent-text font-bold"
+                                      : "text-white/90 group-hover:theme-accent-text"
+                                  }`}
+                                >
+                                  {item.title}
+                                </p>
+                                <p className="text-[10px] text-white/50 truncate mt-0.5">
+                                  {item.author || selectedArtist.name}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-white/40 italic py-6 text-center bg-white/5 rounded-xl border border-white/5">
+                          Chưa tìm thấy bài hát single nào của nghệ sĩ này.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Section Playlists */}
+                  {(activeArtistTab === "all" || activeArtistTab === "playlists") && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3.5">
+                        <div className="flex items-center gap-2">
+                          <ListMusic className="w-4 h-4 theme-accent-text" />
+                          <h3 className="text-[17px] font-bold text-white tracking-wide">
+                            Danh sách phát & Album ({artistPlaylists.length})
+                          </h3>
+                        </div>
+                      </div>
+
+                      {artistPlaylists.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                          {artistPlaylists.map((pl, idx) => (
+                            <div
+                              key={pl.id || idx}
+                              onClick={() => playPlaylistItem(pl)}
+                              className="w-full flex flex-col cursor-pointer group"
+                            >
+                              <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-black/30">
+                                <img
+                                  src={pl.thumbnail || DEFAULT_TRACK_ART}
+                                  alt={pl.title}
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_TRACK_ART;
+                                  }}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="w-11 h-11 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
+                                    <Play className="w-5 h-5 fill-current translate-x-0.5" />
+                                  </div>
+                                </div>
+                                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                  Playlist
+                                </span>
+                              </div>
+                              <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2">
+                                {pl.title}
+                              </p>
+                              <p className="text-[10px] text-white/50 truncate mt-0.5">
+                                {pl.author || selectedArtist.name}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-white/40 italic py-6 text-center bg-white/5 rounded-xl border border-white/5">
+                          Chưa có danh sách phát nào của nghệ sĩ này.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : isSearchOpen ? (
             /* ===================================================================== */
             /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
             /* ===================================================================== */
@@ -2090,7 +2463,7 @@ export default function App() {
                             {searchStructured.artists.map((artist) => (
                               <div
                                 key={artist.id || artist.name}
-                                onClick={() => executeSearch(artist.name)}
+                                onClick={() => openArtistDetail({ name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
                                 className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0"
                                 style={{ width: "170px" }}
                               >
@@ -2397,7 +2770,7 @@ export default function App() {
                           {searchStructured.artists.map((artist) => (
                             <div
                               key={artist.id || artist.name}
-                              onClick={() => executeSearch(artist.name)}
+                              onClick={() => openArtistDetail({ name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
                               className="flex flex-col items-center p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
                             >
                               <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-3 relative">
@@ -2722,7 +3095,7 @@ export default function App() {
                     {FEATURED_ARTISTS.map((artist, idx) => (
                       <div
                         key={idx}
-                        onClick={() => searchArtistSongs(artist.query)}
+                        onClick={() => openArtistDetail({ name: artist.name, avatar: artist.avatar, genre: artist.genre })}
                         className="w-full flex flex-col items-center cursor-pointer group"
                       >
                         <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:theme-accent-border group-hover:scale-[1.04] transition-all duration-200">
