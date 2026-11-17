@@ -226,16 +226,63 @@ app.post("/api/user/library", async (req, res) => {
   }
 });
 
-// 10. Home Feed (Trending & New Releases with 100% YouTube Music Tags)
+// 10. Home Feed (Trending & New Releases with Randomization and Dynamic Rotation)
+const TRENDING_QUERIES = [
+  "nhạc trending việt nam",
+  "top bài hát vpop hot",
+  "nhạc trẻ hot tiktok thịnh hành",
+  "nhạc thịnh hành việt nam",
+  "top hits việt nam",
+  "nhạc hot triệu view việt nam",
+  "bài hát việt nam nghe nhiều nhất",
+  "v-pop trending hits",
+  "bài hát hot trend tiktok",
+  "nhạc edm remix việt nam hot",
+  "nhạc lofi chill việt nam",
+  "acoustic vpop hay nhất"
+];
+
+const NEW_RELEASE_QUERIES = [
+  "bài hát mới phát hành vpop",
+  "nhạc mới ra mắt vpop",
+  "mv mới nhất việt nam",
+  "ca khúc mới hay nhất vpop",
+  "single mới phát hành việt nam",
+  "nhạc việt mới nhất 2024",
+  "vpop mới phát hành hot",
+  "bài hát mới ra mắt việt nam",
+  "nhạc trẻ mới phát hành",
+  "nhạc mới phát hành hôm nay"
+];
+
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 app.get("/api/home", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   try {
+    const randomTrendingQuery = TRENDING_QUERIES[Math.floor(Math.random() * TRENDING_QUERIES.length)];
+    const randomNewReleaseQuery = NEW_RELEASE_QUERIES[Math.floor(Math.random() * NEW_RELEASE_QUERIES.length)];
+
     const [trendingRes, newReleasesRes] = await Promise.all([
-      searchYouTubeMusicStructured("nhạc trending"),
-      searchYouTubeMusicStructured("nhạc mới v-pop"),
+      searchYouTubeMusicStructured(randomTrendingQuery),
+      searchYouTubeMusicStructured(randomNewReleaseQuery),
     ]);
+
+    const trendingTracks = shuffleArray(trendingRes.tracks || []);
+    const newReleaseTracks = shuffleArray(newReleasesRes.tracks || []);
+
     return res.json({
-      trending: trendingRes.tracks || [],
-      newReleases: newReleasesRes.tracks || [],
+      trending: trendingTracks,
+      newReleases: newReleaseTracks,
     });
   } catch (err: any) {
     console.error("[Home API Error]", err.message);

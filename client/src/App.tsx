@@ -160,6 +160,65 @@ function compareSortItems(a: any, b: any): number {
   });
 }
 
+
+interface UnifiedPlayOverlayProps {
+  isCurrent: boolean;
+  isPlaying: boolean;
+  isLoading?: boolean;
+  onToggle: (e: React.MouseEvent) => void;
+  size?: "sm" | "md" | "lg";
+  className?: string;
+  buttonClassName?: string;
+}
+
+const UnifiedPlayOverlay: React.FC<UnifiedPlayOverlayProps> = ({
+  isCurrent,
+  isPlaying,
+  isLoading = false,
+  onToggle,
+  size = "md",
+  className = "",
+  buttonClassName = "",
+}) => {
+  const sizeClasses = {
+    sm: "w-8 h-8",
+    md: "w-10 h-10",
+    lg: "w-12 h-12",
+  }[size];
+
+  const iconSizes = {
+    sm: "w-4 h-4",
+    md: "w-5 h-5",
+    lg: "w-6 h-6",
+  }[size];
+
+  return (
+    <div
+      className={`absolute inset-0 bg-black/45 flex items-center justify-center transition-all duration-200 z-10 ${
+        isCurrent ? "opacity-100 backdrop-blur-[1px]" : "opacity-0 group-hover:opacity-100"
+      } ${className}`}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle(e);
+        }}
+        className={`${sizeClasses} rounded-full theme-btn-primary flex items-center justify-center shadow-xl text-white hover:scale-110 active:scale-95 transition-all duration-150 cursor-pointer ${buttonClassName}`}
+        title={isLoading ? "Đang tải..." : isCurrent && isPlaying ? "Tạm dừng" : "Phát"}
+      >
+        {isLoading ? (
+          <Loader2 className={`${iconSizes} animate-spin text-white`} />
+        ) : isCurrent && isPlaying ? (
+          <Pause className={`${iconSizes} fill-current text-white`} />
+        ) : (
+          <Play className={`${iconSizes} fill-current text-white translate-x-0.5`} />
+        )}
+      </button>
+    </div>
+  );
+};
+
 export default function App() {
   const [playlist, setPlaylist] = useState<Track[]>([]);
   const [queueTracks, setQueueTracks] = useState<Track[]>([]);
@@ -853,7 +912,7 @@ export default function App() {
 
     // Fetch Live Home Feed (Trending & New Releases)
     setIsHomeLoading(true);
-    fetch(`${API_BASE}/api/home`)
+    fetch(`${API_BASE}/api/home?_t=${Date.now()}`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data) {
@@ -1509,7 +1568,34 @@ export default function App() {
     }
   };
 
+  const handlePlaySongItem = (
+    track: Track,
+    contextList?: Track[],
+    startIndex?: number
+  ) => {
+    if (currentTrack?.id === track.id) {
+      togglePlayPause();
+      return;
+    }
+    const list = contextList && contextList.length > 0 ? contextList : [track, ...queueTracks];
+    setPlaylist(list);
+    playlistRef.current = list;
+    setQueueTracks(list);
+    queueTracksRef.current = list;
+    const idx = startIndex !== undefined && startIndex >= 0
+      ? startIndex
+      : list.findIndex((t) => t.id === track.id);
+    const playIdx = idx !== -1 ? idx : 0;
+    setCurrentIndex(playIdx);
+    currentIndexRef.current = playIdx;
+    loadAndPlayTrack(track, true);
+  };
+
   const playSearchResult = (track: Track) => {
+    if (currentTrack?.id === track.id) {
+      togglePlayPause();
+      return;
+    }
     if (searchResults && searchResults.length > 0) {
       setPlaylist(searchResults);
       playlistRef.current = searchResults;
@@ -1540,6 +1626,10 @@ export default function App() {
   };
 
   const playTrackDirectly = (track: Track) => {
+    if (currentTrack?.id === track.id) {
+      togglePlayPause();
+      return;
+    }
     const existingIdx = queueTracks.findIndex((t) => t.id === track.id);
     if (existingIdx !== -1) {
       setCurrentIndex(existingIdx);
@@ -2205,19 +2295,20 @@ export default function App() {
                                     }}
                                     className="w-full h-full object-cover"
                                   />
-                                  <div
-                                    className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-                                      isCurrentPlaying ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                                    }`}
-                                  >
-                                    <div className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
-                                      {isCurrentPlaying && isPlaying ? (
-                                        <Pause className="w-5 h-5 fill-current" />
-                                      ) : (
-                                        <Play className="w-5 h-5 fill-current translate-x-0.5" />
-                                      )}
-                                    </div>
-                                  </div>
+                                  <UnifiedPlayOverlay
+                                    isCurrent={isCurrentPlaying}
+                                    isPlaying={isCurrentPlaying && isPlaying}
+                                    onToggle={() => {
+                                      if (isCurrentPlaying) {
+                                        togglePlayPause();
+                                      } else {
+                                        setPlaylist(artistTracks);
+                                        setQueueTracks(artistTracks);
+                                        setCurrentIndex(idx);
+                                        loadAndPlayTrack(item, true);
+                                      }
+                                    }}
+                                  />
                                   {item.duration > 0 && (
                                     <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
                                       {formatTime(item.duration)}
@@ -2277,19 +2368,12 @@ export default function App() {
                                   }}
                                   className="w-full h-full object-cover"
                                 />
-                                <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity ${
-                                  activePlayingPlaylistId === pl.id || loadingPlaylistId === pl.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                                }`}>
-                                  <div className="w-11 h-11 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
-                                    {loadingPlaylistId === pl.id ? (
-                                      <Loader2 className="w-5 h-5 animate-spin text-white" />
-                                    ) : activePlayingPlaylistId === pl.id && isPlaying ? (
-                                      <Pause className="w-5 h-5 fill-current" />
-                                    ) : (
-                                      <Play className="w-5 h-5 fill-current translate-x-0.5" />
-                                    )}
-                                  </div>
-                                </div>
+                                <UnifiedPlayOverlay
+                                  isCurrent={activePlayingPlaylistId === pl.id}
+                                  isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
+                                  isLoading={loadingPlaylistId === pl.id}
+                                  onToggle={() => playPlaylistItem(pl)}
+                                />
                                 <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
                                   Playlist
                                 </span>
@@ -2614,19 +2698,12 @@ export default function App() {
                                     }}
                                     className="w-full h-full object-cover"
                                   />
-                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        playPlaylistItem(pl);
-                                      }}
-                                      className="w-11 h-11 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                                      title="Phát danh sách này"
-                                    >
-                                      <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                    </button>
-                                  </div>
+                                  <UnifiedPlayOverlay
+                                    isCurrent={activePlayingPlaylistId === pl.id}
+                                    isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
+                                    isLoading={loadingPlaylistId === pl.id}
+                                    onToggle={() => playPlaylistItem(pl)}
+                                  />
                                   <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
                                     Playlist
                                   </span>
@@ -2694,32 +2771,17 @@ export default function App() {
                                       }}
                                       className="w-full h-full object-cover"
                                     />
-                                    <div
-                                      className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-                                        isCurrentPlaying
-                                          ? "opacity-100"
-                                          : "opacity-0 group-hover:opacity-100"
-                                      }`}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isCurrentPlaying) {
-                                            togglePlayPause();
-                                          } else {
-                                            playSearchResult(item);
-                                          }
-                                        }}
-                                        className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                                      >
-                                        {isCurrentPlaying && isPlaying ? (
-                                          <Pause className="w-5 h-5 text-white fill-current" />
-                                        ) : (
-                                          <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                        )}
-                                      </button>
-                                    </div>
+                                    <UnifiedPlayOverlay
+                                      isCurrent={isCurrentPlaying}
+                                      isPlaying={isCurrentPlaying && isPlaying}
+                                      onToggle={() => {
+                                        if (isCurrentPlaying) {
+                                          togglePlayPause();
+                                        } else {
+                                          playSearchResult(item);
+                                        }
+                                      }}
+                                    />
                                     {item.duration > 0 && (
                                       <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
                                         {formatTime(item.duration)}
@@ -2790,32 +2852,17 @@ export default function App() {
                                   }}
                                   className="w-full h-full object-cover"
                                 />
-                                <div
-                                  className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-                                    isCurrentPlaying
-                                      ? "opacity-100"
-                                      : "opacity-0 group-hover:opacity-100"
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (isCurrentPlaying) {
-                                        togglePlayPause();
-                                      } else {
-                                        playSearchResult(item);
-                                      }
-                                    }}
-                                    className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                                  >
-                                    {isCurrentPlaying && isPlaying ? (
-                                      <Pause className="w-5 h-5 text-white fill-current" />
-                                    ) : (
-                                      <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                    )}
-                                  </button>
-                                </div>
+                                <UnifiedPlayOverlay
+                                  isCurrent={isCurrentPlaying}
+                                  isPlaying={isCurrentPlaying && isPlaying}
+                                  onToggle={() => {
+                                    if (isCurrentPlaying) {
+                                      togglePlayPause();
+                                    } else {
+                                      playSearchResult(item);
+                                    }
+                                  }}
+                                />
                                 {item.duration > 0 && (
                                   <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
                                     {formatTime(item.duration)}
@@ -2918,25 +2965,12 @@ export default function App() {
                                   }}
                                   className="w-full h-full object-cover"
                                 />
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      playPlaylistItem(pl);
-                                    }}
-                                    className="w-11 h-11 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                                    title={activePlayingPlaylistId === pl.id && isPlaying ? "Tạm dừng danh sách này" : "Phát danh sách này"}
-                                  >
-                                    {loadingPlaylistId === pl.id ? (
-                                      <Loader2 className="w-5 h-5 text-white animate-spin" />
-                                    ) : activePlayingPlaylistId === pl.id && isPlaying ? (
-                                      <Pause className="w-5 h-5 text-white fill-current" />
-                                    ) : (
-                                      <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                    )}
-                                  </button>
-                                </div>
+                                <UnifiedPlayOverlay
+                                  isCurrent={activePlayingPlaylistId === pl.id}
+                                  isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
+                                  isLoading={loadingPlaylistId === pl.id}
+                                  onToggle={() => playPlaylistItem(pl)}
+                                />
                                 <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
                                   Playlist
                                 </span>
@@ -3029,41 +3063,47 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                    {trendingTracks.slice(0, 12).map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          setPlaylist(trendingTracks);
-                          setQueueTracks(trendingTracks);
-                          const idx = trendingTracks.findIndex((t) => t.id === item.id);
-                          setCurrentIndex(idx !== -1 ? idx : 0);
-                          loadAndPlayTrack(item, true);
-                        }}
-                        className="w-full flex flex-col cursor-pointer group"
-                      >
-                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                          <img
-                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                            alt={item.title}
-                            onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
-                            }}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
-                              <Play className="w-5 h-5 fill-white ml-0.5" />
-                            </div>
+                    {trendingTracks.slice(0, 12).map((item, idx) => {
+                      const isCurrent = currentTrack?.id === item.id;
+                      const isThisPlaying = isCurrent && isPlaying;
+                      return (
+                        <div
+                          key={item.id + "-" + idx}
+                          onClick={() => handlePlaySongItem(item, trendingTracks, idx)}
+                          className="w-full flex flex-col cursor-pointer group"
+                        >
+                          <div
+                            className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
+                              isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
+                            }`}
+                          >
+                            <img
+                              src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                              alt={item.title}
+                              onError={(e) => {
+                                e.currentTarget.src = DEFAULT_TRACK_ART;
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                            <UnifiedPlayOverlay
+                              isCurrent={isCurrent}
+                              isPlaying={isThisPlaying}
+                              onToggle={() => handlePlaySongItem(item, trendingTracks, idx)}
+                            />
                           </div>
+                          <p
+                            className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
+                              isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
+                            }`}
+                          >
+                            {item.title}
+                          </p>
+                          <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                            {item.author || "Kahoii Music"}
+                          </p>
                         </div>
-                        <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 transition-colors">
-                          {item.title}
-                        </p>
-                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                          {item.author || "Kahoii Music"}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3116,41 +3156,47 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                    {newReleaseTracks.slice(0, 12).map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          setPlaylist(newReleaseTracks);
-                          setQueueTracks(newReleaseTracks);
-                          const idx = newReleaseTracks.findIndex((t) => t.id === item.id);
-                          setCurrentIndex(idx !== -1 ? idx : 0);
-                          loadAndPlayTrack(item, true);
-                        }}
-                        className="w-full flex flex-col cursor-pointer group"
-                      >
-                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                          <img
-                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                            alt={item.title}
-                            onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
-                            }}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
-                              <Play className="w-5 h-5 fill-white ml-0.5" />
-                            </div>
+                    {newReleaseTracks.slice(0, 12).map((item, idx) => {
+                      const isCurrent = currentTrack?.id === item.id;
+                      const isThisPlaying = isCurrent && isPlaying;
+                      return (
+                        <div
+                          key={item.id + "-" + idx}
+                          onClick={() => handlePlaySongItem(item, newReleaseTracks, idx)}
+                          className="w-full flex flex-col cursor-pointer group"
+                        >
+                          <div
+                            className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
+                              isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
+                            }`}
+                          >
+                            <img
+                              src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                              alt={item.title}
+                              onError={(e) => {
+                                e.currentTarget.src = DEFAULT_TRACK_ART;
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                            <UnifiedPlayOverlay
+                              isCurrent={isCurrent}
+                              isPlaying={isThisPlaying}
+                              onToggle={() => handlePlaySongItem(item, newReleaseTracks, idx)}
+                            />
                           </div>
+                          <p
+                            className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
+                              isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
+                            }`}
+                          >
+                            {item.title}
+                          </p>
+                          <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                            {item.author || "Kahoii Music"}
+                          </p>
                         </div>
-                        <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 transition-colors">
-                          {item.title}
-                        </p>
-                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                          {item.author || "Kahoii Music"}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3244,30 +3290,47 @@ export default function App() {
                       </div>
                     ) : recentTracksToDisplay.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                        {recentTracksToDisplay.map((item) => (
-                          <div
-                            key={item.id}
-                            onClick={() => playTrackDirectly(item)}
-                            className="w-full flex flex-col cursor-pointer group"
-                          >
-                            <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                              <img
-                                src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                                alt={item.title}
-                                onError={(e) => {
-                                  e.currentTarget.src = DEFAULT_TRACK_ART;
-                                }}
-                                className="w-full h-full object-cover"
-                              />
+                        {recentTracksToDisplay.map((item, idx) => {
+                          const isCurrent = currentTrack?.id === item.id;
+                          const isThisPlaying = isCurrent && isPlaying;
+                          return (
+                            <div
+                              key={item.id + "-" + idx}
+                              onClick={() => handlePlaySongItem(item, recentTracksToDisplay, idx)}
+                              className="w-full flex flex-col cursor-pointer group"
+                            >
+                              <div
+                                className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
+                                  isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
+                                }`}
+                              >
+                                <img
+                                  src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                  alt={item.title}
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_TRACK_ART;
+                                  }}
+                                  className="w-full h-full object-cover"
+                                />
+                                <UnifiedPlayOverlay
+                                  isCurrent={isCurrent}
+                                  isPlaying={isThisPlaying}
+                                  onToggle={() => handlePlaySongItem(item, recentTracksToDisplay, idx)}
+                                />
+                              </div>
+                              <p
+                                className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
+                                  isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
+                                }`}
+                              >
+                                {item.title}
+                              </p>
+                              <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                {item.author || "Kahoii Music"}
+                              </p>
                             </div>
-                            <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 transition-colors">
-                              {item.title}
-                            </p>
-                            <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                              {item.author || "Kahoii Music"}
-                            </p>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
@@ -3305,30 +3368,47 @@ export default function App() {
                       </div>
                     ) : recommendedTracksToDisplay.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                        {recommendedTracksToDisplay.map((item) => (
-                          <div
-                            key={item.id}
-                            onClick={() => playTrackDirectly(item)}
-                            className="w-full flex flex-col cursor-pointer group"
-                          >
-                            <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                              <img
-                                src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                                alt={item.title}
-                                onError={(e) => {
-                                  e.currentTarget.src = DEFAULT_TRACK_ART;
-                                }}
-                                className="w-full h-full object-cover"
-                              />
+                        {recommendedTracksToDisplay.map((item, idx) => {
+                          const isCurrent = currentTrack?.id === item.id;
+                          const isThisPlaying = isCurrent && isPlaying;
+                          return (
+                            <div
+                              key={item.id + "-" + idx}
+                              onClick={() => handlePlaySongItem(item, recommendedTracksToDisplay, idx)}
+                              className="w-full flex flex-col cursor-pointer group"
+                            >
+                              <div
+                                className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
+                                  isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
+                                }`}
+                              >
+                                <img
+                                  src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                  alt={item.title}
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_TRACK_ART;
+                                  }}
+                                  className="w-full h-full object-cover"
+                                />
+                                <UnifiedPlayOverlay
+                                  isCurrent={isCurrent}
+                                  isPlaying={isThisPlaying}
+                                  onToggle={() => handlePlaySongItem(item, recommendedTracksToDisplay, idx)}
+                                />
+                              </div>
+                              <p
+                                className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
+                                  isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
+                                }`}
+                              >
+                                {item.title}
+                              </p>
+                              <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                {item.author || "Kahoii Music"}
+                              </p>
                             </div>
-                            <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 transition-colors">
-                              {item.title}
-                            </p>
-                            <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                              {item.author || "Kahoii Music"}
-                            </p>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
