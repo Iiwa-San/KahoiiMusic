@@ -16,7 +16,13 @@ function getSavedDir(): string {
   for (const dir of candidateDirs) {
     if (fs.existsSync(dir)) return dir;
   }
-  return path.resolve(process.cwd(), "Saved");
+  const fallback = path.resolve(process.cwd(), "Saved");
+  if (!fs.existsSync(fallback)) {
+    try {
+      fs.mkdirSync(fallback, { recursive: true });
+    } catch {}
+  }
+  return fallback;
 }
 
 function readJsonClean(filePath: string): any {
