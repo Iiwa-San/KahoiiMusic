@@ -44,102 +44,14 @@ import { formatTime } from "./utils/lyricsParser";
 import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/colorExtractor";
 
 // Official App Logo & Favicon placeholder
-const DEFAULT_TRACK_ART = "/logo_icon.png";
+const DEFAULT_TRACK_ART = "./logo_icon.png";
 
 // Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
-// Curated Initial Trending Tracks (Preloaded immediately before network returns)
-const INITIAL_TRENDING_TRACKS: Track[] = [
-  {
-    id: "d3WWp_yU2L4",
-    title: "Nơi Này Có Anh",
-    author: "Sơn Tùng M-TP",
-    duration: 260,
-    thumbnail: "https://i.ytimg.com/vi/d3WWp_yU2L4/mqdefault.jpg",
-  },
-  {
-    id: "cAmZ_k2n9yA",
-    title: "Chúng Ta Của Tương Lai",
-    author: "Sơn Tùng M-TP",
-    duration: 254,
-    thumbnail: "https://i.ytimg.com/vi/cAmZ_k2n9yA/mqdefault.jpg",
-  },
-  {
-    id: "oZpLwV8H_F4",
-    title: "Đúng Người Đúng Thời Điểm",
-    author: "Thanh Hưng",
-    duration: 250,
-    thumbnail: "https://i.ytimg.com/vi/oZpLwV8H_F4/mqdefault.jpg",
-  },
-  {
-    id: "q0m0o5H0uS8",
-    title: "Từng Là",
-    author: "Vũ Cát Tường",
-    duration: 236,
-    thumbnail: "https://i.ytimg.com/vi/q0m0o5H0uS8/mqdefault.jpg",
-  },
-  {
-    id: "1J5eCsqcW_M",
-    title: "Ngày Mai Người Ta Lấy Chồng",
-    author: "Thành Đạt",
-    duration: 320,
-    thumbnail: "https://i.ytimg.com/vi/1J5eCsqcW_M/mqdefault.jpg",
-  },
-  {
-    id: "tP3r3r34wQA",
-    title: "Cắt Đôi Nỗi Sầu",
-    author: "Tăng Duy Tân",
-    duration: 188,
-    thumbnail: "https://i.ytimg.com/vi/tP3r3r34wQA/mqdefault.jpg",
-  },
-];
-
-// Curated Initial New Releases
-const INITIAL_NEW_RELEASES: Track[] = [
-  {
-    id: "abPmZCZZrFA",
-    title: "Đừng Làm Trái Tim Anh Đau",
-    author: "Sơn Tùng M-TP",
-    duration: 326,
-    thumbnail: "https://i.ytimg.com/vi/abPmZCZZrFA/mqdefault.jpg",
-  },
-  {
-    id: "Jg9Z6n2Wn1o",
-    title: "Bầu Trời Mới",
-    author: "Da LAB ft. Minh Tốc & Lam",
-    duration: 218,
-    thumbnail: "https://i.ytimg.com/vi/Jg9Z6n2Wn1o/mqdefault.jpg",
-  },
-  {
-    id: "uB1T1VbZt9g",
-    title: "Nâng Chén Tiêu Sầu",
-    author: "Bích Phương",
-    duration: 228,
-    thumbnail: "https://i.ytimg.com/vi/uB1T1VbZt9g/mqdefault.jpg",
-  },
-  {
-    id: "8zV_x8G9L3w",
-    title: "Thủy Triều",
-    author: "Quang Hùng MasterD",
-    duration: 204,
-    thumbnail: "https://i.ytimg.com/vi/8zV_x8G9L3w/mqdefault.jpg",
-  },
-  {
-    id: "yV9w8k2n1pM",
-    title: "Giá Như",
-    author: "Soobin Hoàng Sơn",
-    duration: 245,
-    thumbnail: "https://i.ytimg.com/vi/yV9w8k2n1pM/mqdefault.jpg",
-  },
-  {
-    id: "oK8v3W9mZ1p",
-    title: "Từng Quen",
-    author: "Wren Evans",
-    duration: 178,
-    thumbnail: "https://i.ytimg.com/vi/oK8v3W9mZ1p/mqdefault.jpg",
-  },
-];
+// Initial Curated Tracks (Empty by default, skeleton loader displays until live data arrives)
+const INITIAL_TRENDING_TRACKS: Track[] = [];
+const INITIAL_NEW_RELEASES: Track[] = [];
 
 // Nhạc Sĩ Nổi Bật (Featured Artists - High-res local avatars)
 const FEATURED_ARTISTS = [
@@ -1618,9 +1530,9 @@ export default function App() {
         {/* Left: App Logo & Brand Identity */}
         <div className="w-[160px] flex items-center gap-2.5">
           <img
-            src="/logo_icon.png"
+            src="./logo_icon.png"
             alt="Kahoii Music"
-            className="w-7 h-7 rounded-lg object-contain shadow-md shadow-pink-500/20"
+            className="w-7 h-7 rounded-lg object-contain shadow-md shadow-black/40"
           />
           <span className="font-extrabold text-sm tracking-wide bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
             Kahoii Music
@@ -1631,9 +1543,9 @@ export default function App() {
         <div ref={searchDropdownRef} className="relative flex-1 max-w-[580px]">
           <form
             onSubmit={handleTopSearchSubmit}
-            className="w-full h-[36px] px-4 rounded-full bg-[#390f8d]/60 border border-purple-500/40 hover:border-pink-500/70 focus-within:border-pink-500 flex items-center gap-2.5 shadow-inner transition-all"
+            className="w-full h-[36px] px-4 rounded-full theme-input-pill flex items-center gap-2.5 shadow-inner transition-all"
           >
-            <Search className="w-4 h-4 text-pink-400 flex-shrink-0" />
+            <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
             <input
               type="text"
               placeholder="Search"
@@ -1661,19 +1573,19 @@ export default function App() {
               type="button"
               onClick={handlePasteClick}
               title="Dán từ Clipboard"
-              className="px-4 py-0.5 rounded-full bg-[#200645] hover:bg-pink-600 border border-white/20 text-xs font-semibold text-white transition-all cursor-pointer flex items-center gap-1"
+              className="px-4 py-0.5 rounded-full bg-white/10 hover:theme-accent-bg hover:text-white border border-white/20 text-xs font-semibold text-white transition-all cursor-pointer flex items-center gap-1"
             >
-              <ClipboardPaste className="w-3 h-3 text-pink-300" />
+              <ClipboardPaste className="w-3 h-3 text-white/80" />
               <span>Dán</span>
             </button>
           </form>
 
           {/* Quick Search History Dropdown Popover */}
           {isSearchFocused && searchHistory.length > 0 && (
-            <div className="absolute top-[42px] left-0 right-0 rounded-2xl bg-[#160430]/95 border border-purple-500/50 backdrop-blur-xl shadow-2xl p-3 z-50 animate-fade-in flex flex-col gap-1.5">
+            <div className="absolute top-[42px] left-0 right-0 rounded-2xl theme-card-bg backdrop-blur-xl shadow-2xl p-3 z-50 animate-fade-in flex flex-col gap-1.5">
               <div className="flex items-center justify-between px-2 pb-1.5 border-b border-white/10 text-[11px] font-semibold text-white/60">
-                <span className="flex items-center gap-1.5 text-pink-300">
-                  <Clock className="w-3.5 h-3.5 text-pink-400" />
+                <span className="flex items-center gap-1.5 theme-accent-text">
+                  <Clock className="w-3.5 h-3.5 theme-accent-text" />
                   Lịch sử tìm kiếm
                 </span>
                 <button
@@ -1689,10 +1601,10 @@ export default function App() {
                   <div
                     key={idx}
                     onClick={() => handleHistoryItemClick(query)}
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-xs text-white/90 hover:text-pink-300 transition-colors cursor-pointer group"
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-xs text-white/90 hover:theme-accent-text transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-2 truncate flex-1 min-w-0 pr-2">
-                      <Clock className="w-3.5 h-3.5 text-white/30 group-hover:text-pink-400 flex-shrink-0" />
+                      <Clock className="w-3.5 h-3.5 text-white/30 group-hover:theme-accent-text flex-shrink-0" />
                       <span className="truncate">{query}</span>
                     </div>
                     <button
@@ -1724,7 +1636,7 @@ export default function App() {
                 onError={(e) => {
                   e.currentTarget.src = DEFAULT_TRACK_ART;
                 }}
-                className="w-6 h-6 rounded-full object-cover border border-pink-500/40 shadow-sm"
+                className="w-6 h-6 rounded-full object-cover border border-white/20 shadow-sm"
               />
               <span className="max-w-[70px] truncate text-black font-semibold">
                 {userSession.user?.name || "avatar"}
@@ -1734,7 +1646,7 @@ export default function App() {
             <button
               onClick={() => setIsAccountOpen(true)}
               title="Đăng nhập"
-              className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90 text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
+              className="px-3.5 py-1.5 rounded-full theme-btn-primary hover:opacity-90 text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
             >
               <User className="w-3.5 h-3.5" />
               <span>Đăng nhập</span>
@@ -1761,12 +1673,12 @@ export default function App() {
               ? "bg-amber-950/90 border-amber-500/60 text-amber-200 shadow-amber-500/20"
               : toast.type === "success"
               ? "bg-emerald-950/90 border-emerald-500/60 text-emerald-200 shadow-emerald-500/20"
-              : "bg-purple-950/90 border-pink-500/60 text-pink-200 shadow-pink-500/20"
+              : "theme-card-bg theme-accent-text shadow-xl"
           }`}
         >
           {toast.type === "warning" && <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />}
           {toast.type === "success" && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
-          {toast.type === "info" && <Sparkles className="w-4 h-4 text-pink-400 flex-shrink-0" />}
+          {toast.type === "info" && <Sparkles className="w-4 h-4 theme-accent-text flex-shrink-0" />}
           <span>{toast.text}</span>
           <button
             onClick={() => setToast(null)}
@@ -1826,7 +1738,7 @@ export default function App() {
 
           {!userSession?.isLoggedIn ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-3 bg-white/5 rounded-2xl border border-white/10 my-auto">
-              <div className="w-12 h-12 rounded-full bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.3)]">
+              <div className="w-12 h-12 rounded-full theme-badge flex items-center justify-center theme-accent-text shadow-md">
                 <FolderHeart className="w-6 h-6" />
               </div>
               <div>
@@ -1838,7 +1750,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsAccountOpen(true)}
-                className="mt-2 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-semibold hover:opacity-95 active:scale-95 transition-all cursor-pointer shadow-lg shadow-pink-500/30"
+                className="mt-2 px-4 py-2 rounded-xl theme-btn-primary text-white text-xs font-semibold hover:opacity-95 active:scale-95 transition-all cursor-pointer shadow-lg"
               >
                 Đăng nhập ngay
               </button>
@@ -1847,10 +1759,10 @@ export default function App() {
             <>
               {/* Search Box in Sidebar with Sort Icon (Matching Figma: Centered text, pink icons) */}
               <div
-                className="relative flex items-center h-10 px-3.5 rounded-full bg-[#1e053a] border border-purple-500/30 hover:border-pink-500/50 focus-within:border-pink-500 transition-all flex-shrink-0"
+                className="relative flex items-center h-10 px-3.5 rounded-full theme-input-pill transition-all flex-shrink-0"
                 style={{ marginBottom: "22px" }}
               >
-                <Search className="w-4 h-4 text-[#e0007b] flex-shrink-0" />
+                <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
                 <input
                   type="text"
                   placeholder="Search"
@@ -1863,7 +1775,7 @@ export default function App() {
                   onClick={() => setIsLeftSorted(!isLeftSorted)}
                   title={isLeftSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
                   className={`p-1 rounded-md transition-all cursor-pointer flex-shrink-0 ${
-                    isLeftSorted ? "text-white bg-pink-500/40 shadow-sm" : "text-[#e0007b] hover:text-white"
+                    isLeftSorted ? "theme-badge-active" : "theme-accent-text hover:text-white"
                   }`}
                 >
                   <ArrowDownAZ className="w-4 h-4" />
@@ -1910,7 +1822,7 @@ export default function App() {
                         className="w-11 h-11 rounded-[14px] object-cover flex-shrink-0 border border-white/10 shadow-sm"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13.5px] font-semibold text-white group-hover:text-pink-300 truncate transition-colors">
+                        <p className="text-[13.5px] font-semibold text-white group-hover:theme-accent-text truncate transition-colors">
                           {item.title}
                         </p>
                         <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
@@ -1958,9 +1870,9 @@ export default function App() {
                       setSearchQueryTitle("");
                       setActiveSearchTab("all");
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-pink-500/20 text-white/80 hover:text-white border border-white/10 transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
+                    className="px-3 py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
                   >
-                    <ArrowLeft className="w-4 h-4 text-pink-400 group-hover:-translate-x-0.5 transition-transform" />
+                    <ArrowLeft className="w-4 h-4 theme-accent-text group-hover:-translate-x-0.5 transition-transform" />
                     <span>Quay lại Khám phá</span>
                   </button>
                   <h2 className="text-[20px] font-bold text-white tracking-wide truncate">
@@ -2004,7 +1916,7 @@ export default function App() {
                       }
                       className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
                         isActive
-                          ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25 scale-[1.02]"
+                          ? "theme-badge-active scale-[1.02]"
                           : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5"
                       }`}
                     >
@@ -2026,7 +1938,7 @@ export default function App() {
               {/* Body: Loading / Results Multi-tier Grid / Empty state */}
               {isSearching ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-pink-400" />
+                  <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
                   <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
                 </div>
               ) : searchResults.length > 0 || (searchStructured && (searchStructured.artists.length > 0 || searchStructured.playlists.length > 0)) ? (
@@ -2079,7 +1991,7 @@ export default function App() {
                                   });
                                 }
                               }}
-                              className="w-full rounded-[20px] p-4 bg-gradient-to-r from-[#2f1647]/95 via-[#1e1335]/95 to-[#140d24]/95 border border-pink-500/35 hover:border-pink-500/70 shadow-xl shadow-pink-500/10 transition-all flex items-center justify-between gap-4 group cursor-pointer"
+                              className="w-full rounded-[20px] p-4 theme-card-bg shadow-xl transition-all flex items-center justify-between gap-4 group cursor-pointer"
                             >
                               <div className="flex items-center gap-4 min-w-0">
                                 {/* Large Artwork */}
@@ -2101,11 +2013,11 @@ export default function App() {
 
                                 {/* Track Info */}
                                 <div className="min-w-0 flex flex-col justify-center">
-                                  <span className="text-[10px] uppercase font-bold tracking-widest text-pink-400 mb-1 flex items-center gap-1.5">
-                                    <Sparkles className="w-3 h-3 text-pink-400" />
+                                  <span className="text-[10px] uppercase font-bold tracking-widest theme-accent-text mb-1 flex items-center gap-1.5">
+                                    <Sparkles className="w-3 h-3 theme-accent-text" />
                                     BÀI HÁT PHÙ HỢP NHẤT
                                   </span>
-                                  <h3 className="text-base sm:text-lg font-bold text-white tracking-wide truncate group-hover:text-pink-300 transition-colors">
+                                  <h3 className="text-base sm:text-lg font-bold text-white tracking-wide truncate group-hover:theme-accent-text transition-colors">
                                     {top.title}
                                   </h3>
                                   <p className="text-xs text-purple-200/70 truncate mt-1">
@@ -2136,7 +2048,7 @@ export default function App() {
                                       });
                                     }
                                   }}
-                                  className="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                                  className="px-5 py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
                                 >
                                   {isCurrentPlaying && isPlaying ? (
                                     <>
@@ -2162,14 +2074,14 @@ export default function App() {
                           <div className="flex items-center justify-between mb-3">
                             <h3
                               onClick={() => setActiveSearchTab("artists")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
                             >
                               <span>Nhạc sĩ</span>
                             </h3>
                             <button
                               type="button"
                               onClick={() => setActiveSearchTab("artists")}
-                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
                             >
                               Xem tất cả ({searchStructured.artists.length})
                             </button>
@@ -2182,7 +2094,7 @@ export default function App() {
                                 className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0"
                                 style={{ width: "170px" }}
                               >
-                                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-[3px] border-pink-500/30 group-hover:border-pink-500 group-hover:shadow-[0_0_22px_rgba(236,72,153,0.45)] group-hover:scale-105 transition-all duration-300 shadow-xl bg-purple-950/60 mb-2.5 relative">
+                                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-2.5 relative">
                                   <img
                                     src={artist.thumbnail || DEFAULT_TRACK_ART}
                                     alt={artist.name}
@@ -2192,12 +2104,12 @@ export default function App() {
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                   />
                                   <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                    <div className="w-9 h-9 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                    <div className="w-9 h-9 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
                                       <Search className="w-4 h-4 text-white" />
                                     </div>
                                   </div>
                                 </div>
-                                <p className="text-sm font-bold text-white group-hover:text-pink-300 text-center truncate w-full">
+                                <p className="text-sm font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
                                   {artist.name}
                                 </p>
                                 <p className="text-[11px] text-purple-200/60 text-center truncate w-full mt-0.5">
@@ -2215,14 +2127,14 @@ export default function App() {
                           <div className="flex items-center justify-between mb-3">
                             <h3
                               onClick={() => setActiveSearchTab("playlists")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
                             >
                               <span>Playlist</span>
                             </h3>
                             <button
                               type="button"
                               onClick={() => setActiveSearchTab("playlists")}
-                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
                             >
                               Xem tất cả ({searchStructured.playlists.length})
                             </button>
@@ -2250,7 +2162,7 @@ export default function App() {
                                         e.stopPropagation();
                                         playPlaylistItem(pl);
                                       }}
-                                      className="w-11 h-11 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                      className="w-11 h-11 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
                                       title="Phát danh sách này"
                                     >
                                       <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
@@ -2260,7 +2172,7 @@ export default function App() {
                                     Playlist
                                   </span>
                                 </div>
-                                <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5">
+                                <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-1.5">
                                   {pl.title}
                                 </p>
                                 <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
@@ -2278,14 +2190,14 @@ export default function App() {
                           <div className="flex items-center justify-between mb-3">
                             <h3
                               onClick={() => setActiveSearchTab("tracks")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
                             >
                               <span>Bài hát</span>
                             </h3>
                             <button
                               type="button"
                               onClick={() => setActiveSearchTab("tracks")}
-                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
                             >
                               Xem tất cả ({searchResults.length})
                             </button>
@@ -2308,7 +2220,7 @@ export default function App() {
                                   <div
                                     className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
                                       isCurrentPlaying
-                                        ? "border-pink-500 shadow-pink-500/30"
+                                        ? "theme-accent-border shadow-lg"
                                         : "border-white/5 bg-purple-900/30"
                                     }`}
                                   >
@@ -2340,7 +2252,7 @@ export default function App() {
                                             playSearchResult(item);
                                           }
                                         }}
-                                        className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                        className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
                                       >
                                         {isCurrentPlaying && isPlaying ? (
                                           <Pause className="w-5 h-5 text-white fill-current" />
@@ -2358,8 +2270,8 @@ export default function App() {
                                   <p
                                     className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
                                       isCurrentPlaying
-                                        ? "text-pink-300 font-bold"
-                                        : "text-white/90 group-hover:text-pink-300"
+                                        ? "theme-accent-text font-bold"
+                                        : "text-white/90 group-hover:theme-accent-text"
                                     }`}
                                   >
                                     {item.title}
@@ -2404,7 +2316,7 @@ export default function App() {
                               <div
                                 className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
                                   isCurrentPlaying
-                                    ? "border-pink-500 shadow-pink-500/30"
+                                    ? "theme-accent-border shadow-lg"
                                     : "border-white/5 bg-purple-900/30"
                                 }`}
                               >
@@ -2436,7 +2348,7 @@ export default function App() {
                                         playSearchResult(item);
                                       }
                                     }}
-                                    className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                    className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
                                   >
                                     {isCurrentPlaying && isPlaying ? (
                                       <Pause className="w-5 h-5 text-white fill-current" />
@@ -2454,8 +2366,8 @@ export default function App() {
                               <p
                                 className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
                                   isCurrentPlaying
-                                    ? "text-pink-300 font-bold"
-                                    : "text-white/90 group-hover:text-pink-300"
+                                    ? "theme-accent-text font-bold"
+                                    : "text-white/90 group-hover:theme-accent-text"
                                 }`}
                               >
                                 {item.title}
@@ -2488,7 +2400,7 @@ export default function App() {
                               onClick={() => executeSearch(artist.name)}
                               className="flex flex-col items-center p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
                             >
-                              <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden border-[3px] border-pink-500/30 group-hover:border-pink-500 group-hover:shadow-[0_0_25px_rgba(236,72,153,0.45)] group-hover:scale-105 transition-all duration-300 shadow-xl bg-purple-950/60 mb-3 relative">
+                              <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-3 relative">
                                 <img
                                   src={artist.thumbnail || DEFAULT_TRACK_ART}
                                   alt={artist.name}
@@ -2498,12 +2410,12 @@ export default function App() {
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                 />
                                 <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                  <div className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
                                     <Search className="w-5 h-5 text-white" />
                                   </div>
                                 </div>
                               </div>
-                              <p className="text-base font-bold text-white group-hover:text-pink-300 text-center truncate w-full">
+                              <p className="text-base font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
                                 {artist.name}
                               </p>
                               <p className="text-xs text-purple-200/60 text-center truncate w-full mt-1">
@@ -2554,7 +2466,7 @@ export default function App() {
                                       e.stopPropagation();
                                       playPlaylistItem(pl);
                                     }}
-                                    className="w-11 h-11 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                    className="w-11 h-11 rounded-full theme-btn-primary flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
                                     title="Phát danh sách này"
                                   >
                                     <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
@@ -2564,7 +2476,7 @@ export default function App() {
                                   Playlist
                                 </span>
                               </div>
-                              <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5">
+                              <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-1.5">
                                 {pl.title}
                               </p>
                               <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
@@ -2592,7 +2504,7 @@ export default function App() {
                       setSearchQueryTitle("");
                       setActiveSearchTab("all");
                     }}
-                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-pink-600 text-xs font-semibold text-white transition-all cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-white/10 hover:theme-accent-bg text-xs font-semibold text-white transition-all cursor-pointer"
                   >
                     Quay lại Khám phá
                   </button>
@@ -2608,13 +2520,13 @@ export default function App() {
               <div>
                 <div className="flex items-center justify-between mb-3.5">
                   <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-5 h-5 text-pink-400" />
+                    <Sparkles className="w-5 h-5 theme-accent-text" />
                     <h2 className="text-[20px] font-bold text-white tracking-wide">
                       Nhạc Trending
                     </h2>
                     {isHomeLoading && (
-                      <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-pink-500/10 border border-pink-500/30 text-[11px] text-pink-300 animate-pulse font-medium">
-                        <Loader2 className="w-3 h-3 animate-spin text-pink-400" />
+                      <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full theme-badge animate-pulse font-medium">
+                        <Loader2 className="w-3 h-3 animate-spin theme-accent-text" />
                         <span>Đang tải...</span>
                       </div>
                     )}
@@ -2630,7 +2542,7 @@ export default function App() {
                           loadAndPlayTrack(trendingTracks[0], true);
                         }
                       }}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-full bg-pink-500/10 hover:bg-pink-500 text-pink-400 hover:text-white border border-pink-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
                       <span>Phát tất cả</span>
@@ -2642,8 +2554,8 @@ export default function App() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
                     {Array.from({ length: 6 }).map((_, idx) => (
                       <div key={idx} className="w-full flex flex-col animate-pulse">
-                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-pink-950/20 to-black/40 border border-white/5 flex items-center justify-center">
-                          <Sparkles className="w-8 h-8 text-pink-400/20 animate-pulse" />
+                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                          <Sparkles className="w-8 h-8 text-white/20 animate-pulse" />
                         </div>
                         <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
                         <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
@@ -2674,12 +2586,12 @@ export default function App() {
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/40 text-white">
+                            <div className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
                               <Play className="w-5 h-5 fill-white ml-0.5" />
                             </div>
                           </div>
                         </div>
-                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 transition-colors">
                           {item.title}
                         </p>
                         <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
@@ -2761,12 +2673,12 @@ export default function App() {
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/40 text-white">
+                            <div className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg text-white">
                               <Play className="w-5 h-5 fill-white ml-0.5" />
                             </div>
                           </div>
                         </div>
-                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 transition-colors">
                           {item.title}
                         </p>
                         <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
@@ -2781,13 +2693,13 @@ export default function App() {
               {/* Section 3: Nhạc Sĩ Nổi Bật (Đổi từ Nhạc Sĩ) */}
               <div>
                 <div className="flex items-center gap-2.5 mb-3.5">
-                  <Mic2 className="w-5 h-5 text-purple-400" />
+                  <Mic2 className="w-5 h-5 theme-sec-accent-text" />
                   <h2 className="text-[20px] font-bold text-white tracking-wide">
                     Nhạc Sĩ Nổi Bật
                   </h2>
                   {isHomeLoading && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-[11px] text-purple-300 animate-pulse font-medium">
-                      <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
+                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full theme-badge animate-pulse font-medium">
+                      <Loader2 className="w-3 h-3 animate-spin theme-accent-text" />
                       <span>Đang tải...</span>
                     </div>
                   )}
@@ -2813,7 +2725,7 @@ export default function App() {
                         onClick={() => searchArtistSongs(artist.query)}
                         className="w-full flex flex-col items-center cursor-pointer group"
                       >
-                        <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.04] transition-all duration-200">
+                        <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:theme-accent-border group-hover:scale-[1.04] transition-all duration-200">
                           <img
                             src={artist.avatar}
                             alt={artist.name}
@@ -2823,7 +2735,7 @@ export default function App() {
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 text-center w-full transition-colors">
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 text-center w-full transition-colors">
                           {artist.name}
                         </p>
                         <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
@@ -2883,7 +2795,7 @@ export default function App() {
                                 className="w-full h-full object-cover"
                               />
                             </div>
-                            <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                            <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 transition-colors">
                               {item.title}
                             </p>
                             <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
@@ -2944,7 +2856,7 @@ export default function App() {
                                 className="w-full h-full object-cover"
                               />
                             </div>
-                            <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                            <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 transition-colors">
                               {item.title}
                             </p>
                             <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
@@ -2981,8 +2893,8 @@ export default function App() {
             {!currentTrack ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden select-none">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.15)_0%,transparent_70%)]" />
-                <div className="w-16 h-16 rounded-full bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 shadow-[0_0_25px_rgba(236,72,153,0.25)] mb-2.5 p-3 overflow-hidden">
-                  <img src="/logo_icon.png" alt="Kahoii Music" className="w-full h-full object-contain drop-shadow" />
+                <div className="w-16 h-16 rounded-full theme-badge flex items-center justify-center theme-accent-text mb-2.5 p-3 overflow-hidden shadow-md">
+                  <img src="./logo_icon.png" alt="Kahoii Music" className="w-full h-full object-contain drop-shadow" />
                 </div>
                 <p className="text-xs font-bold text-white tracking-wide">Kahoii Music</p>
                 <p className="text-[10.5px] text-white/50 mt-0.5">Sẵn sàng phát nhạc</p>
@@ -3037,7 +2949,7 @@ export default function App() {
                   }}
                   className={`w-7 h-7 rounded-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${
                     showPlayerMenu
-                      ? "bg-pink-600 text-white shadow-[0_0_12px_rgba(236,72,153,0.6)]"
+                      ? "theme-badge-active shadow-md"
                       : "bg-black/40 text-white/80 hover:text-white hover:bg-black/60"
                   }`}
                   title="Tùy chọn bài hát"
@@ -3047,7 +2959,7 @@ export default function App() {
 
                 {/* Popup 1 (Menu chính: Combobox) */}
                 {showPlayerMenu && currentTrack && (
-                  <div className="absolute top-9 left-0 z-40 bg-[#160430]/95 border border-pink-500/50 backdrop-blur-xl rounded-xl shadow-2xl p-1.5 min-w-[175px] flex flex-col gap-1 text-xs animate-fade-in">
+                  <div className="absolute top-9 left-0 z-40 theme-card-bg backdrop-blur-xl rounded-xl shadow-2xl p-1.5 min-w-[175px] flex flex-col gap-1 text-xs animate-fade-in">
                     {/* Option 1: Lưu vào thư viện */}
                     <button
                       type="button"
@@ -3055,11 +2967,11 @@ export default function App() {
                         setShowLibrarySubmenu(!showLibrarySubmenu);
                       }}
                       className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${
-                        showLibrarySubmenu ? "bg-white/15 text-pink-300" : "hover:bg-white/10 text-white/90"
+                        showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
                       }`}
                     >
                       <span className="flex items-center gap-2">
-                        <FolderPlus className="w-4 h-4 text-pink-400" />
+                        <FolderPlus className="w-4 h-4 theme-accent-text" />
                         <span>Lưu vào thư viện</span>
                       </span>
                       <div className="flex items-center gap-1">
@@ -3077,7 +2989,7 @@ export default function App() {
                       className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
                     >
                       <span className="flex items-center gap-2">
-                        <Download className="w-4 h-4 text-pink-400" />
+                        <Download className="w-4 h-4 theme-accent-text" />
                         <span>Tải xuống</span>
                       </span>
                       {downloadedTrackIds.has(currentTrack.id) && (
@@ -3089,8 +3001,8 @@ export default function App() {
 
                 {/* Popup 2 (Submenu cạnh bên - side-by-side) */}
                 {showPlayerMenu && showLibrarySubmenu && currentTrack && (
-                  <div className="absolute top-9 left-[185px] z-40 bg-[#160430]/95 border border-purple-500/50 backdrop-blur-xl rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in">
-                    <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider text-purple-300">
+                  <div className="absolute top-9 left-[185px] z-40 theme-card-bg backdrop-blur-xl rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in">
+                    <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
                       <span>Thêm vào playlist</span>
                     </div>
 
@@ -3104,7 +3016,7 @@ export default function App() {
                             setShowLibrarySubmenu(false);
                             setIsAccountOpen(true);
                           }}
-                          className="px-3 py-1.5 rounded-lg bg-pink-500 hover:bg-pink-600 text-white text-xs font-semibold cursor-pointer transition-colors"
+                          className="px-3 py-1.5 rounded-lg theme-btn-primary text-white text-xs font-semibold cursor-pointer transition-colors"
                         >
                           Đăng nhập ngay
                         </button>
@@ -3116,13 +3028,13 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => setIsCreatingPlaylist(true)}
-                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 text-pink-300 font-medium transition-colors cursor-pointer text-left"
+                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 theme-accent-text font-medium transition-colors cursor-pointer text-left"
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span>Tạo playlist mới</span>
                           </button>
                         ) : (
-                          <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg border border-pink-500/40">
+                          <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg theme-accent-border">
                             <input
                               type="text"
                               placeholder="Tên playlist..."
@@ -3189,13 +3101,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setShowVolumeSlider(!showVolumeSlider)}
-                  className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-pink-400 hover:text-white hover:bg-black/60 transition-all cursor-pointer"
+                  className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:theme-accent-text hover:bg-black/60 transition-all cursor-pointer"
                   title="Âm lượng"
                 >
                   {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                 </button>
                 {showVolumeSlider && (
-                  <div className="absolute top-9 left-0 p-2.5 rounded-xl bg-black/95 border border-pink-500/50 backdrop-blur-xl shadow-2xl flex items-center gap-2 z-30">
+                  <div className="absolute top-9 left-0 p-2.5 rounded-xl theme-card-bg backdrop-blur-xl shadow-2xl flex items-center gap-2 z-30">
                     <input
                       type="range"
                       min={0}
@@ -3206,9 +3118,9 @@ export default function App() {
                         setIsMuted(false);
                         setVolume(parseFloat(e.target.value));
                       }}
-                      className="w-20 h-1 bg-white/30 rounded appearance-none cursor-pointer accent-pink-500"
+                      className="w-20 h-1 bg-white/30 rounded appearance-none cursor-pointer theme-slider"
                     />
-                    <span className="text-[10px] text-pink-400 font-mono font-bold">
+                    <span className="text-[10px] theme-accent-text font-mono font-bold">
                       {Math.round((isMuted ? 0 : volume) * 100)}%
                     </span>
                   </div>
@@ -3296,13 +3208,7 @@ export default function App() {
                     : "Tắt lặp lại"
                 }
                 className={`p-1.5 transition-all cursor-pointer hover:scale-115 active:scale-90 ${
-                  repeatMode === "all"
-                    ? "text-pink-400 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]"
-                    : repeatMode === "one"
-                    ? "text-pink-400 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]"
-                    : repeatMode === "shuffle"
-                    ? "text-purple-300 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]"
-                    : "text-white/40 hover:text-white"
+                  repeatMode === "all" || repeatMode === "one" ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)]" : repeatMode === "shuffle" ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)]" : "text-white/40 hover:text-white"
                 }`}
               >
                 {repeatMode === "one" ? (
@@ -3319,7 +3225,7 @@ export default function App() {
                 type="button"
                 onClick={handlePrev}
                 title="Bài trước"
-                className="p-1.5 text-pink-500 hover:text-pink-400 transition-all cursor-pointer hover:scale-115 active:scale-90"
+                className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
               >
                 <SkipBack className="w-6 h-6 fill-current" />
               </button>
@@ -3350,7 +3256,7 @@ export default function App() {
                 type="button"
                 onClick={handleNext}
                 title="Bài kế tiếp"
-                className="p-1.5 text-pink-500 hover:text-pink-400 transition-all cursor-pointer hover:scale-115 active:scale-90"
+                className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
               >
                 <SkipForward className="w-6 h-6 fill-current" />
               </button>
@@ -3366,19 +3272,19 @@ export default function App() {
                       : "Hẹn giờ tắt nhạc"
                   }
                   className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${
-                    sleepTimerSecondsLeft ? "text-pink-400 font-bold" : "text-white/60 hover:text-white"
+                    sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
                   }`}
                 >
                   <Clock className="w-5 h-5" />
                   {sleepTimerMinutes && (
-                    <span className="absolute -top-1 -right-1 px-1 rounded-full bg-pink-500 text-[8px] text-white font-mono font-bold animate-pulse">
+                    <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[8px] text-white font-mono font-bold animate-pulse">
                       {sleepTimerMinutes}m
                     </span>
                   )}
                 </button>
                 {showSleepTimerMenu && (
-                  <div className="absolute bottom-9 right-0 p-2 rounded-xl bg-black/95 border border-pink-500/50 backdrop-blur-xl shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in">
-                    <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider px-2 py-0.5">
+                  <div className="absolute bottom-9 right-0 p-2 rounded-xl theme-card-bg backdrop-blur-xl shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in">
+                    <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
                       Hẹn giờ tắt
                     </span>
                     {[15, 30, 45, 60].map((m) => (
@@ -3387,9 +3293,7 @@ export default function App() {
                         type="button"
                         onClick={() => startSleepTimer(m)}
                         className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                          sleepTimerMinutes === m
-                            ? "bg-pink-500 text-white font-bold"
-                            : "hover:bg-white/10 text-white/80"
+                          sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
                         }`}
                       >
                         {m} phút
@@ -3429,9 +3333,7 @@ export default function App() {
                 }}
                 title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${
-                  isQueueSorted
-                    ? "border-pink-500 bg-pink-500/30 text-pink-300 shadow-[0_0_10px_rgba(236,72,153,0.4)]"
-                    : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
+                  isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
                 }`}
               >
                 <ArrowDownAZ className="w-3.5 h-3.5" />
@@ -3469,7 +3371,7 @@ export default function App() {
                       className="w-8 h-8 rounded-md object-cover flex-shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-white truncate group-hover:text-pink-300 transition-colors">
+                      <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
                         {track.title}
                       </p>
                       {track.author && (
@@ -3500,9 +3402,9 @@ export default function App() {
       {/* ========================================================================= */}
       {isAccountOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="figma-panel w-full max-w-[420px] flex flex-col p-5 relative shadow-2xl border border-pink-500/50">
+          <div className="figma-panel w-full max-w-[420px] flex flex-col p-5 relative shadow-2xl border theme-accent-border">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <span className="font-extrabold text-sm text-pink-400 flex items-center gap-2">
+              <span className="font-extrabold text-sm theme-accent-text flex items-center gap-2">
                 <User className="w-4 h-4" />
                 Hồ sơ người dùng
               </span>
@@ -3521,7 +3423,7 @@ export default function App() {
             {userSession?.isLoggedIn ? (
               <div className="flex flex-col gap-4 mt-4">
                 {/* User Info Header Card */}
-                <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/5 border border-pink-500/30">
+                <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/5 border border-white/10">
                   <div className="relative flex-shrink-0">
                     <img
                       src={`${API_BASE}/api/user/avatar?t=${avatarKey}`}
@@ -3529,7 +3431,7 @@ export default function App() {
                       onError={(e) => {
                         e.currentTarget.src = DEFAULT_TRACK_ART;
                       }}
-                      className="w-14 h-14 rounded-full object-cover border-2 border-pink-400 shadow-lg shadow-pink-500/30"
+                      className="w-14 h-14 rounded-full object-cover border-2 theme-accent-border shadow-lg shadow-black/40"
                     />
                     <div
                       className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#1e053a]"
@@ -3541,12 +3443,12 @@ export default function App() {
                       <h3 className="font-bold text-base text-white truncate">
                         {userSession.user?.name || "Kahoii User"}
                       </h3>
-                      <ShieldCheck className="w-4 h-4 text-pink-400 flex-shrink-0" />
+                      <ShieldCheck className="w-4 h-4 theme-accent-text flex-shrink-0" />
                     </div>
                     <p className="text-xs text-purple-200/70 truncate mt-0.5">
                       {userSession.user?.email || "danlanga26@gmail.com"}
                     </p>
-                    <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                    <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full theme-badge">
                       Kahoii Member • Cloud Synced
                     </span>
                   </div>
@@ -3555,19 +3457,19 @@ export default function App() {
                 {/* User Stats Grid (Real Database Counts) */}
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/20">
-                    <p className="text-lg font-bold text-pink-400">
+                    <p className="text-lg font-bold theme-accent-text">
                       {userSession.user?.stats?.favoritesCount ?? libraryData.favorites.length}
                     </p>
                     <p className="text-[11px] text-white/70 mt-0.5">Yêu thích</p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/20">
-                    <p className="text-lg font-bold text-pink-400">
+                    <p className="text-lg font-bold theme-accent-text">
                       {userSession.user?.stats?.historyCount ?? libraryData.history.length}
                     </p>
                     <p className="text-[11px] text-white/70 mt-0.5">Lịch sử</p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/20">
-                    <p className="text-lg font-bold text-pink-400">
+                    <p className="text-lg font-bold theme-accent-text">
                       {userSession.user?.stats?.playlistsCount ?? libraryData.playlists.length}
                     </p>
                     <p className="text-[11px] text-white/70 mt-0.5">Playlists</p>
@@ -3587,7 +3489,7 @@ export default function App() {
                   <button
                     onClick={handleSyncCloud}
                     disabled={isSyncing}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-white font-bold text-xs shadow-lg shadow-pink-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {isSyncing ? (
                       <>
@@ -3632,7 +3534,7 @@ export default function App() {
                     placeholder="nhap-email@gmail.com"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-black/40 border border-purple-500/30 focus:border-pink-500 text-xs text-white placeholder-white/30 focus:outline-none"
+                    className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
                   />
                 </div>
 
@@ -3643,14 +3545,14 @@ export default function App() {
                     placeholder="••••••••"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-black/40 border border-purple-500/30 focus:border-pink-500 text-xs text-white placeholder-white/30 focus:outline-none"
+                    className="w-full px-3.5 py-2 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className="w-full mt-2 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-white font-bold text-xs shadow-lg shadow-pink-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full mt-2 py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isLoggingIn ? (
                     <>

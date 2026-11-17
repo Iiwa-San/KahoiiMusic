@@ -91,3 +91,67 @@ html, body, #root {
 .animate-fade-in {
   animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Dynamic Theme Utilities (Synced 100% with extracted song palette) */
+.theme-btn-primary {
+  background: var(--theme-btn-gradient);
+  border: 1px solid var(--theme-panel-border);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+  transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.theme-btn-primary:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 6px 20px var(--theme-panel-border);
+}
+
+.theme-accent-bg {
+  background-color: var(--theme-accent) !important;
+}
+
+.theme-accent-text {
+  color: var(--theme-accent) !important;
+}
+
+.theme-sec-accent-text {
+  color: var(--theme-sec-accent) !important;
+}
+
+.theme-accent-border {
+  border-color: var(--theme-accent) !important;
+}
+
+.theme-card-bg {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, var(--theme-panel-bg) 100%);
+  border: 1.5px solid var(--theme-panel-border);
+  transition: all 0.8s ease;
+}
+
+.theme-input-pill {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--theme-panel-border);
+  transition: all 0.6s ease;
+}
+.theme-input-pill:hover, .theme-input-pill:focus-within {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 15px var(--theme-panel-border);
+}
+
+.theme-badge {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--theme-panel-border);
+  color: var(--theme-accent);
+  transition: all 0.6s ease;
+}
+
+.theme-badge-active {
+  background: var(--theme-btn-gradient) !important;
+  border: 1px solid var(--theme-accent) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition: all 0.6s ease;
+}
+
+/* Dynamic Range Input Thumb & Progress */
+input[type="range"].theme-slider {
+  accent-color: var(--theme-accent);
+}
