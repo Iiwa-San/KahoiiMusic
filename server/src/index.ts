@@ -216,6 +216,23 @@ app.get("/api/user/library", async (req, res) => {
   }
 });
 
+// 10. Home Feed (Trending & New Releases with 100% YouTube Music Tags)
+app.get("/api/home", async (_req, res) => {
+  try {
+    const [trendingRes, newReleasesRes] = await Promise.all([
+      searchYouTubeMusicStructured("nhạc trending"),
+      searchYouTubeMusicStructured("nhạc mới v-pop"),
+    ]);
+    return res.json({
+      trending: trendingRes.tracks || [],
+      newReleases: newReleasesRes.tracks || [],
+    });
+  } catch (err: any) {
+    console.error("[Home API Error]", err.message);
+    return res.status(500).json({ error: "Failed to load home data" });
+  }
+});
+
 // Serve frontend dist in production
 const clientDist = path.resolve(process.cwd(), "../client/dist");
 if (fs.existsSync(clientDist)) {

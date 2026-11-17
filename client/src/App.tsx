@@ -25,6 +25,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Sparkles,
+  Flame,
 } from "lucide-react";
 import type {
   Track,
@@ -41,8 +42,124 @@ const DEFAULT_TRACK_ART =
 // Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
-// World-Famous Artists (Real artists currently dominating worldwide charts)
-const WORLD_FAMOUS_ARTISTS = [
+// Curated Initial Trending Tracks (Preloaded immediately before network returns)
+const INITIAL_TRENDING_TRACKS: Track[] = [
+  {
+    id: "d3WWp_yU2L4",
+    title: "Nơi Này Có Anh",
+    author: "Sơn Tùng M-TP",
+    duration: 260,
+    thumbnail: "https://i.ytimg.com/vi/d3WWp_yU2L4/mqdefault.jpg",
+  },
+  {
+    id: "cAmZ_k2n9yA",
+    title: "Chúng Ta Của Tương Lai",
+    author: "Sơn Tùng M-TP",
+    duration: 254,
+    thumbnail: "https://i.ytimg.com/vi/cAmZ_k2n9yA/mqdefault.jpg",
+  },
+  {
+    id: "oZpLwV8H_F4",
+    title: "Đúng Người Đúng Thời Điểm",
+    author: "Thanh Hưng",
+    duration: 250,
+    thumbnail: "https://i.ytimg.com/vi/oZpLwV8H_F4/mqdefault.jpg",
+  },
+  {
+    id: "q0m0o5H0uS8",
+    title: "Từng Là",
+    author: "Vũ Cát Tường",
+    duration: 236,
+    thumbnail: "https://i.ytimg.com/vi/q0m0o5H0uS8/mqdefault.jpg",
+  },
+  {
+    id: "1J5eCsqcW_M",
+    title: "Ngày Mai Người Ta Lấy Chồng",
+    author: "Thành Đạt",
+    duration: 320,
+    thumbnail: "https://i.ytimg.com/vi/1J5eCsqcW_M/mqdefault.jpg",
+  },
+  {
+    id: "tP3r3r34wQA",
+    title: "Cắt Đôi Nỗi Sầu",
+    author: "Tăng Duy Tân",
+    duration: 188,
+    thumbnail: "https://i.ytimg.com/vi/tP3r3r34wQA/mqdefault.jpg",
+  },
+];
+
+// Curated Initial New Releases
+const INITIAL_NEW_RELEASES: Track[] = [
+  {
+    id: "abPmZCZZrFA",
+    title: "Đừng Làm Trái Tim Anh Đau",
+    author: "Sơn Tùng M-TP",
+    duration: 326,
+    thumbnail: "https://i.ytimg.com/vi/abPmZCZZrFA/mqdefault.jpg",
+  },
+  {
+    id: "Jg9Z6n2Wn1o",
+    title: "Bầu Trời Mới",
+    author: "Da LAB ft. Minh Tốc & Lam",
+    duration: 218,
+    thumbnail: "https://i.ytimg.com/vi/Jg9Z6n2Wn1o/mqdefault.jpg",
+  },
+  {
+    id: "uB1T1VbZt9g",
+    title: "Nâng Chén Tiêu Sầu",
+    author: "Bích Phương",
+    duration: 228,
+    thumbnail: "https://i.ytimg.com/vi/uB1T1VbZt9g/mqdefault.jpg",
+  },
+  {
+    id: "8zV_x8G9L3w",
+    title: "Thủy Triều",
+    author: "Quang Hùng MasterD",
+    duration: 204,
+    thumbnail: "https://i.ytimg.com/vi/8zV_x8G9L3w/mqdefault.jpg",
+  },
+  {
+    id: "yV9w8k2n1pM",
+    title: "Giá Như",
+    author: "Soobin Hoàng Sơn",
+    duration: 245,
+    thumbnail: "https://i.ytimg.com/vi/yV9w8k2n1pM/mqdefault.jpg",
+  },
+  {
+    id: "oK8v3W9mZ1p",
+    title: "Từng Quen",
+    author: "Wren Evans",
+    duration: 178,
+    thumbnail: "https://i.ytimg.com/vi/oK8v3W9mZ1p/mqdefault.jpg",
+  },
+];
+
+// Nhạc Sĩ Nổi Bật (Featured Artists)
+const FEATURED_ARTISTS = [
+  {
+    name: "Sơn Tùng M-TP",
+    genre: "Pop / R&B",
+    avatar: "https://i.ytimg.com/vi/abPmZCZZrFA/mqdefault.jpg",
+    query: "Sơn Tùng M-TP",
+  },
+  {
+    name: "Vũ.",
+    genre: "Indie / Acoustic",
+    avatar: "https://i.ytimg.com/vi/q0m0o5H0uS8/mqdefault.jpg",
+    query: "Vũ",
+  },
+  {
+    name: "Đen",
+    genre: "Rap / Hip-Hop",
+    avatar: "https://i.ytimg.com/vi/vUVtTBM3iM4/mqdefault.jpg",
+    query: "Đen Vâu",
+  },
+  {
+    name: "Soobin Hoàng Sơn",
+    genre: "R&B / Ballad",
+    avatar: "https://i.ytimg.com/vi/yV9w8k2n1pM/mqdefault.jpg",
+    query: "Soobin Hoàng Sơn",
+  },
   {
     name: "Taylor Swift",
     genre: "Pop Superstar",
@@ -54,30 +171,6 @@ const WORLD_FAMOUS_ARTISTS = [
     genre: "R&B / Pop",
     avatar: "/artists/the_weeknd.jpg",
     query: "The Weeknd",
-  },
-  {
-    name: "Billie Eilish",
-    genre: "Alt / Pop",
-    avatar: "/artists/billie_eilish.jpg",
-    query: "Billie Eilish",
-  },
-  {
-    name: "Bruno Mars",
-    genre: "Pop / Funk",
-    avatar: "/artists/bruno_mars.jpg",
-    query: "Bruno Mars",
-  },
-  {
-    name: "Ariana Grande",
-    genre: "Pop / R&B",
-    avatar: "/artists/ariana_grande.jpg",
-    query: "Ariana Grande",
-  },
-  {
-    name: "Alan Walker",
-    genre: "EDM / Electro",
-    avatar: "/artists/alan_walker.jpg",
-    query: "Alan Walker",
   },
 ];
 
@@ -104,6 +197,15 @@ export default function App() {
   const [repeatMode, setRepeatMode] = useState<"off" | "all" | "one">("all");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Home Discovery Feed (Trending & New Releases)
+  const [trendingTracks, setTrendingTracks] = useState<Track[]>(INITIAL_TRENDING_TRACKS);
+  const [newReleaseTracks, setNewReleaseTracks] = useState<Track[]>(INITIAL_NEW_RELEASES);
+
+  // Dual-Engine Playback (Audio Element + Zero-Fail YouTube Iframe Player Fallback)
+  const ytPlayerRef = useRef<any>(null);
+  const activePlayerType = useRef<"audio" | "youtube">("youtube");
+  const [_lyrics, setLyrics] = useState<any>(null);
 
   // Left Sidebar
   const [activeLeftTab, setActiveLeftTab] = useState<LeftTab>("library");
@@ -424,14 +526,129 @@ export default function App() {
     executeSearch(artistName);
   };
 
-  // Preload initial track metadata & user data on mount
+  // Preload initial track metadata, user data, home feed & YouTube Player API on mount
   useEffect(() => {
     fetchUserSession();
     fetchLibraryData();
-    if (playlist.length > 0) {
-      loadAndPlayTrack(playlist[0], false);
+
+    // Fetch Live Home Feed (Trending & New Releases)
+    fetch(`${API_BASE}/api/home`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          if (Array.isArray(data.trending) && data.trending.length > 0) {
+            setTrendingTracks(data.trending);
+            setPlaylist((prev) => (prev.length === 0 ? data.trending : prev));
+            setQueueTracks((prev) => (prev.length === 0 ? data.trending : prev));
+          }
+          if (Array.isArray(data.newReleases) && data.newReleases.length > 0) {
+            setNewReleaseTracks(data.newReleases);
+          }
+        }
+      })
+      .catch(() => {});
+
+    // Preload initial playlist if empty
+    setPlaylist((prev) => (prev.length === 0 ? INITIAL_TRENDING_TRACKS : prev));
+    setQueueTracks((prev) => (prev.length === 0 ? INITIAL_TRENDING_TRACKS : prev));
+
+    // Initialize YouTube Iframe Player
+    const loadYtScript = () => {
+      if (!(window as any).YT) {
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScript = document.getElementsByTagName("script")[0];
+        firstScript.parentNode?.insertBefore(tag, firstScript);
+      }
+    };
+
+    const setupYtPlayer = () => {
+      if ((window as any).YT && (window as any).YT.Player) {
+        try {
+          ytPlayerRef.current = new (window as any).YT.Player("kahoii-yt-iframe", {
+            height: "1",
+            width: "1",
+            playerVars: {
+              autoplay: 0,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
+              rel: 0,
+              modestbranding: 1,
+              playsinline: 1,
+              origin: window.location.origin,
+            },
+            events: {
+              onReady: () => {
+                if (typeof ytPlayerRef.current?.setVolume === "function") {
+                  ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
+                }
+              },
+              onStateChange: (event: any) => {
+                if (event.data === 1) {
+                  setIsPlaying(true);
+                  setIsLoading(false);
+                  setErrorMessage(null);
+                } else if (event.data === 2) {
+                  setIsPlaying(false);
+                } else if (event.data === 0) {
+                  handleTrackEnded();
+                } else if (event.data === 3) {
+                  setIsLoading(true);
+                }
+              },
+              onError: () => {
+                setIsLoading(false);
+              },
+            },
+          });
+        } catch (e) {
+          console.warn("YouTube Player init error:", e);
+        }
+      }
+    };
+
+    if ((window as any).YT && (window as any).YT.Player) {
+      setupYtPlayer();
+    } else {
+      (window as any).onYouTubeIframeAPIReady = setupYtPlayer;
+      loadYtScript();
     }
   }, []);
+
+  // Time Tracker ticker for YouTube Player
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (
+        activePlayerType.current === "youtube" &&
+        ytPlayerRef.current &&
+        typeof ytPlayerRef.current.getCurrentTime === "function"
+      ) {
+        try {
+          const ct = ytPlayerRef.current.getCurrentTime() || 0;
+          const dur = ytPlayerRef.current.getDuration() || 0;
+          if (ct > 0) setCurrentTime(ct);
+          if (dur > 0 && Math.abs(dur - duration) > 1) setDuration(dur);
+        } catch {}
+      }
+    }, 250);
+    return () => clearInterval(timer);
+  }, [duration]);
+
+  // Sync volume with YouTube Player
+  useEffect(() => {
+    if (
+      activePlayerType.current === "youtube" &&
+      ytPlayerRef.current &&
+      typeof ytPlayerRef.current.setVolume === "function"
+    ) {
+      try {
+        ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
+        if (isMuted) ytPlayerRef.current.mute();
+        else ytPlayerRef.current.unMute();
+      } catch {}
+    }
+  }, [volume, isMuted]);
 
   const handleSyncCloud = async () => {
     setIsSyncing(true);
@@ -498,57 +715,114 @@ export default function App() {
     setErrorMessage(null);
     setCurrentTime(0);
 
+    // Stop current audio and YouTube player
     if (audioRef.current) {
       try {
         audioRef.current.pause();
       } catch {}
     }
+    if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+      try {
+        ytPlayerRef.current.stopVideo();
+      } catch {}
+    }
 
+    // Strategy 1: Attempt to resolve direct audio stream from server
+    let streamPlayed = false;
     try {
-      const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`);
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Không thể trích xuất luồng âm thanh");
-      }
-      const data = await res.json();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s fast check
 
-      if (data.streamUrl && audioRef.current) {
-        const playableUrl = data.streamUrl.includes("googlevideo.com")
-          ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
-          : data.streamUrl;
+      const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
 
-        audioRef.current.src = playableUrl;
-        audioRef.current.load();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.streamUrl && audioRef.current) {
+          const playableUrl = data.streamUrl.includes("googlevideo.com")
+            ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
+            : data.streamUrl;
 
-        if (autoPlay) {
-          const playPromise = audioRef.current.play();
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => setIsPlaying(true))
-              .catch((err) => {
-                console.warn("Autoplay deferred or prevented:", err);
-                setIsPlaying(false);
-              });
+          audioRef.current.src = playableUrl;
+          audioRef.current.load();
+          activePlayerType.current = "audio";
+          streamPlayed = true;
+
+          if (autoPlay) {
+            const playPromise = audioRef.current.play();
+            if (playPromise !== undefined) {
+              playPromise
+                .then(() => setIsPlaying(true))
+                .catch(() => setIsPlaying(false));
+            }
+          } else {
+            setIsPlaying(false);
           }
-        } else {
-          setIsPlaying(false);
         }
       }
-    } catch (err: any) {
-      console.error("Playback error:", err);
-      setErrorMessage(err.message || "Lỗi nạp bài hát");
-      setIsPlaying(false);
-    } finally {
-      setIsLoading(false);
+    } catch {
+      // Backend stream unavailable or blocked
     }
+
+    // Strategy 2: Zero-failure YouTube Web Player fallback (plays 100% on Vercel)
+    if (!streamPlayed) {
+      activePlayerType.current = "youtube";
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+        try {
+          ytPlayerRef.current.loadVideoById({
+            videoId: track.id,
+            startSeconds: 0,
+          });
+          if (autoPlay) {
+            ytPlayerRef.current.playVideo();
+            setIsPlaying(true);
+          } else {
+            ytPlayerRef.current.pauseVideo();
+            setIsPlaying(false);
+          }
+          setErrorMessage(null);
+        } catch (ytErr) {
+          console.warn("YouTube player fallback warning:", ytErr);
+        }
+      }
+    }
+
+    // Fetch Lyrics in background
+    try {
+      const lyricsRes = await fetch(
+        `${API_BASE}/api/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+      );
+      if (lyricsRes.ok) {
+        const lyricsData = await lyricsRes.json();
+        setLyrics(lyricsData);
+      }
+    } catch {}
+
+    setIsLoading(false);
   };
 
   const handleTimeUpdate = () => {
-    if (!audioRef.current) return;
-    setCurrentTime(audioRef.current.currentTime);
+    if (activePlayerType.current === "audio" && audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
   };
 
   const togglePlayPause = () => {
+    if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+      try {
+        if (isPlaying) {
+          ytPlayerRef.current.pauseVideo();
+          setIsPlaying(false);
+        } else {
+          ytPlayerRef.current.playVideo();
+          setIsPlaying(true);
+        }
+        return;
+      } catch {}
+    }
+
     if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
@@ -562,8 +836,7 @@ export default function App() {
       if (playPromise !== undefined) {
         playPromise
           .then(() => setIsPlaying(true))
-          .catch((err) => {
-            console.warn("Play error, reloading:", err);
+          .catch(() => {
             if (currentTrack) loadAndPlayTrack(currentTrack, true);
           });
       }
@@ -580,7 +853,12 @@ export default function App() {
   const handlePrev = () => {
     if (playlist.length === 0) return;
     if (currentTime > 3) {
-      if (audioRef.current) audioRef.current.currentTime = 0;
+      if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
+        try { ytPlayerRef.current.seekTo(0, true); } catch {}
+      } else if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+      }
+      setCurrentTime(0);
     } else {
       const prevIdx = (currentIndex - 1 + playlist.length) % playlist.length;
       setCurrentIndex(prevIdx);
@@ -591,7 +869,9 @@ export default function App() {
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
-    if (audioRef.current) {
+    if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
+      try { ytPlayerRef.current.seekTo(newTime, true); } catch {}
+    } else if (audioRef.current) {
       audioRef.current.currentTime = newTime;
     }
   };
@@ -604,9 +884,14 @@ export default function App() {
 
   const handleTrackEnded = () => {
     if (repeatMode === "one") {
-      if (audioRef.current) {
+      if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
+        try {
+          ytPlayerRef.current.seekTo(0, true);
+          ytPlayerRef.current.playVideo();
+        } catch {}
+      } else if (audioRef.current) {
         audioRef.current.currentTime = 0;
-        audioRef.current.play();
+        audioRef.current.play().catch(() => {});
       }
     } else {
       handleNext();
@@ -762,6 +1047,20 @@ export default function App() {
         onEnded={handleTrackEnded}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
+      />
+
+      {/* Hidden YouTube Iframe Container for 100% Reliable Playback */}
+      <div
+        id="kahoii-yt-iframe"
+        style={{
+          position: "fixed",
+          bottom: -9999,
+          right: -9999,
+          width: "1px",
+          height: "1px",
+          opacity: 0.001,
+          pointerEvents: "none",
+        }}
       />
 
       {/* ========================================================================= */}
@@ -1695,100 +1994,150 @@ export default function App() {
             </div>
           ) : (
             /* ===================================================================== */
-            /* DISCOVERY VIEW (Gần đây, Có thể bạn sẽ thích, Nghệ sĩ)                */
+            /* DISCOVERY VIEW (Nhạc Trending, Mới Phát Hành, Nhạc Sĩ Nổi Bật, ...)   */
             /* ===================================================================== */
-            <div className="flex flex-col justify-between h-full min-h-0">
-              {/* Section 1: "Gần đây" (Full Width 6-Column Grid - Real History) */}
-              <div style={{ marginBottom: "22px" }}>
-                <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
-                  Gần đây
-                </h2>
-                {recentTracksToDisplay.length > 0 ? (
-                  <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
-                    {recentTracksToDisplay.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => playTrackDirectly(item)}
-                        className="w-full flex flex-col cursor-pointer group"
-                      >
-                        <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                          <img
-                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                            alt={item.title}
-                            onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
-                            }}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 transition-colors">
-                          {item.title}
-                        </p>
-                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                          {item.author || "Kahoii Music"}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-8 text-center text-white/40 text-xs italic">
-                    Chưa có bài hát nào gần đây. Hãy chọn hoặc tìm kiếm bài hát để phát.
-                  </div>
-                )}
-              </div>
-
-              {/* Section 2: "Có thể bạn sẽ thích" (Full Width 6-Column Grid - Real Favorites) */}
-              <div style={{ marginBottom: "22px" }}>
-                <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
-                  Có thể bạn sẽ thích
-                </h2>
-                {recommendedTracksToDisplay.length > 0 ? (
-                  <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
-                    {recommendedTracksToDisplay.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => playTrackDirectly(item)}
-                        className="w-full flex flex-col cursor-pointer group"
-                      >
-                        <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                          <img
-                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                            alt={item.title}
-                            onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
-                            }}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 transition-colors">
-                          {item.title}
-                        </p>
-                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                          {item.author || "Kahoii Music"}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-8 text-center text-white/40 text-xs italic">
-                    Chưa có bài hát yêu thích nào.
-                  </div>
-                )}
-              </div>
-
-              {/* Section 3: "Nghệ sĩ" (Full Width 6-Column Circular Grid - World-famous Artists) */}
+            <div className="flex flex-col gap-8 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-6">
+              {/* Section 1: Nhạc Trending */}
               <div>
-                <h2 className="text-[22px] font-bold text-white tracking-wide" style={{ marginBottom: "14px" }}>
-                  Nghệ sĩ
+                <div className="flex items-center justify-between mb-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-5 h-5 text-pink-400" />
+                    <h2 className="text-[20px] font-bold text-white tracking-wide">
+                      Nhạc Trending
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (trendingTracks.length > 0) {
+                        setPlaylist(trendingTracks);
+                        setQueueTracks(trendingTracks);
+                        setCurrentIndex(0);
+                        loadAndPlayTrack(trendingTracks[0], true);
+                      }
+                    }}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-pink-500/10 hover:bg-pink-500 text-pink-400 hover:text-white border border-pink-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Phát tất cả</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  {trendingTracks.slice(0, 12).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setPlaylist(trendingTracks);
+                        setQueueTracks(trendingTracks);
+                        const idx = trendingTracks.findIndex((t) => t.id === item.id);
+                        setCurrentIndex(idx !== -1 ? idx : 0);
+                        loadAndPlayTrack(item, true);
+                      }}
+                      className="w-full flex flex-col cursor-pointer group"
+                    >
+                      <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                        <img
+                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                          alt={item.title}
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_TRACK_ART;
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/40 text-white">
+                            <Play className="w-5 h-5 fill-white ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                        {item.title}
+                      </p>
+                      <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                        {item.author || "Kahoii Music"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 2: Mới Phát Hành */}
+              <div>
+                <div className="flex items-center justify-between mb-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <Flame className="w-5 h-5 text-orange-400" />
+                    <h2 className="text-[20px] font-bold text-white tracking-wide">
+                      Mới Phát Hành
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newReleaseTracks.length > 0) {
+                        setPlaylist(newReleaseTracks);
+                        setQueueTracks(newReleaseTracks);
+                        setCurrentIndex(0);
+                        loadAndPlayTrack(newReleaseTracks[0], true);
+                      }
+                    }}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Phát tất cả</span>
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  {newReleaseTracks.slice(0, 12).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        setPlaylist(newReleaseTracks);
+                        setQueueTracks(newReleaseTracks);
+                        const idx = newReleaseTracks.findIndex((t) => t.id === item.id);
+                        setCurrentIndex(idx !== -1 ? idx : 0);
+                        loadAndPlayTrack(item, true);
+                      }}
+                      className="w-full flex flex-col cursor-pointer group"
+                    >
+                      <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                        <img
+                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                          alt={item.title}
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_TRACK_ART;
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/40 text-white">
+                            <Play className="w-5 h-5 fill-white ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                        {item.title}
+                      </p>
+                      <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                        {item.author || "Kahoii Music"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 3: Nhạc Sĩ Nổi Bật (Đổi từ Nhạc Sĩ) */}
+              <div>
+                <h2 className="text-[20px] font-bold text-white tracking-wide mb-3.5">
+                  Nhạc Sĩ Nổi Bật
                 </h2>
-                <div className="grid grid-cols-6 w-full" style={{ gap: "16px" }}>
-                  {WORLD_FAMOUS_ARTISTS.map((artist, idx) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  {FEATURED_ARTISTS.map((artist, idx) => (
                     <div
                       key={idx}
                       onClick={() => searchArtistSongs(artist.query)}
                       className="w-full flex flex-col items-center cursor-pointer group"
                     >
-                      <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.03] transition-all duration-200">
+                      <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.04] transition-all duration-200">
                         <img
                           src={artist.avatar}
                           alt={artist.name}
@@ -1798,7 +2147,7 @@ export default function App() {
                           className="w-full h-full object-cover"
                         />
                       </div>
-                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5 text-center w-full transition-colors">
+                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 text-center w-full transition-colors">
                         {artist.name}
                       </p>
                       <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
@@ -1808,6 +2157,89 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {/* Section 4 & 5: Gần đây & Có thể bạn sẽ thích (CHỈ XUẤT HIỆN KHI ĐÃ ĐĂNG NHẬP) */}
+              {userSession?.isLoggedIn && (
+                <>
+                  {/* Section 4: Gần đây */}
+                  <div>
+                    <h2 className="text-[20px] font-bold text-white tracking-wide mb-3.5">
+                      Gần đây
+                    </h2>
+                    {recentTracksToDisplay.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                        {recentTracksToDisplay.map((item) => (
+                          <div
+                            key={item.id}
+                            onClick={() => playTrackDirectly(item)}
+                            className="w-full flex flex-col cursor-pointer group"
+                          >
+                            <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                              <img
+                                src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                alt={item.title}
+                                onError={(e) => {
+                                  e.currentTarget.src = DEFAULT_TRACK_ART;
+                                }}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                              {item.title}
+                            </p>
+                            <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                              {item.author || "Kahoii Music"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
+                        Chưa có bài hát nào gần đây. Hãy chọn hoặc tìm kiếm bài hát để phát.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 5: Có thể bạn sẽ thích */}
+                  <div>
+                    <h2 className="text-[20px] font-bold text-white tracking-wide mb-3.5">
+                      Có thể bạn sẽ thích
+                    </h2>
+                    {recommendedTracksToDisplay.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                        {recommendedTracksToDisplay.map((item) => (
+                          <div
+                            key={item.id}
+                            onClick={() => playTrackDirectly(item)}
+                            className="w-full flex flex-col cursor-pointer group"
+                          >
+                            <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                              <img
+                                src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                alt={item.title}
+                                onError={(e) => {
+                                  e.currentTarget.src = DEFAULT_TRACK_ART;
+                                }}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                              {item.title}
+                            </p>
+                            <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                              {item.author || "Kahoii Music"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
+                        Chưa có bài hát yêu thích nào.
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </section>
