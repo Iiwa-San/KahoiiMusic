@@ -97,22 +97,23 @@ app.get("/api/artist", async (req, res) => {
   }
 });
 
-// 3. Synced Lyrics
+// 3. Synced Lyrics & Romanization / Translation
 app.get("/api/lyrics", async (req, res) => {
   const title = (req.query.title as string) || "";
   const artist = (req.query.artist as string) || "";
+  const videoId = (req.query.videoId as string) || (req.query.id as string) || "";
   const duration = req.query.duration ? Number(req.query.duration) : undefined;
 
-  if (!title) {
-    return res.json({ syncedLyrics: null, plainLyrics: null, instrumental: false });
+  if (!title && !videoId) {
+    return res.json({ syncedLyrics: null, plainLyrics: null, instrumental: false, lines: [] });
   }
 
   try {
-    const lyrics = await fetchLyrics(title, artist, duration);
+    const lyrics = await fetchLyrics(title, artist, duration, videoId);
     return res.json(lyrics);
   } catch (err: any) {
     console.error("[API Lyrics Error]", err.message);
-    return res.json({ syncedLyrics: null, plainLyrics: null, instrumental: false });
+    return res.json({ syncedLyrics: null, plainLyrics: null, instrumental: false, lines: [] });
   }
 });
 

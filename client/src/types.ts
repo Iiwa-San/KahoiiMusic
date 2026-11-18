@@ -12,6 +12,16 @@ export interface Track {
 export interface LyricLine {
   time: number; // in seconds
   text: string;
+  romanized?: string;
+  translation?: string;
+}
+
+export interface LyricsData {
+  syncedLyrics: string | null;
+  plainLyrics: string | null;
+  instrumental: boolean;
+  detectedLang?: "ja" | "zh" | "ko" | "vi" | "other" | null;
+  lines?: LyricLine[];
 }
 
 export interface SearchTopResult {

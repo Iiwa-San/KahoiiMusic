@@ -1128,13 +1128,30 @@ export async function getArtistDetails(
       channelUploads.forEach((t) => (t.author = artistName));
       tracks = channelUploads;
     } else if (ytmTracks.length > 0) {
-      // For official artists, if duration is missing in browse shelf, enrich from search
-      const searchRes = await searchYouTubeMusicStructured(artistName);
-      if (searchRes.tracks && searchRes.tracks.length > 0) {
-        tracks = searchRes.tracks;
-      } else {
-        tracks = ytmTracks;
-      }
+      // Preserve authentic artist tracks from browse shelf; try to enrich missing duration
+      try {
+        const searchRes = await searchYouTubeMusicStructured(artistName);
+        if (searchRes.tracks && searchRes.tracks.length > 0) {
+          const durMap = new Map<string, { duration: number; durationText: string }>();
+          searchRes.tracks.forEach((st) => {
+            if (st.duration > 0) {
+              const durInfo = { duration: st.duration, durationText: st.durationText || "" };
+              durMap.set(st.id, durInfo);
+              durMap.set(st.title.toLowerCase().trim(), durInfo);
+            }
+          });
+          ytmTracks.forEach((yt) => {
+            if (yt.duration <= 0) {
+              const matched = durMap.get(yt.id) || durMap.get(yt.title.toLowerCase().trim());
+              if (matched) {
+                yt.duration = matched.duration;
+                yt.durationText = matched.durationText;
+              }
+            }
+          });
+        }
+      } catch {}
+      tracks = ytmTracks;
     } else {
       return searchYouTubeMusicStructured(artistName);
     }
