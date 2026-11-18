@@ -776,7 +776,8 @@ export default function App() {
   const activeLyricRef = useRef<HTMLDivElement | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Romanization / Translation display mode: "dual" (song ngữ) | "original" (chữ gốc) | "romanized" (phiên âm thuần)
+  // Romanization display mode matching PC App (LyricsPanel.cs:11-16):
+  // "dual" = Dual (1, Romaji 2 dòng) | "romanized" = RomanizedOnly (2, Romaji thuần) | "original" = Original (0, Chữ gốc)
   const [lyricDisplayMode, setLyricDisplayMode] = useState<"dual" | "original" | "romanized">(() => {
     try {
       return (localStorage.getItem("kahoii_lyric_display_mode") as any) || "dual";
@@ -784,38 +785,6 @@ export default function App() {
       return "dual";
     }
   });
-
-  const ensureEnrichedLyrics = useCallback(async () => {
-    if (!currentTrack?.id) return;
-    if (_lyrics?.lines && _lyrics.lines.length > 0 && _lyrics.lines.some((l: any) => l.romanized || l.translation)) {
-      return;
-    }
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(currentTrack.id)}&title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.author || "")}&duration=${currentTrack.duration || ""}`
-      );
-      if (res.ok) {
-        const lyricsData = await res.json();
-        if (lyricsData?.lines && lyricsData.lines.length > 0) {
-          setLyrics(lyricsData);
-          if (lyricsData.artist && (!currentTrack.author || currentTrack.author === "Nghệ sĩ" || currentTrack.author === "Kahoii Music")) {
-            setCurrentTrack((prev) => (prev && prev.id === currentTrack.id ? { ...prev, author: lyricsData.artist } : prev));
-          }
-        }
-      }
-    } catch {}
-  }, [currentTrack, _lyrics]);
-
-  const toggleLyricDisplayMode = () => {
-    ensureEnrichedLyrics();
-    setLyricDisplayMode((prev) => {
-      const next = prev === "dual" ? "romanized" : prev === "romanized" ? "original" : "dual";
-      try {
-        localStorage.setItem("kahoii_lyric_display_mode", next);
-      } catch {}
-      return next;
-    });
-  };
 
   const parsedLyrics = useMemo(() => {
     if (_lyrics?.lines && _lyrics.lines.length > 0) {
@@ -842,19 +811,45 @@ export default function App() {
     return idx;
   }, [parsedLyrics, currentTime, isLyricsSynced]);
 
-  const romaziPillLabel = useMemo(() => {
-    const lang = _lyrics?.detectedLang;
-    const isJa = lang === "ja";
-    const isZh = lang === "zh";
+  // Detected language for Romanization support matching PC App (LyricsService.cs:1394-1407)
+  const detectedLang = useMemo(() => {
+    if (_lyrics?.detectedLang === "ja" || _lyrics?.detectedLang === "zh") {
+      return _lyrics.detectedLang;
+    }
+    const fullText = (parsedLyrics || []).map((l) => l.text || "").join(" ");
+    const kanaCount = (fullText.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
+    const hanziCount = (fullText.match(/[\u4E00-\u9FFF]/g) || []).length;
+    if (kanaCount >= 2) return "ja";
+    if (hanziCount >= 4) return "zh";
+    return null;
+  }, [_lyrics, parsedLyrics]);
 
+  const hasRomanizationSupport = Boolean(
+    (detectedLang === "ja" || detectedLang === "zh") && parsedLyrics.length > 0
+  );
+
+  // Exact button labels matching PC App (LyricsPanel.cs:945-967)
+  const romaziPillLabel = useMemo(() => {
+    const isJa = detectedLang === "ja";
+    if (lyricDisplayMode === "original") {
+      return isJa ? "Aa Romaji" : "Aa Pinyin";
+    }
     if (lyricDisplayMode === "dual") {
-      return isJa ? "Song ngữ (Romaji)" : isZh ? "Song ngữ (Pinyin)" : "Song ngữ";
+      return isJa ? "Romaji • 2 dòng" : "Pinyin • 2 dòng";
     }
-    if (lyricDisplayMode === "romanized") {
-      return isJa ? "Romaji" : isZh ? "Pinyin" : "Bản dịch";
-    }
-    return "Chữ gốc";
-  }, [_lyrics, lyricDisplayMode]);
+    return isJa ? "Romaji thuần" : "Pinyin thuần";
+  }, [detectedLang, lyricDisplayMode]);
+
+  // Cycle matching PC App: Original (0) -> Dual (1) -> RomanizedOnly (2) -> Original (0)
+  const toggleLyricDisplayMode = () => {
+    setLyricDisplayMode((prev) => {
+      const next = prev === "dual" ? "romanized" : prev === "romanized" ? "original" : "dual";
+      try {
+        localStorage.setItem("kahoii_lyric_display_mode", next);
+      } catch {}
+      return next;
+    });
+  };
 
   const scrollToActiveLyric = useCallback((smooth = true) => {
     if (sidebar2Tab !== "lyrics" || !lyricsContainerRef.current || !activeLyricRef.current) return;
@@ -889,11 +884,31 @@ export default function App() {
     }
   }, [parsedLyrics.length, _lyrics, currentTrack?.id]);
 
-  // Automatically fetch/refresh full enriched lyrics whenever currentTrack changes
+  // Automatically fetch full enriched lyrics whenever currentTrack changes
   useEffect(() => {
-    if (!currentTrack?.id) return;
-    ensureEnrichedLyrics();
-  }, [currentTrack?.id, ensureEnrichedLyrics]);
+    const trackId = currentTrack?.id;
+    if (!trackId) return;
+
+    let isCancelled = false;
+
+    fetch(
+      `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(trackId)}&title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.author || "")}&duration=${currentTrack.duration || ""}`
+    )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((lyricsData) => {
+        if (!isCancelled && lyricsData?.lines && lyricsData.lines.length > 0) {
+          setLyrics(lyricsData);
+          if (lyricsData.artist && (!currentTrack.author || currentTrack.author === "Nghệ sĩ" || currentTrack.author === "Kahoii Music")) {
+            setCurrentTrack((prev) => (prev && prev.id === trackId ? { ...prev, author: lyricsData.artist } : prev));
+          }
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentTrack?.id]);
 
   // Hamburger popups on player card
   const [showPlayerMenu, setShowPlayerMenu] = useState<boolean>(false);
@@ -5451,11 +5466,11 @@ export default function App() {
                   )}
                 </div>
 
-                {(parsedLyrics.length > 0 || Boolean(_lyrics?.plainLyrics)) && (
+                {hasRomanizationSupport && (
                   <button
                     type="button"
                     onClick={toggleLyricDisplayMode}
-                    title="Nhấn để đổi: Song ngữ (2 dòng) → Phiên âm thuần → Chữ gốc"
+                    title="Nhấn để đổi: Romaji • 2 dòng → Romaji thuần → Aa Romaji"
                     className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-md border ${
                       lyricDisplayMode === "dual"
                         ? "theme-btn-primary text-white border-transparent scale-[1.02]"
@@ -5485,17 +5500,15 @@ export default function App() {
                 {parsedLyrics.length > 0 ? (
                   parsedLyrics.map((line, idx) => {
                     const isActive = isLyricsSynced && idx === activeLyricIndex;
-                    const isRomanizedOnly = lyricDisplayMode === "romanized";
-                    const isDual = lyricDisplayMode === "dual";
 
-                    let primaryText = line.text;
+                    let primaryText = line.text || "♪";
                     let secondaryText: string | null = null;
 
-                    if (isRomanizedOnly) {
-                      primaryText = line.romanized || line.translation || line.text;
-                    } else if (isDual) {
+                    if (lyricDisplayMode === "romanized" && line.romanized) {
+                      primaryText = line.romanized;
+                    } else if (lyricDisplayMode === "dual" && line.romanized) {
                       primaryText = line.text;
-                      secondaryText = line.romanized || line.translation || null;
+                      secondaryText = line.romanized;
                     }
 
                     return (

@@ -385,41 +385,42 @@ function parsePlainTextToLines(txt: string): LyricLine[] {
 
 async function enrichLinesWithRomanizationAndTranslation(
   lines: LyricLine[]
-): Promise<{ enrichedLines: LyricLine[]; detectedLang: "ja" | "zh" | "ko" | "vi" | "other" | null }> {
+): Promise<{ enrichedLines: LyricLine[]; detectedLang: "ja" | "zh" | null }> {
   if (lines.length === 0) {
     return { enrichedLines: lines, detectedLang: null };
   }
 
-  // Detect script characteristics
-  const sampleText = lines
-    .slice(0, 30)
-    .map((l) => l.text)
-    .join(" ");
+  // 1. Detect language matching PC App exactly (LyricsService.cs:1394-1407)
+  const fullText = lines.map((l) => l.text || "").join(" ");
+  const kanaCount = (fullText.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
+  const hanziCount = (fullText.match(/[\u4E00-\u9FFF]/g) || []).length;
 
-  const kanaCount = (sampleText.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
-  const hanziCount = (sampleText.match(/[\u4E00-\u9FFF]/g) || []).length;
-  const hangulCount = (sampleText.match(/[\uAC00-\uD7AF]/g) || []).length;
-
-  let langTag: "ja" | "zh" | "ko" | "vi" | "other" = "other";
-  if (kanaCount >= 3) {
+  let langTag: "ja" | "zh" | null = null;
+  if (kanaCount >= 2) {
     langTag = "ja";
-  } else if (hanziCount >= 5) {
+  } else if (hanziCount >= 4) {
     langTag = "zh";
-  } else if (hangulCount >= 3) {
-    langTag = "ko";
   }
 
-  // Batch lines into chunks of 20 to avoid URL length limits
-  const BATCH_SIZE = 20;
+  // PC App: if not Japanese and not Chinese, return lines directly without Romanization
+  if (!langTag) {
+    return { enrichedLines: lines, detectedLang: null };
+  }
+
+  const sl = langTag === "ja" ? "ja" : "zh-CN";
+
+  // 2. Query Google Translate Romanization in batches of 25 lines matching PC App (LyricsService.cs:1439-1478)
+  const BATCH_SIZE = 25;
   const enriched: LyricLine[] = [];
 
   for (let i = 0; i < lines.length; i += BATCH_SIZE) {
     const chunk = lines.slice(i, i + BATCH_SIZE);
-    const delim = " ~ ";
-    const query = chunk.map((l) => l.text.replace(/~/g, "-")).join(delim);
+    const batchLines = chunk.map((l) => (l.text && l.text.trim() ? l.text.trim() : "♪"));
+    const delim = " ::: ";
+    const query = batchLines.join(delim);
 
     try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=vi&dt=t&dt=rm&q=${encodeURIComponent(query)}`;
+      const url = `https://translate.googleapis.com/translate_a/single?client=dict-chrome-ex&sl=${sl}&tl=en&dt=rm&q=${encodeURIComponent(query)}`;
       const res = await fetch(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -428,39 +429,23 @@ async function enrichLinesWithRomanizationAndTranslation(
 
       if (res.ok) {
         const data = (await res.json()) as any;
-        const detectedSource = data?.[2] || "";
-        if (langTag === "other" && detectedSource) {
-          if (detectedSource.startsWith("ja")) langTag = "ja";
-          else if (detectedSource.startsWith("zh")) langTag = "zh";
-          else if (detectedSource.startsWith("ko")) langTag = "ko";
-          else if (detectedSource.startsWith("vi")) langTag = "vi";
+        const rawItems = data?.[0];
+        let romStr = "";
+        if (rawItems && rawItems[0] && typeof rawItems[0][3] === "string") {
+          romStr = rawItems[0][3];
         }
 
-        let romajiFull = "";
-        let transFull = "";
-        const parts = data?.[0] || [];
-        for (const item of parts) {
-          if (item[0]) transFull += item[0];
-          if (item[3]) romajiFull += item[3];
-        }
-
-        const romSplit = romajiFull.split("~").map((s) => s.trim());
-        const transSplit = transFull.split("~").map((s) => s.trim());
+        const parts = romStr ? romStr.split(/:\s*:\s*:/) : [];
 
         chunk.forEach((l, idx) => {
-          let romanized = romSplit[idx] || "";
-          if (romanized) {
-            if (langTag === "ja") {
-              romanized = formatAnimeRomaji(romanized);
-            } else if (langTag === "zh") {
-              romanized = formatChinesePinyin(romanized);
-            }
+          let r = parts[idx] ? parts[idx].trim() : "";
+          if (r && r !== "♪") {
+            if (langTag === "ja") r = formatAnimeRomaji(r);
+            else if (langTag === "zh") r = formatChinesePinyin(r);
           }
-          const translation = transSplit[idx] || "";
           enriched.push({
             ...l,
-            romanized: romanized || undefined,
-            translation: translation && translation !== l.text ? translation : undefined,
+            romanized: r && r !== "♪" ? r : undefined,
           });
         });
       } else {
