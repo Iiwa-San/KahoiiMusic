@@ -880,6 +880,35 @@ export async function getPlaylistTracks(browseOrPlaylistId: string): Promise<Sea
 }
 
 /**
+ * Filter to ensure item is music:
+ * 1. Has explicit YouTube 'MUSIC' badge.
+ * 2. Or matches music terms (cover, bài hát, mv, acoustic, remix, 歌ってみた, 弾き語り, 歌枠...).
+ * 3. Filters out non-music videos (vlog, gaming, podcast, chém gió, livestream talk, tutorial...).
+ */
+export function isMusicContent(title: string, hasMusicTag = false): boolean {
+  if (hasMusicTag) return true;
+  if (!title) return false;
+
+  const nonMusicPatterns = [
+    /\b(vlog|q&a|gaming|gameplay|minecraft|roblox|valorant|pubg|genshin|honkai|unboxing|review|reaction|podcast|tâm sự|chém gió|trò chuyện|thông báo|hướng dẫn|tutorial|highlight|highlights)\b/i,
+    /【(雑談|ゲーム|配信|告知|生放送|作業用|振り返り)】/,
+  ];
+  for (const p of nonMusicPatterns) {
+    if (p.test(title)) return false;
+  }
+
+  const musicPatterns = [
+    /(歌ってみた|弾き語り|語り弾き|歌枠|歌|曲|オリジナル曲|cover|mv|music|song|track|audio|remix|acoustic|official|ost|soundtrack|bài hát|ca khúc|nhạc|hát|karaoke|instrumental|feat\.|ft\.)/i,
+    /【(歌|歌枠|cover|mv|original|sing|singing)】/i,
+  ];
+  for (const p of musicPatterns) {
+    if (p.test(title)) return true;
+  }
+
+  return false;
+}
+
+/**
  * Fetch video uploads from channel uploads playlist (VL + UU...) via YouTube Web Innertube.
  * Returns exact duration, durationText and isMusic (music note) tag!
  */
@@ -913,6 +942,12 @@ async function fetchUploadsPlaylist(
           if (tb?.icon?.sources?.[0]?.clientResource?.imageName === "MUSIC") isMusic = true;
         }
       }
+
+      // Only take items that have a music tag or are considered music
+      if (!isMusicContent(title, isMusic)) {
+        continue;
+      }
+
       const thumbs = vm.contentImage?.thumbnailViewModel?.image?.sources || [];
       const thumbnail =
         thumbs[thumbs.length - 1]?.url ||
@@ -926,7 +961,7 @@ async function fetchUploadsPlaylist(
           durationText: durText,
           thumbnail,
           artistBrowseId: browseId,
-          isMusic,
+          isMusic: true,
         });
       }
     }
