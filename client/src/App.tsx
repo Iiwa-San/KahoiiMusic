@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -59,7 +59,7 @@ import {
   deleteOfflineTrack,
   formatBytes,
 } from "./utils/offlineStorage";
-import { formatTime } from "./utils/lyricsParser";
+import { formatTime, parseLrc } from "./utils/lyricsParser";
 import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/colorExtractor";
 
 // Official App Logo & Favicon placeholder
@@ -234,15 +234,22 @@ function compareSortItems(a: any, b: any): number {
 }
 
 
-// Smart Artist Extractor: prevents "Kahoii Music" placeholder and extracts real artist from title if needed
+// Smart Artist Extractor: prevents "Kahoii Music", "Nghệ sĩ", "YouTube Music" placeholder and extracts real artist from title if needed
 function formatTrackArtist(title?: string, author?: string): string {
   const cleanAuthor = (author || "").trim();
-  if (cleanAuthor && cleanAuthor !== "Kahoii Music" && cleanAuthor !== "YouTube Music") {
+  if (
+    cleanAuthor &&
+    cleanAuthor !== "Kahoii Music" &&
+    cleanAuthor !== "YouTube Music" &&
+    cleanAuthor !== "Nghệ sĩ" &&
+    cleanAuthor !== "Artist" &&
+    cleanAuthor !== "Various Artists"
+  ) {
     return cleanAuthor;
   }
 
   const rawTitle = (title || "").trim();
-  if (!rawTitle) return "Nghệ sĩ";
+  if (!rawTitle) return "";
 
   // Check " / ": e.g. "『ラベンダー』 / MIMI feat. saewool (Music Video)" -> "MIMI feat. saewool"
   if (rawTitle.includes(" / ")) {
@@ -271,7 +278,13 @@ function formatTrackArtist(title?: string, author?: string): string {
     }
   }
 
-  return cleanAuthor && cleanAuthor !== "Kahoii Music" ? cleanAuthor : "Nghệ sĩ";
+  // Check brackets like 【Artist】 if not standard tags
+  const bracketMatch = rawTitle.match(/【([^】]+)】/);
+  if (bracketMatch && bracketMatch[1] && !/歌ってみた|弾き語り|MV|Official|Lyric|Audio/i.test(bracketMatch[1])) {
+    return bracketMatch[1].trim();
+  }
+
+  return cleanAuthor && cleanAuthor !== "Kahoii Music" && cleanAuthor !== "Nghệ sĩ" ? cleanAuthor : "";
 }
 
 interface UnifiedPlayOverlayProps {
@@ -687,6 +700,34 @@ export default function App() {
   // Sorting state for Left Sidebar and Right Queue
   const [isLeftSorted, setIsLeftSorted] = useState<boolean>(false);
   const [isQueueSorted, setIsQueueSorted] = useState<boolean>(false);
+
+  // Right Sidebar (Sidebar 2) Tabs: Queue (Hàng đợi) vs Lyrics (Lời bài hát)
+  const [sidebar2Tab, setSidebar2Tab] = useState<"queue" | "lyrics">("queue");
+  const activeLyricRef = useRef<HTMLParagraphElement | null>(null);
+
+  const parsedLyrics = useMemo(() => {
+    if (!_lyrics?.syncedLyrics) return [];
+    return parseLrc(_lyrics.syncedLyrics);
+  }, [_lyrics]);
+
+  const activeLyricIndex = useMemo(() => {
+    if (!parsedLyrics.length) return -1;
+    let idx = -1;
+    for (let i = 0; i < parsedLyrics.length; i++) {
+      if (parsedLyrics[i].time <= currentTime) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    return idx;
+  }, [parsedLyrics, currentTime]);
+
+  useEffect(() => {
+    if (sidebar2Tab === "lyrics" && activeLyricRef.current) {
+      activeLyricRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeLyricIndex, sidebar2Tab]);
 
   // Hamburger popups on player card
   const [showPlayerMenu, setShowPlayerMenu] = useState<boolean>(false);
@@ -1299,24 +1340,28 @@ export default function App() {
       const res = await authenticatedFetch(`${API_BASE}/api/user/library`);
       if (res.ok) {
         const data = await res.json();
+        const cleanAuthorField = (obj: any) => {
+          const raw = obj?.author || obj?.Author || obj?.Artist || "";
+          return (raw && raw !== "Nghệ sĩ" && raw !== "Kahoii Music" && raw !== "YouTube Music") ? raw : "";
+        };
         const mappedFavs: Track[] = (data.favorites || []).map((f: any) => ({
           id: f.id || f.Id,
           title: f.title || f.Title,
-          author: f.author || f.Author || f.Artist || "Kahoii Music",
+          author: cleanAuthorField(f),
           duration: Number(f.DurationSeconds ?? f.duration ?? f.durationSeconds ?? f.Duration ?? 0),
           thumbnail: `https://i.ytimg.com/vi/${f.id || f.Id}/mqdefault.jpg`,
         }));
         const mappedSaved: Track[] = (data.savedTracks || data.SavedTracks || []).map((s: any) => ({
           id: s.id || s.Id,
           title: s.title || s.Title,
-          author: s.author || s.Author || s.Artist || "Kahoii Music",
+          author: cleanAuthorField(s),
           duration: Number(s.DurationSeconds ?? s.duration ?? s.durationSeconds ?? s.Duration ?? 0),
           thumbnail: `https://i.ytimg.com/vi/${s.id || s.Id}/mqdefault.jpg`,
         }));
         const mappedHist: Track[] = (data.history || []).map((h: any) => ({
           id: h.id || h.Id,
           title: h.title || h.Title,
-          author: h.author || h.Author || h.Artist || "Kahoii Music",
+          author: cleanAuthorField(h),
           duration: Number(h.DurationSeconds ?? h.duration ?? h.durationSeconds ?? h.Duration ?? 0),
           thumbnail: `https://i.ytimg.com/vi/${h.id || h.Id}/mqdefault.jpg`,
         }));
@@ -2219,14 +2264,17 @@ export default function App() {
     loadAndPlayTrack(activeQueue[prevIdx], true);
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = parseFloat(e.target.value);
+  const seekToTime = (newTime: number) => {
     setCurrentTime(newTime);
     if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
       try { ytPlayerRef.current.seekTo(newTime, true); } catch {}
     } else if (audioRef.current) {
       audioRef.current.currentTime = newTime;
     }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    seekToTime(parseFloat(e.target.value));
   };
 
   // Top Search Submit
@@ -2375,15 +2423,15 @@ export default function App() {
       const favs = libraryData.favorites;
       if (favs.length > 0) {
         items = favs
-          .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
+          .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
           .map((t) => {
             const artistName = formatTrackArtist(t.title, t.author);
             return {
               id: t.id,
               title: t.title,
               subtitle: t.duration && t.duration > 0
-                ? `${artistName} • ${formatTime(t.duration)}`
-                : artistName,
+                ? (artistName ? `${artistName} • ${formatTime(t.duration)}` : formatTime(t.duration))
+                : (artistName || "Bài hát"),
               thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
               rawTrack: t,
               rawPlaylist: null as any,
@@ -2432,12 +2480,12 @@ export default function App() {
       const allSaved = Array.from(mergedMap.values());
       if (allSaved.length > 0) {
         items = allSaved
-          .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
+          .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
           .map((t) => {
             const artistName = formatTrackArtist(t.title, t.author);
-            const sub = t.isLocalCached
-              ? (t.duration && t.duration > 0 ? `${artistName} • ${formatTime(t.duration)} • ${t.sizeStr}` : `${artistName} • ${t.sizeStr}`)
-              : (t.duration && t.duration > 0 ? `${artistName} • ${formatTime(t.duration)} • Đám mây` : `${artistName} • Đám mây`);
+            const prefix = artistName ? `${artistName} • ` : "";
+            const dur = t.duration && t.duration > 0 ? `${formatTime(t.duration)} • ` : "";
+            const sub = t.isLocalCached ? `${prefix}${dur}${t.sizeStr}` : `${prefix}${dur}Đám mây`;
             return {
               id: t.id,
               title: t.title,
@@ -2461,15 +2509,15 @@ export default function App() {
       const hist = libraryData.history;
       if (hist.length > 0) {
         items = hist
-          .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
+          .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
           .map((t) => {
             const artistName = formatTrackArtist(t.title, t.author);
             return {
               id: t.id,
               title: t.title,
               subtitle: t.duration && t.duration > 0
-                ? `${artistName} • ${formatTime(t.duration)}`
-                : artistName,
+                ? (artistName ? `${artistName} • ${formatTime(t.duration)}` : formatTime(t.duration))
+                : (artistName || "Bài hát"),
               thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
               rawTrack: t,
               rawPlaylist: null as any,
@@ -2938,10 +2986,10 @@ export default function App() {
           <div className="relative grid grid-cols-4 gap-1.5" style={{ marginBottom: "20px" }}>
             {/* Static Capsule Backgrounds */}
             <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pointer-events-none">
-              <div className="rounded-xl bg-[#250746] border border-white/10" />
-              <div className="rounded-xl bg-[#250746] border border-white/10" />
-              <div className="rounded-xl bg-[#250746] border border-white/10" />
-              <div className="rounded-xl bg-[#250746] border border-white/10" />
+              <div className="rounded-xl theme-tab-inactive" />
+              <div className="rounded-xl theme-tab-inactive" />
+              <div className="rounded-xl theme-tab-inactive" />
+              <div className="rounded-xl theme-tab-inactive" />
             </div>
 
             {/* Active Sliding Glowing Pill */}
@@ -5048,86 +5096,179 @@ export default function App() {
             </div>
           </div>
 
-          {/* Bottom Part: Queue Header with Track Count & Sorter */}
-          <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0">
-            <span className="text-xs font-semibold text-white/70">
-              Hàng đợi phát {queueTracks.length > 0 && `(${queueTracks.length})`}
-            </span>
-            {queueTracks.length > 0 && (
+          {/* Sidebar 2 Tab Switcher: Hàng đợi (Queue) & Lời bài hát (Lyrics) */}
+          <div className="relative mb-3 flex-shrink-0">
+            {/* Inactive Background Capsules matching app theme but darker */}
+            <div className="absolute inset-0 grid grid-cols-2 gap-1.5 pointer-events-none">
+              <div className="rounded-xl theme-tab-inactive" />
+              <div className="rounded-xl theme-tab-inactive" />
+            </div>
+
+            {/* Active Sliding Glowing Pill */}
+            <div
+              className="absolute top-0 bottom-0 rounded-xl pointer-events-none z-10"
+              style={{
+                width: "calc((100% - 6px) / 2)",
+                left: 0,
+                transform: `translateX(${sidebar2Tab === "queue" ? "0%" : "calc(100% + 6px)"})`,
+                transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.8s ease, box-shadow 0.8s ease",
+                background: "var(--theme-btn-gradient)",
+                boxShadow: "0 4px 18px var(--theme-panel-border)",
+              }}
+            />
+
+            {/* Clickable Buttons */}
+            <div className="relative z-20 grid grid-cols-2 gap-1.5">
               <button
                 type="button"
-                onClick={() => {
-                  const nextSorted = !isQueueSorted;
-                  setIsQueueSorted(nextSorted);
-                  if (nextSorted) {
-                    setQueueTracks((prev) => [...prev].sort(compareSortItems));
-                  } else {
-                    setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
-                  }
-                }}
-                title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${
-                  isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
+                onClick={() => setSidebar2Tab("queue")}
+                className={`py-1.5 px-2 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+                  sidebar2Tab === "queue" ? "text-white" : "text-white/70 hover:text-white"
                 }`}
               >
-                <ArrowDownAZ className="w-3.5 h-3.5" />
-                <span>Sort</span>
+                <ListMusic className="w-3.5 h-3.5" />
+                <span>Hàng đợi {queueTracks.length > 0 && `(${queueTracks.length})`}</span>
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => setSidebar2Tab("lyrics")}
+                className={`py-1.5 px-2 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+                  sidebar2Tab === "lyrics" ? "text-white" : "text-white/70 hover:text-white"
+                }`}
+              >
+                <Mic2 className="w-3.5 h-3.5" />
+                <span>Lời bài hát</span>
+              </button>
+            </div>
           </div>
 
-          {/* Bottom Part: Queue List (Starting directly with Active Highlight Beam) */}
-          <div
-            className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
-            style={{ gap: "8px" }}
-          >
-            {queueTracks.length > 0 ? (
-              queueTracks.map((track, i) => {
-                const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
-                return (
-                  <div
-                    key={track.id + i}
+          {/* Tab 1: Hàng đợi phát (Queue List) */}
+          {sidebar2Tab === "queue" && (
+            <>
+              <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0">
+                <span className="text-xs font-semibold text-white/70">
+                  Danh sách phát {queueTracks.length > 0 && `(${queueTracks.length})`}
+                </span>
+                {queueTracks.length > 0 && (
+                  <button
+                    type="button"
                     onClick={() => {
-                      setCurrentIndex(i);
-                      currentIndexRef.current = i;
-                      loadAndPlayTrack(track, true);
+                      const nextSorted = !isQueueSorted;
+                      setIsQueueSorted(nextSorted);
+                      if (nextSorted) {
+                        setQueueTracks((prev) => [...prev].sort(compareSortItems));
+                      } else {
+                        setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
+                      }
                     }}
-                    className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group ${
-                      isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
+                    title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${
+                      isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
                     }`}
                   >
-                    <img
-                      src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
-                      alt=""
-                      onError={(e) => {
-                        e.currentTarget.src = DEFAULT_TRACK_ART;
-                      }}
-                      className="w-8 h-8 rounded-md object-cover flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
-                        {track.title}
-                      </p>
-                      {track.author && (
-                        <p className="text-[10px] text-white/50 truncate">
-                          {track.author}
-                        </p>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
-                      {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
-                    </span>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2">
-                <ListMusic className="w-8 h-8 opacity-30" />
-                <p className="font-medium">Hàng đợi đang trống</p>
-                <p className="text-[11px] text-white/30">Chọn bài hát bất kỳ từ trang chủ để bắt đầu nghe nhạc</p>
+                    <ArrowDownAZ className="w-3.5 h-3.5" />
+                    <span>Sort</span>
+                  </button>
+                )}
               </div>
-            )}
-          </div>
+
+              <div
+                className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
+                style={{ gap: "8px" }}
+              >
+                {queueTracks.length > 0 ? (
+                  queueTracks.map((track, i) => {
+                    const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
+                    const artistLabel = formatTrackArtist(track.title, track.author);
+                    return (
+                      <div
+                        key={track.id + i}
+                        onClick={() => {
+                          setCurrentIndex(i);
+                          currentIndexRef.current = i;
+                          loadAndPlayTrack(track, true);
+                        }}
+                        className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group ${
+                          isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
+                        }`}
+                      >
+                        <img
+                          src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
+                          alt=""
+                          onError={(e) => {
+                            e.currentTarget.src = DEFAULT_TRACK_ART;
+                          }}
+                          className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
+                            {track.title}
+                          </p>
+                          {artistLabel && (
+                            <p className="text-[10px] text-white/50 truncate">
+                              {artistLabel}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
+                          {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2">
+                    <ListMusic className="w-8 h-8 opacity-30" />
+                    <p className="font-medium">Hàng đợi đang trống</p>
+                    <p className="text-[11px] text-white/30">Chọn bài hát bất kỳ từ trang chủ để bắt đầu nghe nhạc</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Tab 2: Lời bài hát (Lyrics) */}
+          {sidebar2Tab === "lyrics" && (
+            <div className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1 py-2 custom-scrollbar text-center">
+              {parsedLyrics.length > 0 ? (
+                <div className="flex flex-col gap-3 py-3">
+                  {parsedLyrics.map((line, idx) => {
+                    const isActive = idx === activeLyricIndex;
+                    return (
+                      <p
+                        key={idx}
+                        ref={isActive ? activeLyricRef : undefined}
+                        onClick={() => seekToTime(line.time)}
+                        className={`transition-all duration-300 cursor-pointer select-none px-3 py-1.5 rounded-xl ${
+                          isActive
+                            ? "text-[14px] font-bold text-white scale-[1.03] drop-shadow-md theme-accent-text bg-white/10"
+                            : "text-xs font-medium text-white/40 hover:text-white/80 hover:bg-white/5"
+                        }`}
+                      >
+                        {line.text}
+                      </p>
+                    );
+                  })}
+                </div>
+              ) : _lyrics?.plainLyrics ? (
+                <div className="py-4 text-xs leading-relaxed text-white/80 whitespace-pre-line text-center font-medium">
+                  {_lyrics.plainLyrics}
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2.5">
+                  <Mic2 className="w-8 h-8 opacity-30 theme-accent-text" />
+                  <p className="font-semibold text-white/70">
+                    {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
+                  </p>
+                  <p className="text-[11px] text-white/40 max-w-[200px]">
+                    {currentTrack
+                      ? "Không tìm thấy lời đồng bộ cho bài hát này trên hệ thống"
+                      : "Chọn một bài hát để bắt đầu theo dõi lời bài hát"}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </aside>
       </main>
 

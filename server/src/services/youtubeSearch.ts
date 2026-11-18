@@ -218,25 +218,62 @@ function extractDuration(renderer: any, descRuns: any[]): { duration: number; du
   return { duration: 0, durationText: "" };
 }
 
-function parseSongItem(renderer: any): SearchTrackResult | null {
+function parseSongItem(renderer: any, fallbackAuthor = ""): SearchTrackResult | null {
   if (!renderer) return null;
   const flexCols = renderer.flexColumns || [];
   const title = extractRunsText(flexCols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs);
   if (!title) return null;
 
   const descRuns = flexCols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
-  const author = descRuns[0]?.text || "Nghệ sĩ";
-
+  let author = "";
   let artistBrowseId: string | undefined = undefined;
+
   for (const r of descRuns) {
+    if (!r?.text) continue;
     const isArtist =
       r.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs
         ?.browseEndpointContextMusicConfig?.pageType === "MUSIC_PAGE_TYPE_ARTIST" ||
       (r.navigationEndpoint?.browseEndpoint?.browseId &&
         r.navigationEndpoint.browseEndpoint.browseId.startsWith("UC"));
-    if (isArtist && r.navigationEndpoint?.browseEndpoint?.browseId) {
+    if (isArtist) {
+      author = r.text.trim();
       artistBrowseId = r.navigationEndpoint.browseEndpoint.browseId;
       break;
+    }
+  }
+
+  if (!author) {
+    for (const r of descRuns) {
+      const txt = (r?.text || "").trim();
+      if (
+        txt &&
+        txt !== "•" &&
+        txt !== "·" &&
+        txt !== "Bài hát" &&
+        txt !== "Video" &&
+        txt !== "Song" &&
+        txt !== "Nghệ sĩ" &&
+        txt !== "Artist" &&
+        !/^\d+[\s\u00a0]*(Tr|T|k|N|M|B)?\s*(lượt|views|plays)/i.test(txt) &&
+        !/^\d+:\d+(?::\d+)?$/.test(txt)
+      ) {
+        author = txt;
+        break;
+      }
+    }
+  }
+
+  if (!author && fallbackAuthor && fallbackAuthor !== "Nghệ sĩ") {
+    author = fallbackAuthor;
+  }
+
+  if (!author && title) {
+    if (title.includes(" - ")) {
+      const parts = title.split(" - ");
+      if (parts.length >= 2) author = parts[0].trim();
+    } else if (title.includes(" / ")) {
+      const parts = title.split(" / ");
+      if (parts.length >= 2) author = parts[1].trim();
     }
   }
 
@@ -256,7 +293,7 @@ function parseSongItem(renderer: any): SearchTrackResult | null {
       ? rawThumb
       : `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
 
-  return { id: videoId, title, author, duration, durationText, thumbnail, artistBrowseId };
+  return { id: videoId, title, author: author || "", duration, durationText, thumbnail, artistBrowseId, isMusic: true };
 }
 
 function parseArtistItem(renderer: any): SearchArtistItem | null {
@@ -654,7 +691,14 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       }
 
       const subParts = cardSubtitle.split("•").map((s) => s.trim());
-      const author = subParts[1] || subParts[0] || "Nghệ sĩ";
+      let author = "";
+      for (const p of subParts) {
+        if (p && !/^(bài hát|video|song|nghệ sĩ|artist|\d+:\d+)$/i.test(p) && !/lượt/i.test(p)) {
+          author = p;
+          break;
+        }
+      }
+      if (!author) author = subParts[1] || subParts[0] || "";
 
       if (videoId) {
         topResult = {
@@ -862,18 +906,31 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
  * Fetch tracks belonging to a playlist
  */
 export async function getPlaylistTracks(browseOrPlaylistId: string): Promise<SearchTrackResult[]> {
-  const browseId = browseOrPlaylistId.startsWith("VL")
-    ? browseOrPlaylistId
-    : `VL${browseOrPlaylistId}`;
+  const browseId =
+    browseOrPlaylistId.startsWith("VL") || browseOrPlaylistId.startsWith("MPREb")
+      ? browseOrPlaylistId
+      : `VL${browseOrPlaylistId}`;
 
   const data = await postYTM("browse", { browseId });
   const items =
     data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer
-      ?.contents?.[0]?.musicPlaylistShelfRenderer?.contents || [];
+      ?.contents?.[0]?.musicPlaylistShelfRenderer?.contents ||
+    data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer
+      ?.contents?.[0]?.musicShelfRenderer?.contents ||
+    [];
+
+  const header =
+    data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicResponsiveHeaderRenderer ||
+    data?.header?.musicDetailHeaderRenderer ||
+    data?.header?.musicResponsiveHeaderRenderer;
+  const headerAuthor =
+    header?.straplineTextOne?.runs?.[0]?.text ||
+    header?.subtitle?.runs?.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("UC"))?.text ||
+    "";
 
   const results: SearchTrackResult[] = [];
   for (const item of items) {
-    const parsed = parseSongItem(item.musicResponsiveListItemRenderer);
+    const parsed = parseSongItem(item.musicResponsiveListItemRenderer, headerAuthor);
     if (parsed) results.push(parsed);
   }
   return results;
