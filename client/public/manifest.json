@@ -1,0 +1,26 @@
+{
+  "name": "Kahoii Music - Trình phát nhạc không quảng cáo",
+  "short_name": "Kahoii Music",
+  "description": "Nghe nhạc không quảng cáo, hỗ trợ lưu nhạc ngoại tuyến như YouTube Music",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#141026",
+  "theme_color": "#FA0091",
+  "icons": [
+    {
+      "src": "/logo_icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/app_logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["music", "entertainment"],
+  "lang": "vi"
+}

@@ -42,12 +42,23 @@ import {
   Tablet,
   Puzzle,
   ExternalLink,
+  HardDriveDownload,
+  WifiOff,
+  Trash2,
 } from "lucide-react";
 import type {
   Track,
   StructuredSearchResult,
   SearchPlaylistItem,
+  OfflineTrackItem,
 } from "./types";
+import {
+  saveTrackOffline,
+  getOfflineTrack,
+  getAllOfflineTracks,
+  deleteOfflineTrack,
+  formatBytes,
+} from "./utils/offlineStorage";
 import { formatTime } from "./utils/lyricsParser";
 import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/colorExtractor";
 
@@ -155,11 +166,12 @@ const FEATURED_ARTISTS = [
   },
 ];
 
-type LeftTab = "library" | "favorites" | "history";
+type LeftTab = "library" | "favorites" | "offline" | "history";
 
 const SIDEBAR_TABS: { key: LeftTab; label: string }[] = [
   { key: "library", label: "Thư viện" },
   { key: "favorites", label: "Yêu thích" },
+  { key: "offline", label: "Đã tải" },
   { key: "history", label: "Lịch sử" },
 ];
 
@@ -368,6 +380,13 @@ export default function App() {
   const [activeLeftTab, setActiveLeftTab] = useState<LeftTab>("library");
   const [leftSearchQuery, setLeftSearchQuery] = useState<string>("");
   const activeTabIndex = Math.max(0, SIDEBAR_TABS.findIndex((t) => t.key === activeLeftTab));
+
+  // Offline Music & PWA Management (YouTube-Style In-Browser Local Storage)
+  const [offlineTracks, setOfflineTracks] = useState<OfflineTrackItem[]>([]);
+  const [offlineTrackIds, setOfflineTrackIds] = useState<Set<string>>(new Set());
+  const [savingOfflineTrackId, setSavingOfflineTrackId] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   // User Profile & Real Database Session (Secured & Isolated per-user)
   const [isAccountOpen, setIsAccountOpen] = useState<boolean>(false);
@@ -824,6 +843,146 @@ export default function App() {
 
     fetchLatestDownloads();
   }, []);
+
+  // Load Offline Tracks from IndexedDB on startup & attach online/offline/pwa event listeners
+  useEffect(() => {
+    getAllOfflineTracks()
+      .then((items) => {
+        setOfflineTracks(items);
+        setOfflineTrackIds(new Set(items.map((it) => it.id)));
+      })
+      .catch((err) => {
+        console.warn("[Offline DB] Failed to load offline tracks:", err);
+      });
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToast("Đã khôi phục kết nối Internet", "success");
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToast("Bạn đang ngoại tuyến. Các bài hát trong mục 'Đã tải' vẫn phát bình thường!", "info");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    const handleBeforeInstall = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handleBeforeInstall);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
+    };
+  }, []);
+
+  const offlineTotalBytes = offlineTracks.reduce(
+    (sum, item) => sum + (item.sizeBytes || item.audioBlob?.size || 0),
+    0
+  );
+
+  // Install PWA
+  const handleInstallPwa = async () => {
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === "accepted") {
+          showToast("Đang cài đặt ứng dụng Kahoii Music...", "success");
+        }
+      } catch {}
+      setDeferredPrompt(null);
+    } else {
+      showToast("Để cài đặt: Bấm biểu tượng 'Cài đặt' trên thanh địa chỉ URL của trình duyệt!", "info");
+    }
+  };
+
+  // Play All Offline Tracks
+  const handlePlayAllOffline = () => {
+    if (offlineTracks.length === 0) return;
+    const tracks: Track[] = offlineTracks.map((it) => ({
+      id: it.id,
+      title: it.title,
+      author: it.author,
+      duration: it.duration,
+      durationText: it.durationText,
+      thumbnail: it.thumbnail,
+    }));
+    setPlaylist(tracks);
+    playlistRef.current = tracks;
+    setQueueTracks(tracks);
+    queueTracksRef.current = tracks;
+    setCurrentIndex(0);
+    currentIndexRef.current = 0;
+    loadAndPlayTrack(tracks[0], true);
+  };
+
+  // Delete Track from IndexedDB Offline Storage
+  const handleDeleteOfflineTrack = async (id: string, title?: string) => {
+    try {
+      await deleteOfflineTrack(id);
+      const updated = await getAllOfflineTracks();
+      setOfflineTracks(updated);
+      setOfflineTrackIds(new Set(updated.map((t) => t.id)));
+      showToast(`Đã xóa "${title || "bài hát"}" khỏi bộ nhớ ngoại tuyến`, "info");
+    } catch {
+      showToast("Lỗi khi xóa bài hát khỏi bộ nhớ", "warning");
+    }
+  };
+
+  // Save Track into IndexedDB for 100% Offline YouTube-Style Playback
+  const handleSaveOfflineTrack = async (track: Track) => {
+    if (!track) return;
+
+    const isSaved = offlineTrackIds.has(track.id);
+    if (isSaved) {
+      await handleDeleteOfflineTrack(track.id, track.title);
+      return;
+    }
+
+    setSavingOfflineTrackId(track.id);
+    showToast(`Đang tải & lưu "${track.title}" vào bộ nhớ ngoại tuyến...`, "info");
+
+    try {
+      // 1. Fetch audio stream as Blob
+      const downloadUrl = `${API_BASE}/api/download-audio?id=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&author=${encodeURIComponent(track.author || "")}`;
+      const audioRes = await fetch(downloadUrl);
+      if (!audioRes.ok) {
+        throw new Error("Không thể tải luồng âm thanh");
+      }
+      const audioBlob = await audioRes.blob();
+
+      // 2. Fetch lyrics in background
+      let lyricsData = _lyrics;
+      try {
+        const lyrRes = await fetch(
+          `${API_BASE}/api/lyrics?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+        );
+        if (lyrRes.ok) {
+          lyricsData = await lyrRes.json();
+        }
+      } catch {}
+
+      // 3. Store into IndexedDB
+      await saveTrackOffline(track, audioBlob, lyricsData);
+
+      // 4. Update UI state
+      const updated = await getAllOfflineTracks();
+      setOfflineTracks(updated);
+      setOfflineTrackIds(new Set(updated.map((t) => t.id)));
+
+      showToast(`Đã lưu thành công "${track.title}"! Bạn có thể nghe khi không có mạng.`, "success");
+    } catch (err: any) {
+      console.error("[Offline Save Error]", err);
+      showToast(`Không thể lưu ngoại tuyến: ${err.message || "Vui lòng thử lại"}`, "warning");
+    } finally {
+      setSavingOfflineTrackId(null);
+    }
+  };
 
   // Save library data to server & cloud (Authenticated per user with offline cache)
   const persistLibraryData = async (updated: {
@@ -1554,6 +1713,55 @@ export default function App() {
         });
       }
 
+      // Strategy 0: Offline IndexedDB Playback (Zero network bytes, 100% offline)
+      try {
+        const offlineItem = await getOfflineTrack(track.id);
+        if (offlineItem && offlineItem.audioBlob && audioRef.current) {
+          if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+            try {
+              ytPlayerRef.current.stopVideo();
+            } catch {}
+          }
+          const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
+          audioRef.current.src = blobUrl;
+          audioRef.current.load();
+          activePlayerType.current = "audio";
+          if (autoPlay) {
+            const playPromise = audioRef.current.play();
+            if (playPromise !== undefined) {
+              playPromise
+                .then(() => {
+                  setIsPlaying(true);
+                  setIsLoading(false);
+                })
+                .catch(() => {
+                  setIsPlaying(false);
+                  setIsLoading(false);
+                });
+            }
+          } else {
+            setIsPlaying(false);
+            setIsLoading(false);
+          }
+          if (offlineItem.lyrics) {
+            setLyrics(offlineItem.lyrics);
+          }
+          setErrorMessage(null);
+          return;
+        }
+      } catch (offlineErr) {
+        console.warn("[Offline Playback Error]", offlineErr);
+      }
+
+      // Check if user is offline without internet and the track is not downloaded
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsLoading(false);
+        setErrorMessage("Bạn đang ngoại tuyến. Hãy mở tab 'Đã tải' để nghe các bài đã lưu.");
+        showToast("Bạn đang ngoại tuyến! Hãy chọn bài hát trong mục 'Đã tải'", "info");
+        setActiveLeftTab("offline");
+        return;
+      }
+
       // If active player is already YouTube, transition track smoothly
       if (
         activePlayerType.current === "youtube" &&
@@ -2094,6 +2302,33 @@ export default function App() {
             };
           });
       }
+    } else if (activeLeftTab === "offline") {
+      if (offlineTracks.length > 0) {
+        items = offlineTracks
+          .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
+          .map((t) => {
+            const artistName = formatTrackArtist(t.title, t.author);
+            const sizeStr = formatBytes(t.sizeBytes || t.audioBlob?.size || 0);
+            return {
+              id: t.id,
+              title: t.title,
+              subtitle: t.duration && t.duration > 0
+                ? `${artistName} • ${formatTime(t.duration)} • ${sizeStr}`
+                : `${artistName} • ${sizeStr}`,
+              thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+              rawTrack: {
+                id: t.id,
+                title: t.title,
+                author: t.author,
+                duration: t.duration,
+                durationText: t.durationText,
+                thumbnail: t.thumbnail,
+              },
+              isOffline: true,
+              rawPlaylist: null as any,
+            };
+          });
+      }
     } else if (activeLeftTab === "history") {
       const hist = libraryData.history;
       if (hist.length > 0) {
@@ -2276,14 +2511,25 @@ export default function App() {
           )}
         </div>
 
-        {/* Right: Download Apps & User Avatar Pill Buttons */}
+        {/* Right: Offline Indicator, Download Apps & User Avatar Pill Buttons */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {!isOnline && (
+            <div
+              title="Bạn đang ngoại tuyến. Các bài hát đã lưu trong mục 'Đã tải' vẫn nghe được bình thường!"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-medium animate-pulse cursor-pointer"
+              onClick={() => setActiveLeftTab("offline")}
+            >
+              <WifiOff className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Ngoại tuyến (Offline)</span>
+            </div>
+          )}
+
           {/* Download App Button & Dropdown */}
           <div className="relative" ref={downloadMenuRef}>
             <button
               type="button"
               onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-              title="Tải ứng dụng Kahoii Music (PC, Extension, Android, iOS)"
+              title="Tải ứng dụng Kahoii Music (PC, Extension, Android, iOS, PWA)"
               className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer shadow-md border ${
                 showDownloadMenu
                   ? "theme-badge-active scale-105"
@@ -2314,8 +2560,37 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* 4 Platforms List */}
+                {/* Platforms List */}
                 <div className="flex flex-col gap-1.5">
+                  {/* 0. Cài đặt Web App (PWA) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDownloadMenu(false);
+                      handleInstallPwa();
+                    }}
+                    className="flex items-center justify-between p-2 rounded-xl bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-indigo-500/15 hover:from-pink-500/25 hover:to-purple-500/25 transition-all group border border-pink-500/30 hover:border-pink-500/60 cursor-pointer text-left w-full"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                          <span>Cài đặt Web App (PWA)</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-pink-500/30 text-pink-300 font-semibold flex-shrink-0">
+                            Mở Offline
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/60 truncate">
+                          Mở ngay trên máy tính/điện thoại khi mất mạng
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/10 group-hover:theme-btn-primary group-hover:text-white text-white/80 transition-all flex-shrink-0 ml-2">
+                      <Plus className="w-3.5 h-3.5" />
+                    </div>
+                  </button>
                   {/* 1. PC (Windows) */}
                   <a
                     href={downloadData.pc.downloadUrl}
@@ -2531,10 +2806,11 @@ export default function App() {
             mobileTab === "library" ? "flex w-full" : "hidden"
           } lg:flex lg:w-[290px] xl:w-[320px] flex-shrink-0 figma-panel flex-col min-h-0 overflow-hidden p-4 sm:p-5 lg:px-[18px] lg:pt-[30px] lg:pb-[22px]`}
         >
-          {/* Top 3 Tabs Row: Silky Smooth Sliding Indicator Animation */}
-          <div className="relative grid grid-cols-3 gap-2.5" style={{ marginBottom: "20px" }}>
+          {/* Top 4 Tabs Row: Silky Smooth Sliding Indicator Animation */}
+          <div className="relative grid grid-cols-4 gap-1.5" style={{ marginBottom: "20px" }}>
             {/* Static Capsule Backgrounds */}
-            <div className="absolute inset-0 grid grid-cols-3 gap-2.5 pointer-events-none">
+            <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pointer-events-none">
+              <div className="rounded-xl bg-[#250746] border border-white/10" />
               <div className="rounded-xl bg-[#250746] border border-white/10" />
               <div className="rounded-xl bg-[#250746] border border-white/10" />
               <div className="rounded-xl bg-[#250746] border border-white/10" />
@@ -2544,9 +2820,9 @@ export default function App() {
             <div
               className="absolute top-0 bottom-0 rounded-xl pointer-events-none z-10"
               style={{
-                width: "calc((100% - 20px) / 3)",
+                width: "calc((100% - 18px) / 4)",
                 left: 0,
-                transform: `translateX(calc(${activeTabIndex} * (100% + 10px)))`,
+                transform: `translateX(calc(${activeTabIndex} * (100% + 6px)))`,
                 transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.8s ease, box-shadow 0.8s ease",
                 background: "var(--theme-btn-gradient)",
                 boxShadow: "0 4px 18px var(--theme-panel-border)",
@@ -2558,16 +2834,21 @@ export default function App() {
               <button
                 key={tab.key}
                 onClick={() => setActiveLeftTab(tab.key)}
-                className={`relative z-20 py-2 px-1 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer truncate ${
+                className={`relative z-20 py-2 px-0.5 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer truncate flex items-center justify-center gap-1 ${
                   activeLeftTab === tab.key ? "text-white" : "text-white/70 hover:text-white"
                 }`}
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                {tab.key === "offline" && offlineTracks.length > 0 && (
+                  <span className="text-[9px] px-1 py-0.2 rounded-full bg-white/20 font-mono">
+                    {offlineTracks.length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
-          {!userSession?.isLoggedIn ? (
+          {!userSession?.isLoggedIn && activeLeftTab !== "offline" ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-3 bg-white/5 rounded-2xl border border-white/10 my-auto">
               <div className="w-12 h-12 rounded-full theme-badge flex items-center justify-center theme-accent-text shadow-md">
                 <FolderHeart className="w-6 h-6" />
@@ -2591,7 +2872,7 @@ export default function App() {
               {/* Search Box in Sidebar with Sort Icon (Matching Figma: Centered text, pink icons) */}
               <div
                 className="relative flex items-center h-10 px-3.5 rounded-full theme-input-pill transition-all flex-shrink-0"
-                style={{ marginBottom: "22px" }}
+                style={{ marginBottom: "16px" }}
               >
                 <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
                 <input
@@ -2613,6 +2894,23 @@ export default function App() {
                 </button>
               </div>
 
+              {/* Offline Storage Summary & Play All Action */}
+              {activeLeftTab === "offline" && offlineTracks.length > 0 && (
+                <div className="flex items-center justify-between px-1 mb-2.5 text-xs flex-shrink-0">
+                  <span className="text-white/60 text-[11px]">
+                    {offlineTracks.length} bài hát • {formatBytes(offlineTotalBytes)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handlePlayAllOffline}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg theme-btn-primary text-white text-[11px] font-semibold hover:opacity-90 active:scale-95 transition-all cursor-pointer shadow-sm"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Phát tất cả</span>
+                  </button>
+                </div>
+              )}
+
               {/* Vertical List of Playlist Items (Matching Figma) */}
               <div
                 className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
@@ -2627,6 +2925,16 @@ export default function App() {
                           if (activeLeftTab === "favorites") {
                             const favList = libraryData.favorites;
                             handlePlaySongItem(item.rawTrack, favList);
+                          } else if (activeLeftTab === "offline") {
+                            const offlineList = offlineTracks.map((ot) => ({
+                              id: ot.id,
+                              title: ot.title,
+                              author: ot.author,
+                              duration: ot.duration,
+                              durationText: ot.durationText,
+                              thumbnail: ot.thumbnail,
+                            }));
+                            handlePlaySongItem(item.rawTrack, offlineList);
                           } else if (activeLeftTab === "history") {
                             const histList = libraryData.history;
                             handlePlaySongItem(item.rawTrack, histList);
@@ -2654,7 +2962,7 @@ export default function App() {
                       }}
                       className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group ${
                         (activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                        ((activeLeftTab === "favorites" || activeLeftTab === "history") && currentTrack && currentTrack.id === item.id)
+                        ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)
                           ? "active-queue-beam shadow-md scale-[1.01]"
                           : "hover:bg-white/10 hover:translate-x-1"
                       }`}
@@ -2670,7 +2978,7 @@ export default function App() {
                           className="w-full h-full rounded-[14px] object-cover border border-white/10 shadow-sm"
                         />
                         {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                          ((activeLeftTab === "favorites" || activeLeftTab === "history") && currentTrack && currentTrack.id === item.id)) && (
+                          ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
                           <div className="absolute inset-0 bg-black/55 rounded-[14px] flex items-center justify-center">
                             {isPlaying ? (
                               <Volume2 className="w-5 h-5 theme-accent-text animate-pulse" />
@@ -2686,7 +2994,7 @@ export default function App() {
                             {item.title}
                           </p>
                           {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                            ((activeLeftTab === "favorites" || activeLeftTab === "history") && currentTrack && currentTrack.id === item.id)) && (
+                            ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
                             <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider flex-shrink-0">
                               {isPlaying ? "Đang phát" : "Tạm dừng"}
                             </span>
@@ -2696,6 +3004,19 @@ export default function App() {
                           {item.subtitle}
                         </p>
                       </div>
+                      {activeLeftTab === "offline" && (
+                        <button
+                          type="button"
+                          title="Xóa khỏi bộ nhớ ngoại tuyến"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteOfflineTrack(item.id, item.title);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-rose-400 transition-colors cursor-pointer flex-shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   ))
                 ) : (
@@ -2705,6 +3026,8 @@ export default function App() {
                         ? "Chưa có danh sách phát nào"
                         : activeLeftTab === "favorites"
                         ? "Chưa có bài hát yêu thích nào"
+                        : activeLeftTab === "offline"
+                        ? "Chưa có bài hát ngoại tuyến nào"
                         : "Chưa có lịch sử phát nhạc"}
                     </p>
                   </div>
@@ -4152,8 +4475,8 @@ export default function App() {
 
                 {/* Popup 1 (Menu chính: Combobox) */}
                 {showPlayerMenu && currentTrack && (
-                  <div className="absolute top-9 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[175px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
-                    {/* Option 1: Lưu vào thư viện */}
+                  <div className="absolute top-9 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[205px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
+                    {/* Option 1: Lưu vào playlist */}
                     <button
                       type="button"
                       onClick={() => {
@@ -4165,7 +4488,7 @@ export default function App() {
                     >
                       <span className="flex items-center gap-2">
                         <FolderPlus className="w-4 h-4 theme-accent-text" />
-                        <span>Lưu vào thư viện</span>
+                        <span>Lưu vào playlist</span>
                       </span>
                       <div className="flex items-center gap-1">
                         {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
@@ -4175,7 +4498,33 @@ export default function App() {
                       </div>
                     </button>
 
-                    {/* Option 2: Tải xuống */}
+                    {/* Option 2: Lưu ngoại tuyến (nghe trong app như YouTube) */}
+                    <button
+                      type="button"
+                      disabled={savingOfflineTrackId === currentTrack.id}
+                      onClick={() => handleSaveOfflineTrack(currentTrack)}
+                      className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                    >
+                      <span className="flex items-center gap-2">
+                        {savingOfflineTrackId === currentTrack.id ? (
+                          <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
+                        ) : (
+                          <HardDriveDownload className="w-4 h-4 theme-accent-text" />
+                        )}
+                        <span>
+                          {savingOfflineTrackId === currentTrack.id
+                            ? "Đang lưu ngoại tuyến..."
+                            : offlineTrackIds.has(currentTrack.id)
+                            ? "Đã lưu offline (Bấm để xóa)"
+                            : "Lưu nghe offline (như YouTube)"}
+                        </span>
+                      </span>
+                      {offlineTrackIds.has(currentTrack.id) && (
+                        <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      )}
+                    </button>
+
+                    {/* Option 3: Tải file MP3 về máy */}
                     <button
                       type="button"
                       onClick={() => handleDownloadTrack(currentTrack)}
@@ -4183,10 +4532,10 @@ export default function App() {
                     >
                       <span className="flex items-center gap-2">
                         <Download className="w-4 h-4 theme-accent-text" />
-                        <span>Tải xuống</span>
+                        <span>Tải file MP3 về máy</span>
                       </span>
                       {downloadedTrackIds.has(currentTrack.id) && (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                       )}
                     </button>
                   </div>

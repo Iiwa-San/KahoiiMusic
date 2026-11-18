@@ -46,3 +46,20 @@ export interface StructuredSearchResult {
   artists: SearchArtistItem[];
   playlists: SearchPlaylistItem[];
 }
+
+export interface OfflineTrackItem {
+  id: string;
+  title: string;
+  author: string;
+  duration: number;
+  durationText?: string;
+  thumbnail: string;
+  savedAt: number;
+  sizeBytes: number;
+  audioBlob: Blob;
+  lyrics?: {
+    syncedLyrics?: LyricLine[] | null;
+    plainLyrics?: string | null;
+    instrumental?: boolean;
+  } | null;
+}
