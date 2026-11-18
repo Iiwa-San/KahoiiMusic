@@ -88,9 +88,9 @@ const getAuthSession = (): { idToken: string | null; refreshToken: string | null
 const getAuthToken = (): string | null => getAuthSession().idToken;
 const getRefreshToken = (): string | null => getAuthSession().refreshToken;
 
-// Helper to make authenticated requests with transparent token auto-refresh
+// Helper to make authenticated requests with transparent token auto-refresh & 401 retry
 const authenticatedFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
-  const { idToken, refreshToken } = getAuthSession();
+  let { idToken, refreshToken } = getAuthSession();
   const headers = new Headers(options.headers || {});
   if (idToken) {
     headers.set("Authorization", `Bearer ${idToken}`);
@@ -99,7 +99,47 @@ const authenticatedFetch = async (url: string, options: RequestInit = {}): Promi
     headers.set("X-Refresh-Token", refreshToken);
   }
 
-  const res = await fetch(url, { ...options, headers });
+  let res = await fetch(url, { ...options, headers });
+
+  // If 401 Unauthorized and we have a refreshToken, proactively refresh and retry the request once!
+  if (res.status === 401 && refreshToken) {
+    try {
+      const refreshRes = await fetch(`${API_BASE}/api/user/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Refresh-Token": refreshToken },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        if (refreshData?.idToken) {
+          idToken = refreshData.idToken;
+          refreshToken = refreshData.refreshToken || refreshToken;
+
+          // Save new tokens into localStorage immediately
+          try {
+            const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
+            if (raw) {
+              const session = JSON.parse(raw);
+              if (session && session.user) {
+                session.user.idToken = idToken;
+                session.user.refreshToken = refreshToken;
+                localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(session));
+              }
+            }
+          } catch {}
+
+          // Retry the request with the fresh token
+          headers.set("Authorization", `Bearer ${idToken}`);
+          if (refreshToken) {
+            headers.set("X-Refresh-Token", refreshToken);
+          }
+          res = await fetch(url, { ...options, headers });
+        }
+      }
+    } catch (err) {
+      console.warn("[authenticatedFetch] Auto-refresh retry error:", err);
+    }
+  }
 
   // If server auto-refreshed the token, capture it and update localStorage
   const refreshedIdToken = res.headers.get("x-refreshed-id-token");
@@ -308,13 +348,13 @@ function formatTrackArtist(title?: string, author?: string): string {
     }
   }
 
-  // 2. If not found in title, use author (channel name / uploader / description)
-  if (!isGeneric) {
+  // 2. If not found in title, use author (channel name / uploader / description) if not generic
+  if (!isGeneric && cleanAuthor) {
     return cleanAuthor;
   }
 
-  // 3. Fallback: return author if present, or "Nghệ sĩ" instead of blank
-  return cleanAuthor || "Nghệ sĩ";
+  // 3. Fallback: Never return generic "Nghệ sĩ" or placeholder
+  return "";
 }
 
 interface UnifiedPlayOverlayProps {
@@ -806,6 +846,13 @@ export default function App() {
       behavior: "smooth",
     });
   }, [activeLyricIndex, sidebar2Tab]);
+
+  // Reset lyrics scroll to 0 whenever lyrics are cleared or empty
+  useEffect(() => {
+    if (lyricsContainerRef.current && (parsedLyrics.length === 0 || !_lyrics)) {
+      lyricsContainerRef.current.scrollTop = 0;
+    }
+  }, [parsedLyrics.length, _lyrics, currentTrack?.id]);
 
   // Hamburger popups on player card
   const [showPlayerMenu, setShowPlayerMenu] = useState<boolean>(false);
@@ -1363,10 +1410,6 @@ export default function App() {
   const fetchUserSession = async () => {
     const token = getAuthToken();
     const refreshToken = getRefreshToken();
-    if (!token && !refreshToken) {
-      setUserSession({ isLoggedIn: false, user: null });
-      return;
-    }
 
     try {
       const res = await authenticatedFetch(`${API_BASE}/api/user/session`);
@@ -5349,11 +5392,13 @@ export default function App() {
               {/* Scrollable lyrics area */}
               <div
                 ref={lyricsContainerRef}
-                className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1 custom-scrollbar text-center"
+                className={`relative flex-1 flex flex-col min-h-0 pr-1 text-center ${
+                  parsedLyrics.length > 0 ? "overflow-y-auto custom-scrollbar" : "overflow-hidden"
+                }`}
                 style={{
                   paddingTop: parsedLyrics.length > 0 ? "35vh" : "0px",
                   paddingBottom: parsedLyrics.length > 0 ? "40vh" : "0px",
-                  gap: parsedLyrics.length > 0 ? "10px" : "0px",
+                  gap: parsedLyrics.length > 0 ? "8px" : "0px",
                 }}
               >
                 {parsedLyrics.length > 0 ? (
@@ -5379,13 +5424,13 @@ export default function App() {
                         onClick={() => {
                           if (line.time > 0) seekToTime(line.time);
                         }}
-                        className={`transition-all select-none cursor-pointer text-center rounded-2xl ${
+                        className={`transition-all select-none cursor-pointer text-center rounded-2xl px-4 py-2.5 ${
                           isActive
-                            ? "scale-[1.04] theme-accent-text font-bold drop-shadow-md bg-white/10 px-4 py-3 border border-white/10 shadow-lg"
-                            : "scale-100 font-medium opacity-30 hover:opacity-75 px-3 py-1.5 hover:bg-white/5"
+                            ? "scale-[1.04] theme-accent-text font-bold drop-shadow-md bg-white/10 border border-white/10 shadow-lg"
+                            : "scale-100 font-medium opacity-35 hover:opacity-80 hover:bg-white/5 border border-transparent"
                         }`}
                         style={{
-                          transition: "transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease, background-color 0.3s ease",
+                          transition: "transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease, background-color 0.3s ease, color 0.3s ease",
                         }}
                       >
                         <p className={`leading-snug tracking-wide ${isActive ? "text-[15px]" : "text-[13px] text-white"}`}>
@@ -5408,8 +5453,8 @@ export default function App() {
                     {_lyrics.plainLyrics}
                   </div>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center py-10 text-center text-white/40 text-xs gap-3 my-auto">
-                    <Mic2 className="w-9 h-9 opacity-35 theme-accent-text" />
+                  <div className="h-full w-full flex-1 flex flex-col items-center justify-center p-6 text-center text-white/40 text-xs gap-3">
+                    <Mic2 className="w-10 h-10 opacity-35 theme-accent-text" />
                     <p className="font-semibold text-white/70 text-sm">
                       {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
                     </p>

@@ -998,7 +998,7 @@ export function isMusicContent(title: string, hasMusicTag = false): boolean {
  */
 async function fetchUploadsPlaylist(
   browseId: string,
-  fallbackAuthor = "Nghệ sĩ"
+  fallbackAuthor = ""
 ): Promise<SearchTrackResult[]> {
   if (!browseId || !browseId.startsWith("UC")) return [];
   const uploadsPlaylistId = "VL" + "UU" + browseId.slice(2);
@@ -1032,6 +1032,18 @@ async function fetchUploadsPlaylist(
         continue;
       }
 
+      let rowAuthor = "";
+      const metadataRows = vm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
+      for (const row of metadataRows) {
+        const parts = row.metadataParts || [];
+        for (const p of parts) {
+          const run = p.text?.runs?.[0]?.text;
+          if (run && !run.includes("lượt xem") && !run.includes("views") && !run.includes("trước") && !run.includes("ago")) {
+            rowAuthor = run;
+          }
+        }
+      }
+
       const thumbs = vm.contentImage?.thumbnailViewModel?.image?.sources || [];
       const thumbnail =
         thumbs[thumbs.length - 1]?.url ||
@@ -1040,7 +1052,7 @@ async function fetchUploadsPlaylist(
         tracks.push({
           id: videoId,
           title,
-          author: fallbackAuthor,
+          author: rowAuthor || fallbackAuthor || "",
           duration: parseDuration(durText),
           durationText: durText,
           thumbnail,
@@ -1060,10 +1072,10 @@ async function fetchUploadsPlaylist(
  */
 export async function getArtistDetails(
   browseId: string,
-  fallbackName = "Nghệ sĩ"
+  fallbackName = ""
 ): Promise<StructuredSearchResponse> {
   if (!browseId || !browseId.startsWith("UC")) {
-    return searchYouTubeMusicStructured(fallbackName);
+    return searchYouTubeMusicStructured(fallbackName || "Nghệ sĩ");
   }
 
   try {
@@ -1075,7 +1087,14 @@ export async function getArtistDetails(
     const header =
       data?.header?.musicImmersiveHeaderRenderer ||
       data?.header?.musicVisualHeaderRenderer;
-    const artistName = header?.title?.runs?.[0]?.text || fallbackName;
+    const artistName = header?.title?.runs?.[0]?.text || fallbackName || "";
+    if (artistName && artistName !== "Nghệ sĩ") {
+      channelUploads.forEach((t) => {
+        if (!t.author || t.author === "Nghệ sĩ") {
+          t.author = artistName;
+        }
+      });
+    }
     const subText =
       header?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.runs?.[0]?.text;
     const thumbs = header?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];

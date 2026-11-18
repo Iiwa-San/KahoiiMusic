@@ -188,7 +188,18 @@ export async function getVerifiedUserAndTokens(
   if (refreshToken) {
     const refreshed = await refreshFirebaseToken(refreshToken);
     if (refreshed?.idToken) {
-      const verified = await verifyFirebaseIdToken(refreshed.idToken);
+      let verified = await verifyFirebaseIdToken(refreshed.idToken);
+      if (!verified && refreshed.localId) {
+        let email = "";
+        if (!isProduction) {
+          try {
+            const savedDir = getSavedDir();
+            const session = readJsonClean(path.join(savedDir, "user_session.json"));
+            email = session?.email || "";
+          } catch {}
+        }
+        verified = { localId: refreshed.localId, email };
+      }
       if (verified) {
         if (!isProduction) {
           const savedDir = getSavedDir();
@@ -311,6 +322,9 @@ export async function getUserSessionData(
     };
   }
 
+  // Ensure idToken is fresh before returning to client
+  const validIdToken = await getValidIdToken(session);
+
   const favorites = readJsonClean(path.join(savedDir, "favorites.json")) || [];
   const history = readJsonClean(path.join(savedDir, "history.json")) || [];
   const playlists = readJsonClean(path.join(savedDir, "playlists.json")) || [];
@@ -323,7 +337,7 @@ export async function getUserSessionData(
       name: session.email ? session.email.split("@")[0] : "Kahoii User",
       avatarUrl: "/api/user/avatar",
       avatarBase64: session.avatarBase64 ? `data:image/png;base64,${session.avatarBase64}` : null,
-      idToken: session.idToken,
+      idToken: validIdToken || session.idToken,
       refreshToken: session.refreshToken,
       stats: {
         favoritesCount: Array.isArray(favorites) ? favorites.length : 0,
@@ -331,6 +345,8 @@ export async function getUserSessionData(
         playlistsCount: Array.isArray(playlists) ? playlists.length : 0,
       },
     },
+    _newIdToken: validIdToken && validIdToken !== session.idToken ? validIdToken : null,
+    _newRefreshToken: session.refreshToken || null,
   };
 }
 
@@ -607,6 +623,35 @@ export async function getUserLibraryData(
         if (docData.fields?.musicDataJson?.stringValue) {
           const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
 
+          // Build local author lookup map if in local environment to backfill authentic authors
+          const localAuthorMap = new Map<string, string>();
+          if (!isProduction) {
+            try {
+              const savedDir = getSavedDir();
+              const localFavs = readJsonClean(path.join(savedDir, "favorites.json")) || [];
+              const localHist = readJsonClean(path.join(savedDir, "history.json")) || [];
+              [...localFavs, ...localHist].forEach((item: any) => {
+                const iId = item.Id || item.id;
+                const iAuthor = item.Author || item.Artist || item.author;
+                if (iId && iAuthor && iAuthor !== "Nghệ sĩ" && iAuthor !== "Kahoii Music" && iAuthor !== "YouTube Music") {
+                  localAuthorMap.set(iId, iAuthor);
+                }
+              });
+            } catch {}
+          }
+
+          const resolveAuthor = (t: any): string => {
+            const id = t.Id || t.id;
+            const explicit = (t.Author || t.Artist || t.author || t.channel || t.uploader || "").trim();
+            if (explicit && explicit !== "Nghệ sĩ" && explicit !== "Kahoii Music" && explicit !== "YouTube Music") {
+              return explicit;
+            }
+            if (id && localAuthorMap.has(id)) {
+              return localAuthorMap.get(id)!;
+            }
+            return "";
+          };
+
           const favSources = Array.isArray(musicData.favorites)
             ? musicData.favorites
             : Array.isArray(musicData.Favorites)
@@ -617,7 +662,7 @@ export async function getUserLibraryData(
             title: t.Title || t.title,
             duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
             durationText: t.durationText,
-            author: t.Author || t.Artist || t.author || "Kahoii Music",
+            author: resolveAuthor(t),
             thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
           }));
 
@@ -631,17 +676,21 @@ export async function getUserLibraryData(
             title: t.Title || t.title,
             duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
             durationText: t.durationText,
-            author: t.Author || t.Artist || t.author || "Kahoii Music",
+            author: resolveAuthor(t),
             thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
           }));
 
-          const histSources = Array.isArray(musicData.history) ? musicData.history : [];
+          const histSources = Array.isArray(musicData.history)
+            ? musicData.history
+            : Array.isArray(musicData.History)
+            ? musicData.History
+            : [];
           const history = histSources.map((t: any) => ({
             id: t.Id || t.id,
             title: t.Title || t.title,
             duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
             durationText: t.durationText,
-            author: t.Author || t.Artist || t.author || "Kahoii Music",
+            author: resolveAuthor(t),
             thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
           }));
 
@@ -659,7 +708,7 @@ export async function getUserLibraryData(
               title: t.Title || t.title,
               duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
               durationText: t.durationText,
-              author: t.Author || t.Artist || t.author || "",
+              author: resolveAuthor(t),
               thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
             }));
             return {

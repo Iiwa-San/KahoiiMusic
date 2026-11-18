@@ -22,7 +22,11 @@ import {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  exposedHeaders: ["x-refreshed-id-token", "x-refreshed-refresh-token"],
+}));
 app.use(express.json());
 
 // 1. Resolve Audio Stream URL

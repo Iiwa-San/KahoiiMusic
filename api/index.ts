@@ -19,7 +19,11 @@ import {
 
 const app = express();
 
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  origin: true,
+  credentials: true,
+  exposedHeaders: ["x-refreshed-id-token", "x-refreshed-refresh-token"],
+}));
 app.use(express.json());
 
 // 1. Resolve Audio Stream URL
