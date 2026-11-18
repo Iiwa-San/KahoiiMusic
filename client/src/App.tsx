@@ -901,25 +901,17 @@ export default function App() {
       return next;
     });
 
-    showToast(`Đang chuẩn bị tải xuống "${track.title}"...`, "success");
+    showToast(`Đang chuẩn bị tải xuống file MP3 "${track.title}"...`, "success");
 
     try {
-      const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.url) {
-          const link = document.createElement("a");
-          link.href = data.url;
-          link.target = "_blank";
-          link.download = `${track.title} - ${track.author}.mp3`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          showToast(`Đã bắt đầu tải xuống "${track.title}"!`, "success");
-          return;
-        }
-      }
-      window.open(`https://www.youtube.com/watch?v=${track.id}`, "_blank");
+      const downloadUrl = `${API_BASE}/api/download-audio?id=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&author=${encodeURIComponent(track.author || "")}`;
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.setAttribute("download", `${track.title} - ${track.author}.mp3`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(`Đã bắt đầu tải xuống file MP3 "${track.title}"!`, "success");
     } catch {
       window.open(`https://www.youtube.com/watch?v=${track.id}`, "_blank");
     }

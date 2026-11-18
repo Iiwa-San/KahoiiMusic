@@ -160,7 +160,50 @@ app.get("/api/proxy-audio", async (req, res) => {
   }
 });
 
-// 4b. Latest App Downloads (PC, Android, iOS, Extension - Always latest from GitHub)
+// 4b. Direct Track MP3 Download (Resolves audio stream & pipes as downloadable MP3 file)
+app.get("/api/download-audio", async (req, res) => {
+  const videoId = req.query.id as string;
+  const rawTitle = (req.query.title as string) || "Track";
+  const rawAuthor = (req.query.author as string) || "Kahoii Music";
+  if (!videoId) return res.status(400).send("Missing video ID");
+
+  try {
+    const streamInfo = await resolveAudioStream(videoId);
+    if (!streamInfo?.streamUrl) {
+      return res.redirect(`https://www.youtube.com/watch?v=${videoId}`);
+    }
+
+    const safeFileName = `${rawTitle.replace(/[\\/:*?"<>|]/g, "_")} - ${rawAuthor.replace(/[\\/:*?"<>|]/g, "_")}.mp3`;
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName)}`);
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    const audioRes = await fetch(streamInfo.streamUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+
+    if (!audioRes.body) return res.end();
+    const reader = audioRes.body.getReader();
+    let isClosed = false;
+    req.on("close", () => {
+      isClosed = true;
+      try { reader.cancel(); } catch {}
+    });
+
+    while (!isClosed) {
+      const { done, value } = await reader.read();
+      if (done || isClosed) break;
+      res.write(value);
+    }
+    if (!isClosed) res.end();
+  } catch (err: any) {
+    return res.redirect(`https://www.youtube.com/watch?v=${videoId}`);
+  }
+});
+
+// 4c. Latest App Downloads (PC, Android, iOS, Extension - Always latest from GitHub)
 let downloadsCache: { data: any; expiry: number } | null = null;
 
 app.get("/api/downloads", async (req, res) => {
