@@ -1952,8 +1952,8 @@ export default function App() {
       if ((window as any).YT && (window as any).YT.Player) {
         try {
           ytPlayerRef.current = new (window as any).YT.Player("kahoii-yt-iframe", {
-            height: "1",
-            width: "1",
+            height: "140",
+            width: "240",
             playerVars: {
               autoplay: 0,
               controls: 0,
@@ -1962,6 +1962,7 @@ export default function App() {
               rel: 0,
               modestbranding: 1,
               playsinline: 1,
+              enablejsapi: 1,
               origin: window.location.origin,
             },
             events: {
@@ -1977,10 +1978,14 @@ export default function App() {
                   setErrorMessage(null);
                 } else if (event.data === 2) {
                   setIsPlaying(false);
+                  setIsLoading(false);
                 } else if (event.data === 0) {
                   handleTrackEndedRef.current();
                 } else if (event.data === 3) {
-                  setIsLoading(true);
+                  // Buffer event: clear loading spinner after 2.5s max to prevent freeze on iOS
+                  setTimeout(() => setIsLoading(false), 2500);
+                } else if (event.data === -1) {
+                  setIsLoading(false);
                 }
               },
               onError: () => {
@@ -2379,6 +2384,11 @@ export default function App() {
         }
       }
 
+      // Synchronously prime/unlock HTML5 Audio on user gesture for iOS Safari background playback
+      if (audioRef.current) {
+        audioRef.current.play().catch(() => {});
+      }
+
       // Stop current audio and YouTube player
       if (audioRef.current) {
         try {
@@ -2391,12 +2401,12 @@ export default function App() {
         } catch {}
       }
 
-      // Strategy 1: Attempt to resolve direct audio stream from server
+      // Strategy 1: Attempt to resolve direct audio stream from server (real HTML5 audio for background playback)
       let streamPlayed = false;
       try {
         const controller = new AbortController();
         playAbortControllerRef.current = controller;
-        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s fast check
+        const timeoutId = setTimeout(() => controller.abort(), 7000); // 7s realistic stream resolve timeout
 
         const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
           signal: controller.signal,
@@ -2459,7 +2469,8 @@ export default function App() {
               setIsPlaying(false);
             }
             setErrorMessage(null);
-            setIsLoading(false);
+            // Clear loading after short delay so iPhone never freezes in loading state
+            setTimeout(() => setIsLoading(false), 1500);
           } catch (ytErr) {
             console.warn("YouTube player fallback warning:", ytErr);
             setIsLoading(false);
@@ -2468,6 +2479,11 @@ export default function App() {
           setIsLoading(false);
         }
       }
+
+      // Safety watchdog: ensure loading spinner is cleared after 6s max if stalled
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 6000);
 
       // Fetch Lyrics in background
       try {
@@ -2731,6 +2747,77 @@ export default function App() {
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     seekToTime(parseFloat(e.target.value));
   };
+
+  // MediaSession API Integration for Background Audio, Lock Screen Controls & Mobile Playback
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+
+    if (currentTrack) {
+      const artUrl =
+        currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+          ? currentTrack.thumbnail.includes("i.ytimg.com")
+            ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+            : currentTrack.thumbnail
+          : currentTrack.id
+          ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg`
+          : DEFAULT_TRACK_ART;
+
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.title || "Kahoii Music",
+          artist: formatTrackArtist(currentTrack.title, currentTrack.author) || "Kahoii Music",
+          album: "Kahoii Music",
+          artwork: [
+            { src: artUrl, sizes: "96x96", type: "image/jpeg" },
+            { src: artUrl, sizes: "128x128", type: "image/jpeg" },
+            { src: artUrl, sizes: "192x192", type: "image/jpeg" },
+            { src: artUrl, sizes: "256x256", type: "image/jpeg" },
+            { src: artUrl, sizes: "512x512", type: "image/jpeg" },
+          ],
+        });
+      } catch (err) {
+        console.warn("MediaSession metadata error:", err);
+      }
+    }
+
+    try {
+      navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+
+      navigator.mediaSession.setActionHandler("play", () => {
+        if (activePlayerType.current === "audio" && audioRef.current) {
+          audioRef.current.play().catch(() => {});
+        } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+          try { ytPlayerRef.current.playVideo(); } catch {}
+        }
+        setIsPlaying(true);
+      });
+
+      navigator.mediaSession.setActionHandler("pause", () => {
+        if (activePlayerType.current === "audio" && audioRef.current) {
+          audioRef.current.pause();
+        } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+          try { ytPlayerRef.current.pauseVideo(); } catch {}
+        }
+        setIsPlaying(false);
+      });
+
+      navigator.mediaSession.setActionHandler("previoustrack", () => {
+        handlePrev();
+      });
+
+      navigator.mediaSession.setActionHandler("nexttrack", () => {
+        handleNext();
+      });
+
+      navigator.mediaSession.setActionHandler("seekto", (details) => {
+        if (details.seekTime !== undefined) {
+          seekToTime(details.seekTime);
+        }
+      });
+    } catch (e) {
+      console.warn("MediaSession action handler error:", e);
+    }
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, isPlaying]);
 
   // Top Search Submit
   const handleTopSearchSubmit = async (e?: React.FormEvent) => {
@@ -3022,11 +3109,25 @@ export default function App() {
     <div className="w-screen h-screen h-[100dvh] flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
       <audio
         ref={audioRef}
+        preload="auto"
+        playsInline
         onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || currentTrack?.duration || 207)}
+        onLoadedMetadata={() => {
+          setDuration(audioRef.current?.duration || currentTrack?.duration || 207);
+          setIsLoading(false);
+        }}
+        onCanPlay={() => setIsLoading(false)}
+        onPlaying={() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+        }}
         onEnded={() => handleTrackEndedRef.current()}
-        onPlay={() => setIsPlaying(true)}
+        onPlay={() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+        }}
         onPause={() => setIsPlaying(false)}
+        onError={() => setIsLoading(false)}
       />
 
       {/* Hidden YouTube Iframe Container for 100% Reliable Playback */}
@@ -3034,12 +3135,13 @@ export default function App() {
         id="kahoii-yt-iframe"
         style={{
           position: "fixed",
-          bottom: -9999,
-          right: -9999,
-          width: "1px",
-          height: "1px",
+          bottom: "-40px",
+          right: "-40px",
+          width: "200px",
+          height: "200px",
           opacity: 0.001,
           pointerEvents: "none",
+          zIndex: -50,
         }}
       />
 
@@ -3072,7 +3174,7 @@ export default function App() {
               value={topSearchText}
               onFocus={() => setIsSearchFocused(true)}
               onChange={(e) => setTopSearchText(e.target.value)}
-              className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none min-w-0"
+              className="flex-1 bg-transparent text-base sm:text-sm text-white placeholder-white/40 focus:outline-none min-w-0"
             />
             {(topSearchText || isSearchOpen) && (
               <button
@@ -5220,7 +5322,7 @@ export default function App() {
                   type="button"
                   onClick={() => setIsMuted(!isMuted)}
                   title={isMuted ? "Bật âm thanh" : "Tắt tiếng"}
-                  className="absolute left-3 bottom-[44px] p-0.5 text-white/80 hover:text-white cursor-pointer z-20 hover:scale-110 active:scale-95 transition-all"
+                  className="absolute left-3 bottom-[66px] p-0.5 text-white/80 hover:text-white cursor-pointer z-20 hover:scale-110 active:scale-95 transition-all"
                 >
                   {isMuted ? (
                     <VolumeX className="w-4 h-4 text-red-400" />
@@ -5229,8 +5331,8 @@ export default function App() {
                   )}
                 </button>
 
-                {/* Seekbar Progress Line (Matching PC Mini App) */}
-                <div className="absolute left-3 right-3 bottom-[30px] h-2 flex items-center group/seek z-20">
+                {/* Seekbar Progress Line (Matching PC Mini App - strictly above control buttons) */}
+                <div className="absolute left-3 right-3 bottom-[50px] h-2 flex items-center group/seek z-20">
                   <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/25 overflow-hidden" />
                   <div
                     className="absolute left-0 top-0 bottom-0 rounded-full"
@@ -6683,7 +6785,7 @@ export default function App() {
                       placeholder="nhap-email@gmail.com"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
                     />
                   </div>
 
@@ -6695,7 +6797,7 @@ export default function App() {
                       placeholder="••••••••"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
                     />
                   </div>
 
@@ -6714,7 +6816,7 @@ export default function App() {
                         placeholder="••••••••"
                         value={registerConfirmPassword}
                         onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-xs text-white placeholder-white/30 focus:outline-none"
+                        className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
                       />
                     </div>
                   </div>

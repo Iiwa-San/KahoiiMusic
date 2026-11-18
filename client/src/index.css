@@ -30,9 +30,17 @@ html, body, #root {
   padding: 0;
   overflow: hidden;
   user-select: none;
+  touch-action: manipulation;
   background: linear-gradient(180deg, var(--theme-bg-0) 0%, var(--theme-bg-1) 28%, var(--theme-bg-2) 70%, var(--theme-bg-3) 100%);
   transition: background 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
   color: #ffffff;
+}
+
+/* Prevent mobile browser & iOS Safari auto-zoom on input focus */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
 
 /* Exact Figma Panel Glass Card with dynamic tone & adaptive border */
