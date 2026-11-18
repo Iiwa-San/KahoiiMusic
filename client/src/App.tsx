@@ -880,6 +880,7 @@ export default function App() {
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
   const miniActiveLyricRef = useRef<HTMLDivElement | null>(null);
   const miniLyricsContainerRef = useRef<HTMLDivElement | null>(null);
+  const mobileActiveQueueRef = useRef<HTMLDivElement | null>(null);
   const [showFullQueueMobile, setShowFullQueueMobile] = useState<boolean>(false);
   const [miniLyricFontSize, setMiniLyricFontSize] = useState<number>(1);
 
@@ -1040,6 +1041,13 @@ export default function App() {
       miniLyricsContainerRef.current.scrollTop = 0;
     }
   }, [parsedLyrics.length, _lyrics, currentTrack?.id]);
+
+  // Auto-scroll mobile queue to current playing track when expanded
+  useEffect(() => {
+    if (showFullQueueMobile && mobileActiveQueueRef.current) {
+      mobileActiveQueueRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [showFullQueueMobile, currentIndex]);
 
   // Automatically fetch full enriched lyrics whenever currentTrack changes
   useEffect(() => {
@@ -5058,8 +5066,8 @@ export default function App() {
         {/* ----------------------------------------------------------------------- */}
         <aside
           className={`${
-            mobileTab === "player" ? "flex w-full" : "hidden"
-          } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-3.5 sm:p-5 lg:px-[18px] lg:pt-[26px] pb-24 lg:pb-[20px]`}
+            mobileTab === "player" ? "flex w-full h-full" : "hidden"
+          } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-3 sm:p-4 lg:px-[18px] lg:pt-[26px] pb-3 lg:pb-[20px]`}
           style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}
         >
           {/* Mobile Collapse / Back Header */}
@@ -5078,7 +5086,7 @@ export default function App() {
           {/* ========================================================================= */}
           {/* 1. MOBILE TAB "ĐANG PHÁT" (EXACT PC MINI APP MODE, lg:hidden)             */}
           {/* ========================================================================= */}
-          <div className="lg:hidden flex flex-col w-full min-h-0 gap-3">
+          <div className="lg:hidden flex flex-col w-full h-full flex-1 min-h-0 gap-2.5 sm:gap-3">
             {/* TOP CARD: PLAYER CONTROLS + LIVE LYRICS SPLIT */}
             <div className="w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 flex flex-col min-[380px]:flex-row gap-3 sm:gap-3.5 items-stretch relative overflow-hidden flex-shrink-0">
               {/* Left Column: Artwork with Player Controls Inside */}
@@ -5468,8 +5476,12 @@ export default function App() {
             </div>
 
             {/* BOTTOM CARD: "BÀI TIẾP THEO" (NEXT TRACK IN QUEUE) */}
-            <div className="w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 flex-shrink-0">
-              <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
+            <div
+              className={`w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 ${
+                showFullQueueMobile ? "flex-1 min-h-0 flex flex-col" : "flex-shrink-0"
+              }`}
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2 flex-shrink-0">
                 <span className="text-xs font-bold text-white tracking-wide">
                   {showFullQueueMobile ? `Hàng đợi (${queueTracks.length})` : "Bài tiếp theo"}
                 </span>
@@ -5523,12 +5535,13 @@ export default function App() {
                   </p>
                 )
               ) : (
-                <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="flex-1 min-h-0 flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1">
                   {queueTracks.map((track, i) => {
                     const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
                     return (
                       <div
                         key={track.id + i}
+                        ref={isCurrent ? mobileActiveQueueRef : undefined}
                         onClick={() => {
                           setCurrentIndex(i);
                           currentIndexRef.current = i;
