@@ -1325,12 +1325,14 @@ export default function App() {
   };
 
   const openArtistDetail = async (artist: {
+    id?: string;
     name: string;
     avatar?: string;
     subscribers?: string;
     genre?: string;
   }) => {
     setSelectedArtist({
+      id: artist.id,
       name: artist.name,
       avatar: artist.avatar || DEFAULT_TRACK_ART,
       subscribers: artist.subscribers || "Nghệ sĩ",
@@ -1342,35 +1344,61 @@ export default function App() {
     setArtistPlaylists([]);
 
     try {
-      const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
-      if (!res.ok) throw new Error("Artist search failed");
-      const data: StructuredSearchResult = await res.json();
+      let data: StructuredSearchResult;
+
+      // If we have a browseId (starts with UC or valid channel ID), query authentic channel uploads
+      if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb"))) {
+        const res = await fetch(
+          `${API_BASE}/api/artist?id=${encodeURIComponent(artist.id)}&name=${encodeURIComponent(artist.name)}`
+        );
+        if (res.ok) {
+          data = await res.json();
+        } else {
+          // Fallback to text search if /api/artist failed
+          const sRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
+          if (!sRes.ok) throw new Error("Artist search failed");
+          data = await sRes.json();
+        }
+      } else {
+        const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
+        if (!res.ok) throw new Error("Artist search failed");
+        data = await res.json();
+      }
 
       const rawTracks: Track[] = data.tracks || [];
       const lower = artist.name.toLowerCase().trim();
 
-      // Refine tracks: singles/tracks specifically by this artist
-      const matched = rawTracks.filter((t) => {
-        const a = (t.author || "").toLowerCase();
-        const tit = (t.title || "").toLowerCase();
-        return a.includes(lower) || tit.includes(lower);
-      });
-      setArtistTracks(matched.length >= 4 ? matched : rawTracks);
+      // If loaded directly from channel endpoint, rawTracks are already authentic channel uploads!
+      if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb")) && rawTracks.length > 0) {
+        setArtistTracks(rawTracks);
+      } else {
+        // Refine tracks: singles/tracks specifically by this artist
+        const matched = rawTracks.filter((t) => {
+          const a = (t.author || "").toLowerCase();
+          const tit = (t.title || "").toLowerCase();
+          return a.includes(lower) || tit.includes(lower);
+        });
+        setArtistTracks(matched.length >= 4 ? matched : rawTracks);
+      }
 
       // Playlists / albums
       const rawPlaylists = data.playlists || [];
-      const matchedPl = rawPlaylists.filter((p) => {
-        const a = (p.author || "").toLowerCase();
-        const tit = (p.title || "").toLowerCase();
-        return a.includes(lower) || tit.includes(lower);
-      });
-      setArtistPlaylists(matchedPl.length > 0 ? matchedPl : rawPlaylists);
+      if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb")) && rawPlaylists.length > 0) {
+        setArtistPlaylists(rawPlaylists);
+      } else {
+        const matchedPl = rawPlaylists.filter((p) => {
+          const a = (p.author || "").toLowerCase();
+          const tit = (p.title || "").toLowerCase();
+          return a.includes(lower) || tit.includes(lower);
+        });
+        setArtistPlaylists(matchedPl.length > 0 ? matchedPl : rawPlaylists);
+      }
 
       // Enrich artist info if available
       if (data.artists && data.artists.length > 0) {
         const matchedArtist =
           data.artists.find(
-            (a) => a.name.toLowerCase() === lower || lower.includes(a.name.toLowerCase())
+            (a) => (a.id && a.id === artist.id) || a.name.toLowerCase() === lower || lower.includes(a.name.toLowerCase())
           ) || data.artists[0];
 
         if (matchedArtist) {
@@ -3668,7 +3696,7 @@ export default function App() {
                             {searchStructured.artists.map((artist) => (
                               <div
                                 key={artist.id || artist.name}
-                                onClick={() => openArtistDetail({ name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
+                                onClick={() => openArtistDetail({ id: artist.id, name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
                                 className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0"
                                 style={{ width: "170px" }}
                               >
@@ -3940,7 +3968,7 @@ export default function App() {
                           {searchStructured.artists.map((artist) => (
                             <div
                               key={artist.id || artist.name}
-                              onClick={() => openArtistDetail({ name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
+                              onClick={() => openArtistDetail({ id: artist.id, name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
                               className="flex flex-col items-center p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
                             >
                               <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-3 relative">

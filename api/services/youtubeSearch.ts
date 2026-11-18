@@ -825,6 +825,129 @@ export async function getPlaylistTracks(browseOrPlaylistId: string): Promise<Sea
 }
 
 /**
+ * Fetch dedicated artist/channel details, tracks and playlists by browseId (UC...)
+ */
+export async function getArtistDetails(
+  browseId: string,
+  fallbackName = "Nghệ sĩ"
+): Promise<StructuredSearchResponse> {
+  if (!browseId || !browseId.startsWith("UC")) {
+    return searchYouTubeMusicStructured(fallbackName);
+  }
+
+  try {
+    const data = await postYTM("browse", { browseId }, 6000);
+    const header =
+      data?.header?.musicImmersiveHeaderRenderer ||
+      data?.header?.musicVisualHeaderRenderer;
+    const artistName = header?.title?.runs?.[0]?.text || fallbackName;
+    const subText =
+      header?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.runs?.[0]?.text;
+    const thumbs = header?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+    const avatar = thumbs[thumbs.length - 1]?.url || thumbs[0]?.url || "";
+
+    const tabs = data?.contents?.singleColumnBrowseResultsRenderer?.tabs || [];
+    const secList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+
+    const tracks: SearchTrackResult[] = [];
+    const playlists: SearchPlaylistItem[] = [];
+    const seenTrackIds = new Set<string>();
+    const seenPlaylistIds = new Set<string>();
+
+    for (const s of secList) {
+      const shelf = s.musicShelfRenderer || s.musicCarouselShelfRenderer;
+      if (!shelf) continue;
+      const items = shelf.contents || [];
+
+      for (const it of items) {
+        const rend = it.musicResponsiveListItemRenderer || it.musicTwoRowItemRenderer;
+        if (!rend) continue;
+
+        const title = extractRunsText(
+          rend.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ||
+          rend.title?.runs
+        );
+        const sub = extractRunsText(
+          rend.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ||
+          rend.subtitle?.runs
+        );
+
+        const videoId =
+          rend.navigationEndpoint?.watchEndpoint?.videoId ||
+          rend.playlistItemData?.videoId ||
+          rend.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer
+            ?.playNavigationEndpoint?.watchEndpoint?.videoId;
+
+        const playlistId =
+          rend.navigationEndpoint?.browseEndpoint?.browseId ||
+          rend.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer
+            ?.playNavigationEndpoint?.watchEndpoint?.playlistId;
+
+        const thumbs =
+          rend.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ||
+          rend.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+        const thumbnail =
+          thumbs[thumbs.length - 1]?.url ||
+          (videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : "");
+
+        if (videoId && title && !seenTrackIds.has(videoId)) {
+          seenTrackIds.add(videoId);
+          tracks.push({
+            id: videoId,
+            title,
+            author: sub ? sub.split("•")[0].trim() : artistName,
+            duration: 0,
+            durationText: "",
+            thumbnail,
+            artistBrowseId: browseId,
+          });
+        } else if (playlistId && title && !videoId && !seenPlaylistIds.has(playlistId)) {
+          seenPlaylistIds.add(playlistId);
+          playlists.push({
+            id: playlistId,
+            title,
+            author: artistName,
+            trackCountText: sub,
+            thumbnail,
+          });
+        }
+      }
+    }
+
+    if (tracks.length === 0) {
+      return searchYouTubeMusicStructured(artistName);
+    }
+
+    const artistItem: SearchArtistItem = {
+      id: browseId,
+      name: artistName,
+      subscribers: subText ? `Nghệ sĩ • ${subText}` : "Nghệ sĩ",
+      thumbnail: avatar,
+    };
+
+    return {
+      query: artistName,
+      topResult: {
+        id: tracks[0].id,
+        title: tracks[0].title,
+        subtitle: `${artistName} • ${tracks[0].author}`,
+        author: artistName,
+        duration: tracks[0].duration,
+        durationText: tracks[0].durationText,
+        thumbnail: tracks[0].thumbnail,
+        type: "song",
+      },
+      tracks,
+      artists: [artistItem],
+      playlists,
+      results: tracks,
+    };
+  } catch {
+    return searchYouTubeMusicStructured(fallbackName);
+  }
+}
+
+/**
  * Backward compatibility function
  */
 export async function searchYouTubeTracks(query: string): Promise<SearchTrackResult[]> {

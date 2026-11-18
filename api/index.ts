@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { resolveAudioStream } from "./services/streamResolver.js";
-import { searchYouTubeMusicStructured, getPlaylistTracks } from "./services/youtubeSearch.js";
+import { searchYouTubeMusicStructured, getPlaylistTracks, getArtistDetails } from "./services/youtubeSearch.js";
 import { fetchLyrics } from "./services/lyricsService.js";
 import {
   extractBearerToken,
@@ -74,6 +74,23 @@ app.get(["/api/playlist", "/playlist"], async (req, res) => {
   } catch (err: any) {
     console.error("[API Playlist Error]", err.message);
     return res.status(500).json({ error: "Failed to load playlist tracks" });
+  }
+});
+
+// 2c. Get Artist Details by browseId (UC...)
+app.get(["/api/artist", "/artist"], async (req, res) => {
+  const id = (req.query.id as string) || "";
+  const name = (req.query.name as string) || "Nghệ sĩ";
+  if (!id && !name) {
+    return res.status(400).json({ error: "Missing artist id or name" });
+  }
+
+  try {
+    const data = await getArtistDetails(id, name);
+    return res.json(data);
+  } catch (err: any) {
+    console.error("[API Artist Error]", err.message);
+    return res.status(500).json({ error: "Failed to fetch artist details" });
   }
 });
 
