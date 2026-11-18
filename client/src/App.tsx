@@ -402,6 +402,7 @@ export default function App() {
       refreshToken?: string;
       stats?: {
         favoritesCount: number;
+        savedTracksCount?: number;
         historyCount: number;
         playlistsCount: number;
       };
@@ -421,6 +422,7 @@ export default function App() {
 
   const [libraryData, setLibraryData] = useState<{
     favorites: Track[];
+    savedTracks: Track[];
     history: Track[];
     playlists: any[];
   }>(() => {
@@ -430,6 +432,7 @@ export default function App() {
         const parsed = JSON.parse(saved);
         return {
           favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
+          savedTracks: Array.isArray(parsed.savedTracks) ? parsed.savedTracks : [],
           history: Array.isArray(parsed.history) ? parsed.history : [],
           playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
         };
@@ -437,6 +440,7 @@ export default function App() {
     } catch {}
     return {
       favorites: [],
+      savedTracks: [],
       history: [],
       playlists: [],
     };
@@ -921,20 +925,27 @@ export default function App() {
     loadAndPlayTrack(tracks[0], true);
   };
 
-  // Delete Track from IndexedDB Offline Storage
+  // Delete Track from IndexedDB Offline Storage & sync with Firebase
   const handleDeleteOfflineTrack = async (id: string, title?: string) => {
     try {
       await deleteOfflineTrack(id);
       const updated = await getAllOfflineTracks();
       setOfflineTracks(updated);
       setOfflineTrackIds(new Set(updated.map((t) => t.id)));
+
+      if (userSession?.isLoggedIn) {
+        const updatedCloudSaved = libraryData.savedTracks.filter((t) => t.id !== id);
+        setLibraryData((prev) => ({ ...prev, savedTracks: updatedCloudSaved }));
+        persistLibraryData({ savedTracks: updatedCloudSaved });
+      }
+
       showToast(`Đã xóa "${title || "bài hát"}" khỏi bộ nhớ ngoại tuyến`, "info");
     } catch {
       showToast("Lỗi khi xóa bài hát khỏi bộ nhớ", "warning");
     }
   };
 
-  // Save Track into IndexedDB for 100% Offline YouTube-Style Playback
+  // Save Track into IndexedDB for 100% Offline YouTube-Style Playback & sync with Firebase
   const handleSaveOfflineTrack = async (track: Track) => {
     if (!track) return;
 
@@ -975,6 +986,14 @@ export default function App() {
       setOfflineTracks(updated);
       setOfflineTrackIds(new Set(updated.map((t) => t.id)));
 
+      // 5. Sync to Firebase Cloud if logged in
+      if (userSession?.isLoggedIn) {
+        const filtered = libraryData.savedTracks.filter((t) => t.id !== track.id);
+        const updatedCloudSaved = [track, ...filtered];
+        setLibraryData((prev) => ({ ...prev, savedTracks: updatedCloudSaved }));
+        persistLibraryData({ savedTracks: updatedCloudSaved });
+      }
+
       showToast(`Đã lưu thành công "${track.title}"! Bạn có thể nghe khi không có mạng.`, "success");
     } catch (err: any) {
       console.error("[Offline Save Error]", err);
@@ -987,11 +1006,13 @@ export default function App() {
   // Save library data to server & cloud (Authenticated per user with offline cache)
   const persistLibraryData = async (updated: {
     favorites?: Track[];
+    savedTracks?: Track[];
     history?: Track[];
     playlists?: any[];
   }) => {
     const payload = {
       favorites: updated.favorites || libraryData.favorites,
+      savedTracks: updated.savedTracks || libraryData.savedTracks,
       history: updated.history || libraryData.history,
       playlists: updated.playlists || libraryData.playlists,
     };
@@ -1254,6 +1275,13 @@ export default function App() {
           duration: Number(f.DurationSeconds ?? f.duration ?? f.durationSeconds ?? f.Duration ?? 0),
           thumbnail: `https://i.ytimg.com/vi/${f.id || f.Id}/mqdefault.jpg`,
         }));
+        const mappedSaved: Track[] = (data.savedTracks || data.SavedTracks || []).map((s: any) => ({
+          id: s.id || s.Id,
+          title: s.title || s.Title,
+          author: s.author || s.Author || s.Artist || "Kahoii Music",
+          duration: Number(s.DurationSeconds ?? s.duration ?? s.durationSeconds ?? s.Duration ?? 0),
+          thumbnail: `https://i.ytimg.com/vi/${s.id || s.Id}/mqdefault.jpg`,
+        }));
         const mappedHist: Track[] = (data.history || []).map((h: any) => ({
           id: h.id || h.Id,
           title: h.title || h.Title,
@@ -1280,6 +1308,7 @@ export default function App() {
         });
         const nextLibrary = {
           favorites: mappedFavs,
+          savedTracks: mappedSaved,
           history: mappedHist,
           playlists: rawPlaylists,
         };
@@ -1620,7 +1649,7 @@ export default function App() {
       localStorage.removeItem(STORAGE_LIBRARY_KEY);
     } catch {}
     setUserSession({ isLoggedIn: false, user: null });
-    setLibraryData({ favorites: [], history: [], playlists: [] });
+    setLibraryData({ favorites: [], savedTracks: [], history: [], playlists: [] });
     pausePlayback();
     setCurrentTrack(null);
     currentTrackRef.current = null;
@@ -2303,19 +2332,58 @@ export default function App() {
           });
       }
     } else if (activeLeftTab === "offline") {
-      if (offlineTracks.length > 0) {
-        items = offlineTracks
+      const mergedMap = new Map<string, any>();
+
+      // 1. Add all tracks from Firebase cloud (synced from PC / Android / Web)
+      libraryData.savedTracks.forEach((t) => {
+        const localOffline = offlineTracks.find((ot) => ot.id === t.id);
+        const isLocalCached = !!localOffline;
+        const sizeStr = isLocalCached
+          ? formatBytes(localOffline?.sizeBytes || localOffline?.audioBlob?.size || 0)
+          : null;
+        mergedMap.set(t.id, {
+          id: t.id,
+          title: t.title,
+          author: t.author,
+          duration: t.duration,
+          durationText: t.durationText,
+          thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+          isLocalCached,
+          sizeStr,
+        });
+      });
+
+      // 2. Add local IndexedDB tracks that might not be in cloud
+      offlineTracks.forEach((ot) => {
+        if (!mergedMap.has(ot.id)) {
+          const sizeStr = formatBytes(ot.sizeBytes || ot.audioBlob?.size || 0);
+          mergedMap.set(ot.id, {
+            id: ot.id,
+            title: ot.title,
+            author: ot.author,
+            duration: ot.duration,
+            durationText: ot.durationText,
+            thumbnail: ot.thumbnail || `https://i.ytimg.com/vi/${ot.id}/mqdefault.jpg`,
+            isLocalCached: true,
+            sizeStr,
+          });
+        }
+      });
+
+      const allSaved = Array.from(mergedMap.values());
+      if (allSaved.length > 0) {
+        items = allSaved
           .filter((t) => !q || t.title.toLowerCase().includes(q) || t.author.toLowerCase().includes(q))
           .map((t) => {
             const artistName = formatTrackArtist(t.title, t.author);
-            const sizeStr = formatBytes(t.sizeBytes || t.audioBlob?.size || 0);
+            const sub = t.isLocalCached
+              ? (t.duration && t.duration > 0 ? `${artistName} • ${formatTime(t.duration)} • ${t.sizeStr}` : `${artistName} • ${t.sizeStr}`)
+              : (t.duration && t.duration > 0 ? `${artistName} • ${formatTime(t.duration)} • Đám mây` : `${artistName} • Đám mây`);
             return {
               id: t.id,
               title: t.title,
-              subtitle: t.duration && t.duration > 0
-                ? `${artistName} • ${formatTime(t.duration)} • ${sizeStr}`
-                : `${artistName} • ${sizeStr}`,
-              thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+              subtitle: sub,
+              thumb: t.thumbnail,
               rawTrack: {
                 id: t.id,
                 title: t.title,
@@ -2325,6 +2393,7 @@ export default function App() {
                 thumbnail: t.thumbnail,
               },
               isOffline: true,
+              isLocalCached: t.isLocalCached,
               rawPlaylist: null as any,
             };
           });
@@ -2839,9 +2908,9 @@ export default function App() {
                 }`}
               >
                 <span>{tab.label}</span>
-                {tab.key === "offline" && offlineTracks.length > 0 && (
+                {tab.key === "offline" && Math.max(libraryData.savedTracks.length, offlineTracks.length) > 0 && (
                   <span className="text-[9px] px-1 py-0.2 rounded-full bg-white/20 font-mono">
-                    {offlineTracks.length}
+                    {Math.max(libraryData.savedTracks.length, offlineTracks.length)}
                   </span>
                 )}
               </button>
@@ -2895,10 +2964,10 @@ export default function App() {
               </div>
 
               {/* Offline Storage Summary & Play All Action */}
-              {activeLeftTab === "offline" && offlineTracks.length > 0 && (
+              {activeLeftTab === "offline" && getSidebarItems().length > 0 && (
                 <div className="flex items-center justify-between px-1 mb-2.5 text-xs flex-shrink-0">
                   <span className="text-white/60 text-[11px]">
-                    {offlineTracks.length} bài hát • {formatBytes(offlineTotalBytes)}
+                    {getSidebarItems().length} bài hát {offlineTracks.length > 0 ? `• ${formatBytes(offlineTotalBytes)} offline` : "• Đám mây"}
                   </span>
                   <button
                     type="button"
@@ -2926,14 +2995,7 @@ export default function App() {
                             const favList = libraryData.favorites;
                             handlePlaySongItem(item.rawTrack, favList);
                           } else if (activeLeftTab === "offline") {
-                            const offlineList = offlineTracks.map((ot) => ({
-                              id: ot.id,
-                              title: ot.title,
-                              author: ot.author,
-                              duration: ot.duration,
-                              durationText: ot.durationText,
-                              thumbnail: ot.thumbnail,
-                            }));
+                            const offlineList = getSidebarItems().map((it) => it.rawTrack).filter(Boolean);
                             handlePlaySongItem(item.rawTrack, offlineList);
                           } else if (activeLeftTab === "history") {
                             const histList = libraryData.history;
@@ -3005,17 +3067,36 @@ export default function App() {
                         </p>
                       </div>
                       {activeLeftTab === "offline" && (
-                        <button
-                          type="button"
-                          title="Xóa khỏi bộ nhớ ngoại tuyến"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteOfflineTrack(item.id, item.title);
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-rose-400 transition-colors cursor-pointer flex-shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {!item.isLocalCached ? (
+                            <button
+                              type="button"
+                              title="Tải về bộ nhớ máy này (để nghe offline không cần mạng)"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (item.rawTrack) handleSaveOfflineTrack(item.rawTrack);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:theme-accent-text transition-colors cursor-pointer"
+                            >
+                              <HardDriveDownload className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span title="Đã lưu offline trên máy này" className="p-1 text-emerald-400">
+                              <Check className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            title="Xóa khỏi danh sách đã tải"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteOfflineTrack(item.id, item.title);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-rose-400 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))
@@ -5133,22 +5214,40 @@ export default function App() {
                 </div>
 
                 {/* User Stats Grid (Synced Live with Library & Dynamic Theme Palette) */}
-                <div className="grid grid-cols-3 gap-2.5 text-center">
+                <div className="grid grid-cols-4 gap-2 text-center">
                   <button
                     type="button"
                     onClick={() => {
                       setActiveLeftTab("favorites");
                       setIsAccountOpen(false);
                     }}
-                    className="p-3 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                    className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
                     title="Xem danh sách bài hát yêu thích"
                   >
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
-                    <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                    <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
                       {libraryData.favorites.length || userSession?.user?.stats?.favoritesCount || 0}
                     </p>
-                    <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
+                    <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
                       Yêu thích
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveLeftTab("offline");
+                      setIsAccountOpen(false);
+                    }}
+                    className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                    title="Xem danh sách bài hát đã tải"
+                  >
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
+                    <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                      {libraryData.savedTracks.length || userSession?.user?.stats?.savedTracksCount || offlineTracks.length || 0}
+                    </p>
+                    <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
+                      Đã tải
                     </p>
                   </button>
 
@@ -5158,14 +5257,14 @@ export default function App() {
                       setActiveLeftTab("history");
                       setIsAccountOpen(false);
                     }}
-                    className="p-3 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                    className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
                     title="Xem lịch sử phát nhạc"
                   >
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
-                    <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                    <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
                       {libraryData.history.length || userSession?.user?.stats?.historyCount || 0}
                     </p>
-                    <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
+                    <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
                       Lịch sử
                     </p>
                   </button>
@@ -5176,14 +5275,14 @@ export default function App() {
                       setActiveLeftTab("library");
                       setIsAccountOpen(false);
                     }}
-                    className="p-3 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                    className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
                     title="Xem danh sách phát cá nhân"
                   >
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
-                    <p className="text-xl font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                    <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
                       {libraryData.playlists.length || userSession?.user?.stats?.playlistsCount || 0}
                     </p>
-                    <p className="text-[11px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors">
+                    <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
                       Playlists
                     </p>
                   </button>

@@ -222,6 +222,7 @@ export async function getUserSessionData(
   if (verified && idToken) {
     let avatarBase64: string | null = null;
     let favCount = 0;
+    let savedCount = 0;
     let histCount = 0;
     let plCount = 0;
 
@@ -238,10 +239,30 @@ export async function getUserSessionData(
         if (docData.fields?.musicDataJson?.stringValue) {
           try {
             const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
-            const favs = Array.isArray(musicData.favorites) ? musicData.favorites : Array.isArray(musicData.savedTracks) ? musicData.savedTracks : [];
-            const hist = Array.isArray(musicData.history) ? musicData.history : [];
-            const pls = Array.isArray(musicData.collections) ? musicData.collections : Array.isArray(musicData.playlists) ? musicData.playlists : [];
+            const favs = Array.isArray(musicData.favorites)
+              ? musicData.favorites
+              : Array.isArray(musicData.Favorites)
+              ? musicData.Favorites
+              : [];
+            const saved = Array.isArray(musicData.savedTracks)
+              ? musicData.savedTracks
+              : Array.isArray(musicData.SavedTracks)
+              ? musicData.SavedTracks
+              : [];
+            const hist = Array.isArray(musicData.history)
+              ? musicData.history
+              : Array.isArray(musicData.History)
+              ? musicData.History
+              : [];
+            const pls = Array.isArray(musicData.collections)
+              ? musicData.collections
+              : Array.isArray(musicData.Collections)
+              ? musicData.Collections
+              : Array.isArray(musicData.playlists)
+              ? musicData.playlists
+              : [];
             favCount = favs.length;
+            savedCount = saved.length;
             histCount = hist.length;
             plCount = pls.length;
           } catch {}
@@ -261,6 +282,7 @@ export async function getUserSessionData(
         refreshToken: newRefreshToken || clientRefreshToken || undefined,
         stats: {
           favoritesCount: favCount,
+          savedTracksCount: savedCount,
           historyCount: histCount,
           playlistsCount: plCount,
         },
@@ -566,6 +588,7 @@ export async function getUserLibraryData(
   clientRefreshToken?: string | null
 ): Promise<{
   favorites: any[];
+  savedTracks: any[];
   history: any[];
   playlists: any[];
   _newIdToken?: string | null;
@@ -583,28 +606,53 @@ export async function getUserLibraryData(
         const docData = (await docRes.json()) as any;
         if (docData.fields?.musicDataJson?.stringValue) {
           const musicData = JSON.parse(docData.fields.musicDataJson.stringValue);
-          const favSources = Array.isArray(musicData.favorites) && musicData.favorites.length > 0
+
+          const favSources = Array.isArray(musicData.favorites)
             ? musicData.favorites
-            : Array.isArray(musicData.savedTracks)
-            ? musicData.savedTracks
+            : Array.isArray(musicData.Favorites)
+            ? musicData.Favorites
             : [];
           const favorites = favSources.map((t: any) => ({
             id: t.Id || t.id,
             title: t.Title || t.title,
             duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-            author: t.Author || t.Artist || t.author || "",
+            durationText: t.durationText,
+            author: t.Author || t.Artist || t.author || "Kahoii Music",
+            thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
           }));
 
-          const histSources = Array.isArray(musicData.history) ? musicData.history : [];
+          const savedSources = Array.isArray(musicData.savedTracks)
+            ? musicData.savedTracks
+            : Array.isArray(musicData.SavedTracks)
+            ? musicData.SavedTracks
+            : [];
+          const savedTracks = savedSources.map((t: any) => ({
+            id: t.Id || t.id,
+            title: t.Title || t.title,
+            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+            durationText: t.durationText,
+            author: t.Author || t.Artist || t.author || "Kahoii Music",
+            thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
+          }));
+
+          const histSources = Array.isArray(musicData.history)
+            ? musicData.history
+            : Array.isArray(musicData.History)
+            ? musicData.History
+            : [];
           const history = histSources.map((t: any) => ({
             id: t.Id || t.id,
             title: t.Title || t.title,
             duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-            author: t.Author || t.Artist || t.author || "",
+            durationText: t.durationText,
+            author: t.Author || t.Artist || t.author || "Kahoii Music",
+            thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
           }));
 
           const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
             ? musicData.collections
+            : Array.isArray(musicData.Collections) && musicData.Collections.length > 0
+            ? musicData.Collections
             : Array.isArray(musicData.playlists)
             ? musicData.playlists
             : [];
@@ -614,6 +662,7 @@ export async function getUserLibraryData(
               id: t.Id || t.id,
               title: t.Title || t.title,
               duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+              durationText: t.durationText,
               author: t.Author || t.Artist || t.author || "",
               thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
             }));
@@ -628,6 +677,7 @@ export async function getUserLibraryData(
 
           return {
             favorites,
+            savedTracks,
             history,
             playlists,
             _newIdToken: newRefreshToken ? idToken : null,
@@ -644,6 +694,7 @@ export async function getUserLibraryData(
   if (isProduction) {
     return {
       favorites: [],
+      savedTracks: [],
       history: [],
       playlists: [],
     };
@@ -654,29 +705,49 @@ export async function getUserLibraryData(
   const sessionPath = path.join(savedDir, "user_session.json");
   const session = readJsonClean(sessionPath);
   if (!session || !session.localId) {
-    return { favorites: [], history: [], playlists: [] };
+    return { favorites: [], savedTracks: [], history: [], playlists: [] };
   }
 
   const favorites = readJsonClean(path.join(savedDir, "favorites.json")) || [];
+  const savedTracks = readJsonClean(path.join(savedDir, "saved_tracks.json")) || [];
   const history = readJsonClean(path.join(savedDir, "history.json")) || [];
   const playlists = readJsonClean(path.join(savedDir, "playlists.json")) || [];
 
-  return { favorites, history, playlists };
+  return { favorites, savedTracks, history, playlists };
 }
 
 export async function saveUserLibraryData(
-  data: { favorites?: any[]; history?: any[]; playlists?: any[] },
+  data: { favorites?: any[]; history?: any[]; playlists?: any[]; savedTracks?: any[] },
   clientToken?: string | null,
   clientRefreshToken?: string | null
 ): Promise<{ success: boolean; newIdToken?: string | null; newRefreshToken?: string | null }> {
   const favorites = Array.isArray(data.favorites) ? data.favorites : [];
   const history = Array.isArray(data.history) ? data.history : [];
   const playlists = Array.isArray(data.playlists) ? data.playlists : [];
+  const savedTracks = Array.isArray(data.savedTracks) ? data.savedTracks : [];
 
   // 1. If client provided a Bearer token or refresh token, save directly to user's Firestore document
   const { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
   if (verified && idToken) {
     try {
+      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
+
+      let finalSavedTracks = savedTracks;
+      if (data.savedTracks === undefined) {
+        // Preserve existing savedTracks from cloud if not provided in payload
+        try {
+          const checkRes = await fetch(docUrl, { headers: { Authorization: `Bearer ${idToken}` } });
+          if (checkRes.ok) {
+            const checkData = (await checkRes.json()) as any;
+            if (checkData.fields?.musicDataJson?.stringValue) {
+              const parsed = JSON.parse(checkData.fields.musicDataJson.stringValue);
+              if (Array.isArray(parsed.savedTracks)) finalSavedTracks = parsed.savedTracks;
+              else if (Array.isArray(parsed.SavedTracks)) finalSavedTracks = parsed.SavedTracks;
+            }
+          }
+        } catch {}
+      }
+
       const collections = playlists.map((pl: any) => ({
         Id: pl.id || pl.Id,
         Name: pl.name || pl.Name,
@@ -698,6 +769,13 @@ export async function saveUserLibraryData(
           Duration: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
           DurationSeconds: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
         })),
+        savedTracks: finalSavedTracks.map((t: any) => ({
+          Id: t.id || t.Id,
+          Title: t.title || t.Title,
+          Author: t.author || t.Author || t.Artist || "",
+          Duration: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
+          DurationSeconds: Number(t.duration ?? t.DurationSeconds ?? t.durationSeconds ?? t.Duration ?? 0),
+        })),
         history: history.map((t: any) => ({
           Id: t.id || t.Id,
           Title: t.title || t.Title,
@@ -709,8 +787,8 @@ export async function saveUserLibraryData(
         collections: collections,
       });
 
-      const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?updateMask.fieldPaths=musicDataJson&key=${FIREBASE_API_KEY}`;
-      await fetch(docUrl, {
+      const patchUrl = `${docUrl}&updateMask.fieldPaths=musicDataJson`;
+      await fetch(patchUrl, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${idToken}`,
