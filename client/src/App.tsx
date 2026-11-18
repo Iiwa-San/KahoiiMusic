@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Play,
   Pause,
@@ -785,7 +785,29 @@ export default function App() {
     }
   });
 
+  const ensureEnrichedLyrics = useCallback(async () => {
+    if (!currentTrack?.id) return;
+    if (_lyrics?.lines && _lyrics.lines.length > 0 && _lyrics.lines.some((l: any) => l.romanized || l.translation)) {
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(currentTrack.id)}&title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.author || "")}&duration=${currentTrack.duration || ""}`
+      );
+      if (res.ok) {
+        const lyricsData = await res.json();
+        if (lyricsData?.lines && lyricsData.lines.length > 0) {
+          setLyrics(lyricsData);
+          if (lyricsData.artist && (!currentTrack.author || currentTrack.author === "Nghệ sĩ" || currentTrack.author === "Kahoii Music")) {
+            setCurrentTrack((prev) => (prev && prev.id === currentTrack.id ? { ...prev, author: lyricsData.artist } : prev));
+          }
+        }
+      }
+    } catch {}
+  }, [currentTrack, _lyrics]);
+
   const toggleLyricDisplayMode = () => {
+    ensureEnrichedLyrics();
     setLyricDisplayMode((prev) => {
       const next = prev === "dual" ? "romanized" : prev === "romanized" ? "original" : "dual";
       try {
@@ -825,27 +847,40 @@ export default function App() {
     const isJa = lang === "ja";
     const isZh = lang === "zh";
 
-    if (lyricDisplayMode === "original") {
-      return isJa ? "Aa Romaji" : isZh ? "Aa Pinyin" : "Aa Song ngữ";
-    }
     if (lyricDisplayMode === "dual") {
-      return isJa ? "Romaji • 2 dòng" : isZh ? "Pinyin • 2 dòng" : "Song ngữ • 2 dòng";
+      return isJa ? "Song ngữ (Romaji)" : isZh ? "Song ngữ (Pinyin)" : "Song ngữ";
     }
-    return isJa ? "Romaji thuần" : isZh ? "Pinyin thuần" : "Bản dịch";
+    if (lyricDisplayMode === "romanized") {
+      return isJa ? "Romaji" : isZh ? "Pinyin" : "Bản dịch";
+    }
+    return "Chữ gốc";
   }, [_lyrics, lyricDisplayMode]);
 
-  useEffect(() => {
+  const scrollToActiveLyric = useCallback((smooth = true) => {
     if (sidebar2Tab !== "lyrics" || !lyricsContainerRef.current || !activeLyricRef.current) return;
     const container = lyricsContainerRef.current;
     const activeEl = activeLyricRef.current;
 
-    // Smoothly glide active line to the exact vertical center
-    const targetScroll = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = activeEl.getBoundingClientRect();
+
+    // Exact relative top offset inside lyricsContainer
+    const relativeTop = activeRect.top - containerRect.top;
+    const targetScroll = container.scrollTop + relativeTop - (container.clientHeight / 2) + (activeRect.height / 2);
+
     container.scrollTo({
       top: Math.max(0, targetScroll),
-      behavior: "smooth",
+      behavior: smooth ? "smooth" : "auto",
     });
-  }, [activeLyricIndex, sidebar2Tab]);
+  }, [sidebar2Tab]);
+
+  useEffect(() => {
+    if (sidebar2Tab !== "lyrics" || activeLyricIndex < 0) return;
+    const animId = requestAnimationFrame(() => {
+      scrollToActiveLyric(true);
+    });
+    return () => cancelAnimationFrame(animId);
+  }, [activeLyricIndex, sidebar2Tab, lyricDisplayMode, _lyrics, scrollToActiveLyric]);
 
   // Reset lyrics scroll to 0 whenever lyrics are cleared or empty
   useEffect(() => {
@@ -857,22 +892,8 @@ export default function App() {
   // Automatically fetch/refresh full enriched lyrics whenever currentTrack changes
   useEffect(() => {
     if (!currentTrack?.id) return;
-    if (!_lyrics?.lines || _lyrics.lines.length === 0) {
-      fetch(
-        `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(currentTrack.id)}&title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.author || "")}&duration=${currentTrack.duration || ""}`
-      )
-        .then((res) => (res.ok ? res.json() : null))
-        .then((lyricsData) => {
-          if (lyricsData?.lines && lyricsData.lines.length > 0) {
-            setLyrics(lyricsData);
-            if (lyricsData.artist && (!currentTrack.author || currentTrack.author === "Nghệ sĩ" || currentTrack.author === "Kahoii Music")) {
-              setCurrentTrack((prev) => (prev && prev.id === currentTrack.id ? { ...prev, author: lyricsData.artist } : prev));
-            }
-          }
-        })
-        .catch(() => {});
-    }
-  }, [currentTrack?.id]);
+    ensureEnrichedLyrics();
+  }, [currentTrack?.id, ensureEnrichedLyrics]);
 
   // Hamburger popups on player card
   const [showPlayerMenu, setShowPlayerMenu] = useState<boolean>(false);
@@ -1957,6 +1978,7 @@ export default function App() {
     setIsLoading(true);
     setErrorMessage(null);
     setCurrentTime(0);
+    setLyrics(null);
 
     // Cancel existing pending debounce timer
     if (playDebounceTimerRef.current) {
@@ -5420,7 +5442,7 @@ export default function App() {
                     </span>
                   ) : parsedLyrics.length > 0 || _lyrics?.plainLyrics ? (
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/60">
-                      Lời tĩnh
+                      Non synced
                     </span>
                   ) : (
                     <span className="text-[11px] text-white/40 font-medium">
@@ -5455,16 +5477,16 @@ export default function App() {
                   parsedLyrics.length > 0 ? "overflow-y-auto custom-scrollbar" : "overflow-hidden"
                 }`}
                 style={{
-                  paddingTop: parsedLyrics.length > 0 ? "35vh" : "0px",
-                  paddingBottom: parsedLyrics.length > 0 ? "40vh" : "0px",
+                  paddingTop: parsedLyrics.length > 0 ? "110px" : "0px",
+                  paddingBottom: parsedLyrics.length > 0 ? "150px" : "0px",
                   gap: parsedLyrics.length > 0 ? "8px" : "0px",
                 }}
               >
                 {parsedLyrics.length > 0 ? (
                   parsedLyrics.map((line, idx) => {
                     const isActive = isLyricsSynced && idx === activeLyricIndex;
-                    const isRomanizedOnly = lyricDisplayMode === "romanized" && (line.romanized || line.translation);
-                    const isDual = lyricDisplayMode === "dual" && (line.romanized || line.translation);
+                    const isRomanizedOnly = lyricDisplayMode === "romanized";
+                    const isDual = lyricDisplayMode === "dual";
 
                     let primaryText = line.text;
                     let secondaryText: string | null = null;
@@ -5512,7 +5534,7 @@ export default function App() {
                     {_lyrics.plainLyrics}
                   </div>
                 ) : (
-                  <div className="h-full w-full flex-1 flex flex-col items-center justify-center p-6 text-center text-white/40 text-xs gap-3">
+                  <div className="h-full w-full flex-1 flex flex-col items-center justify-center p-6 text-center text-white/40 text-xs gap-3 my-auto">
                     <Mic2 className="w-10 h-10 opacity-35 theme-accent-text" />
                     <p className="font-semibold text-white/70 text-sm">
                       {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
