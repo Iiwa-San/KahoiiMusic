@@ -854,6 +854,26 @@ export default function App() {
     }
   }, [parsedLyrics.length, _lyrics, currentTrack?.id]);
 
+  // Automatically fetch/refresh full enriched lyrics whenever currentTrack changes
+  useEffect(() => {
+    if (!currentTrack?.id) return;
+    if (!_lyrics?.lines || _lyrics.lines.length === 0) {
+      fetch(
+        `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(currentTrack.id)}&title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.author || "")}&duration=${currentTrack.duration || ""}`
+      )
+        .then((res) => (res.ok ? res.json() : null))
+        .then((lyricsData) => {
+          if (lyricsData?.lines && lyricsData.lines.length > 0) {
+            setLyrics(lyricsData);
+            if (lyricsData.artist && (!currentTrack.author || currentTrack.author === "Nghệ sĩ" || currentTrack.author === "Kahoii Music")) {
+              setCurrentTrack((prev) => (prev && prev.id === currentTrack.id ? { ...prev, author: lyricsData.artist } : prev));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentTrack?.id]);
+
   // Hamburger popups on player card
   const [showPlayerMenu, setShowPlayerMenu] = useState<boolean>(false);
   const [showLibrarySubmenu, setShowLibrarySubmenu] = useState<boolean>(false);
@@ -1450,19 +1470,13 @@ export default function App() {
   };
 
   const fetchLibraryData = async () => {
-    const token = getAuthToken();
-    const refreshToken = getRefreshToken();
-    if (!token && !refreshToken) {
-      return;
-    }
-
     setIsLibraryLoading(true);
     try {
       const res = await authenticatedFetch(`${API_BASE}/api/user/library`);
       if (res.ok) {
         const data = await res.json();
         const cleanAuthorField = (obj: any) => {
-          const raw = obj?.author || obj?.Author || obj?.Artist || "";
+          const raw = (obj?.author || obj?.Author || obj?.Artist || obj?.channel || "").trim();
           return (raw && raw !== "Nghệ sĩ" && raw !== "Kahoii Music" && raw !== "YouTube Music") ? raw : "";
         };
         const mappedFavs: Track[] = (data.favorites || []).map((f: any) => ({
@@ -2000,6 +2014,20 @@ export default function App() {
           if (offlineItem.lyrics) {
             setLyrics(offlineItem.lyrics);
           }
+          // If offline lyrics don't have .lines, fetch enriched lyrics in background and update IndexedDB
+          if ((!(offlineItem.lyrics as any)?.lines || (offlineItem.lyrics as any).lines.length === 0) && typeof navigator !== "undefined" && navigator.onLine) {
+            fetch(
+              `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+            )
+              .then((res) => (res.ok ? res.json() : null))
+              .then((lyricsData) => {
+                if (lyricsData?.lines && lyricsData.lines.length > 0) {
+                  setLyrics(lyricsData);
+                  saveTrackOffline(track, offlineItem.audioBlob, lyricsData);
+                }
+              })
+              .catch(() => {});
+          }
           setErrorMessage(null);
           return;
         }
@@ -2037,13 +2065,36 @@ export default function App() {
           setErrorMessage(null);
           setIsLoading(false);
 
+          const updateAuthorAcrossApp = (newAuthor: string) => {
+            if (!newAuthor || newAuthor === "Nghệ sĩ" || newAuthor === "Kahoii Music") return;
+            track.author = newAuthor;
+            setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: newAuthor } : prev));
+            setLibraryData((prev) => {
+              const repl = (list: Track[]) =>
+                list.map((it) => (it.id === track.id ? { ...it, author: newAuthor } : it));
+              const updated = {
+                ...prev,
+                favorites: repl(prev.favorites),
+                savedTracks: repl(prev.savedTracks),
+                history: repl(prev.history),
+              };
+              persistLibraryData(updated);
+              return updated;
+            });
+          };
+
           // Fetch Lyrics in background without delaying playback
           fetch(
             `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
           )
             .then((res) => (res.ok ? res.json() : null))
             .then((lyricsData) => {
-              if (lyricsData) setLyrics(lyricsData);
+              if (lyricsData) {
+                setLyrics(lyricsData);
+                if (lyricsData.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
+                  updateAuthorAcrossApp(lyricsData.artist);
+                }
+              }
             })
             .catch(() => {});
 
@@ -2079,6 +2130,10 @@ export default function App() {
 
         if (res.ok) {
           const data = await res.json();
+          if (data.author && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
+            track.author = data.author;
+            setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: data.author } : prev));
+          }
           if (data.streamUrl && audioRef.current) {
             const playableUrl = data.streamUrl.includes("googlevideo.com")
               ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
@@ -2147,6 +2202,10 @@ export default function App() {
         if (lyricsRes.ok) {
           const lyricsData = await lyricsRes.json();
           setLyrics(lyricsData);
+          if (lyricsData?.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
+            track.author = lyricsData.artist;
+            setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: lyricsData.artist } : prev));
+          }
         }
       } catch {}
     };
@@ -5357,7 +5416,7 @@ export default function App() {
                   {isLyricsSynced ? (
                     <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider theme-badge-active shadow-sm">
                       <Sparkles className="w-3 h-3 theme-accent-text" />
-                      Khớp nhạc
+                      Audio synced
                     </span>
                   ) : parsedLyrics.length > 0 || _lyrics?.plainLyrics ? (
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/60">

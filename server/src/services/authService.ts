@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { resolveTrackArtist } from "./youtubeSearch.js";
 
 const FIREBASE_API_KEY = "AIzaSyB4fUCZZN41WmnxGeH8jSdz1M5mi2LhLX8";
 const PROJECT_ID = "kahoiimusic";
@@ -640,7 +641,7 @@ export async function getUserLibraryData(
             } catch {}
           }
 
-          const resolveAuthor = (t: any): string => {
+          const resolveAuthorAsync = async (t: any): Promise<string> => {
             const id = t.Id || t.id;
             const explicit = (t.Author || t.Artist || t.author || t.channel || t.uploader || "").trim();
             if (explicit && explicit !== "Nghệ sĩ" && explicit !== "Kahoii Music" && explicit !== "YouTube Music") {
@@ -648,6 +649,10 @@ export async function getUserLibraryData(
             }
             if (id && localAuthorMap.has(id)) {
               return localAuthorMap.get(id)!;
+            }
+            if (id) {
+              const res = await resolveTrackArtist(id, t.Title || t.title);
+              if (res) return res;
             }
             return "";
           };
@@ -657,42 +662,48 @@ export async function getUserLibraryData(
             : Array.isArray(musicData.Favorites)
             ? musicData.Favorites
             : [];
-          const favorites = favSources.map((t: any) => ({
-            id: t.Id || t.id,
-            title: t.Title || t.title,
-            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-            durationText: t.durationText,
-            author: resolveAuthor(t),
-            thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
-          }));
+          const favorites = await Promise.all(
+            favSources.map(async (t: any) => ({
+              id: t.Id || t.id,
+              title: t.Title || t.title,
+              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+              durationText: t.durationText,
+              author: await resolveAuthorAsync(t),
+              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
+            }))
+          );
 
           const savedSources = Array.isArray(musicData.savedTracks)
             ? musicData.savedTracks
             : Array.isArray(musicData.SavedTracks)
             ? musicData.SavedTracks
             : [];
-          const savedTracks = savedSources.map((t: any) => ({
-            id: t.Id || t.id,
-            title: t.Title || t.title,
-            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-            durationText: t.durationText,
-            author: resolveAuthor(t),
-            thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
-          }));
+          const savedTracks = await Promise.all(
+            savedSources.map(async (t: any) => ({
+              id: t.Id || t.id,
+              title: t.Title || t.title,
+              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+              durationText: t.durationText,
+              author: await resolveAuthorAsync(t),
+              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
+            }))
+          );
 
           const histSources = Array.isArray(musicData.history)
             ? musicData.history
             : Array.isArray(musicData.History)
             ? musicData.History
             : [];
-          const history = histSources.map((t: any) => ({
-            id: t.Id || t.id,
-            title: t.Title || t.title,
-            duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-            durationText: t.durationText,
-            author: resolveAuthor(t),
-            thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
-          }));
+          const history = await Promise.all(
+            histSources.map(async (t: any) => ({
+              id: t.Id || t.id,
+              title: t.Title || t.title,
+              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+              durationText: t.durationText,
+              author: await resolveAuthorAsync(t),
+              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
+            }))
+          );
 
           const plSources = Array.isArray(musicData.collections) && musicData.collections.length > 0
             ? musicData.collections
@@ -701,24 +712,28 @@ export async function getUserLibraryData(
             : Array.isArray(musicData.playlists)
             ? musicData.playlists
             : [];
-          const playlists = plSources.map((pl: any) => {
-            const rawItems = pl.Items || pl.items || pl.Tracks || pl.tracks || [];
-            const mapped = rawItems.map((t: any) => ({
-              id: t.Id || t.id,
-              title: t.Title || t.title,
-              duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
-              durationText: t.durationText,
-              author: resolveAuthor(t),
-              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
-            }));
-            return {
-              id: pl.Id || pl.id || pl.Name || pl.name,
-              name: pl.Name || pl.name,
-              created: pl.CreatedAt || pl.created,
-              items: mapped,
-              tracks: mapped,
-            };
-          });
+          const playlists = await Promise.all(
+            plSources.map(async (pl: any) => {
+              const rawItems = pl.Items || pl.items || pl.Tracks || pl.tracks || [];
+              const mapped = await Promise.all(
+                rawItems.map(async (t: any) => ({
+                  id: t.Id || t.id,
+                  title: t.Title || t.title,
+                  duration: Number(t.DurationSeconds ?? t.duration ?? t.durationSeconds ?? t.Duration ?? 0),
+                  durationText: t.durationText,
+                  author: await resolveAuthorAsync(t),
+                  thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.Id || t.id}/mqdefault.jpg`,
+                }))
+              );
+              return {
+                id: pl.Id || pl.id || pl.Name || pl.name,
+                name: pl.Name || pl.name,
+                created: pl.CreatedAt || pl.created,
+                items: mapped,
+                tracks: mapped,
+              };
+            })
+          );
 
           return {
             favorites,

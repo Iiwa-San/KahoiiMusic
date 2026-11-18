@@ -200,6 +200,120 @@ function postYouTubeWeb(endpoint: string, payload: Record<string, any>, timeout 
   });
 }
 
+const artistMemoryCache = new Map<string, string>();
+
+/**
+ * Smart Multi-Tier Artist Resolver:
+ * 1. Title extraction (Artist - Title, Title / Artist, Covered by, quotes, brackets, hashtag)
+ * 2. YouTube Video Details & Description probing (Title · Artist standard pattern, Vocal:, Artist:, Singer:, Ca sĩ:)
+ * 3. YouTube Channel name fallback (minus Topic, Chủ đề, Official, etc.)
+ */
+export async function resolveTrackArtist(videoId: string, rawTitle?: string): Promise<string> {
+  const vid = (videoId || "").trim();
+  const title = (rawTitle || "").trim();
+
+  // Check in-memory cache first
+  if (vid && artistMemoryCache.has(vid)) {
+    return artistMemoryCache.get(vid)!;
+  }
+
+  // Tier 1: Check title pattern
+  if (title) {
+    if (title.includes(" / ")) {
+      const parts = title.split(" / ");
+      if (parts.length >= 2) {
+        const cand = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").replace(/\(.*?\)/g, "").trim();
+        if (cand && !/^(mv|official|lyric|audio|video)$/i.test(cand)) {
+          if (vid) artistMemoryCache.set(vid, cand);
+          return cand;
+        }
+      }
+    }
+    if (title.includes(" - ")) {
+      const parts = title.split(" - ");
+      if (parts.length >= 2) {
+        let cand = parts[0].trim().replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "").trim();
+        if (cand && !/^(mv|official|lyric|audio|video|teaser|hd|4k)$/i.test(cand)) {
+          if (vid) artistMemoryCache.set(vid, cand);
+          return cand;
+        }
+      }
+    }
+    if (title.includes(" | ")) {
+      const parts = title.split(" | ");
+      if (parts.length >= 2) {
+        const cand = parts[1].trim();
+        if (cand) {
+          if (vid) artistMemoryCache.set(vid, cand);
+          return cand;
+        }
+      }
+    }
+    const mCover = title.match(/(?:covered\s+by|cover\s+by|vocal\s*:?)\s*([^\s\(\)\[\]【】\/|]+)/i);
+    if (mCover && mCover[1]) {
+      const cand = mCover[1].trim();
+      if (vid) artistMemoryCache.set(vid, cand);
+      return cand;
+    }
+    const mQuotes = title.match(/([^\s\u300C\u300E\u3010]+)\s*[\u300C\u300E\u3010][^\u300D\u300F\u3011]+[\u300D\u300F\u3011]/);
+    if (mQuotes && mQuotes[1] && !/^(mv|official|video|audio|lyrics?|弾き語り|歌ってみた)$/i.test(mQuotes[1])) {
+      const cand = mQuotes[1].trim();
+      if (vid) artistMemoryCache.set(vid, cand);
+      return cand;
+    }
+  }
+
+  // Tier 2: Probe YouTube Innertube Player (Description & Channel)
+  if (vid && vid.length === 11) {
+    try {
+      const d = await postYouTubeWeb("player", { videoId: vid }, 5000);
+      const desc = d?.videoDetails?.shortDescription || "";
+      const channel = (d?.videoDetails?.author || "").trim();
+
+      // Probe description for "Title · Artist" or "Artist: ..."
+      if (desc) {
+        const lines = desc.split("\n").map((l: string) => l.trim()).filter(Boolean);
+        for (const line of lines) {
+          if (line.includes("·")) {
+            const parts = line.split("·").map((p: string) => p.trim());
+            if (parts.length >= 2 && parts[1]) {
+              const cand = parts[1].replace(/\s*-\s*Topic$/i, "").trim();
+              if (cand) {
+                artistMemoryCache.set(vid, cand);
+                return cand;
+              }
+            }
+          }
+          const mVoc = line.match(/(?:vocal|artist|singer|ca sĩ|trình bày|cover by|nhạc sĩ)\s*[:：]\s*([^\n\r,\/]+)/i);
+          if (mVoc && mVoc[1]) {
+            const cand = mVoc[1].trim();
+            if (cand) {
+              artistMemoryCache.set(vid, cand);
+              return cand;
+            }
+          }
+        }
+      }
+
+      // Probe channel name
+      if (channel) {
+        const cleanChan = channel
+          .replace(/\s*-\s*Topic$/i, "")
+          .replace(/\s*-\s*Chủ đề$/i, "")
+          .replace(/\s*Official Channel$/i, "")
+          .replace(/\s*Official$/i, "")
+          .trim();
+        if (cleanChan && cleanChan !== "Nghệ sĩ" && cleanChan !== "YouTube") {
+          artistMemoryCache.set(vid, cleanChan);
+          return cleanChan;
+        }
+      }
+    } catch {}
+  }
+
+  return "";
+}
+
 function extractDuration(renderer: any, descRuns: any[]): { duration: number; durationText: string } {
   for (let i = descRuns.length - 1; i >= 0; i--) {
     const txt = descRuns[i]?.text?.trim();

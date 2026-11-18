@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { resolveAudioStream } from "./services/streamResolver.js";
-import { searchYouTubeMusicStructured, getPlaylistTracks, getArtistDetails } from "./services/youtubeSearch.js";
+import { searchYouTubeMusicStructured, getPlaylistTracks, getArtistDetails, resolveTrackArtist } from "./services/youtubeSearch.js";
 import { fetchLyrics } from "./services/lyricsService.js";
 import {
   extractBearerToken,
@@ -35,6 +35,10 @@ app.get(["/api/stream", "/stream"], async (req, res) => {
 
   try {
     const streamInfo = await resolveAudioStream(videoId);
+    if (!streamInfo.author || streamInfo.author === "Nghệ sĩ" || streamInfo.author === "Kahoii Music") {
+      const resolved = await resolveTrackArtist(videoId, streamInfo.title);
+      if (resolved) streamInfo.author = resolved;
+    }
     return res.json(streamInfo);
   } catch (err: any) {
     console.error("[API Stream Error]", err.message);
@@ -101,7 +105,7 @@ app.get(["/api/artist", "/artist"], async (req, res) => {
 // 3. Synced Lyrics & Romanization / Translation
 app.get(["/api/lyrics", "/lyrics"], async (req, res) => {
   const title = (req.query.title as string) || "";
-  const artist = (req.query.artist as string) || "";
+  let artist = (req.query.artist as string) || "";
   const videoId = (req.query.videoId as string) || (req.query.id as string) || "";
   const duration = req.query.duration ? Number(req.query.duration) : undefined;
 
@@ -109,9 +113,14 @@ app.get(["/api/lyrics", "/lyrics"], async (req, res) => {
     return res.json({ syncedLyrics: null, plainLyrics: null, instrumental: false, lines: [] });
   }
 
+  if ((!artist || artist === "Nghệ sĩ" || artist === "Kahoii Music") && videoId) {
+    const resolved = await resolveTrackArtist(videoId, title);
+    if (resolved) artist = resolved;
+  }
+
   try {
     const lyrics = await fetchLyrics(title, artist, duration, videoId);
-    return res.json(lyrics);
+    return res.json({ ...lyrics, artist: artist || undefined });
   } catch (err: any) {
     console.error("[API Lyrics Error]", err.message);
     return res.json({ syncedLyrics: null, plainLyrics: null, instrumental: false, lines: [] });
