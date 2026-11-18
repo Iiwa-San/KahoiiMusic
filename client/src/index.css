@@ -42,7 +42,6 @@ html, body, #root {
   border-radius: 28px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   transition: background-color 1.2s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.8s ease, box-shadow 0.2s ease;
-  backdrop-filter: blur(20px);
 }
 
 .figma-panel:hover {
@@ -124,6 +123,15 @@ html, body, #root {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, var(--theme-panel-bg) 100%);
   border: 1.5px solid var(--theme-panel-border);
   transition: all 0.8s ease;
+}
+
+/* Frosted Glass Menu & Dropdown Panels */
+.theme-menu-glass {
+  background: linear-gradient(135deg, rgba(18, 6, 30, 0.90) 0%, var(--theme-panel-bg) 100%) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  border: 1.5px solid var(--theme-panel-border) !important;
+  box-shadow: 0 16px 40px -4px rgba(0, 0, 0, 0.75), 0 0 20px rgba(0, 0, 0, 0.35) !important;
 }
 
 .theme-input-pill {

@@ -2244,7 +2244,7 @@ export default function App() {
 
           {/* Quick Search History Dropdown Popover */}
           {isSearchFocused && searchHistory.length > 0 && (
-            <div className="absolute top-[42px] left-0 right-0 rounded-2xl theme-card-bg backdrop-blur-xl shadow-2xl p-3 z-50 animate-fade-in flex flex-col gap-1.5">
+            <div className="absolute top-[42px] left-0 right-0 rounded-2xl theme-menu-glass shadow-2xl p-3 z-50 animate-fade-in flex flex-col gap-1.5 border border-white/15">
               <div className="flex items-center justify-between px-2 pb-1.5 border-b border-white/10 text-[11px] font-semibold text-white/60">
                 <span className="flex items-center gap-1.5 theme-accent-text">
                   <Clock className="w-3.5 h-3.5 theme-accent-text" />
@@ -2304,7 +2304,7 @@ export default function App() {
 
             {/* Download Dropdown Popover */}
             {showDownloadMenu && (
-              <div className="absolute top-[44px] right-0 z-50 w-[310px] sm:w-[350px] theme-card-bg backdrop-blur-2xl rounded-2xl shadow-2xl p-3 border theme-accent-border animate-fade-in flex flex-col gap-2">
+              <div className="absolute top-[44px] right-0 z-50 w-[310px] sm:w-[350px] theme-menu-glass rounded-2xl shadow-2xl p-3 border theme-accent-border animate-fade-in flex flex-col gap-2">
                 <div className="flex items-center justify-between px-1 pb-1.5 border-b border-white/10">
                   <div>
                     <p className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -4067,6 +4067,7 @@ export default function App() {
           className={`${
             mobileTab === "player" ? "flex w-full" : "hidden"
           } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-4 sm:p-5 lg:px-[18px] lg:pt-[26px] lg:pb-[20px]`}
+          style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}
         >
           {/* Mobile Collapse / Back Header */}
           <div className="lg:hidden flex items-center justify-between pb-2 mb-2 border-b border-white/10 flex-shrink-0">
@@ -4159,7 +4160,7 @@ export default function App() {
 
                 {/* Popup 1 (Menu chính: Combobox) */}
                 {showPlayerMenu && currentTrack && (
-                  <div className="absolute top-9 left-0 z-40 theme-card-bg backdrop-blur-xl rounded-xl shadow-2xl p-1.5 min-w-[175px] flex flex-col gap-1 text-xs animate-fade-in">
+                  <div className="absolute top-9 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[175px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
                     {/* Option 1: Lưu vào thư viện */}
                     <button
                       type="button"
@@ -4201,7 +4202,7 @@ export default function App() {
 
                 {/* Popup 2 (Submenu mở sang bên trái trên Desktop, và responsive trên Mobile) */}
                 {showPlayerMenu && showLibrarySubmenu && currentTrack && (
-                  <div className="absolute top-9 left-0 lg:left-auto lg:right-[calc(100%+8px)] z-50 theme-card-bg backdrop-blur-xl rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
+                  <div className="absolute top-9 left-0 lg:left-auto lg:right-[calc(100%+8px)] z-50 theme-menu-glass rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
                     <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
                       <button
                         type="button"
@@ -4315,7 +4316,7 @@ export default function App() {
                   {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                 </button>
                 {showVolumeSlider && (
-                  <div className="absolute top-9 left-0 p-2.5 rounded-xl theme-card-bg backdrop-blur-xl shadow-2xl flex items-center gap-2 z-30">
+                  <div className="absolute top-9 left-0 p-2.5 rounded-xl theme-menu-glass shadow-2xl flex items-center gap-2 z-30 border theme-accent-border/40">
                     <input
                       type="range"
                       min={0}
@@ -4491,7 +4492,7 @@ export default function App() {
                   )}
                 </button>
                 {showSleepTimerMenu && (
-                  <div className="absolute bottom-9 right-0 p-2 rounded-xl theme-card-bg backdrop-blur-xl shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in">
+                  <div className="absolute bottom-9 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in border theme-accent-border/40">
                     <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
                       Hẹn giờ tắt
                     </span>
