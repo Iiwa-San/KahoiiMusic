@@ -949,6 +949,13 @@ export default function App() {
   const handleSaveOfflineTrack = async (track: Track) => {
     if (!track) return;
 
+    if (!userSession?.isLoggedIn) {
+      showToast("Vui lòng đăng nhập để lưu bài hát nghe ngoại tuyến!", "warning");
+      setShowPlayerMenu(false);
+      setIsAccountOpen(true);
+      return;
+    }
+
     const isSaved = offlineTrackIds.has(track.id);
     if (isSaved) {
       await handleDeleteOfflineTrack(track.id, track.title);
@@ -1058,6 +1065,14 @@ export default function App() {
   // Download track audio
   const handleDownloadTrack = async (track: Track) => {
     if (!track) return;
+
+    if (!userSession?.isLoggedIn) {
+      showToast("Vui lòng đăng nhập để tải bài hát về máy!", "warning");
+      setShowPlayerMenu(false);
+      setIsAccountOpen(true);
+      return;
+    }
+
     const isDownloaded = downloadedTrackIds.has(track.id);
     if (isDownloaded) {
       setDownloadedTrackIds((prev) => {
@@ -1100,6 +1115,15 @@ export default function App() {
   // Create playlist and add current track
   const handleCreatePlaylistAndAddTrack = async () => {
     if (!newPlaylistName.trim() || !currentTrack) return;
+
+    if (!userSession?.isLoggedIn) {
+      showToast("Vui lòng đăng nhập để tạo và lưu danh sách phát!", "warning");
+      setIsCreatingPlaylist(false);
+      setNewPlaylistName("");
+      setIsAccountOpen(true);
+      return;
+    }
+
     const newPl = {
       id: `pl_${Date.now()}`,
       name: newPlaylistName.trim(),
@@ -1117,6 +1141,13 @@ export default function App() {
   // Toggle track inside a playlist
   const handleToggleTrackInPlaylist = async (playlistId: string) => {
     if (!currentTrack) return;
+
+    if (!userSession?.isLoggedIn) {
+      showToast("Vui lòng đăng nhập để lưu bài hát vào playlist!", "warning");
+      setIsAccountOpen(true);
+      return;
+    }
+
     const targetPl = libraryData.playlists.find((pl) => pl.id === playlistId);
     if (!targetPl) return;
 
@@ -2945,7 +2976,7 @@ export default function App() {
             ))}
           </div>
 
-          {!userSession?.isLoggedIn && activeLeftTab !== "offline" ? (
+          {!userSession?.isLoggedIn ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-3 bg-white/5 rounded-2xl border border-white/10 my-auto">
               <div className="w-12 h-12 rounded-full theme-badge flex items-center justify-center theme-accent-text shadow-md">
                 <FolderHeart className="w-6 h-6" />
@@ -2953,7 +2984,7 @@ export default function App() {
               <div>
                 <p className="text-sm font-semibold text-white">Thư viện cá nhân</p>
                 <p className="text-xs text-white/50 mt-1 leading-relaxed">
-                  Đăng nhập để xem danh sách phát, bài hát yêu thích và lịch sử nghe nhạc của bạn.
+                  Đăng nhập để xem danh sách phát, bài hát yêu thích, lịch sử nghe nhạc và các bài hát đã tải về của bạn.
                 </p>
               </div>
               <button
