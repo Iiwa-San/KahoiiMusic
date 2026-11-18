@@ -6,6 +6,7 @@ export interface Track {
   durationText?: string;
   thumbnail: string;
   streamUrl?: string;
+  isMusic?: boolean;
 }
 
 export interface LyricLine {
@@ -22,6 +23,7 @@ export interface SearchTopResult {
   durationText?: string;
   thumbnail: string;
   type: "song" | "artist" | "playlist" | "video";
+  isMusic?: boolean;
 }
 
 export interface SearchArtistItem {

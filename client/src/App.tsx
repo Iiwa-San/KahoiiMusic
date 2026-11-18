@@ -3363,10 +3363,12 @@ export default function App() {
                                       }
                                     }}
                                   />
-                                  {item.duration > 0 && (
+                                  {(item.duration > 0 || !!item.durationText) && (
                                     <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
-                                      <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                      <span>{formatTime(item.duration)}</span>
+                                      {item.isMusic !== false && (
+                                        <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                      )}
+                                      <span>{item.durationText || formatTime(item.duration)}</span>
                                     </span>
                                   )}
                                 </div>
@@ -3592,9 +3594,11 @@ export default function App() {
                               }}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
-                            {top.duration > 0 && (
+                            {(top.duration > 0 || !!top.durationText) && (
                               <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
-                                <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                {top.isMusic !== false && (
+                                  <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                )}
                                 <span>{top.durationText || formatTime(top.duration)}</span>
                               </span>
                             )}
@@ -3845,10 +3849,12 @@ export default function App() {
                                         }
                                       }}
                                     />
-                                    {item.duration > 0 && (
+                                    {(item.duration > 0 || !!item.durationText) && (
                                       <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
-                                        <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                        <span>{formatTime(item.duration)}</span>
+                                        {item.isMusic !== false && (
+                                          <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                        )}
+                                        <span>{item.durationText || formatTime(item.duration)}</span>
                                       </span>
                                     )}
                                   </div>
@@ -3927,10 +3933,12 @@ export default function App() {
                                     }
                                   }}
                                 />
-                                {item.duration > 0 && (
+                                {(item.duration > 0 || !!item.durationText) && (
                                   <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
-                                    <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                    <span>{formatTime(item.duration)}</span>
+                                    {item.isMusic !== false && (
+                                      <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                    )}
+                                    <span>{item.durationText || formatTime(item.duration)}</span>
                                   </span>
                                 )}
                               </div>

@@ -11,6 +11,7 @@ export interface SearchTrackResult {
   durationText?: string;
   thumbnail: string;
   artistBrowseId?: string;
+  isMusic?: boolean;
 }
 
 export interface SearchTopResult {
@@ -22,6 +23,7 @@ export interface SearchTopResult {
   durationText?: string;
   thumbnail: string;
   type: "song" | "artist" | "playlist" | "video";
+  isMusic?: boolean;
 }
 
 export interface SearchArtistItem {
@@ -119,6 +121,59 @@ function postYTM(endpoint: string, payload: Record<string, any>, timeout = 9000)
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           Referer: "https://music.youtube.com/",
           Origin: "https://music.youtube.com",
+        },
+        timeout,
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+    );
+
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(null);
+    });
+    req.write(postData);
+    req.end();
+  });
+}
+
+/**
+ * Shared POST helper for standard YouTube InnerTube API (WEB client)
+ */
+function postYouTubeWeb(endpoint: string, payload: Record<string, any>, timeout = 9000): Promise<any> {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({
+      ...payload,
+      context: {
+        client: {
+          clientName: "WEB",
+          clientVersion: "2.20240101.01.00",
+          hl: "vi",
+          gl: "VN",
+        },
+      },
+    });
+
+    const req = https.request(
+      `https://www.youtube.com/youtubei/v1/${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Referer: "https://www.youtube.com/",
+          Origin: "https://www.youtube.com",
         },
         timeout,
       },
@@ -825,6 +880,63 @@ export async function getPlaylistTracks(browseOrPlaylistId: string): Promise<Sea
 }
 
 /**
+ * Fetch video uploads from channel uploads playlist (VL + UU...) via YouTube Web Innertube.
+ * Returns exact duration, durationText and isMusic (music note) tag!
+ */
+async function fetchUploadsPlaylist(
+  browseId: string,
+  fallbackAuthor = "Nghệ sĩ"
+): Promise<SearchTrackResult[]> {
+  if (!browseId || !browseId.startsWith("UC")) return [];
+  const uploadsPlaylistId = "VL" + "UU" + browseId.slice(2);
+  try {
+    const d = await postYouTubeWeb("browse", { browseId: uploadsPlaylistId }, 6000);
+    const isr =
+      d?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content
+        ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer;
+    const items = isr?.contents || [];
+    const tracks: SearchTrackResult[] = [];
+    for (const item of items) {
+      const vm = item.lockupViewModel;
+      if (!vm) continue;
+      const title = vm.metadata?.lockupMetadataViewModel?.title?.content;
+      const videoId =
+        vm.rendererContext?.commandContext?.onTap?.innertubeCommand?.watchEndpoint?.videoId;
+      const overlays = vm.contentImage?.thumbnailViewModel?.overlays || [];
+      let durText = "";
+      let isMusic = false;
+      for (const ov of overlays) {
+        const badges = ov.thumbnailBottomOverlayViewModel?.badges || [];
+        for (const b of badges) {
+          const tb = b.thumbnailBadgeViewModel;
+          if (tb?.text) durText = tb.text;
+          if (tb?.icon?.sources?.[0]?.clientResource?.imageName === "MUSIC") isMusic = true;
+        }
+      }
+      const thumbs = vm.contentImage?.thumbnailViewModel?.image?.sources || [];
+      const thumbnail =
+        thumbs[thumbs.length - 1]?.url ||
+        (videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : "");
+      if (videoId && title) {
+        tracks.push({
+          id: videoId,
+          title,
+          author: fallbackAuthor,
+          duration: parseDuration(durText),
+          durationText: durText,
+          thumbnail,
+          artistBrowseId: browseId,
+          isMusic,
+        });
+      }
+    }
+    return tracks;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Fetch dedicated artist/channel details, tracks and playlists by browseId (UC...)
  */
 export async function getArtistDetails(
@@ -836,7 +948,11 @@ export async function getArtistDetails(
   }
 
   try {
-    const data = await postYTM("browse", { browseId }, 6000);
+    const [channelUploads, data] = await Promise.all([
+      fetchUploadsPlaylist(browseId, fallbackName),
+      postYTM("browse", { browseId }, 6000),
+    ]);
+
     const header =
       data?.header?.musicImmersiveHeaderRenderer ||
       data?.header?.musicVisualHeaderRenderer;
@@ -849,7 +965,7 @@ export async function getArtistDetails(
     const tabs = data?.contents?.singleColumnBrowseResultsRenderer?.tabs || [];
     const secList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
 
-    const tracks: SearchTrackResult[] = [];
+    const ytmTracks: SearchTrackResult[] = [];
     const playlists: SearchPlaylistItem[] = [];
     const seenTrackIds = new Set<string>();
     const seenPlaylistIds = new Set<string>();
@@ -883,16 +999,16 @@ export async function getArtistDetails(
           rend.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer
             ?.playNavigationEndpoint?.watchEndpoint?.playlistId;
 
-        const thumbs =
+        const itemThumbs =
           rend.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ||
           rend.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
         const thumbnail =
-          thumbs[thumbs.length - 1]?.url ||
+          itemThumbs[itemThumbs.length - 1]?.url ||
           (videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : "");
 
         if (videoId && title && !seenTrackIds.has(videoId)) {
           seenTrackIds.add(videoId);
-          tracks.push({
+          ytmTracks.push({
             id: videoId,
             title,
             author: sub ? sub.split("•")[0].trim() : artistName,
@@ -900,6 +1016,7 @@ export async function getArtistDetails(
             durationText: "",
             thumbnail,
             artistBrowseId: browseId,
+            isMusic: true,
           });
         } else if (playlistId && title && !videoId && !seenPlaylistIds.has(playlistId)) {
           seenPlaylistIds.add(playlistId);
@@ -914,7 +1031,19 @@ export async function getArtistDetails(
       }
     }
 
-    if (tracks.length === 0) {
+    let tracks: SearchTrackResult[] = [];
+    if (channelUploads && channelUploads.length > 0) {
+      channelUploads.forEach((t) => (t.author = artistName));
+      tracks = channelUploads;
+    } else if (ytmTracks.length > 0) {
+      // For official artists, if duration is missing in browse shelf, enrich from search
+      const searchRes = await searchYouTubeMusicStructured(artistName);
+      if (searchRes.tracks && searchRes.tracks.length > 0) {
+        tracks = searchRes.tracks;
+      } else {
+        tracks = ytmTracks;
+      }
+    } else {
       return searchYouTubeMusicStructured(artistName);
     }
 
@@ -930,12 +1059,13 @@ export async function getArtistDetails(
       topResult: {
         id: tracks[0].id,
         title: tracks[0].title,
-        subtitle: `${artistName} • ${tracks[0].author}`,
+        subtitle: `${artistName}${tracks[0].durationText ? " • " + tracks[0].durationText : ""}`,
         author: artistName,
         duration: tracks[0].duration,
         durationText: tracks[0].durationText,
         thumbnail: tracks[0].thumbnail,
         type: "song",
+        isMusic: tracks[0].isMusic,
       },
       tracks,
       artists: [artistItem],
