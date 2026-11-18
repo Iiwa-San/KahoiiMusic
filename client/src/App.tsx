@@ -5088,9 +5088,9 @@ export default function App() {
           {/* ========================================================================= */}
           <div className="lg:hidden flex flex-col w-full h-full flex-1 min-h-0 gap-2.5 sm:gap-3">
             {/* TOP CARD: PLAYER CONTROLS + LIVE LYRICS SPLIT */}
-            <div className="w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 flex flex-col min-[380px]:flex-row gap-3 sm:gap-3.5 items-stretch relative overflow-hidden flex-shrink-0">
-              {/* Left Column: Artwork with Player Controls Inside */}
-              <div className="w-full min-[380px]:w-[145px] min-[440px]:w-[170px] sm:w-[186px] aspect-square rounded-[16px] sm:rounded-[18px] relative overflow-hidden flex-shrink-0 shadow-lg bg-black/50 border border-white/10 select-none mx-auto min-[380px]:mx-0">
+            <div className="w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 flex flex-col min-[380px]:flex-row gap-3 sm:gap-3.5 items-start relative overflow-hidden flex-shrink-0">
+              {/* Left Column: Artwork with Player Controls Inside (Square 1:1, Rounded Corners) */}
+              <div className="w-[170px] h-[170px] min-[420px]:w-[185px] min-[420px]:h-[185px] sm:w-[195px] sm:h-[195px] aspect-square rounded-[18px] sm:rounded-[22px] relative overflow-hidden flex-shrink-0 self-start shadow-xl bg-black/60 border border-white/10 select-none mx-auto min-[380px]:mx-0">
                 {/* Artwork Image */}
                 {!currentTrack ? (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden">
@@ -5115,10 +5115,10 @@ export default function App() {
                 )}
 
                 {/* Dark gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/45 to-black/25 pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent pointer-events-none" />
 
                 {/* Top-left Menu Button */}
-                <div className="absolute top-2 left-2 z-30" ref={playerMenuRef}>
+                <div className="absolute top-2.5 left-2.5 z-30" ref={playerMenuRef}>
                   <button
                     type="button"
                     onClick={() => {
@@ -5128,10 +5128,10 @@ export default function App() {
                       }
                       setShowPlayerMenu(!showPlayerMenu);
                     }}
-                    className="w-6 h-6 rounded-md bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white cursor-pointer transition-all border border-white/10"
+                    className="w-7 h-7 rounded-lg bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center text-white/90 hover:text-white cursor-pointer transition-all border border-white/15 shadow-sm"
                     title="Tùy chọn bài hát"
                   >
-                    <Menu className="w-3.5 h-3.5" />
+                    <Menu className="w-4 h-4" />
                   </button>
 
                   {/* Menu Popup */}
@@ -5203,14 +5203,14 @@ export default function App() {
                   type="button"
                   disabled={!currentTrack}
                   onClick={toggleCurrentFavorite}
-                  className="absolute top-2 right-2 w-6 h-6 rounded-md bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center z-30 cursor-pointer transition-all border border-white/10"
+                  className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center z-30 cursor-pointer transition-all border border-white/15 shadow-sm"
                   title="Yêu thích"
                 >
                   <Heart
-                    className={`w-3.5 h-3.5 transition-transform ${
+                    className={`w-4 h-4 transition-transform ${
                       userSession?.isLoggedIn && currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
                         ? "fill-red-500 text-red-500 scale-110 drop-shadow-[0_0_8px_rgba(239,68,68,0.9)]"
-                        : "text-white/60 hover:text-red-400"
+                        : "text-white/70 hover:text-red-400"
                     }`}
                   />
                 </button>
@@ -5220,23 +5220,29 @@ export default function App() {
                   type="button"
                   onClick={() => setIsMuted(!isMuted)}
                   title={isMuted ? "Bật âm thanh" : "Tắt tiếng"}
-                  className="absolute left-2.5 bottom-[42px] p-0.5 text-white/70 hover:text-white cursor-pointer z-20 hover:scale-110 active:scale-95 transition-all"
+                  className="absolute left-3 bottom-[44px] p-0.5 text-white/80 hover:text-white cursor-pointer z-20 hover:scale-110 active:scale-95 transition-all"
                 >
                   {isMuted ? (
-                    <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                    <VolumeX className="w-4 h-4 text-red-400" />
                   ) : (
-                    <Volume2 className="w-3.5 h-3.5" />
+                    <Volume2 className="w-4 h-4" />
                   )}
                 </button>
 
-                {/* Seekbar Progress Line */}
-                <div className="absolute left-2.5 right-2.5 bottom-[29px] flex items-center group/seek z-20">
-                  <div className="absolute left-0 right-0 h-1 rounded-full bg-white/20" />
+                {/* Seekbar Progress Line (Matching PC Mini App) */}
+                <div className="absolute left-3 right-3 bottom-[30px] h-2 flex items-center group/seek z-20">
+                  <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/25 overflow-hidden" />
                   <div
-                    className="absolute left-0 h-1 rounded-full"
+                    className="absolute left-0 top-0 bottom-0 rounded-full"
                     style={{
                       width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
                       background: "var(--theme-btn-gradient)",
+                    }}
+                  />
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white shadow-md pointer-events-none opacity-0 group-hover/seek:opacity-100 transition-opacity"
+                    style={{
+                      left: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
                     }}
                   />
                   <input
@@ -5245,12 +5251,12 @@ export default function App() {
                     max={duration || 100}
                     value={currentTime}
                     onChange={handleSeek}
-                    className="w-full h-2 opacity-0 cursor-pointer z-10"
+                    className="w-full h-full opacity-0 cursor-pointer z-10"
                   />
                 </div>
 
                 {/* 5 Playback Control Buttons Row */}
-                <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-0.5 z-20">
+                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-0.5 z-20">
                   {/* Loop / Shuffle */}
                   <button
                     type="button"
@@ -5261,15 +5267,15 @@ export default function App() {
                         ? "theme-accent-text"
                         : repeatMode === "shuffle"
                         ? "theme-sec-accent-text"
-                        : "text-white/50 hover:text-white"
+                        : "text-white/60 hover:text-white"
                     }`}
                   >
                     {repeatMode === "one" ? (
-                      <Repeat1 className="w-3.5 h-3.5" />
+                      <Repeat1 className="w-4 h-4" />
                     ) : repeatMode === "shuffle" ? (
-                      <Shuffle className="w-3.5 h-3.5" />
+                      <Shuffle className="w-4 h-4" />
                     ) : (
-                      <Repeat className="w-3.5 h-3.5" />
+                      <Repeat className="w-4 h-4" />
                     )}
                   </button>
 
@@ -5278,9 +5284,9 @@ export default function App() {
                     type="button"
                     onClick={handlePrev}
                     title="Bài trước"
-                    className="p-1 text-white/70 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    className="p-1 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
                   >
-                    <SkipBack className="w-4 h-4 fill-current" />
+                    <SkipBack className="w-4.5 h-4.5 fill-current" />
                   </button>
 
                   {/* Play / Pause (Circular Gradient Button) */}
@@ -5289,15 +5295,15 @@ export default function App() {
                     onClick={togglePlayPause}
                     disabled={isLoading}
                     title={isPlaying ? "Tạm dừng" : "Phát"}
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    className="w-8 h-8 min-[420px]:w-9 min-[420px]:h-9 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
                     style={{ background: "var(--theme-btn-gradient)" }}
                   >
                     {isLoading ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     ) : isPlaying ? (
-                      <Pause className="w-3.5 h-3.5 fill-current" />
+                      <Pause className="w-4 h-4 fill-current" />
                     ) : (
-                      <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
+                      <Play className="w-4 h-4 fill-current translate-x-0.5" />
                     )}
                   </button>
 
@@ -5306,9 +5312,9 @@ export default function App() {
                     type="button"
                     onClick={handleNext}
                     title="Bài tiếp theo"
-                    className="p-1 text-white/70 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    className="p-1 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
                   >
-                    <SkipForward className="w-4 h-4 fill-current" />
+                    <SkipForward className="w-4.5 h-4.5 fill-current" />
                   </button>
 
                   {/* Timer */}
@@ -5321,7 +5327,7 @@ export default function App() {
                         sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
                       }`}
                     >
-                      <Clock className="w-3.5 h-3.5" />
+                      <Clock className="w-4 h-4" />
                       {sleepTimerMinutes && (
                         <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[7px] text-white font-mono font-bold animate-pulse">
                           {sleepTimerMinutes}m
@@ -5361,17 +5367,17 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Right Column: Song Metadata, Toolbar Pills & Live Lyrics Card */}
-              <div className="flex-1 min-w-0 flex flex-col justify-between">
+              {/* Right Column: Song Metadata, Toolbar Pills & Live Lyrics Card (Height aligned with Thumbnail) */}
+              <div className="w-full min-[380px]:w-auto min-[380px]:h-[170px] min-[420px]:h-[185px] sm:h-[195px] flex-1 min-w-0 flex flex-col justify-between">
                 {/* Title & Artist */}
                 <div className="min-w-0">
                   <h3
-                    className="text-sm min-[400px]:text-base font-bold text-white tracking-wide truncate"
+                    className="text-base min-[400px]:text-lg sm:text-xl font-black text-white tracking-tight truncate leading-snug"
                     title={currentTrack?.title}
                   >
                     {currentTrack?.title || "Chưa phát hiện Audio"}
                   </h3>
-                  <p className="text-[11px] min-[400px]:text-xs text-white/60 truncate mt-0.5">
+                  <p className="text-xs min-[400px]:text-[13px] text-white/70 font-semibold truncate mt-0.5">
                     {currentTrack ? formatTrackArtist(currentTrack.title, currentTrack.author) : "Kahoii Music"}
                   </p>
                 </div>
@@ -5383,9 +5389,9 @@ export default function App() {
                     type="button"
                     onClick={handleReloadLyrics}
                     title="Tải lại / đồng bộ lời bài hát"
-                    className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/75 hover:text-white transition-all cursor-pointer shadow-sm"
+                    className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer shadow-sm"
                   >
-                    <RefreshCw className="w-2.5 h-2.5" />
+                    <RefreshCw className="w-3 h-3" />
                   </button>
 
                   {/* Font size button: Aa 1 / Aa 2 / Aa 3 */}
@@ -5393,7 +5399,7 @@ export default function App() {
                     type="button"
                     onClick={() => setMiniLyricFontSize((f) => (f % 3) + 1)}
                     title="Đổi kích thước chữ lời bài hát"
-                    className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-mono font-semibold text-white/80 cursor-pointer transition-all shadow-sm"
+                    className="px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-mono font-bold text-white/90 cursor-pointer transition-all shadow-sm"
                   >
                     Aa {miniLyricFontSize}
                   </button>
@@ -5404,17 +5410,17 @@ export default function App() {
                       type="button"
                       onClick={toggleLyricDisplayMode}
                       title="Chuyển chế độ: Song ngữ → Romaji thuần → Gốc"
-                      className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer theme-badge-active shadow-sm"
+                      className="px-3 py-0.5 rounded-full text-xs font-bold border transition-all cursor-pointer theme-badge-active shadow-sm"
                     >
                       {romaziPillLabel}
                     </button>
                   )}
                 </div>
 
-                {/* Live Lyrics Box (_lyricsCard) */}
+                {/* Live Lyrics Box (_lyricsCard, fills remaining height) */}
                 <div
                   ref={miniLyricsContainerRef}
-                  className="rounded-xl bg-black/40 border border-white/10 p-2 sm:p-2.5 mt-2 flex-1 min-h-[95px] max-h-[145px] min-[420px]:max-h-[175px] overflow-y-auto custom-scrollbar flex flex-col relative"
+                  className="rounded-[14px] bg-black/40 border border-white/10 p-2 sm:p-2.5 mt-2 flex-1 min-h-[90px] overflow-y-auto custom-scrollbar flex flex-col relative"
                 >
                   {parsedLyrics.length > 0 ? (
                     parsedLyrics.map((line, idx) => {
@@ -5430,10 +5436,10 @@ export default function App() {
 
                       const fontClass =
                         miniLyricFontSize === 2
-                          ? isActive ? "text-[13px] sm:text-sm" : "text-[11px] sm:text-xs"
+                          ? isActive ? "text-[15px] min-[400px]:text-base sm:text-[17px]" : "text-xs min-[400px]:text-[13px] sm:text-sm"
                           : miniLyricFontSize === 3
-                          ? isActive ? "text-[11px]" : "text-[10px]"
-                          : isActive ? "text-[12px] sm:text-[13px]" : "text-[11px]";
+                          ? isActive ? "text-xs min-[400px]:text-[13px]" : "text-[10px] min-[400px]:text-[11px]"
+                          : isActive ? "text-[13px] min-[400px]:text-sm sm:text-[15px]" : "text-[11px] min-[400px]:text-xs sm:text-[13px]";
 
                       return (
                         <div
@@ -5445,17 +5451,17 @@ export default function App() {
                           className={`flex flex-col py-0.5 transition-all cursor-pointer ${
                             isActive
                               ? "font-bold text-white opacity-100"
-                              : "text-white/40 hover:text-white/70 opacity-60"
+                              : "text-white/50 hover:text-white/80 opacity-70 font-medium"
                           }`}
                         >
                           <div className="flex items-start gap-1.5 leading-snug">
                             {isActive && (
-                              <span className="w-1 h-3.5 rounded-full bg-[var(--theme-accent)] flex-shrink-0 mt-0.5 shadow-sm" />
+                              <span className="w-1.5 min-h-[16px] rounded-full flex-shrink-0 mt-0.5 shadow-sm" style={{ backgroundColor: 'var(--theme-accent)' }} />
                             )}
                             <p className={fontClass}>{primaryText}</p>
                           </div>
                           {secondaryText && (
-                            <p className={`pl-2.5 text-[9.5px] text-white/60 mt-0.5 leading-tight ${isActive ? "opacity-90" : "opacity-50"}`}>
+                            <p className={`pl-3 text-[11px] text-white/70 mt-0.5 leading-tight ${isActive ? "opacity-95 font-semibold" : "opacity-60"}`}>
                               {secondaryText}
                             </p>
                           )}
@@ -5463,11 +5469,11 @@ export default function App() {
                       );
                     })
                   ) : _lyrics?.plainLyrics ? (
-                    <div className="text-[11px] leading-relaxed text-white/75 whitespace-pre-line my-auto text-center font-medium">
+                    <div className="text-xs min-[420px]:text-[13px] leading-relaxed text-white/80 whitespace-pre-line my-auto text-center font-medium">
                       {_lyrics.plainLyrics}
                     </div>
                   ) : (
-                    <div className="my-auto text-center text-[11px] text-white/40 italic">
+                    <div className="my-auto text-center text-xs text-white/40 italic">
                       {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
                     </div>
                   )}
@@ -5482,14 +5488,14 @@ export default function App() {
               }`}
             >
               <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2 flex-shrink-0">
-                <span className="text-xs font-bold text-white tracking-wide">
+                <span className="text-sm min-[400px]:text-[15px] font-bold text-white tracking-wide">
                   {showFullQueueMobile ? `Hàng đợi (${queueTracks.length})` : "Bài tiếp theo"}
                 </span>
                 {queueTracks.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setShowFullQueueMobile(!showFullQueueMobile)}
-                    className="text-[11px] theme-accent-text hover:brightness-125 font-semibold cursor-pointer transition-colors"
+                    className="text-xs theme-accent-text hover:brightness-125 font-semibold cursor-pointer transition-colors"
                   >
                     {showFullQueueMobile ? "Chỉ hiện bài kế" : `Xem tất cả (${queueTracks.length})`}
                   </button>
@@ -5508,24 +5514,24 @@ export default function App() {
                     }}
                     className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/5 transition-all cursor-pointer group"
                   >
-                    <div className="w-1 h-8 rounded-full bg-[var(--theme-accent)] flex-shrink-0 group-hover:scale-y-110 transition-transform shadow-sm" />
+                    <div className="w-1.5 h-9 rounded-full bg-[var(--theme-accent)] flex-shrink-0 group-hover:scale-y-110 transition-transform shadow-sm" />
                     <img
                       src={nextTrack.thumbnail || DEFAULT_TRACK_ART}
                       alt={nextTrack.title}
                       onError={(e) => {
                         e.currentTarget.src = DEFAULT_TRACK_ART;
                       }}
-                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-white/10 shadow-sm"
+                      className="w-11 h-11 rounded-lg object-cover flex-shrink-0 border border-white/10 shadow-sm"
                     />
                     <div className="flex-1 min-w-0 pr-1">
-                      <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
+                      <p className="text-sm sm:text-[15px] font-bold text-white truncate group-hover:theme-accent-text transition-colors">
                         {nextTrack.title}
                       </p>
-                      <p className="text-[10px] text-white/50 truncate mt-0.5">
+                      <p className="text-xs text-white/60 truncate mt-0.5">
                         {formatTrackArtist(nextTrack.title, nextTrack.author)}
                       </p>
                     </div>
-                    <span className="text-[10px] text-white/60 font-mono flex-shrink-0">
+                    <span className="text-xs text-white/70 font-mono flex-shrink-0">
                       {nextTrack.duration && nextTrack.duration > 0 ? formatTime(nextTrack.duration) : "--:--"}
                     </span>
                   </div>
@@ -5552,23 +5558,23 @@ export default function App() {
                         }`}
                       >
                         {isCurrent && (
-                          <div className="w-1 h-7 rounded-full bg-[var(--theme-accent)] flex-shrink-0" />
+                          <div className="w-1.5 h-8 rounded-full bg-[var(--theme-accent)] flex-shrink-0" />
                         )}
                         <img
                           src={track.thumbnail || DEFAULT_TRACK_ART}
                           alt=""
                           onError={(e) => { e.currentTarget.src = DEFAULT_TRACK_ART; }}
-                          className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                          className="w-9 h-9 rounded-md object-cover flex-shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
+                          <p className="text-[13px] sm:text-sm font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
                             {track.title}
                           </p>
-                          <p className="text-[10px] text-white/50 truncate">
+                          <p className="text-[11px] sm:text-xs text-white/60 truncate mt-0.5">
                             {formatTrackArtist(track.title, track.author)}
                           </p>
                         </div>
-                        <span className="text-[10px] text-white/60 font-mono flex-shrink-0">
+                        <span className="text-xs text-white/70 font-mono flex-shrink-0">
                           {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
                         </span>
                       </div>
