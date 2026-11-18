@@ -878,6 +878,10 @@ export default function App() {
   const [sidebar2Tab, setSidebar2Tab] = useState<"queue" | "lyrics">("queue");
   const activeLyricRef = useRef<HTMLDivElement | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
+  const miniActiveLyricRef = useRef<HTMLDivElement | null>(null);
+  const miniLyricsContainerRef = useRef<HTMLDivElement | null>(null);
+  const [showFullQueueMobile, setShowFullQueueMobile] = useState<boolean>(false);
+  const [miniLyricFontSize, setMiniLyricFontSize] = useState<number>(1);
 
   // Romanization display mode matching PC App (LyricsPanel.cs:11-16):
   // "dual" = Dual (1, Romaji 2 dòng) | "romanized" = RomanizedOnly (2, Romaji thuần) | "original" = Original (0, Chữ gốc)
@@ -954,36 +958,86 @@ export default function App() {
     });
   };
 
+  // Next track in queue for Mini Player ("Bài tiếp theo")
+  const nextTrackIndex = useMemo(() => {
+    if (!queueTracks || queueTracks.length === 0) return -1;
+    if (currentIndex + 1 < queueTracks.length) return currentIndex + 1;
+    if (repeatMode === "all") return 0;
+    return -1;
+  }, [queueTracks, currentIndex, repeatMode]);
+
+  const nextTrack = useMemo(() => {
+    if (nextTrackIndex >= 0 && nextTrackIndex < queueTracks.length) {
+      return queueTracks[nextTrackIndex];
+    }
+    return null;
+  }, [queueTracks, nextTrackIndex]);
+
+  const handleReloadLyrics = () => {
+    if (!currentTrack) return;
+    showToast("Đang đồng bộ lại lời bài hát...", "info");
+    fetch(
+      `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(currentTrack.id)}&title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.author || "")}&duration=${currentTrack.duration || ""}&refresh=true`
+    )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.lines && data.lines.length > 0) {
+          setLyrics(data);
+          showToast("Đã cập nhật lời bài hát mới!", "success");
+        } else {
+          showToast("Không tìm thấy lời bài hát mới", "warning");
+        }
+      })
+      .catch(() => {
+        showToast("Lỗi khi tải lại lời bài hát", "warning");
+      });
+  };
+
   const scrollToActiveLyric = useCallback((smooth = true) => {
-    if (sidebar2Tab !== "lyrics" || !lyricsContainerRef.current || !activeLyricRef.current) return;
-    const container = lyricsContainerRef.current;
-    const activeEl = activeLyricRef.current;
+    // 1. Desktop full lyrics container
+    if (lyricsContainerRef.current && activeLyricRef.current) {
+      const container = lyricsContainerRef.current;
+      const activeEl = activeLyricRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      const relativeTop = activeRect.top - containerRect.top;
+      const targetScroll = container.scrollTop + relativeTop - (container.clientHeight / 2) + (activeRect.height / 2);
+      container.scrollTo({
+        top: Math.max(0, targetScroll),
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
 
-    const containerRect = container.getBoundingClientRect();
-    const activeRect = activeEl.getBoundingClientRect();
-
-    // Exact relative top offset inside lyricsContainer
-    const relativeTop = activeRect.top - containerRect.top;
-    const targetScroll = container.scrollTop + relativeTop - (container.clientHeight / 2) + (activeRect.height / 2);
-
-    container.scrollTo({
-      top: Math.max(0, targetScroll),
-      behavior: smooth ? "smooth" : "auto",
-    });
-  }, [sidebar2Tab]);
+    // 2. Mini lyrics container (PC Mini App mode)
+    if (miniLyricsContainerRef.current && miniActiveLyricRef.current) {
+      const container = miniLyricsContainerRef.current;
+      const activeEl = miniActiveLyricRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      const relativeTop = activeRect.top - containerRect.top;
+      const targetScroll = container.scrollTop + relativeTop - (container.clientHeight / 2) + (activeRect.height / 2);
+      container.scrollTo({
+        top: Math.max(0, targetScroll),
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
+  }, []);
 
   useEffect(() => {
-    if (sidebar2Tab !== "lyrics" || activeLyricIndex < 0) return;
+    if (activeLyricIndex < 0) return;
     const animId = requestAnimationFrame(() => {
       scrollToActiveLyric(true);
     });
     return () => cancelAnimationFrame(animId);
-  }, [activeLyricIndex, sidebar2Tab, lyricDisplayMode, _lyrics, scrollToActiveLyric]);
+  }, [activeLyricIndex, sidebar2Tab, mobileTab, lyricDisplayMode, _lyrics, scrollToActiveLyric]);
 
   // Reset lyrics scroll to 0 whenever lyrics are cleared or empty
   useEffect(() => {
     if (lyricsContainerRef.current && (parsedLyrics.length === 0 || !_lyrics)) {
       lyricsContainerRef.current.scrollTop = 0;
+    }
+    if (miniLyricsContainerRef.current && (parsedLyrics.length === 0 || !_lyrics)) {
+      miniLyricsContainerRef.current.scrollTop = 0;
     }
   }, [parsedLyrics.length, _lyrics, currentTrack?.id]);
 
@@ -5005,7 +5059,7 @@ export default function App() {
         <aside
           className={`${
             mobileTab === "player" ? "flex w-full" : "hidden"
-          } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-3.5 sm:p-5 lg:px-[18px] lg:pt-[26px] pb-20 lg:pb-[20px]`}
+          } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-3.5 sm:p-5 lg:px-[18px] lg:pt-[26px] pb-24 lg:pb-[20px]`}
           style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}
         >
           {/* Mobile Collapse / Back Header */}
@@ -5013,15 +5067,510 @@ export default function App() {
             <button
               type="button"
               onClick={() => setMobileTab("explore")}
-              className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white cursor-pointer"
+              className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white cursor-pointer group"
             >
-              <ChevronDown className="w-4 h-4" />
+              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
               <span>Thu nhỏ trình phát</span>
             </button>
             <span className="text-[11px] font-bold theme-accent-text uppercase tracking-wider">Đang phát</span>
           </div>
 
-          {/* Top Part: Now Playing Artwork Card with Dynamic Artwork & Glow */}
+          {/* ========================================================================= */}
+          {/* 1. MOBILE TAB "ĐANG PHÁT" (EXACT PC MINI APP MODE, lg:hidden)             */}
+          {/* ========================================================================= */}
+          <div className="lg:hidden flex flex-col w-full min-h-0 gap-3">
+            {/* TOP CARD: PLAYER CONTROLS + LIVE LYRICS SPLIT */}
+            <div className="w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 flex flex-col min-[380px]:flex-row gap-3 sm:gap-3.5 items-stretch relative overflow-hidden flex-shrink-0">
+              {/* Left Column: Artwork with Player Controls Inside */}
+              <div className="w-full min-[380px]:w-[145px] min-[440px]:w-[170px] sm:w-[186px] aspect-square rounded-[16px] sm:rounded-[18px] relative overflow-hidden flex-shrink-0 shadow-lg bg-black/50 border border-white/10 select-none mx-auto min-[380px]:mx-0">
+                {/* Artwork Image */}
+                {!currentTrack ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden">
+                    <img src="./logo_icon.png" alt="Kahoii Music" className="w-10 h-10 object-contain drop-shadow mb-1" />
+                    <span className="text-[11px] font-bold text-white/80">Kahoii Music</span>
+                  </div>
+                ) : (
+                  <img
+                    src={
+                      currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+                        ? (currentTrack.thumbnail.includes("i.ytimg.com")
+                            ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+                            : currentTrack.thumbnail)
+                        : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
+                    }
+                    alt={currentTrack.title || ""}
+                    onError={(e) => {
+                      e.currentTarget.src = DEFAULT_TRACK_ART;
+                    }}
+                    className="w-full h-full object-cover"
+                  />
+                )}
+
+                {/* Dark gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/45 to-black/25 pointer-events-none" />
+
+                {/* Top-left Menu Button */}
+                <div className="absolute top-2 left-2 z-30" ref={playerMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!currentTrack) {
+                        showToast("Vui lòng phát một bài hát trước khi tùy chọn!", "warning");
+                        return;
+                      }
+                      setShowPlayerMenu(!showPlayerMenu);
+                    }}
+                    className="w-6 h-6 rounded-md bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white cursor-pointer transition-all border border-white/10"
+                    title="Tùy chọn bài hát"
+                  >
+                    <Menu className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Menu Popup */}
+                  {showPlayerMenu && currentTrack && (
+                    <div className="absolute top-8 left-0 z-50 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[190px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => setShowLibrarySubmenu(!showLibrarySubmenu)}
+                        className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-left ${
+                          showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <FolderPlus className="w-3.5 h-3.5 theme-accent-text" />
+                          <span>Lưu vào playlist</span>
+                        </span>
+                        <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
+                      </button>
+
+                      {showLibrarySubmenu && (
+                        <div className="flex flex-col gap-1 pl-2 pr-1 py-1 bg-black/40 rounded-lg max-h-[120px] overflow-y-auto custom-scrollbar border border-white/5">
+                          {libraryData.playlists.map((pl) => {
+                            const hasSong = pl.items?.some((it: any) => it.id === currentTrack.id);
+                            return (
+                              <button
+                                key={pl.id}
+                                type="button"
+                                onClick={() => handleToggleTrackInPlaylist(pl.id)}
+                                className="flex items-center justify-between px-2 py-1 rounded text-[11px] hover:bg-white/10 text-white/80 transition-colors text-left"
+                              >
+                                <span className="truncate pr-1">{pl.title}</span>
+                                {hasSong && <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={savingOfflineTrackId === currentTrack.id}
+                        onClick={() => handleSaveOfflineTrack(currentTrack)}
+                        className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                      >
+                        <span className="flex items-center gap-2">
+                          {savingOfflineTrackId === currentTrack.id ? (
+                            <Loader2 className="w-3.5 h-3.5 theme-accent-text animate-spin" />
+                          ) : (
+                            <HardDriveDownload className="w-3.5 h-3.5 theme-accent-text" />
+                          )}
+                          <span className="text-[11px]">
+                            {savingOfflineTrackId === currentTrack.id
+                              ? "Đang lưu..."
+                              : offlineTrackIds.has(currentTrack.id)
+                              ? "Đã lưu offline"
+                              : "Lưu nghe offline"}
+                          </span>
+                        </span>
+                        {offlineTrackIds.has(currentTrack.id) && (
+                          <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Top-right Favorite Heart Button */}
+                <button
+                  type="button"
+                  disabled={!currentTrack}
+                  onClick={toggleCurrentFavorite}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-md bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center z-30 cursor-pointer transition-all border border-white/10"
+                  title="Yêu thích"
+                >
+                  <Heart
+                    className={`w-3.5 h-3.5 transition-transform ${
+                      userSession?.isLoggedIn && currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                        ? "fill-red-500 text-red-500 scale-110 drop-shadow-[0_0_8px_rgba(239,68,68,0.9)]"
+                        : "text-white/60 hover:text-red-400"
+                    }`}
+                  />
+                </button>
+
+                {/* Left Volume Button directly above Seekbar */}
+                <button
+                  type="button"
+                  onClick={() => setIsMuted(!isMuted)}
+                  title={isMuted ? "Bật âm thanh" : "Tắt tiếng"}
+                  className="absolute left-2.5 bottom-[42px] p-0.5 text-white/70 hover:text-white cursor-pointer z-20 hover:scale-110 active:scale-95 transition-all"
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
+
+                {/* Seekbar Progress Line */}
+                <div className="absolute left-2.5 right-2.5 bottom-[29px] flex items-center group/seek z-20">
+                  <div className="absolute left-0 right-0 h-1 rounded-full bg-white/20" />
+                  <div
+                    className="absolute left-0 h-1 rounded-full"
+                    style={{
+                      width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                      background: "var(--theme-btn-gradient)",
+                    }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration || 100}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="w-full h-2 opacity-0 cursor-pointer z-10"
+                  />
+                </div>
+
+                {/* 5 Playback Control Buttons Row */}
+                <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-0.5 z-20">
+                  {/* Loop / Shuffle */}
+                  <button
+                    type="button"
+                    onClick={cycleRepeatMode}
+                    title="Chế độ lặp"
+                    className={`p-1 transition-all cursor-pointer hover:scale-115 active:scale-90 ${
+                      repeatMode === "all" || repeatMode === "one"
+                        ? "theme-accent-text"
+                        : repeatMode === "shuffle"
+                        ? "theme-sec-accent-text"
+                        : "text-white/50 hover:text-white"
+                    }`}
+                  >
+                    {repeatMode === "one" ? (
+                      <Repeat1 className="w-3.5 h-3.5" />
+                    ) : repeatMode === "shuffle" ? (
+                      <Shuffle className="w-3.5 h-3.5" />
+                    ) : (
+                      <Repeat className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+
+                  {/* Prev */}
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    title="Bài trước"
+                    className="p-1 text-white/70 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                  >
+                    <SkipBack className="w-4 h-4 fill-current" />
+                  </button>
+
+                  {/* Play / Pause (Circular Gradient Button) */}
+                  <button
+                    type="button"
+                    onClick={togglePlayPause}
+                    disabled={isLoading}
+                    title={isPlaying ? "Tạm dừng" : "Phát"}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    style={{ background: "var(--theme-btn-gradient)" }}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : isPlaying ? (
+                      <Pause className="w-3.5 h-3.5 fill-current" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5 fill-current translate-x-0.5" />
+                    )}
+                  </button>
+
+                  {/* Next */}
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    title="Bài tiếp theo"
+                    className="p-1 text-white/70 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                  >
+                    <SkipForward className="w-4 h-4 fill-current" />
+                  </button>
+
+                  {/* Timer */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
+                      title="Hẹn giờ tắt"
+                      className={`p-1 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${
+                        sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      {sleepTimerMinutes && (
+                        <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[7px] text-white font-mono font-bold animate-pulse">
+                          {sleepTimerMinutes}m
+                        </span>
+                      )}
+                    </button>
+
+                    {showSleepTimerMenu && (
+                      <div className="absolute bottom-8 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-50 min-w-[125px] animate-fade-in border theme-accent-border/40" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
+                          Hẹn giờ tắt
+                        </span>
+                        {[15, 30, 45, 60].map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => startSleepTimer(m)}
+                            className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                              sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
+                            }`}
+                          >
+                            {m} phút
+                          </button>
+                        ))}
+                        {sleepTimerMinutes && (
+                          <button
+                            type="button"
+                            onClick={() => startSleepTimer(null)}
+                            className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
+                          >
+                            Tắt hẹn giờ
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Song Metadata, Toolbar Pills & Live Lyrics Card */}
+              <div className="flex-1 min-w-0 flex flex-col justify-between">
+                {/* Title & Artist */}
+                <div className="min-w-0">
+                  <h3
+                    className="text-sm min-[400px]:text-base font-bold text-white tracking-wide truncate"
+                    title={currentTrack?.title}
+                  >
+                    {currentTrack?.title || "Chưa phát hiện Audio"}
+                  </h3>
+                  <p className="text-[11px] min-[400px]:text-xs text-white/60 truncate mt-0.5">
+                    {currentTrack ? formatTrackArtist(currentTrack.title, currentTrack.author) : "Kahoii Music"}
+                  </p>
+                </div>
+
+                {/* Toolbar Action Pills (Directly matching PC Mini App) */}
+                <div className="flex items-center gap-1.5 sm:gap-2 mt-1.5 flex-wrap">
+                  {/* Refresh / Re-sync button */}
+                  <button
+                    type="button"
+                    onClick={handleReloadLyrics}
+                    title="Tải lại / đồng bộ lời bài hát"
+                    className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/75 hover:text-white transition-all cursor-pointer shadow-sm"
+                  >
+                    <RefreshCw className="w-2.5 h-2.5" />
+                  </button>
+
+                  {/* Font size button: Aa 1 / Aa 2 / Aa 3 */}
+                  <button
+                    type="button"
+                    onClick={() => setMiniLyricFontSize((f) => (f % 3) + 1)}
+                    title="Đổi kích thước chữ lời bài hát"
+                    className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-mono font-semibold text-white/80 cursor-pointer transition-all shadow-sm"
+                  >
+                    Aa {miniLyricFontSize}
+                  </button>
+
+                  {/* Romanization / Language pill */}
+                  {hasRomanizationSupport && (
+                    <button
+                      type="button"
+                      onClick={toggleLyricDisplayMode}
+                      title="Chuyển chế độ: Song ngữ → Romaji thuần → Gốc"
+                      className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer theme-badge-active shadow-sm"
+                    >
+                      {romaziPillLabel}
+                    </button>
+                  )}
+                </div>
+
+                {/* Live Lyrics Box (_lyricsCard) */}
+                <div
+                  ref={miniLyricsContainerRef}
+                  className="rounded-xl bg-black/40 border border-white/10 p-2 sm:p-2.5 mt-2 flex-1 min-h-[95px] max-h-[145px] min-[420px]:max-h-[175px] overflow-y-auto custom-scrollbar flex flex-col relative"
+                >
+                  {parsedLyrics.length > 0 ? (
+                    parsedLyrics.map((line, idx) => {
+                      const isActive = isLyricsSynced && idx === activeLyricIndex;
+                      let primaryText = line.text || "♪";
+                      let secondaryText: string | null = null;
+                      if (lyricDisplayMode === "romanized" && line.romanized) {
+                        primaryText = line.romanized;
+                      } else if (lyricDisplayMode === "dual" && line.romanized) {
+                        primaryText = line.text;
+                        secondaryText = line.romanized;
+                      }
+
+                      const fontClass =
+                        miniLyricFontSize === 2
+                          ? isActive ? "text-[13px] sm:text-sm" : "text-[11px] sm:text-xs"
+                          : miniLyricFontSize === 3
+                          ? isActive ? "text-[11px]" : "text-[10px]"
+                          : isActive ? "text-[12px] sm:text-[13px]" : "text-[11px]";
+
+                      return (
+                        <div
+                          key={idx}
+                          ref={isActive ? miniActiveLyricRef : undefined}
+                          onClick={() => {
+                            if (line.time > 0) seekToTime(line.time);
+                          }}
+                          className={`flex flex-col py-0.5 transition-all cursor-pointer ${
+                            isActive
+                              ? "font-bold text-white opacity-100"
+                              : "text-white/40 hover:text-white/70 opacity-60"
+                          }`}
+                        >
+                          <div className="flex items-start gap-1.5 leading-snug">
+                            {isActive && (
+                              <span className="w-1 h-3.5 rounded-full bg-[var(--theme-accent)] flex-shrink-0 mt-0.5 shadow-sm" />
+                            )}
+                            <p className={fontClass}>{primaryText}</p>
+                          </div>
+                          {secondaryText && (
+                            <p className={`pl-2.5 text-[9.5px] text-white/60 mt-0.5 leading-tight ${isActive ? "opacity-90" : "opacity-50"}`}>
+                              {secondaryText}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : _lyrics?.plainLyrics ? (
+                    <div className="text-[11px] leading-relaxed text-white/75 whitespace-pre-line my-auto text-center font-medium">
+                      {_lyrics.plainLyrics}
+                    </div>
+                  ) : (
+                    <div className="my-auto text-center text-[11px] text-white/40 italic">
+                      {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* BOTTOM CARD: "BÀI TIẾP THEO" (NEXT TRACK IN QUEUE) */}
+            <div className="w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 flex-shrink-0">
+              <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
+                <span className="text-xs font-bold text-white tracking-wide">
+                  {showFullQueueMobile ? `Hàng đợi (${queueTracks.length})` : "Bài tiếp theo"}
+                </span>
+                {queueTracks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFullQueueMobile(!showFullQueueMobile)}
+                    className="text-[11px] theme-accent-text hover:brightness-125 font-semibold cursor-pointer transition-colors"
+                  >
+                    {showFullQueueMobile ? "Chỉ hiện bài kế" : `Xem tất cả (${queueTracks.length})`}
+                  </button>
+                )}
+              </div>
+
+              {!showFullQueueMobile ? (
+                nextTrack ? (
+                  <div
+                    onClick={() => {
+                      if (nextTrackIndex >= 0) {
+                        setCurrentIndex(nextTrackIndex);
+                        currentIndexRef.current = nextTrackIndex;
+                        loadAndPlayTrack(nextTrack, true);
+                      }
+                    }}
+                    className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/5 transition-all cursor-pointer group"
+                  >
+                    <div className="w-1 h-8 rounded-full bg-[var(--theme-accent)] flex-shrink-0 group-hover:scale-y-110 transition-transform shadow-sm" />
+                    <img
+                      src={nextTrack.thumbnail || DEFAULT_TRACK_ART}
+                      alt={nextTrack.title}
+                      onError={(e) => {
+                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                      }}
+                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-white/10 shadow-sm"
+                    />
+                    <div className="flex-1 min-w-0 pr-1">
+                      <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
+                        {nextTrack.title}
+                      </p>
+                      <p className="text-[10px] text-white/50 truncate mt-0.5">
+                        {formatTrackArtist(nextTrack.title, nextTrack.author)}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-white/60 font-mono flex-shrink-0">
+                      {nextTrack.duration && nextTrack.duration > 0 ? formatTime(nextTrack.duration) : "--:--"}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-white/40 italic py-3 text-center">
+                    Chưa có bài tiếp theo
+                  </p>
+                )
+              ) : (
+                <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                  {queueTracks.map((track, i) => {
+                    const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
+                    return (
+                      <div
+                        key={track.id + i}
+                        onClick={() => {
+                          setCurrentIndex(i);
+                          currentIndexRef.current = i;
+                          loadAndPlayTrack(track, true);
+                        }}
+                        className={`flex items-center gap-2.5 px-2 py-1.5 transition-all cursor-pointer rounded-xl group ${
+                          isCurrent ? "theme-badge-active shadow-md" : "hover:bg-white/5"
+                        }`}
+                      >
+                        {isCurrent && (
+                          <div className="w-1 h-7 rounded-full bg-[var(--theme-accent)] flex-shrink-0" />
+                        )}
+                        <img
+                          src={track.thumbnail || DEFAULT_TRACK_ART}
+                          alt=""
+                          onError={(e) => { e.currentTarget.src = DEFAULT_TRACK_ART; }}
+                          className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
+                            {track.title}
+                          </p>
+                          <p className="text-[10px] text-white/50 truncate">
+                            {formatTrackArtist(track.title, track.author)}
+                          </p>
+                        </div>
+                        <span className="text-[10px] text-white/60 font-mono flex-shrink-0">
+                          {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* 2. DESKTOP RIGHT SIDEBAR (EXACT FIGMA 3-COLUMN RIGHT PANEL, hidden lg:flex) */}
+          {/* ========================================================================= */}
+          <div className="hidden lg:flex flex-col flex-1 min-h-0">
+            {/* Top Part: Now Playing Artwork Card with Dynamic Artwork & Glow */}
           <div
             className="w-full aspect-square rounded-[22px] relative shadow-2xl bg-[#1b0833] flex-shrink-0 group max-w-[340px] mx-auto lg:max-w-none"
             style={{ marginBottom: "18px" }}
@@ -5737,6 +6286,7 @@ export default function App() {
               </div>
             </div>
           )}
+          </div>
         </aside>
       </main>
 
