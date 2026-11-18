@@ -48,6 +48,29 @@ export interface StructuredSearchResponse {
   results: SearchTrackResult[]; // backward compatibility
 }
 
+const GENERIC_EXCLUDED_ARTISTS = new Set([
+  "nghệ sĩ",
+  "youtube music",
+  "sound effects",
+  "sound effect",
+  "sound effect library",
+  "various artists",
+  "chủ đề",
+  "topic",
+  "karaoke",
+  "nhạc cụ",
+  "instrumental",
+  "chưa có tác giả",
+  "kahoii music",
+]);
+
+const artistProfileCache = new Map<string, SearchArtistItem>();
+
+function cleanArtistName(raw: string): string {
+  if (!raw) return "";
+  return raw.replace(/\s*-\s*Topic$/i, "").replace(/\s+Topic$/i, "").trim();
+}
+
 function parseDuration(text: string): number {
   if (!text) return 0;
   const parts = text.split(":");
@@ -69,12 +92,13 @@ function extractRunsText(runs: any[]): string {
   return runs.map((r) => r?.text || "").join("");
 }
 
-function requestYTM(query?: string, params?: string, continuation?: string): Promise<any> {
+/**
+ * Shared POST helper for YouTube Music InnerTube API (WEB_REMIX client)
+ */
+function postYTM(endpoint: string, payload: Record<string, any>, timeout = 9000): Promise<any> {
   return new Promise((resolve) => {
-    const payload = JSON.stringify({
-      query: continuation ? undefined : query,
-      params: continuation ? undefined : params,
-      continuation,
+    const postData = JSON.stringify({
+      ...payload,
       context: {
         client: {
           clientName: "WEB_REMIX",
@@ -86,7 +110,7 @@ function requestYTM(query?: string, params?: string, continuation?: string): Pro
     });
 
     const req = https.request(
-      "https://music.youtube.com/youtubei/v1/search",
+      `https://music.youtube.com/youtubei/v1/${endpoint}`,
       {
         method: "POST",
         headers: {
@@ -96,11 +120,11 @@ function requestYTM(query?: string, params?: string, continuation?: string): Pro
           Referer: "https://music.youtube.com/",
           Origin: "https://music.youtube.com",
         },
-        timeout: 9000,
+        timeout,
       },
       (res) => {
         let body = "";
-        res.on("data", (chunk) => (body += chunk));
+        res.on("data", (c) => (body += c));
         res.on("end", () => {
           try {
             resolve(JSON.parse(body));
@@ -116,22 +140,38 @@ function requestYTM(query?: string, params?: string, continuation?: string): Pro
       req.destroy();
       resolve(null);
     });
-    req.write(payload);
+    req.write(postData);
     req.end();
   });
+}
+
+function extractDuration(renderer: any, descRuns: any[]): { duration: number; durationText: string } {
+  for (let i = descRuns.length - 1; i >= 0; i--) {
+    const txt = descRuns[i]?.text?.trim();
+    if (txt && /^\d+:\d+(?::\d+)?$/.test(txt)) {
+      return { duration: parseDuration(txt), durationText: txt };
+    }
+  }
+  for (const fCol of renderer.fixedColumns || []) {
+    for (const r of fCol?.musicResponsiveListItemFixedColumnRenderer?.text?.runs || []) {
+      const txt = r?.text?.trim();
+      if (txt && /^\d+:\d+(?::\d+)?$/.test(txt)) {
+        return { duration: parseDuration(txt), durationText: txt };
+      }
+    }
+  }
+  return { duration: 0, durationText: "" };
 }
 
 function parseSongItem(renderer: any): SearchTrackResult | null {
   if (!renderer) return null;
   const flexCols = renderer.flexColumns || [];
-  const titleCol = flexCols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs;
-  const title = extractRunsText(titleCol);
+  const title = extractRunsText(flexCols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs);
   if (!title) return null;
 
   const descRuns = flexCols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
   const author = descRuns[0]?.text || "Nghệ sĩ";
 
-  // Extract artist browseId if available
   let artistBrowseId: string | undefined = undefined;
   for (const r of descRuns) {
     const isArtist =
@@ -145,33 +185,7 @@ function parseSongItem(renderer: any): SearchTrackResult | null {
     }
   }
 
-  let duration = 0;
-  let durationText = "";
-  for (let i = descRuns.length - 1; i >= 0; i--) {
-    const txt = descRuns[i]?.text?.trim();
-    if (txt && /^\d+:\d+(?::\d+)?$/.test(txt)) {
-      durationText = txt;
-      duration = parseDuration(txt);
-      break;
-    }
-  }
-
-  // Check fixedColumns for duration (standard in YouTube Music playlist items)
-  if (!durationText) {
-    const fixedCols = renderer.fixedColumns || [];
-    for (const fCol of fixedCols) {
-      const runs = fCol?.musicResponsiveListItemFixedColumnRenderer?.text?.runs || [];
-      for (const r of runs) {
-        const txt = r?.text?.trim();
-        if (txt && /^\d+:\d+(?::\d+)?$/.test(txt)) {
-          durationText = txt;
-          duration = parseDuration(txt);
-          break;
-        }
-      }
-      if (durationText) break;
-    }
-  }
+  const { duration, durationText } = extractDuration(renderer, descRuns);
 
   const videoId =
     renderer.playlistItemData?.videoId ||
@@ -193,14 +207,10 @@ function parseSongItem(renderer: any): SearchTrackResult | null {
 function parseArtistItem(renderer: any): SearchArtistItem | null {
   if (!renderer) return null;
   const flexCols = renderer.flexColumns || [];
-  const name = extractRunsText(
-    flexCols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
-  );
+  const name = extractRunsText(flexCols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs);
   if (!name) return null;
 
-  const subText = extractRunsText(
-    flexCols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
-  );
+  const subText = extractRunsText(flexCols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs);
   const thumbs = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
   const thumbnail = thumbs[thumbs.length - 1]?.url || "";
   const id = renderer.navigationEndpoint?.browseEndpoint?.browseId || "";
@@ -211,9 +221,7 @@ function parseArtistItem(renderer: any): SearchArtistItem | null {
 function parsePlaylistItem(renderer: any): SearchPlaylistItem | null {
   if (!renderer) return null;
   const flexCols = renderer.flexColumns || [];
-  const title = extractRunsText(
-    flexCols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
-  );
+  const title = extractRunsText(flexCols[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs);
   if (!title) return null;
 
   const descRuns = flexCols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
@@ -235,14 +243,9 @@ function getLocalYtDlpPath(): string | null {
   const possiblePaths = [
     path.resolve(process.cwd(), "../../KahoiiMusic/yt-dlp.exe"),
     path.resolve(process.cwd(), "../KahoiiMusic/yt-dlp.exe"),
-    "D:/KahoiiProjects/MusicApp/KahoiiMusic/yt-dlp.exe",
     path.resolve(process.cwd(), "yt-dlp.exe"),
   ];
-
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
+  return possiblePaths.find((p) => fs.existsSync(p)) || null;
 }
 
 async function searchViaYtDlp(query: string, maxResults = 50): Promise<SearchTrackResult[]> {
@@ -289,8 +292,7 @@ async function searchViaYtDlp(query: string, maxResults = 50): Promise<SearchTra
             const title = parts[1]?.trim() || "Chưa có tiêu đề";
             const author = parts[2]?.trim() || "Kahoii Music";
             const durRaw = parts[3]?.trim();
-            const duration =
-              durRaw && !isNaN(Number(durRaw)) ? Math.round(Number(durRaw)) : 0;
+            const duration = durRaw && !isNaN(Number(durRaw)) ? Math.round(Number(durRaw)) : 0;
             const rawThumb = parts[4]?.trim();
             const thumbnail =
               rawThumb && rawThumb !== "NA" && rawThumb.startsWith("http")
@@ -306,30 +308,6 @@ async function searchViaYtDlp(query: string, maxResults = 50): Promise<SearchTra
   });
 }
 
-// In-memory cache for artist profiles
-const artistProfileCache = new Map<string, SearchArtistItem>();
-
-const GENERIC_EXCLUDED_ARTISTS = new Set([
-  "nghệ sĩ",
-  "youtube music",
-  "sound effects",
-  "sound effect",
-  "sound effect library",
-  "various artists",
-  "chủ đề",
-  "topic",
-  "karaoke",
-  "nhạc cụ",
-  "instrumental",
-  "chưa có tác giả",
-  "kahoii music",
-]);
-
-function cleanArtistName(raw: string): string {
-  if (!raw) return "";
-  return raw.replace(/\s*-\s*Topic$/i, "").replace(/\s+Topic$/i, "").trim();
-}
-
 async function fetchArtistProfile(
   browseId: string,
   fallbackName: string,
@@ -339,94 +317,42 @@ async function fetchArtistProfile(
   const cached = artistProfileCache.get(cacheKey);
   if (cached) return cached;
 
+  const fallback: SearchArtistItem = {
+    id: browseId || `artist-${encodeURIComponent(fallbackName)}`,
+    name: fallbackName,
+    subscribers: "Nghệ sĩ",
+    thumbnail: fallbackThumb,
+  };
+
   if (!browseId || !browseId.startsWith("UC")) {
-    const item: SearchArtistItem = {
-      id: browseId || `artist-${encodeURIComponent(fallbackName)}`,
-      name: fallbackName,
-      subscribers: "Nghệ sĩ",
-      thumbnail: fallbackThumb,
-    };
-    artistProfileCache.set(cacheKey, item);
-    return item;
+    artistProfileCache.set(cacheKey, fallback);
+    return fallback;
   }
 
   try {
-    const data = await new Promise<any>((resolve) => {
-      const payload = JSON.stringify({
-        browseId,
-        context: {
-          client: {
-            clientName: "WEB_REMIX",
-            clientVersion: "1.20240101.01.00",
-            hl: "vi",
-            gl: "VN",
-          },
-        },
-      });
+    const data = await postYTM("browse", { browseId }, 2500);
+    const header = data?.header?.musicImmersiveHeaderRenderer || data?.header?.musicVisualHeaderRenderer;
+    if (!header) {
+      artistProfileCache.set(cacheKey, fallback);
+      return fallback;
+    }
 
-      const req = https.request(
-        "https://music.youtube.com/youtubei/v1/browse",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            Referer: "https://music.youtube.com/",
-            Origin: "https://music.youtube.com",
-          },
-          timeout: 2500,
-        },
-        (res) => {
-          let body = "";
-          res.on("data", (chunk) => (body += chunk));
-          res.on("end", () => {
-            try {
-              resolve(JSON.parse(body));
-            } catch {
-              resolve(null);
-            }
-          });
-        }
-      );
-
-      req.on("error", () => resolve(null));
-      req.on("timeout", () => {
-        req.destroy();
-        resolve(null);
-      });
-      req.write(payload);
-      req.end();
-    });
-
-    const header =
-      data?.header?.musicImmersiveHeaderRenderer ||
-      data?.header?.musicVisualHeaderRenderer;
-    const name = header?.title?.runs?.[0]?.text || fallbackName;
-    const subText =
-      header?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.runs?.[0]?.text;
-    const thumbs =
-      header?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
-    const thumb =
-      thumbs[thumbs.length - 1]?.url || thumbs[0]?.url || fallbackThumb;
+    const name = header.title?.runs?.[0]?.text || fallbackName;
+    const subText = header.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.runs?.[0]?.text;
+    const thumbs = header.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+    const thumbnail = thumbs[thumbs.length - 1]?.url || thumbs[0]?.url || fallbackThumb;
 
     const item: SearchArtistItem = {
       id: browseId,
       name,
       subscribers: subText ? `Nghệ sĩ • ${subText}` : "Nghệ sĩ",
-      thumbnail: thumb,
+      thumbnail,
     };
     artistProfileCache.set(cacheKey, item);
     return item;
   } catch {
-    const item: SearchArtistItem = {
-      id: browseId,
-      name: fallbackName,
-      subscribers: "Nghệ sĩ",
-      thumbnail: fallbackThumb,
-    };
-    artistProfileCache.set(cacheKey, item);
-    return item;
+    artistProfileCache.set(cacheKey, fallback);
+    return fallback;
   }
 }
 
@@ -450,10 +376,10 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
   try {
     // Run 4 queries in parallel for high speed (~700ms total)
     const [overviewData, songsData, artistsData, playlistsData] = await Promise.all([
-      requestYTM(trimmed, undefined),
-      requestYTM(trimmed, "EgWKAQIIAWoSEAUQAxAJEAQQChAVEBAQERAO"), // Songs filter
-      requestYTM(trimmed, "EgWKAQIgAWoSEAUQAxAJEAQQChAVEBAQERAO"), // Artists filter
-      requestYTM(trimmed, "EgeKAQQoAEABahIQBRADEAkQBBAKEBUQEBAREA4%3D"), // Playlists filter
+      postYTM("search", { query: trimmed }),
+      postYTM("search", { query: trimmed, params: "EgWKAQIIAWoSEAUQAxAJEAQQChAVEBAQERAO" }), // Songs
+      postYTM("search", { query: trimmed, params: "EgWKAQIgAWoSEAUQAxAJEAQQChAVEBAQERAO" }), // Artists
+      postYTM("search", { query: trimmed, params: "EgeKAQQoAEABahIQBRADEAkQBBAKEBUQEBAREA4%3D" }), // Playlists
     ]);
 
     // 1. Parse Songs
@@ -477,7 +403,7 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       const nextCont = songShelf.continuations?.[0]?.nextContinuationData?.continuation;
       if (nextCont && tracks.length < 40) {
         try {
-          const contData = await requestYTM(undefined, undefined, nextCont);
+          const contData = await postYTM("search", { continuation: nextCont });
           const nextItems = contData?.continuationContents?.musicShelfContinuation?.contents;
           if (Array.isArray(nextItems)) {
             for (const item of nextItems) {
@@ -510,26 +436,6 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       }
     }
 
-    // Also check overview sections for artists
-    const overviewSections =
-      overviewData?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
-        ?.sectionListRenderer?.contents || [];
-
-    for (const sec of overviewSections) {
-      const item = sec.itemSectionRenderer?.contents?.[0]?.musicResponsiveListItemRenderer;
-      if (item) {
-        const parsed = parseArtistItem(item);
-        if (
-          parsed &&
-          parsed.subscribers?.toLowerCase().includes("nghệ sĩ") &&
-          !seenArtistNames.has(parsed.name.toLowerCase())
-        ) {
-          seenArtistNames.add(parsed.name.toLowerCase());
-          artists.push(parsed);
-        }
-      }
-    }
-
     // 3. Parse Playlists
     const playlists: SearchPlaylistItem[] = [];
     const seenPlaylistIds = new Set<string>();
@@ -541,28 +447,39 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
     if (playlistShelf?.contents) {
       for (const item of playlistShelf.contents) {
         const parsed = parsePlaylistItem(item.musicResponsiveListItemRenderer);
-        if (parsed && parsed.id && !seenPlaylistIds.has(parsed.id)) {
+        if (parsed?.id && !seenPlaylistIds.has(parsed.id)) {
           seenPlaylistIds.add(parsed.id);
           playlists.push(parsed);
         }
       }
     }
 
-    // Also check overview sections for playlists
+    // Single pass over overview sections for artists and playlists
+    const overviewSections =
+      overviewData?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
+        ?.sectionListRenderer?.contents || [];
+
     for (const sec of overviewSections) {
       const item = sec.itemSectionRenderer?.contents?.[0]?.musicResponsiveListItemRenderer;
-      if (item) {
-        const parsed = parsePlaylistItem(item);
-        if (
-          parsed &&
-          (parsed.trackCountText?.toLowerCase().includes("danh sách phát") ||
-            parsed.trackCountText?.toLowerCase().includes("playlist") ||
-            parsed.trackCountText?.toLowerCase().includes("album")) &&
-          !seenPlaylistIds.has(parsed.id)
-        ) {
-          seenPlaylistIds.add(parsed.id);
-          playlists.push(parsed);
+      if (!item) continue;
+
+      const artist = parseArtistItem(item);
+      if (artist?.subscribers?.toLowerCase().includes("nghệ sĩ")) {
+        const key = artist.name.toLowerCase();
+        if (!seenArtistNames.has(key)) {
+          seenArtistNames.add(key);
+          artists.push(artist);
         }
+      }
+
+      const playlist = parsePlaylistItem(item);
+      if (
+        playlist?.id &&
+        !seenPlaylistIds.has(playlist.id) &&
+        /danh sách phát|playlist|album/i.test(playlist.trackCountText || "")
+      ) {
+        seenPlaylistIds.add(playlist.id);
+        playlists.push(playlist);
       }
     }
 
@@ -585,7 +502,6 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
 
       const isArtist = cardSubtitle.toLowerCase().includes("nghệ sĩ");
 
-      // Extract duration from subtitle if available
       let cardDur = 0;
       let cardDurText = "";
       const mDur = cardSubtitle.match(/(\d+:\d+(?::\d+)?)/);
@@ -594,7 +510,7 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
         cardDur = parseDuration(mDur[1]);
       }
 
-      // Extract author and artist browseId from subtitle runs
+      // Extract artist browseId from subtitle runs
       for (const r of card.subtitle?.runs || []) {
         const isArt =
           r.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs
@@ -607,11 +523,9 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
         }
       }
 
-      // Extract author
       const subParts = cardSubtitle.split("•").map((s) => s.trim());
       const author = subParts[1] || subParts[0] || "Nghệ sĩ";
 
-      // If top card is a song and has videoId:
       if (videoId) {
         topResult = {
           id: videoId,
@@ -623,20 +537,17 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
           thumbnail: bestThumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
           type: "song",
         };
-      } else if (isArtist) {
-        // If top card is an artist, we add the artist to the top of artists if not present
-        if (!seenArtistNames.has(cardTitle.toLowerCase())) {
-          artists.unshift({
-            id: card.title?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId || "",
-            name: cardTitle,
-            subscribers: cardSubtitle,
-            thumbnail: bestThumb,
-          });
-        }
+      } else if (isArtist && !seenArtistNames.has(cardTitle.toLowerCase())) {
+        artists.unshift({
+          id: card.title?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId || "",
+          name: cardTitle,
+          subscribers: cardSubtitle,
+          thumbnail: bestThumb,
+        });
       }
     }
 
-    // If no song topResult from card, pick the first track from tracks list
+    // Fallback to first track if topResult not found from card
     if (!topResult && tracks.length > 0) {
       const first = tracks[0];
       topResult = {
@@ -651,8 +562,7 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       };
     }
 
-    // 5. Enrich Artists with artists from matching songs (User requested)
-    // If a user searches for a song title (e.g. "swallows"), include artists whose songs match the query (e.g. "Nowlu")
+    // 5. Enrich Artists with artists from matching songs (e.g. Nowlu for "swallows")
     const songArtistCandidateMap = new Map<
       string,
       { name: string; browseId?: string; thumbnail: string; score: number }
@@ -660,16 +570,12 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
     const qLower = trimmed.toLowerCase();
 
     // Priority 1: Top Result song's artist
-    if (topResult && topResult.type === "song" && topResult.author) {
-      const artName = cleanArtistName(topResult.author);
-      const artKey = artName.toLowerCase();
-      if (
-        artName &&
-        !GENERIC_EXCLUDED_ARTISTS.has(artKey) &&
-        !seenArtistNames.has(artKey)
-      ) {
-        songArtistCandidateMap.set(artKey, {
-          name: artName,
+    if (topResult?.type === "song" && topResult.author) {
+      const name = cleanArtistName(topResult.author);
+      const key = name.toLowerCase();
+      if (name && !GENERIC_EXCLUDED_ARTISTS.has(key) && !seenArtistNames.has(key)) {
+        songArtistCandidateMap.set(key, {
+          name,
           browseId: cardArtistBrowseId || tracks[0]?.artistBrowseId,
           thumbnail: topResult.thumbnail,
           score: 100,
@@ -677,65 +583,48 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       }
     }
 
-    // Priority 2: Tracks whose title matches the query
+    // Priority 2: Artists of songs matching the query
     for (const track of tracks) {
       if (!track.author) continue;
-      const artName = cleanArtistName(track.author);
-      const artKey = artName.toLowerCase();
-      if (
-        !artName ||
-        GENERIC_EXCLUDED_ARTISTS.has(artKey) ||
-        seenArtistNames.has(artKey)
-      ) {
-        continue;
-      }
+      const name = cleanArtistName(track.author);
+      const key = name.toLowerCase();
+      if (!name || GENERIC_EXCLUDED_ARTISTS.has(key) || seenArtistNames.has(key)) continue;
 
-      const tTitle = track.title.toLowerCase();
-      let matchScore = 0;
+      const t = track.title.toLowerCase();
+      const score =
+        t === qLower
+          ? 60
+          : t.startsWith(qLower) || qLower.startsWith(t)
+          ? 40
+          : t.includes(qLower) || qLower.includes(t)
+          ? 25
+          : songArtistCandidateMap.size < 2
+          ? 10
+          : 0;
 
-      if (tTitle === qLower) {
-        matchScore = 60;
-      } else if (tTitle.startsWith(qLower) || qLower.startsWith(tTitle)) {
-        matchScore = 40;
-      } else if (tTitle.includes(qLower) || qLower.includes(tTitle)) {
-        matchScore = 25;
-      } else if (songArtistCandidateMap.size < 2) {
-        // Fallback for top songs if very few matches
-        matchScore = 10;
-      }
-
-      if (matchScore > 0) {
-        const existing = songArtistCandidateMap.get(artKey);
-        if (!existing || existing.score < matchScore) {
-          songArtistCandidateMap.set(artKey, {
-            name: artName,
+      if (score > 0) {
+        const prev = songArtistCandidateMap.get(key);
+        if (!prev || prev.score < score) {
+          songArtistCandidateMap.set(key, {
+            name,
             browseId: track.artistBrowseId,
             thumbnail: track.thumbnail,
-            score: matchScore,
+            score,
           });
         }
       }
     }
 
-    // Pick top candidates sorted by score
     const topSongCandidates = Array.from(songArtistCandidateMap.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, 6);
 
     if (topSongCandidates.length > 0) {
       const resolvedSongArtists = await Promise.all(
-        topSongCandidates.map((c) =>
-          fetchArtistProfile(c.browseId || "", c.name, c.thumbnail)
-        )
+        topSongCandidates.map((c) => fetchArtistProfile(c.browseId || "", c.name, c.thumbnail))
       );
 
-      // Merge song artists into artists list:
-      // If there is an exact artist name match, keep it at index 0 and insert song artists right after.
-      // Otherwise, place song artists at the very front so the user sees the artist of the matching song immediately.
-      const exactMatchIdx = artists.findIndex(
-        (a) => a.name.toLowerCase() === qLower
-      );
-
+      const exactMatchIdx = artists.findIndex((a) => a.name.toLowerCase() === qLower);
       if (exactMatchIdx >= 0) {
         const exactArtist = artists[exactMatchIdx];
         const otherDirect = artists.filter((_, idx) => idx !== exactMatchIdx);
@@ -772,7 +661,7 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
     if (t.author && !artistMap.has(t.author.toLowerCase())) {
       artistMap.set(t.author.toLowerCase(), t.thumbnail);
       fallbackArtists.push({
-        id: `artist-${t.author}`,
+        id: `artist-${encodeURIComponent(t.author)}`,
         name: t.author,
         subscribers: "Nghệ sĩ",
         thumbnail: t.thumbnail,
@@ -780,16 +669,19 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
     }
   }
 
-  const top = ytDlpTracks.length > 0 ? {
-    id: ytDlpTracks[0].id,
-    title: ytDlpTracks[0].title,
-    subtitle: `${ytDlpTracks[0].author}`,
-    author: ytDlpTracks[0].author,
-    duration: ytDlpTracks[0].duration,
-    durationText: "",
-    thumbnail: ytDlpTracks[0].thumbnail,
-    type: "song" as const,
-  } : null;
+  const top =
+    ytDlpTracks.length > 0
+      ? {
+          id: ytDlpTracks[0].id,
+          title: ytDlpTracks[0].title,
+          subtitle: `${ytDlpTracks[0].author}`,
+          author: ytDlpTracks[0].author,
+          duration: ytDlpTracks[0].duration,
+          durationText: "",
+          thumbnail: ytDlpTracks[0].thumbnail,
+          type: "song" as const,
+        }
+      : null;
 
   return {
     query: trimmed,
@@ -809,62 +701,17 @@ export async function getPlaylistTracks(browseOrPlaylistId: string): Promise<Sea
     ? browseOrPlaylistId
     : `VL${browseOrPlaylistId}`;
 
-  return new Promise((resolve) => {
-    const payload = JSON.stringify({
-      browseId,
-      context: {
-        client: {
-          clientName: "WEB_REMIX",
-          clientVersion: "1.20240101.01.00",
-          hl: "vi",
-          gl: "VN",
-        },
-      },
-    });
+  const data = await postYTM("browse", { browseId });
+  const items =
+    data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer
+      ?.contents?.[0]?.musicPlaylistShelfRenderer?.contents || [];
 
-    const req = https.request(
-      "https://music.youtube.com/youtubei/v1/browse",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Referer: "https://music.youtube.com/",
-        },
-        timeout: 9000,
-      },
-      (res) => {
-        let body = "";
-        res.on("data", (c) => (body += c));
-        res.on("end", () => {
-          try {
-            const data = JSON.parse(body);
-            const sec =
-              data.contents?.twoColumnBrowseResultsRenderer?.secondaryContents
-                ?.sectionListRenderer?.contents?.[0]?.musicPlaylistShelfRenderer;
-            const items = sec?.contents || [];
-            const results: SearchTrackResult[] = [];
-            for (const item of items) {
-              const parsed = parseSongItem(item.musicResponsiveListItemRenderer);
-              if (parsed) results.push(parsed);
-            }
-            resolve(results);
-          } catch {
-            resolve([]);
-          }
-        });
-      }
-    );
-
-    req.on("error", () => resolve([]));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve([]);
-    });
-    req.write(payload);
-    req.end();
-  });
+  const results: SearchTrackResult[] = [];
+  for (const item of items) {
+    const parsed = parseSongItem(item.musicResponsiveListItemRenderer);
+    if (parsed) results.push(parsed);
+  }
+  return results;
 }
 
 /**
