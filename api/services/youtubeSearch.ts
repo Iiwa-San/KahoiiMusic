@@ -10,6 +10,7 @@ export interface SearchTrackResult {
   duration: number; // in seconds
   durationText?: string;
   thumbnail: string;
+  artistBrowseId?: string;
 }
 
 export interface SearchTopResult {
@@ -130,6 +131,20 @@ function parseSongItem(renderer: any): SearchTrackResult | null {
   const descRuns = flexCols[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
   const author = descRuns[0]?.text || "Nghệ sĩ";
 
+  // Extract artist browseId if available
+  let artistBrowseId: string | undefined = undefined;
+  for (const r of descRuns) {
+    const isArtist =
+      r.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs
+        ?.browseEndpointContextMusicConfig?.pageType === "MUSIC_PAGE_TYPE_ARTIST" ||
+      (r.navigationEndpoint?.browseEndpoint?.browseId &&
+        r.navigationEndpoint.browseEndpoint.browseId.startsWith("UC"));
+    if (isArtist && r.navigationEndpoint?.browseEndpoint?.browseId) {
+      artistBrowseId = r.navigationEndpoint.browseEndpoint.browseId;
+      break;
+    }
+  }
+
   let duration = 0;
   let durationText = "";
   for (let i = descRuns.length - 1; i >= 0; i--) {
@@ -172,7 +187,7 @@ function parseSongItem(renderer: any): SearchTrackResult | null {
       ? rawThumb
       : `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
 
-  return { id: videoId, title, author, duration, durationText, thumbnail };
+  return { id: videoId, title, author, duration, durationText, thumbnail, artistBrowseId };
 }
 
 function parseArtistItem(renderer: any): SearchArtistItem | null {
@@ -289,6 +304,130 @@ async function searchViaYtDlp(query: string, maxResults = 50): Promise<SearchTra
       }
     );
   });
+}
+
+// In-memory cache for artist profiles
+const artistProfileCache = new Map<string, SearchArtistItem>();
+
+const GENERIC_EXCLUDED_ARTISTS = new Set([
+  "nghệ sĩ",
+  "youtube music",
+  "sound effects",
+  "sound effect",
+  "sound effect library",
+  "various artists",
+  "chủ đề",
+  "topic",
+  "karaoke",
+  "nhạc cụ",
+  "instrumental",
+  "chưa có tác giả",
+  "kahoii music",
+]);
+
+function cleanArtistName(raw: string): string {
+  if (!raw) return "";
+  return raw.replace(/\s*-\s*Topic$/i, "").replace(/\s+Topic$/i, "").trim();
+}
+
+async function fetchArtistProfile(
+  browseId: string,
+  fallbackName: string,
+  fallbackThumb: string
+): Promise<SearchArtistItem> {
+  const cacheKey = browseId || fallbackName.toLowerCase();
+  const cached = artistProfileCache.get(cacheKey);
+  if (cached) return cached;
+
+  if (!browseId || !browseId.startsWith("UC")) {
+    const item: SearchArtistItem = {
+      id: browseId || `artist-${encodeURIComponent(fallbackName)}`,
+      name: fallbackName,
+      subscribers: "Nghệ sĩ",
+      thumbnail: fallbackThumb,
+    };
+    artistProfileCache.set(cacheKey, item);
+    return item;
+  }
+
+  try {
+    const data = await new Promise<any>((resolve) => {
+      const payload = JSON.stringify({
+        browseId,
+        context: {
+          client: {
+            clientName: "WEB_REMIX",
+            clientVersion: "1.20240101.01.00",
+            hl: "vi",
+            gl: "VN",
+          },
+        },
+      });
+
+      const req = https.request(
+        "https://music.youtube.com/youtubei/v1/browse",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Referer: "https://music.youtube.com/",
+            Origin: "https://music.youtube.com",
+          },
+          timeout: 2500,
+        },
+        (res) => {
+          let body = "";
+          res.on("data", (chunk) => (body += chunk));
+          res.on("end", () => {
+            try {
+              resolve(JSON.parse(body));
+            } catch {
+              resolve(null);
+            }
+          });
+        }
+      );
+
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve(null);
+      });
+      req.write(payload);
+      req.end();
+    });
+
+    const header =
+      data?.header?.musicImmersiveHeaderRenderer ||
+      data?.header?.musicVisualHeaderRenderer;
+    const name = header?.title?.runs?.[0]?.text || fallbackName;
+    const subText =
+      header?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.runs?.[0]?.text;
+    const thumbs =
+      header?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+    const thumb =
+      thumbs[thumbs.length - 1]?.url || thumbs[0]?.url || fallbackThumb;
+
+    const item: SearchArtistItem = {
+      id: browseId,
+      name,
+      subscribers: subText ? `Nghệ sĩ • ${subText}` : "Nghệ sĩ",
+      thumbnail: thumb,
+    };
+    artistProfileCache.set(cacheKey, item);
+    return item;
+  } catch {
+    const item: SearchArtistItem = {
+      id: browseId,
+      name: fallbackName,
+      subscribers: "Nghệ sĩ",
+      thumbnail: fallbackThumb,
+    };
+    artistProfileCache.set(cacheKey, item);
+    return item;
+  }
 }
 
 /**
@@ -429,6 +568,7 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
 
     // 4. Parse Top Result (Hero card)
     let topResult: SearchTopResult | null = null;
+    let cardArtistBrowseId = "";
     const card =
       overviewSections[0]?.musicCardShelfRenderer ||
       overviewData?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
@@ -452,6 +592,19 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       if (mDur) {
         cardDurText = mDur[1];
         cardDur = parseDuration(mDur[1]);
+      }
+
+      // Extract author and artist browseId from subtitle runs
+      for (const r of card.subtitle?.runs || []) {
+        const isArt =
+          r.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs
+            ?.browseEndpointContextMusicConfig?.pageType === "MUSIC_PAGE_TYPE_ARTIST" ||
+          (r.navigationEndpoint?.browseEndpoint?.browseId &&
+            r.navigationEndpoint.browseEndpoint.browseId.startsWith("UC"));
+        if (isArt && r.navigationEndpoint?.browseEndpoint?.browseId) {
+          cardArtistBrowseId = r.navigationEndpoint.browseEndpoint.browseId;
+          break;
+        }
       }
 
       // Extract author
@@ -496,6 +649,105 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
         thumbnail: first.thumbnail,
         type: "song",
       };
+    }
+
+    // 5. Enrich Artists with artists from matching songs (User requested)
+    // If a user searches for a song title (e.g. "swallows"), include artists whose songs match the query (e.g. "Nowlu")
+    const songArtistCandidateMap = new Map<
+      string,
+      { name: string; browseId?: string; thumbnail: string; score: number }
+    >();
+    const qLower = trimmed.toLowerCase();
+
+    // Priority 1: Top Result song's artist
+    if (topResult && topResult.type === "song" && topResult.author) {
+      const artName = cleanArtistName(topResult.author);
+      const artKey = artName.toLowerCase();
+      if (
+        artName &&
+        !GENERIC_EXCLUDED_ARTISTS.has(artKey) &&
+        !seenArtistNames.has(artKey)
+      ) {
+        songArtistCandidateMap.set(artKey, {
+          name: artName,
+          browseId: cardArtistBrowseId || tracks[0]?.artistBrowseId,
+          thumbnail: topResult.thumbnail,
+          score: 100,
+        });
+      }
+    }
+
+    // Priority 2: Tracks whose title matches the query
+    for (const track of tracks) {
+      if (!track.author) continue;
+      const artName = cleanArtistName(track.author);
+      const artKey = artName.toLowerCase();
+      if (
+        !artName ||
+        GENERIC_EXCLUDED_ARTISTS.has(artKey) ||
+        seenArtistNames.has(artKey)
+      ) {
+        continue;
+      }
+
+      const tTitle = track.title.toLowerCase();
+      let matchScore = 0;
+
+      if (tTitle === qLower) {
+        matchScore = 60;
+      } else if (tTitle.startsWith(qLower) || qLower.startsWith(tTitle)) {
+        matchScore = 40;
+      } else if (tTitle.includes(qLower) || qLower.includes(tTitle)) {
+        matchScore = 25;
+      } else if (songArtistCandidateMap.size < 2) {
+        // Fallback for top songs if very few matches
+        matchScore = 10;
+      }
+
+      if (matchScore > 0) {
+        const existing = songArtistCandidateMap.get(artKey);
+        if (!existing || existing.score < matchScore) {
+          songArtistCandidateMap.set(artKey, {
+            name: artName,
+            browseId: track.artistBrowseId,
+            thumbnail: track.thumbnail,
+            score: matchScore,
+          });
+        }
+      }
+    }
+
+    // Pick top candidates sorted by score
+    const topSongCandidates = Array.from(songArtistCandidateMap.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+
+    if (topSongCandidates.length > 0) {
+      const resolvedSongArtists = await Promise.all(
+        topSongCandidates.map((c) =>
+          fetchArtistProfile(c.browseId || "", c.name, c.thumbnail)
+        )
+      );
+
+      // Merge song artists into artists list:
+      // If there is an exact artist name match, keep it at index 0 and insert song artists right after.
+      // Otherwise, place song artists at the very front so the user sees the artist of the matching song immediately.
+      const exactMatchIdx = artists.findIndex(
+        (a) => a.name.toLowerCase() === qLower
+      );
+
+      if (exactMatchIdx >= 0) {
+        const exactArtist = artists[exactMatchIdx];
+        const otherDirect = artists.filter((_, idx) => idx !== exactMatchIdx);
+        artists.length = 0;
+        artists.push(exactArtist, ...resolvedSongArtists, ...otherDirect);
+      } else {
+        artists.unshift(...resolvedSongArtists);
+      }
+
+      for (const sa of resolvedSongArtists) {
+        seenArtistNames.add(sa.name.toLowerCase());
+      }
     }
 
     if (tracks.length > 0 || artists.length > 0 || playlists.length > 0) {
