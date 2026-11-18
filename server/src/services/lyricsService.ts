@@ -11,7 +11,7 @@ export interface LyricsResponse {
   syncedLyrics: string | null;
   plainLyrics: string | null;
   instrumental: boolean;
-  detectedLang?: "ja" | "zh" | "ko" | "vi" | "other" | null;
+  detectedLang?: "ja" | "zh" | null;
   lines?: LyricLine[];
 }
 
