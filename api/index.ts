@@ -364,7 +364,12 @@ app.post(["/api/user/refresh", "/user/refresh"], async (req, res) => {
     const refreshed = await refreshFirebaseToken(refreshToken);
     if (!refreshed) return res.status(401).json({ error: "Invalid refresh token" });
     attachRefreshedHeaders(res, refreshed.idToken, refreshed.refreshToken);
-    return res.json(refreshed);
+    const nowSec = Math.floor(Date.now() / 1000);
+    return res.json({
+      ...refreshed,
+      token: refreshed.idToken,
+      expiryTimestamp: nowSec + refreshed.expiresIn,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Failed to refresh token" });
   }

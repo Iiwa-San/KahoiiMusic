@@ -71,26 +71,161 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const STORAGE_USER_SESSION_KEY = "kahoii_user_session";
 const STORAGE_LIBRARY_KEY = "kahoii_cached_library";
 
-const getAuthSession = (): { idToken: string | null; refreshToken: string | null } => {
+const FIREBASE_API_KEY = "AIzaSyB4fUCZZN41WmnxGeH8jSdz1M5mi2LhLX8";
+
+const parseJwtExp = (token: string): number | null => {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonStr = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    const parsed = JSON.parse(jsonStr);
+    return typeof parsed.exp === "number" ? parsed.exp : null;
+  } catch {
+    return null;
+  }
+};
+
+const getAuthSession = (): { idToken: string | null; refreshToken: string | null; expiryTimestamp: number | null } => {
   try {
     const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
-    if (!raw) return { idToken: null, refreshToken: null };
+    if (!raw) return { idToken: null, refreshToken: null, expiryTimestamp: null };
     const parsed = JSON.parse(raw);
-    return {
-      idToken: parsed?.user?.idToken || parsed?.idToken || null,
-      refreshToken: parsed?.user?.refreshToken || parsed?.refreshToken || null,
-    };
+    const idToken = parsed?.user?.idToken || parsed?.idToken || null;
+    const refreshToken = parsed?.user?.refreshToken || parsed?.refreshToken || null;
+    let expiryTimestamp = parsed?.user?.expiryTimestamp || parsed?.expiryTimestamp || null;
+    if (!expiryTimestamp && idToken) {
+      expiryTimestamp = parseJwtExp(idToken);
+    }
+    return { idToken, refreshToken, expiryTimestamp };
   } catch {
-    return { idToken: null, refreshToken: null };
+    return { idToken: null, refreshToken: null, expiryTimestamp: null };
   }
 };
 
 const getAuthToken = (): string | null => getAuthSession().idToken;
 const getRefreshToken = (): string | null => getAuthSession().refreshToken;
 
-// Helper to make authenticated requests with transparent token auto-refresh & 401 retry
+// Helper to save session updates safely across both formats and notify React components
+const saveAuthSession = (newTokens: { idToken?: string; refreshToken?: string; expiryTimestamp?: number }) => {
+  try {
+    const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
+    let session = raw ? JSON.parse(raw) : { isLoggedIn: true, user: {} };
+    if (!session || typeof session !== "object") session = { isLoggedIn: true, user: {} };
+    if (!session.user) session.user = {};
+    if (newTokens.idToken) {
+      session.user.idToken = newTokens.idToken;
+      session.idToken = newTokens.idToken;
+    }
+    if (newTokens.refreshToken) {
+      session.user.refreshToken = newTokens.refreshToken;
+      session.refreshToken = newTokens.refreshToken;
+    }
+    if (newTokens.expiryTimestamp) {
+      session.user.expiryTimestamp = newTokens.expiryTimestamp;
+      session.expiryTimestamp = newTokens.expiryTimestamp;
+    }
+    session.isLoggedIn = true;
+    localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(session));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("kahoii_auth_updated", { detail: session }));
+    }
+  } catch {}
+};
+
+// Singleton promise to prevent multiple concurrent token refresh calls
+let tokenRefreshPromise: Promise<string | null> | null = null;
+
+const doRefreshToken = async (refreshToken: string): Promise<string | null> => {
+  const nowSec = Math.floor(Date.now() / 1000);
+  // Try 1: Call WebApp backend /api/user/refresh
+  try {
+    const res = await fetch(`${API_BASE}/api/user/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Refresh-Token": refreshToken },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const freshId = data.idToken || data.token;
+      const freshRef = data.refreshToken || refreshToken;
+      const freshExp = data.expiryTimestamp || (data.expiresIn ? nowSec + Number(data.expiresIn) : (parseJwtExp(freshId) || nowSec + 3600));
+      if (freshId) {
+        saveAuthSession({ idToken: freshId, refreshToken: freshRef, expiryTimestamp: freshExp });
+        return freshId;
+      }
+    }
+  } catch (backendErr) {
+    console.warn("[doRefreshToken] Backend refresh error, trying direct Google SecureToken fallback:", backendErr);
+  }
+
+  // Try 2: Direct Google SecureToken API fallback (CORS-enabled from all origins)
+  try {
+    const googleUrl = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
+    const params = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken.trim(),
+    });
+    const gRes = await fetch(googleUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+    if (gRes.ok) {
+      const gData = await gRes.json();
+      const freshId = gData.id_token;
+      const freshRef = gData.refresh_token || refreshToken;
+      const expIn = Number(gData.expires_in) || 3600;
+      const freshExp = nowSec + expIn;
+      if (freshId) {
+        saveAuthSession({ idToken: freshId, refreshToken: freshRef, expiryTimestamp: freshExp });
+        return freshId;
+      }
+    }
+  } catch (gErr) {
+    console.error("[doRefreshToken] Direct Google SecureToken failed:", gErr);
+  }
+
+  return null;
+};
+
+// Proactively returns a valid idToken, refreshing it if expired or expiring within 120s
+const getValidAuthToken = async (): Promise<string | null> => {
+  const { idToken, refreshToken, expiryTimestamp } = getAuthSession();
+  if (!idToken && !refreshToken) return null;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const exp = expiryTimestamp || (idToken ? parseJwtExp(idToken) : null);
+
+  // If idToken exists and has more than 120 seconds left before expiration, use it directly!
+  if (idToken && exp && nowSec < exp - 120) {
+    return idToken;
+  }
+
+  // If token is expired or expiring soon, and we have a refreshToken, proactively refresh!
+  if (refreshToken) {
+    if (!tokenRefreshPromise) {
+      tokenRefreshPromise = doRefreshToken(refreshToken).finally(() => {
+        tokenRefreshPromise = null;
+      });
+    }
+    const refreshedToken = await tokenRefreshPromise;
+    if (refreshedToken) return refreshedToken;
+  }
+
+  return idToken;
+};
+
+// Helper to make authenticated requests with transparent proactive refresh & 401 retry
 const authenticatedFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
-  let { idToken, refreshToken } = getAuthSession();
+  let idToken = await getValidAuthToken();
+  let refreshToken = getRefreshToken();
   const headers = new Headers(options.headers || {});
   if (idToken) {
     headers.set("Authorization", `Bearer ${idToken}`);
@@ -101,40 +236,16 @@ const authenticatedFetch = async (url: string, options: RequestInit = {}): Promi
 
   let res = await fetch(url, { ...options, headers });
 
-  // If 401 Unauthorized and we have a refreshToken, proactively refresh and retry the request once!
+  // If 401 Unauthorized and we have a refreshToken, refresh once and retry!
   if (res.status === 401 && refreshToken) {
     try {
-      const refreshRes = await fetch(`${API_BASE}/api/user/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Refresh-Token": refreshToken },
-        body: JSON.stringify({ refreshToken }),
-      });
-      if (refreshRes.ok) {
-        const refreshData = await refreshRes.json();
-        if (refreshData?.idToken) {
-          idToken = refreshData.idToken;
-          refreshToken = refreshData.refreshToken || refreshToken;
-
-          // Save new tokens into localStorage immediately
-          try {
-            const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
-            if (raw) {
-              const session = JSON.parse(raw);
-              if (session && session.user) {
-                session.user.idToken = idToken;
-                session.user.refreshToken = refreshToken;
-                localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(session));
-              }
-            }
-          } catch {}
-
-          // Retry the request with the fresh token
-          headers.set("Authorization", `Bearer ${idToken}`);
-          if (refreshToken) {
-            headers.set("X-Refresh-Token", refreshToken);
-          }
-          res = await fetch(url, { ...options, headers });
-        }
+      const freshToken = await doRefreshToken(refreshToken);
+      if (freshToken) {
+        idToken = freshToken;
+        refreshToken = getRefreshToken() || refreshToken;
+        headers.set("Authorization", `Bearer ${idToken}`);
+        if (refreshToken) headers.set("X-Refresh-Token", refreshToken);
+        res = await fetch(url, { ...options, headers });
       }
     } catch (err) {
       console.warn("[authenticatedFetch] Auto-refresh retry error:", err);
@@ -145,19 +256,11 @@ const authenticatedFetch = async (url: string, options: RequestInit = {}): Promi
   const refreshedIdToken = res.headers.get("x-refreshed-id-token");
   const refreshedRefreshToken = res.headers.get("x-refreshed-refresh-token");
   if (refreshedIdToken) {
-    try {
-      const raw = localStorage.getItem(STORAGE_USER_SESSION_KEY);
-      if (raw) {
-        const session = JSON.parse(raw);
-        if (session && session.user) {
-          session.user.idToken = refreshedIdToken;
-          if (refreshedRefreshToken) {
-            session.user.refreshToken = refreshedRefreshToken;
-          }
-          localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(session));
-        }
-      }
-    } catch {}
+    saveAuthSession({
+      idToken: refreshedIdToken,
+      refreshToken: refreshedRefreshToken || undefined,
+      expiryTimestamp: parseJwtExp(refreshedIdToken) || undefined,
+    });
   }
 
   return res;
@@ -1464,37 +1567,65 @@ export default function App() {
 
   // Fetch User Session & Library Data (Token-authenticated & Multi-User Isolated with auto-refresh)
   const fetchUserSession = async () => {
-    const token = getAuthToken();
-    const refreshToken = getRefreshToken();
-
     try {
       const res = await authenticatedFetch(`${API_BASE}/api/user/session`);
       if (res.ok) {
         const data = await res.json();
         if (data.isLoggedIn && data.user) {
-          const freshIdToken = res.headers.get("x-refreshed-id-token") || data.user.idToken || token;
-          const freshRefreshToken = res.headers.get("x-refreshed-refresh-token") || userSession?.user?.refreshToken || data.user.refreshToken || refreshToken;
+          const freshIdToken = res.headers.get("x-refreshed-id-token") || data.user.idToken || getAuthToken();
+          const freshRefreshToken = res.headers.get("x-refreshed-refresh-token") || userSession?.user?.refreshToken || data.user.refreshToken || getRefreshToken();
+          const freshExpiry = data.user.expiryTimestamp || (freshIdToken ? parseJwtExp(freshIdToken) : null);
           const updatedSession = {
             ...data,
             user: {
               ...data.user,
               idToken: freshIdToken,
               refreshToken: freshRefreshToken,
+              expiryTimestamp: freshExpiry,
             },
           };
           setUserSession(updatedSession);
-          try {
-            localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(updatedSession));
-          } catch {}
+          saveAuthSession({
+            idToken: freshIdToken,
+            refreshToken: freshRefreshToken,
+            expiryTimestamp: freshExpiry || undefined,
+          });
         } else {
-          if (!getRefreshToken()) {
-            try {
-              localStorage.removeItem(STORAGE_USER_SESSION_KEY);
-            } catch {}
-            setUserSession({ isLoggedIn: false, user: null });
+          // If response says not logged in, but we have a refreshToken, proactively refresh and retry!
+          const rf = getRefreshToken();
+          if (rf) {
+            const refreshedId = await doRefreshToken(rf);
+            if (refreshedId) {
+              const retryRes = await authenticatedFetch(`${API_BASE}/api/user/session`);
+              if (retryRes.ok) {
+                const retryData = await retryRes.json();
+                if (retryData.isLoggedIn && retryData.user) {
+                  setUserSession(retryData);
+                  return;
+                }
+              }
+            }
+          }
+          try {
+            localStorage.removeItem(STORAGE_USER_SESSION_KEY);
+          } catch {}
+          setUserSession({ isLoggedIn: false, user: null });
+        }
+      } else if (res.status === 401) {
+        const rf = getRefreshToken();
+        if (rf) {
+          const refreshedId = await doRefreshToken(rf);
+          if (refreshedId) {
+            const retryRes = await authenticatedFetch(`${API_BASE}/api/user/session`);
+            if (retryRes.ok) {
+              const retryData = await retryRes.json();
+              if (retryData.isLoggedIn && retryData.user) {
+                setUserSession(retryData);
+                return;
+              }
+            }
           }
         }
-      } else if (res.status === 401 && !getRefreshToken()) {
         try {
           localStorage.removeItem(STORAGE_USER_SESSION_KEY);
         } catch {}
@@ -1559,10 +1690,22 @@ export default function App() {
           history: mappedHist,
           playlists: rawPlaylists,
         };
-        setLibraryData(nextLibrary);
-        try {
-          localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
-        } catch {}
+
+        // Don't overwrite existing local cached library with empty data if unauthenticated response
+        if (mappedFavs.length > 0 || mappedSaved.length > 0 || mappedHist.length > 0 || rawPlaylists.length > 0) {
+          setLibraryData(nextLibrary);
+          try {
+            localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
+          } catch {}
+        } else {
+          const sess = getAuthSession();
+          if (!sess.idToken && !sess.refreshToken) {
+            setLibraryData(nextLibrary);
+            try {
+              localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
+            } catch {}
+          }
+        }
       }
     } catch (err) {
       console.error("Library fetch failed:", err);
@@ -1669,6 +1812,35 @@ export default function App() {
       setIsArtistLoading(false);
     }
   };
+
+  // Listen for background token updates to update React userSession state in real time
+  useEffect(() => {
+    const handleAuthUpdated = (e: any) => {
+      if (e.detail?.user) {
+        setUserSession((prev) => {
+          if (!prev) return e.detail;
+          return {
+            ...prev,
+            isLoggedIn: true,
+            user: {
+              ...prev.user,
+              ...e.detail.user,
+            },
+          };
+        });
+      }
+    };
+    window.addEventListener("kahoii_auth_updated", handleAuthUpdated);
+    return () => window.removeEventListener("kahoii_auth_updated", handleAuthUpdated);
+  }, []);
+
+  // Proactive background keep-alive interval (runs every 5 minutes to keep Firebase token fresh)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getValidAuthToken().catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Preload initial track metadata, user data, home feed & YouTube Player API on mount
   useEffect(() => {
@@ -1884,9 +2056,11 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Đăng nhập thất bại");
       setUserSession(data);
-      try {
-        localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(data));
-      } catch {}
+      saveAuthSession({
+        idToken: data.user?.idToken,
+        refreshToken: data.user?.refreshToken,
+        expiryTimestamp: data.user?.expiryTimestamp,
+      });
       setAvatarKey(Date.now());
 
       await fetchLibraryData();
@@ -1964,9 +2138,11 @@ export default function App() {
         throw new Error(data.error || "Đăng ký thất bại");
       }
       setUserSession(data);
-      try {
-        localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(data));
-      } catch {}
+      saveAuthSession({
+        idToken: data.user?.idToken,
+        refreshToken: data.user?.refreshToken,
+        expiryTimestamp: data.user?.expiryTimestamp,
+      });
       setAvatarKey(Date.now());
       await fetchLibraryData();
       setLoginPassword("");

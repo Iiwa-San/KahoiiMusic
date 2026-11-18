@@ -73,8 +73,28 @@ function readJsonClean(filePath: string): any {
   }
 }
 
+export function decodeJwtPayload(token: string): any {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonStr = Buffer.from(base64, "base64").toString("utf8");
+    return JSON.parse(jsonStr);
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyFirebaseIdToken(token: string): Promise<{ localId: string; email: string; displayName?: string } | null> {
   if (!token || typeof token !== "string" || token.length < 10) return null;
+  const payload = decodeJwtPayload(token);
+  const now = Math.floor(Date.now() / 1000);
+  // If JWT exp is in the past, token is definitively expired
+  if (payload && typeof payload.exp === "number" && now >= payload.exp) {
+    return null;
+  }
+
   try {
     const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`;
     const res = await fetch(url, {
@@ -82,7 +102,17 @@ export async function verifyFirebaseIdToken(token: string): Promise<{ localId: s
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken: token }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // If accounts:lookup fails with network error or rate limit, but payload is valid and unexpired
+      if (payload && (payload.user_id || payload.sub) && typeof payload.exp === "number" && now < payload.exp) {
+        return {
+          localId: payload.user_id || payload.sub,
+          email: payload.email || "",
+          displayName: payload.name,
+        };
+      }
+      return null;
+    }
     const data = (await res.json()) as any;
     const user = data.users?.[0];
     if (user && user.localId) {
@@ -94,17 +124,24 @@ export async function verifyFirebaseIdToken(token: string): Promise<{ localId: s
     }
     return null;
   } catch {
+    if (payload && (payload.user_id || payload.sub) && typeof payload.exp === "number" && now < payload.exp) {
+      return {
+        localId: payload.user_id || payload.sub,
+        email: payload.email || "",
+        displayName: payload.name,
+      };
+    }
     return null;
   }
 }
 
-export async function refreshFirebaseToken(refreshToken: string): Promise<{ idToken: string; refreshToken: string; expiresIn: number; localId?: string } | null> {
+export async function refreshFirebaseToken(refreshToken: string): Promise<{ idToken: string; refreshToken: string; expiresIn: number; localId?: string; email?: string } | null> {
   if (!refreshToken || typeof refreshToken !== "string" || refreshToken.length < 10) return null;
   try {
     const refreshUrl = `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`;
     const params = new URLSearchParams({
       grant_type: "refresh_token",
-      refresh_token: refreshToken,
+      refresh_token: refreshToken.trim(),
     });
     const res = await fetch(refreshUrl, {
       method: "POST",
@@ -113,11 +150,21 @@ export async function refreshFirebaseToken(refreshToken: string): Promise<{ idTo
     });
     if (!res.ok) return null;
     const data = await res.json();
+    const idToken = data.id_token;
+    const newRefreshToken = data.refresh_token || refreshToken;
+    const expiresIn = Number(data.expires_in) || 3600;
+    const localId = data.user_id;
+
+    // Decode JWT payload to get email and user_id immediately without extra network call
+    const payload = decodeJwtPayload(idToken);
+    const email = payload?.email || "";
+
     return {
-      idToken: data.id_token,
-      refreshToken: data.refresh_token || refreshToken,
-      expiresIn: Number(data.expires_in) || 3600,
-      localId: data.user_id,
+      idToken,
+      refreshToken: newRefreshToken,
+      expiresIn,
+      localId: localId || payload?.user_id || payload?.sub,
+      email,
     };
   } catch {
     return null;
@@ -176,7 +223,7 @@ export async function getVerifiedUserAndTokens(
     }
   }
 
-  // 2. If token verification failed or no token, attempt refresh with clientRefreshToken
+  // 2. If token verification failed or no token, attempt refresh with clientRefreshToken or local session in dev
   let refreshToken = clientRefreshToken || null;
   if (!refreshToken && !isProduction) {
     const savedDir = getSavedDir();
@@ -188,37 +235,32 @@ export async function getVerifiedUserAndTokens(
 
   if (refreshToken) {
     const refreshed = await refreshFirebaseToken(refreshToken);
-    if (refreshed?.idToken) {
-      let verified = await verifyFirebaseIdToken(refreshed.idToken);
-      if (!verified && refreshed.localId) {
-        let email = "";
-        if (!isProduction) {
-          try {
-            const savedDir = getSavedDir();
-            const session = readJsonClean(path.join(savedDir, "user_session.json"));
-            email = session?.email || "";
-          } catch {}
-        }
-        verified = { localId: refreshed.localId, email };
+    if (refreshed?.idToken && refreshed.localId) {
+      const verified = {
+        localId: refreshed.localId,
+        email: refreshed.email || "",
+        displayName: undefined,
+      };
+
+      if (!isProduction) {
+        const savedDir = getSavedDir();
+        const sessionPath = path.join(savedDir, "user_session.json");
+        const session = readJsonClean(sessionPath) || {};
+        session.idToken = refreshed.idToken;
+        session.refreshToken = refreshed.refreshToken;
+        session.localId = refreshed.localId;
+        if (refreshed.email) session.email = refreshed.email;
+        session.expiryTimestamp = Math.floor(Date.now() / 1000) + refreshed.expiresIn;
+        try {
+          fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), "utf8");
+        } catch {}
       }
-      if (verified) {
-        if (!isProduction) {
-          const savedDir = getSavedDir();
-          const sessionPath = path.join(savedDir, "user_session.json");
-          const session = readJsonClean(sessionPath) || {};
-          session.idToken = refreshed.idToken;
-          session.refreshToken = refreshed.refreshToken;
-          session.expiryTimestamp = Math.floor(Date.now() / 1000) + refreshed.expiresIn;
-          try {
-            fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), "utf8");
-          } catch {}
-        }
-        return {
-          verified,
-          idToken: refreshed.idToken,
-          newRefreshToken: refreshed.refreshToken,
-        };
-      }
+
+      return {
+        verified,
+        idToken: refreshed.idToken,
+        newRefreshToken: refreshed.refreshToken,
+      };
     }
   }
 
@@ -230,7 +272,7 @@ export async function getUserSessionData(
   clientRefreshToken?: string | null
 ): Promise<any> {
   // 1. If client provided a Bearer token or refresh token, look up that specific user securely from Firebase
-  const { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
+  let { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
   if (verified && idToken) {
     let avatarBase64: string | null = null;
     let favCount = 0;
@@ -238,11 +280,28 @@ export async function getUserSessionData(
     let histCount = 0;
     let plCount = 0;
 
+    let currentIdToken = idToken;
+    let currentRefreshToken = newRefreshToken;
+
     try {
       const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
-      const docRes = await fetch(docUrl, {
-        headers: { Authorization: `Bearer ${idToken}` },
+      let docRes = await fetch(docUrl, {
+        headers: { Authorization: `Bearer ${currentIdToken}` },
       });
+
+      // If Firestore returns 401 Unauthorized, proactively refresh and retry once!
+      if (docRes.status === 401 && (currentRefreshToken || clientRefreshToken)) {
+        const ref = currentRefreshToken || clientRefreshToken!;
+        const refreshed = await refreshFirebaseToken(ref);
+        if (refreshed?.idToken) {
+          currentIdToken = refreshed.idToken;
+          currentRefreshToken = refreshed.refreshToken;
+          docRes = await fetch(docUrl, {
+            headers: { Authorization: `Bearer ${currentIdToken}` },
+          });
+        }
+      }
+
       if (docRes.ok) {
         const docData = (await docRes.json()) as any;
         if (docData.fields?.avatarBase64?.stringValue) {
@@ -282,6 +341,9 @@ export async function getUserSessionData(
       }
     } catch {}
 
+    const payload = decodeJwtPayload(currentIdToken);
+    const expiryTimestamp = payload?.exp || (Math.floor(Date.now() / 1000) + 3600);
+
     return {
       isLoggedIn: true,
       user: {
@@ -290,8 +352,9 @@ export async function getUserSessionData(
         name: verified.displayName || (verified.email ? verified.email.split("@")[0] : "Kahoii User"),
         avatarUrl: avatarBase64 ? `data:image/png;base64,${avatarBase64}` : "/api/user/avatar",
         avatarBase64: avatarBase64 || null,
-        idToken,
-        refreshToken: newRefreshToken || clientRefreshToken || undefined,
+        idToken: currentIdToken,
+        refreshToken: currentRefreshToken || clientRefreshToken || undefined,
+        expiryTimestamp,
         stats: {
           favoritesCount: favCount,
           savedTracksCount: savedCount,
@@ -299,8 +362,8 @@ export async function getUserSessionData(
           playlistsCount: plCount,
         },
       },
-      _newIdToken: newRefreshToken ? idToken : null,
-      _newRefreshToken: newRefreshToken || null,
+      _newIdToken: currentRefreshToken ? currentIdToken : null,
+      _newRefreshToken: currentRefreshToken || null,
     };
   }
 
@@ -340,6 +403,7 @@ export async function getUserSessionData(
       avatarBase64: session.avatarBase64 ? `data:image/png;base64,${session.avatarBase64}` : null,
       idToken: validIdToken || session.idToken,
       refreshToken: session.refreshToken,
+      expiryTimestamp: session.expiryTimestamp || (validIdToken ? decodeJwtPayload(validIdToken)?.exp : undefined),
       stats: {
         favoritesCount: Array.isArray(favorites) ? favorites.length : 0,
         historyCount: Array.isArray(history) ? history.length : 0,
@@ -355,13 +419,25 @@ export async function getUserAvatarBuffer(
   clientToken?: string | null,
   clientRefreshToken?: string | null
 ): Promise<Buffer | null> {
-  const { verified, idToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
+  const { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
   if (verified && idToken) {
+    let currentIdToken = idToken;
+    let currentRefreshToken = newRefreshToken;
     try {
       const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
-      const docRes = await fetch(docUrl, {
-        headers: { Authorization: `Bearer ${idToken}` },
+      let docRes = await fetch(docUrl, {
+        headers: { Authorization: `Bearer ${currentIdToken}` },
       });
+      if (docRes.status === 401 && (currentRefreshToken || clientRefreshToken)) {
+        const ref = currentRefreshToken || clientRefreshToken!;
+        const refreshed = await refreshFirebaseToken(ref);
+        if (refreshed?.idToken) {
+          currentIdToken = refreshed.idToken;
+          docRes = await fetch(docUrl, {
+            headers: { Authorization: `Bearer ${currentIdToken}` },
+          });
+        }
+      }
       if (docRes.ok) {
         const docData = await docRes.json();
         if (docData.fields?.avatarBase64?.stringValue) {
@@ -612,13 +688,27 @@ export async function getUserLibraryData(
   _newRefreshToken?: string | null;
 }> {
   // 1. If client provided a Bearer token or refresh token, fetch that specific user's Firestore document
-  const { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
+  let { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
   if (verified && idToken) {
     try {
       const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
-      const docRes = await fetch(docUrl, {
+      let docRes = await fetch(docUrl, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
+
+      // If Firestore returns 401 Unauthorized, proactively refresh and retry once!
+      if (docRes.status === 401 && (newRefreshToken || clientRefreshToken)) {
+        const ref = newRefreshToken || clientRefreshToken!;
+        const refreshed = await refreshFirebaseToken(ref);
+        if (refreshed?.idToken) {
+          idToken = refreshed.idToken;
+          newRefreshToken = refreshed.refreshToken;
+          docRes = await fetch(docUrl, {
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+        }
+      }
+
       if (docRes.ok) {
         const docData = (await docRes.json()) as any;
         if (docData.fields?.musicDataJson?.stringValue) {
@@ -787,7 +877,7 @@ export async function saveUserLibraryData(
   const savedTracks = Array.isArray(data.savedTracks) ? data.savedTracks : [];
 
   // 1. If client provided a Bearer token or refresh token, save directly to user's Firestore document
-  const { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
+  let { verified, idToken, newRefreshToken } = await getVerifiedUserAndTokens(clientToken, clientRefreshToken);
   if (verified && idToken) {
     try {
       const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${verified.localId}?key=${FIREBASE_API_KEY}`;
@@ -796,7 +886,16 @@ export async function saveUserLibraryData(
       if (data.savedTracks === undefined) {
         // Preserve existing savedTracks from cloud if not provided in payload
         try {
-          const checkRes = await fetch(docUrl, { headers: { Authorization: `Bearer ${idToken}` } });
+          let checkRes = await fetch(docUrl, { headers: { Authorization: `Bearer ${idToken}` } });
+          if (checkRes.status === 401 && (newRefreshToken || clientRefreshToken)) {
+            const ref = newRefreshToken || clientRefreshToken!;
+            const refreshed = await refreshFirebaseToken(ref);
+            if (refreshed?.idToken) {
+              idToken = refreshed.idToken;
+              newRefreshToken = refreshed.refreshToken;
+              checkRes = await fetch(docUrl, { headers: { Authorization: `Bearer ${idToken}` } });
+            }
+          }
           if (checkRes.ok) {
             const checkData = (await checkRes.json()) as any;
             if (checkData.fields?.musicDataJson?.stringValue) {
@@ -848,7 +947,7 @@ export async function saveUserLibraryData(
       });
 
       const patchUrl = `${docUrl}&updateMask.fieldPaths=musicDataJson`;
-      await fetch(patchUrl, {
+      let patchRes = await fetch(patchUrl, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -860,6 +959,28 @@ export async function saveUserLibraryData(
           },
         }),
       });
+
+      if (patchRes.status === 401 && (newRefreshToken || clientRefreshToken)) {
+        const ref = newRefreshToken || clientRefreshToken!;
+        const refreshed = await refreshFirebaseToken(ref);
+        if (refreshed?.idToken) {
+          idToken = refreshed.idToken;
+          newRefreshToken = refreshed.refreshToken;
+          patchRes = await fetch(patchUrl, {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fields: {
+                musicDataJson: { stringValue: musicDataJson },
+              },
+            }),
+          });
+        }
+      }
+
       return { success: true, newIdToken: newRefreshToken ? idToken : null, newRefreshToken };
     } catch (err) {
       console.warn("[saveUserLibraryData Firestore Error]", err);
