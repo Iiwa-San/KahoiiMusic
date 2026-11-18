@@ -3624,36 +3624,36 @@ export default function App() {
         <section
           className={`${
             mobileTab === "explore" ? "flex w-full" : "hidden"
-          } lg:flex flex-1 h-full figma-panel flex-col min-h-0 overflow-hidden p-3.5 sm:p-5 lg:p-7`}
+          } lg:flex flex-1 h-full figma-panel flex-col min-h-0 overflow-hidden p-2.5 sm:p-4 lg:p-7`}
         >
           {selectedArtist ? (
             /* ===================================================================== */
             /* ARTIST DETAIL VIEW (Session giữa lấy data của đúng artist đó)         */
             /* ===================================================================== */
-            <div className="flex flex-col h-full min-h-0 overflow-hidden">
+            <div className="flex flex-col h-full min-h-0 overflow-y-auto lg:overflow-hidden custom-scrollbar">
               {/* FIXED ARTIST HEADER CLUSTER (Back Bar + Hero Banner + Tags) */}
-              <div className="flex-shrink-0">
+              <div className="lg:flex-shrink-0">
                 {/* Back Bar */}
-              <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-5 flex-shrink-0">
+              <div className="flex items-center justify-between pb-2 sm:pb-3.5 border-b border-white/10 mb-3 sm:mb-5 lg:flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setSelectedArtist(null)}
-                  className="px-3.5 py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
+                  className="px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 text-xs font-semibold group"
                 >
                   <ArrowLeft className="w-4 h-4 theme-accent-text group-hover:-translate-x-0.5 transition-transform" />
                   <span>Quay lại</span>
                 </button>
-                <span className="text-xs text-white/50 font-mono">
+                <span className="text-[11px] sm:text-xs text-white/50 font-mono">
                   Thông tin Nghệ sĩ
                 </span>
               </div>
 
               {/* Artist Hero Header Card */}
-              <div className="w-full rounded-[24px] p-6 theme-card-bg shadow-2xl mb-6 flex flex-col sm:flex-row items-center sm:items-start gap-6 border theme-accent-border relative overflow-hidden flex-shrink-0">
+              <div className="w-full rounded-2xl sm:rounded-[24px] p-3.5 sm:p-5 lg:p-6 theme-card-bg shadow-xl sm:shadow-2xl mb-3 sm:mb-4 lg:mb-6 flex flex-col sm:flex-row items-center sm:items-start gap-3.5 sm:gap-5 lg:gap-6 border theme-accent-border relative overflow-hidden lg:flex-shrink-0">
                 <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
 
                 {/* Big Avatar */}
-                <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden shadow-2xl flex-shrink-0 border-[3px] theme-accent-border bg-black/40">
+                <div className="relative w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shadow-xl flex-shrink-0 border-2 sm:border-[3px] theme-accent-border bg-black/40">
                   <img
                     src={selectedArtist.avatar}
                     alt={selectedArtist.name}
@@ -3666,30 +3666,30 @@ export default function App() {
 
                 {/* Info & Action Buttons */}
                 <div className="flex-1 min-w-0 flex flex-col items-center sm:items-start text-center sm:text-left justify-center">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider theme-badge flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 theme-accent-text" />
+                  <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
+                    <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider theme-badge flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 theme-accent-text" />
                       Nghệ sĩ chính thức
                     </span>
                     {selectedArtist.genre && (
-                      <span className="text-[11px] text-white/60">
+                      <span className="text-[10px] sm:text-[11px] text-white/60">
                         • {selectedArtist.genre}
                       </span>
                     )}
                   </div>
 
-                  <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-wide truncate max-w-full">
+                  <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white tracking-wide truncate max-w-full">
                     {selectedArtist.name}
                   </h1>
 
-                  <p className="text-xs text-white/60 mt-1 mb-4">
+                  <p className="text-[11px] sm:text-xs text-white/60 mt-0.5 sm:mt-1 mb-2.5 sm:mb-4">
                     {selectedArtist.subscribers || "Nghệ sĩ trên YouTube Music"}
                     {artistTracks.length > 0 && ` • ${artistTracks.length} bài hát single`}
                     {artistPlaylists.length > 0 && ` • ${artistPlaylists.length} danh sách phát`}
                   </p>
 
                   {/* Play Actions */}
-                  <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-start">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center sm:justify-start">
                     <button
                       type="button"
                       disabled={artistTracks.length === 0}
@@ -3701,9 +3701,9 @@ export default function App() {
                           loadAndPlayTrack(artistTracks[0], true);
                         }
                       }}
-                      className="px-5 py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                      className="px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                      <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current translate-x-0.5" />
                       <span>Phát tất cả</span>
                     </button>
 
@@ -3720,9 +3720,9 @@ export default function App() {
                           setRepeatMode("shuffle");
                         }
                       }}
-                      className="px-4 py-2.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all text-xs font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all text-xs font-semibold flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      <Shuffle className="w-4 h-4" />
+                      <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Phát ngẫu nhiên</span>
                     </button>
                   </div>
@@ -3730,7 +3730,7 @@ export default function App() {
               </div>
 
               {/* Tag Selection Bar (Fixed together in this header cluster) */}
-                <div className="py-2.5 mb-4 border-b border-white/10 flex items-center gap-2 flex-wrap flex-shrink-0">
+                <div className="py-1.5 sm:py-2.5 mb-2.5 sm:mb-4 border-b border-white/10 flex items-center gap-1.5 sm:gap-2 flex-wrap lg:flex-shrink-0">
                   {[
                     { key: "all", label: "Tất cả", count: artistTracks.length + artistPlaylists.length },
                     { key: "singles", label: "Nhạc Single / Bài hát", count: artistTracks.length },
@@ -3742,7 +3742,7 @@ export default function App() {
                         key={tab.key}
                         type="button"
                         onClick={() => setActiveArtistTab(tab.key as any)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                        className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
                           isActive
                             ? "theme-badge-active scale-[1.02]"
                             : "theme-badge hover:theme-accent-border"
@@ -3751,7 +3751,7 @@ export default function App() {
                         <span>{tab.label}</span>
                         {typeof tab.count === "number" && tab.count > 0 && (
                           <span
-                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                            className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono ${
                               isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
                             }`}
                           >
@@ -3765,7 +3765,7 @@ export default function App() {
               </div>
 
               {/* SCROLLABLE BODY CONTENT (Singles & Playlists) */}
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-8">
+              <div className="flex-1 lg:min-h-0 lg:overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-8">
                 {isArtistLoading ? (
                   <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
                     <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
@@ -3788,7 +3788,7 @@ export default function App() {
                       </div>
 
                       {artistTracks.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                           {artistTracks.map((item, idx) => {
                             const isCurrentPlaying = currentTrack?.id === item.id;
                             return (
@@ -3807,7 +3807,7 @@ export default function App() {
                                 className="w-full flex flex-col cursor-pointer group"
                               >
                                 <div
-                                  className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
+                                  className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
                                     isCurrentPlaying
                                       ? "theme-accent-border shadow-lg"
                                       : "border-white/5 bg-black/30"
@@ -3881,14 +3881,14 @@ export default function App() {
                       </div>
 
                       {artistPlaylists.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                           {artistPlaylists.map((pl, idx) => (
                             <div
                               key={pl.id || idx}
                               onClick={() => playPlaylistItem(pl)}
                               className="w-full flex flex-col cursor-pointer group"
                             >
-                              <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-black/30">
+                              <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-black/30">
                                 <img
                                   src={pl.thumbnail || DEFAULT_TRACK_ART}
                                   alt={pl.title}
@@ -3931,12 +3931,12 @@ export default function App() {
             /* ===================================================================== */
             /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
             /* ===================================================================== */
-            <div className="flex flex-col h-full min-h-0 overflow-hidden">
+            <div className="flex flex-col h-full min-h-0 overflow-y-auto lg:overflow-hidden custom-scrollbar">
               {/* FIXED SEARCH HEADER CLUSTER (Back Bar + Navigation Tabs + Top Match) */}
-              <div className="flex-shrink-0">
+              <div className="lg:flex-shrink-0">
               {/* Header with Back button, search title and result count */}
-              <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-4 flex-shrink-0">
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between pb-2 sm:pb-3.5 border-b border-white/10 mb-2.5 sm:mb-4 lg:flex-shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -3945,24 +3945,24 @@ export default function App() {
                       setSearchQueryTitle("");
                       setActiveSearchTab("all");
                     }}
-                    className="px-3 py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
+                    className="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 text-xs font-semibold group flex-shrink-0"
                   >
                     <ArrowLeft className="w-4 h-4 theme-accent-text group-hover:-translate-x-0.5 transition-transform" />
-                    <span>Quay lại Khám phá</span>
+                    <span>Quay lại</span>
                   </button>
-                  <h2 className="text-[20px] font-bold text-white tracking-wide truncate">
+                  <h2 className="text-base sm:text-[20px] font-bold text-white tracking-wide truncate">
                     {searchQueryTitle ? `Kết quả: "${searchQueryTitle}"` : "Kết quả tìm kiếm"}
                   </h2>
                 </div>
                 {searchResults.length > 0 && (
-                  <span className="text-xs text-purple-200/60 font-mono">
+                  <span className="text-[11px] sm:text-xs text-purple-200/60 font-mono flex-shrink-0 ml-2">
                     {searchResults.length} bài hát
                   </span>
                 )}
               </div>
 
               {/* Navigation Tabs */}
-                <div className="py-2.5 mb-4 border-b border-white/10 flex items-center gap-2 flex-wrap flex-shrink-0">
+                <div className="py-1.5 sm:py-2.5 mb-2.5 sm:mb-4 border-b border-white/10 flex items-center gap-1.5 sm:gap-2 flex-wrap lg:flex-shrink-0">
                 {[
                   { key: "all", label: "Tất cả" },
                   {
@@ -3989,7 +3989,7 @@ export default function App() {
                       onClick={() =>
                         setActiveSearchTab(tab.key as "all" | "tracks" | "artists" | "playlists")
                       }
-                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
+                      className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
                         isActive
                           ? "theme-badge-active scale-[1.02]"
                           : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5"
@@ -3998,7 +3998,7 @@ export default function App() {
                       <span>{tab.label}</span>
                       {typeof tab.count === "number" && tab.count > 0 && (
                         <span
-                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                          className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono ${
                             isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
                           }`}
                         >
@@ -4038,7 +4038,7 @@ export default function App() {
                   const isCurrentPlaying = currentTrack?.id === top.id;
 
                   return (
-                    <div className="w-full mb-4 flex-shrink-0">
+                    <div className="w-full mb-3 sm:mb-4 lg:flex-shrink-0">
                       <div
                         onClick={() => {
                           if (isCurrentPlaying) {
@@ -4053,11 +4053,11 @@ export default function App() {
                             });
                           }
                         }}
-                        className="w-full rounded-[20px] p-4 theme-card-bg shadow-xl transition-all flex items-center justify-between gap-4 group cursor-pointer"
+                        className="w-full rounded-2xl sm:rounded-[20px] p-2.5 sm:p-4 theme-card-bg shadow-lg sm:shadow-xl transition-all flex items-center justify-between gap-3 sm:gap-4 group cursor-pointer"
                       >
-                        <div className="flex items-center gap-4 min-w-0">
-                          {/* Large Artwork */}
-                          <div className="relative w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
+                        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+                          {/* Artwork */}
+                          <div className="relative w-16 h-16 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
                             <img
                               src={top.thumbnail || DEFAULT_TRACK_ART}
                               alt={top.title}
@@ -4067,7 +4067,7 @@ export default function App() {
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                             {(top.duration > 0 || !!top.durationText) && (
-                              <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
+                              <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[9px] sm:text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
                                 {top.isMusic !== false && (
                                   <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
                                 )}
@@ -4078,14 +4078,14 @@ export default function App() {
 
                           {/* Track Info */}
                           <div className="min-w-0 flex flex-col justify-center">
-                            <span className="text-[10px] uppercase font-bold tracking-widest theme-accent-text mb-1 flex items-center gap-1.5">
+                            <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-widest theme-accent-text mb-0.5 sm:mb-1 flex items-center gap-1.5">
                               <Sparkles className="w-3 h-3 theme-accent-text" />
                               BÀI HÁT PHÙ HỢP NHẤT
                             </span>
-                            <h3 className="text-base sm:text-lg font-bold text-white tracking-wide truncate group-hover:theme-accent-text transition-colors">
+                            <h3 className="text-sm sm:text-lg font-bold text-white tracking-wide truncate group-hover:theme-accent-text transition-colors">
                               {top.title}
                             </h3>
-                            <p className="text-xs text-purple-200/70 truncate mt-1">
+                            <p className="text-[11px] sm:text-xs text-purple-200/70 truncate mt-0.5 sm:mt-1">
                               {top.author} •{" "}
                               {top.durationText ||
                                 (top.duration > 0
@@ -4096,7 +4096,7 @@ export default function App() {
                         </div>
 
                         {/* Play Action Button */}
-                        <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -4113,17 +4113,17 @@ export default function App() {
                                 });
                               }
                             }}
-                            className="px-5 py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                            className="p-2 sm:px-5 sm:py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
                           >
                             {isCurrentPlaying && isPlaying ? (
                               <>
                                 <Pause className="w-4 h-4 fill-current" />
-                                <span>Tạm dừng</span>
+                                <span className="hidden sm:inline">Tạm dừng</span>
                               </>
                             ) : (
                               <>
                                 <Play className="w-4 h-4 fill-current translate-x-0.5" />
-                                <span>Phát ngay</span>
+                                <span className="hidden sm:inline">Phát ngay</span>
                               </>
                             )}
                           </button>
@@ -4135,7 +4135,7 @@ export default function App() {
               </div>
 
               {/* SCROLLABLE SEARCH BODY (Artists, Playlists, Tracks) */}
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-8">
+              <div className="flex-1 lg:min-h-0 lg:overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-8">
                 {isSearching ? (
                   <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
                     <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
@@ -4168,15 +4168,14 @@ export default function App() {
                               Xem tất cả ({searchStructured.artists.length})
                             </button>
                           </div>
-                          <div className="flex items-start gap-7 overflow-x-auto pb-2 custom-scrollbar">
+                          <div className="flex items-start gap-3 sm:gap-7 overflow-x-auto pb-2 custom-scrollbar">
                             {searchStructured.artists.map((artist) => (
                               <div
                                 key={artist.id || artist.name}
                                 onClick={() => openArtistDetail({ id: artist.id, name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
-                                className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0"
-                                style={{ width: "170px" }}
+                                className="flex flex-col items-center p-2 sm:p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0 w-[110px] sm:w-[150px] lg:w-[170px]"
                               >
-                                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-2.5 relative">
+                                <div className="w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden border-2 sm:border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-2 sm:mb-2.5 relative">
                                   <img
                                     src={artist.thumbnail || DEFAULT_TRACK_ART}
                                     alt={artist.name}
@@ -4186,15 +4185,15 @@ export default function App() {
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                   />
                                   <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                    <div className="w-9 h-9 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
+                                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
                                       <Search className="w-4 h-4 text-white" />
                                     </div>
                                   </div>
                                 </div>
-                                <p className="text-sm font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
+                                <p className="text-xs sm:text-sm font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
                                   {artist.name}
                                 </p>
-                                <p className="text-[11px] text-purple-200/60 text-center truncate w-full mt-0.5">
+                                <p className="text-[10px] sm:text-[11px] text-purple-200/60 text-center truncate w-full mt-0.5">
                                   {artist.subscribers || "Nghệ sĩ"}
                                 </p>
                               </div>
@@ -4221,14 +4220,14 @@ export default function App() {
                               Xem tất cả ({searchStructured.playlists.length})
                             </button>
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4">
                             {searchStructured.playlists.slice(0, 6).map((pl) => (
                               <div
                                 key={pl.id || pl.title}
                                 onClick={() => playPlaylistItem(pl)}
                                 className="flex flex-col cursor-pointer group"
                               >
-                                <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
+                                <div className="w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
                                   <img
                                     src={pl.thumbnail || DEFAULT_TRACK_ART}
                                     alt={pl.title}
@@ -4277,7 +4276,7 @@ export default function App() {
                               Xem tất cả ({searchResults.length})
                             </button>
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                             {searchResults.slice(0, 12).map((item) => {
                               const isCurrentPlaying = currentTrack?.id === item.id;
                               return (
@@ -4293,7 +4292,7 @@ export default function App() {
                                   className="w-full flex flex-col cursor-pointer group"
                                 >
                                   <div
-                                    className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
+                                    className={`w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
                                       isCurrentPlaying
                                         ? "theme-accent-border shadow-lg"
                                         : "border-white/5 bg-purple-900/30"
@@ -4361,7 +4360,7 @@ export default function App() {
                           Tất cả bài hát ({searchResults.length})
                         </h3>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                         {searchResults.map((item) => {
                           const isCurrentPlaying = currentTrack?.id === item.id;
                           return (
@@ -4377,7 +4376,7 @@ export default function App() {
                               className="w-full flex flex-col cursor-pointer group"
                             >
                               <div
-                                className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
+                                className={`w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
                                   isCurrentPlaying
                                     ? "theme-accent-border shadow-lg"
                                     : "border-white/5 bg-purple-900/30"
@@ -4444,14 +4443,14 @@ export default function App() {
                         </h3>
                       </div>
                       {searchStructured?.artists && searchStructured.artists.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
                           {searchStructured.artists.map((artist) => (
                             <div
                               key={artist.id || artist.name}
                               onClick={() => openArtistDetail({ id: artist.id, name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
-                              className="flex flex-col items-center p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
+                              className="flex flex-col items-center p-2 sm:p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
                             >
-                              <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-3 relative">
+                              <div className="w-20 h-20 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-full overflow-hidden border-2 sm:border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-2 sm:mb-3 relative">
                                 <img
                                   src={artist.thumbnail || DEFAULT_TRACK_ART}
                                   alt={artist.name}
@@ -4461,15 +4460,15 @@ export default function App() {
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                 />
                                 <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                  <div className="w-10 h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
-                                    <Search className="w-5 h-5 text-white" />
+                                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
+                                    <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                                   </div>
                                 </div>
                               </div>
-                              <p className="text-base font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
+                              <p className="text-sm sm:text-base font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
                                 {artist.name}
                               </p>
-                              <p className="text-xs text-purple-200/60 text-center truncate w-full mt-1">
+                              <p className="text-[10px] sm:text-xs text-purple-200/60 text-center truncate w-full mt-0.5 sm:mt-1">
                                 {artist.subscribers || "Nghệ sĩ"}
                               </p>
                             </div>
@@ -4494,14 +4493,14 @@ export default function App() {
                         </h3>
                       </div>
                       {searchStructured?.playlists && searchStructured.playlists.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4">
                           {searchStructured.playlists.map((pl) => (
                             <div
                               key={pl.id || pl.title}
                               onClick={() => playPlaylistItem(pl)}
                               className="flex flex-col cursor-pointer group"
                             >
-                              <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
+                              <div className="w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
                                 <img
                                   src={pl.thumbnail || DEFAULT_TRACK_ART}
                                   alt={pl.title}
@@ -4560,13 +4559,13 @@ export default function App() {
             /* ===================================================================== */
             /* DISCOVERY VIEW (Nhạc Trending, Mới Phát Hành, Nhạc Sĩ Nổi Bật, ...)   */
             /* ===================================================================== */
-            <div className="flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-6">
+            <div className="flex flex-col gap-5 sm:gap-8 flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-6">
               {/* Section 1: Nhạc Trending */}
               <div>
-                <div className="flex items-center justify-between mb-3.5">
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-5 h-5 theme-accent-text" />
-                    <h2 className="text-[20px] font-bold text-white tracking-wide">
+                <div className="flex items-center justify-between mb-3 sm:mb-3.5">
+                  <div className="flex items-center gap-2 sm:gap-2.5">
+                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 theme-accent-text" />
+                    <h2 className="text-base sm:text-[20px] font-bold text-white tracking-wide">
                       Nhạc Trending
                     </h2>
                     {isHomeLoading && (
@@ -4596,10 +4595,10 @@ export default function App() {
                 </div>
 
                 {isHomeLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                     {Array.from({ length: 6 }).map((_, idx) => (
                       <div key={idx} className="w-full flex flex-col animate-pulse">
-                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                        <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border border-white/5 flex items-center justify-center">
                           <Sparkles className="w-8 h-8 text-white/20 animate-pulse" />
                         </div>
                         <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
@@ -4608,7 +4607,7 @@ export default function App() {
                     ))}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                     {trendingTracks.slice(0, 12).map((item, idx) => {
                       const isCurrent = currentTrack?.id === item.id;
                       const isThisPlaying = isCurrent && isPlaying;
@@ -4619,7 +4618,7 @@ export default function App() {
                           className="w-full flex flex-col cursor-pointer group"
                         >
                           <div
-                            className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
+                            className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
                               isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
                             }`}
                           >
@@ -4697,10 +4696,10 @@ export default function App() {
                 </div>
 
                 {isHomeLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                     {Array.from({ length: 6 }).map((_, idx) => (
                       <div key={idx} className="w-full flex flex-col animate-pulse">
-                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-orange-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                        <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-orange-950/20 to-black/40 border border-white/5 flex items-center justify-center">
                           <Flame className="w-8 h-8 text-orange-400/20 animate-pulse" />
                         </div>
                         <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
@@ -4709,7 +4708,7 @@ export default function App() {
                     ))}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                     {newReleaseTracks.slice(0, 12).map((item, idx) => {
                       const isCurrent = currentTrack?.id === item.id;
                       const isThisPlaying = isCurrent && isPlaying;
@@ -4720,7 +4719,7 @@ export default function App() {
                           className="w-full flex flex-col cursor-pointer group"
                         >
                           <div
-                            className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
+                            className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
                               isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
                             }`}
                           >
@@ -4779,7 +4778,7 @@ export default function App() {
                 </div>
 
                 {isHomeLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                     {Array.from({ length: 6 }).map((_, idx) => (
                       <div key={idx} className="w-full flex flex-col items-center animate-pulse">
                         <div className="w-full aspect-square rounded-full bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border-2 border-white/5 flex items-center justify-center">
@@ -4791,7 +4790,7 @@ export default function App() {
                     ))}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                     {FEATURED_ARTISTS.map((artist, idx) => (
                       <div
                         key={idx}
@@ -4925,10 +4924,10 @@ export default function App() {
                     </div>
 
                     {isLibraryLoading ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                         {Array.from({ length: 6 }).map((_, idx) => (
                           <div key={idx} className="w-full flex flex-col animate-pulse">
-                            <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-rose-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                            <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-rose-950/20 to-black/40 border border-white/5 flex items-center justify-center">
                               <Heart className="w-8 h-8 text-rose-400/20 animate-pulse" />
                             </div>
                             <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
@@ -4937,7 +4936,7 @@ export default function App() {
                         ))}
                       </div>
                     ) : recommendedTracksToDisplay.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                         {recommendedTracksToDisplay.map((item, idx) => {
                           const isCurrent = currentTrack?.id === item.id;
                           const isThisPlaying = isCurrent && isPlaying;
@@ -4948,7 +4947,7 @@ export default function App() {
                               className="w-full flex flex-col cursor-pointer group"
                             >
                               <div
-                                className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
+                                className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
                                   isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
                                 }`}
                               >
@@ -5006,7 +5005,7 @@ export default function App() {
         <aside
           className={`${
             mobileTab === "player" ? "flex w-full" : "hidden"
-          } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-4 sm:p-5 lg:px-[18px] lg:pt-[26px] lg:pb-[20px]`}
+          } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-3.5 sm:p-5 lg:px-[18px] lg:pt-[26px] pb-20 lg:pb-[20px]`}
           style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}
         >
           {/* Mobile Collapse / Back Header */}
@@ -5767,11 +5766,11 @@ export default function App() {
             <p className="text-xs font-bold text-white truncate drop-shadow-sm">{currentTrack.title}</p>
             <p className="text-[10px] text-white/60 truncate">{formatTrackArtist(currentTrack.title, currentTrack.author)}</p>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={toggleCurrentFavorite}
-              className="p-1.5 text-white/70 hover:text-white cursor-pointer"
+              className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-95 transition-transform"
               title="Yêu thích"
             >
               <Heart
@@ -5781,6 +5780,14 @@ export default function App() {
                     : "text-white/60"
                 }`}
               />
+            </button>
+            <button
+              type="button"
+              onClick={handlePrev}
+              className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-90 transition-transform"
+              title="Bài trước đó"
+            >
+              <SkipBack className="w-4 h-4 fill-current" />
             </button>
             <button
               type="button"
@@ -5799,7 +5806,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleNext}
-              className="p-1.5 text-white/70 hover:text-white cursor-pointer"
+              className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-90 transition-transform"
               title="Bài tiếp theo"
             >
               <SkipForward className="w-4 h-4 fill-current" />
