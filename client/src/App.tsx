@@ -235,57 +235,86 @@ function compareSortItems(a: any, b: any): number {
 }
 
 
-// Smart Artist Extractor: prevents "Kahoii Music", "Nghệ sĩ", "YouTube Music" placeholder and extracts real artist from title if needed
+// Smart Artist Extractor: extracts artist from title, description/author, or channel name
 function formatTrackArtist(title?: string, author?: string): string {
   const cleanAuthor = (author || "").trim();
-  if (
-    cleanAuthor &&
-    cleanAuthor !== "Kahoii Music" &&
-    cleanAuthor !== "YouTube Music" &&
-    cleanAuthor !== "Nghệ sĩ" &&
-    cleanAuthor !== "Artist" &&
-    cleanAuthor !== "Various Artists"
-  ) {
+  const rawTitle = (title || "").trim();
+
+  // Check if author is a generic placeholder
+  const isGeneric =
+    !cleanAuthor ||
+    cleanAuthor === "Kahoii Music" ||
+    cleanAuthor === "YouTube Music" ||
+    cleanAuthor === "Nghệ sĩ" ||
+    cleanAuthor === "Artist" ||
+    cleanAuthor === "Various Artists";
+
+  // 1. Try extracting artist from title with smart patterns
+  if (rawTitle) {
+    // " / ": e.g. "『ラベンダー』 / MIMI feat. saewool (Music Video)" -> "MIMI feat. saewool"
+    // "私は、私達は / Guiano - Coverd by しほ" -> "Guiano - Coverd by しほ"
+    // "【MV】「言っといてよ」 / 9Lana" -> "9Lana"
+    if (rawTitle.includes(" / ")) {
+      const parts = rawTitle.split(" / ");
+      if (parts.length >= 2) {
+        let cand = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").replace(/\(.*?\)/g, "").trim();
+        if (cand) return cand;
+      }
+    }
+
+    // " - ": e.g. "Orangestar - 花筏 (feat. 夏背)" -> "Orangestar"
+    if (rawTitle.includes(" - ")) {
+      const parts = rawTitle.split(" - ");
+      if (parts.length >= 2) {
+        let cand = parts[0].trim();
+        cand = cand.replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "").trim();
+        if (cand && !/^(mv|official|lyric|audio|video|teaser|hd|4k)$/i.test(cand)) {
+          return cand;
+        }
+      }
+    }
+
+    // " | ": e.g. "Title | Artist"
+    if (rawTitle.includes(" | ")) {
+      const parts = rawTitle.split(" | ");
+      if (parts.length >= 2) {
+        const cand = parts[1].trim();
+        if (cand) return cand;
+      }
+    }
+
+    // "Covered by X" / "Cover by X"
+    const mCover = rawTitle.match(/(?:covered\s+by|cover\s+by|vocal\s*:?)\s*([^\s\(\)\[\]【】\/|]+)/i);
+    if (mCover && mCover[1]) {
+      return mCover[1].trim();
+    }
+
+    // Japanese quotes: 「Track」Artist or Artist「Track」
+    const mQuotes = rawTitle.match(/([^\s\u300C\u300E\u3010]+)\s*[\u300C\u300E\u3010][^\u300D\u300F\u3011]+[\u300D\u300F\u3011]/);
+    if (mQuotes && mQuotes[1] && !/^(mv|official|video|audio|lyrics?|弾き語り|歌ってみた)$/i.test(mQuotes[1])) {
+      return mQuotes[1].trim();
+    }
+
+    // Check brackets like 【Artist】 if not standard tags
+    const bracketMatch = rawTitle.match(/【([^】]+)】/);
+    if (bracketMatch && bracketMatch[1] && !/歌ってみた|弾き語り|MV|Official|Lyric|Audio|HD|4K/i.test(bracketMatch[1])) {
+      return bracketMatch[1].trim();
+    }
+
+    // Hashtag #Artist (e.g. #椎名林檎, #Michita, #KingGnu)
+    const hashMatch = rawTitle.match(/#([^\s#]+)/);
+    if (hashMatch && hashMatch[1]) {
+      return hashMatch[1].trim();
+    }
+  }
+
+  // 2. If not found in title, use author (channel name / uploader / description)
+  if (!isGeneric) {
     return cleanAuthor;
   }
 
-  const rawTitle = (title || "").trim();
-  if (!rawTitle) return "";
-
-  // Check " / ": e.g. "『ラベンダー』 / MIMI feat. saewool (Music Video)" -> "MIMI feat. saewool"
-  if (rawTitle.includes(" / ")) {
-    const parts = rawTitle.split(" / ");
-    if (parts.length >= 2) {
-      let candidate = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").replace(/\(.*?\)/g, "").trim();
-      if (candidate) return candidate;
-    }
-  }
-
-  // Check " - ": e.g. "Orangestar - 花筏 (feat. 夏背)" -> "Orangestar"
-  if (rawTitle.includes(" - ")) {
-    const parts = rawTitle.split(" - ");
-    if (parts.length >= 2) {
-      let candidate = parts[0].trim();
-      candidate = candidate.replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "").trim();
-      if (candidate) return candidate;
-    }
-  }
-
-  // Check " | ": e.g. "Title | Artist"
-  if (rawTitle.includes(" | ")) {
-    const parts = rawTitle.split(" | ");
-    if (parts.length >= 2) {
-      return parts[1].trim();
-    }
-  }
-
-  // Check brackets like 【Artist】 if not standard tags
-  const bracketMatch = rawTitle.match(/【([^】]+)】/);
-  if (bracketMatch && bracketMatch[1] && !/歌ってみた|弾き語り|MV|Official|Lyric|Audio/i.test(bracketMatch[1])) {
-    return bracketMatch[1].trim();
-  }
-
-  return cleanAuthor && cleanAuthor !== "Kahoii Music" && cleanAuthor !== "Nghệ sĩ" ? cleanAuthor : "";
+  // 3. Fallback: return author if present, or "Nghệ sĩ" instead of blank
+  return cleanAuthor || "Nghệ sĩ";
 }
 
 interface UnifiedPlayOverlayProps {
@@ -705,6 +734,7 @@ export default function App() {
   // Right Sidebar (Sidebar 2) Tabs: Queue (Hàng đợi) vs Lyrics (Lời bài hát)
   const [sidebar2Tab, setSidebar2Tab] = useState<"queue" | "lyrics">("queue");
   const activeLyricRef = useRef<HTMLDivElement | null>(null);
+  const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Romanization / Translation display mode: "dual" (song ngữ) | "original" (chữ gốc) | "romanized" (phiên âm thuần)
   const [lyricDisplayMode, setLyricDisplayMode] = useState<"dual" | "original" | "romanized">(() => {
@@ -750,11 +780,6 @@ export default function App() {
     return idx;
   }, [parsedLyrics, currentTime, isLyricsSynced]);
 
-  const hasRomanizationOrTranslation = useMemo(() => {
-    if (!parsedLyrics.length) return false;
-    return parsedLyrics.some((l) => Boolean(l.romanized || l.translation));
-  }, [parsedLyrics]);
-
   const romaziPillLabel = useMemo(() => {
     const lang = _lyrics?.detectedLang;
     const isJa = lang === "ja";
@@ -770,9 +795,16 @@ export default function App() {
   }, [_lyrics, lyricDisplayMode]);
 
   useEffect(() => {
-    if (sidebar2Tab === "lyrics" && activeLyricRef.current) {
-      activeLyricRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    if (sidebar2Tab !== "lyrics" || !lyricsContainerRef.current || !activeLyricRef.current) return;
+    const container = lyricsContainerRef.current;
+    const activeEl = activeLyricRef.current;
+
+    // Smoothly glide active line to the exact vertical center
+    const targetScroll = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
+    container.scrollTo({
+      top: Math.max(0, targetScroll),
+      behavior: "smooth",
+    });
   }, [activeLyricIndex, sidebar2Tab]);
 
   // Hamburger popups on player card
@@ -5288,10 +5320,14 @@ export default function App() {
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/60">
                       Lời tĩnh
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="text-[11px] text-white/40 font-medium">
+                      Lời bài hát
+                    </span>
+                  )}
                 </div>
 
-                {hasRomanizationOrTranslation && (
+                {(parsedLyrics.length > 0 || Boolean(_lyrics?.plainLyrics)) && (
                   <button
                     type="button"
                     onClick={toggleLyricDisplayMode}
@@ -5312,12 +5348,12 @@ export default function App() {
 
               {/* Scrollable lyrics area */}
               <div
+                ref={lyricsContainerRef}
                 className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1 custom-scrollbar text-center"
                 style={{
-                  paddingTop: "38vh",
-                  paddingBottom: "42vh",
-                  gap: "12px",
-                  scrollBehavior: "smooth",
+                  paddingTop: parsedLyrics.length > 0 ? "35vh" : "0px",
+                  paddingBottom: parsedLyrics.length > 0 ? "40vh" : "0px",
+                  gap: parsedLyrics.length > 0 ? "10px" : "0px",
                 }}
               >
                 {parsedLyrics.length > 0 ? (
@@ -5345,11 +5381,11 @@ export default function App() {
                         }}
                         className={`transition-all select-none cursor-pointer text-center rounded-2xl ${
                           isActive
-                            ? "scale-[1.05] theme-accent-text font-bold drop-shadow-lg bg-white/10 px-4 py-3 border border-white/10 shadow-lg"
-                            : "scale-100 font-medium opacity-35 hover:opacity-80 px-3 py-2 hover:bg-white/5"
+                            ? "scale-[1.04] theme-accent-text font-bold drop-shadow-md bg-white/10 px-4 py-3 border border-white/10 shadow-lg"
+                            : "scale-100 font-medium opacity-30 hover:opacity-75 px-3 py-1.5 hover:bg-white/5"
                         }`}
                         style={{
-                          transition: "all 0.35s cubic-bezier(0.25, 1, 0.5, 1)",
+                          transition: "transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease, background-color 0.3s ease",
                         }}
                       >
                         <p className={`leading-snug tracking-wide ${isActive ? "text-[15px]" : "text-[13px] text-white"}`}>
@@ -5368,16 +5404,16 @@ export default function App() {
                     );
                   })
                 ) : _lyrics?.plainLyrics ? (
-                  <div className="py-4 text-xs leading-relaxed text-white/80 whitespace-pre-line text-center font-medium">
+                  <div className="py-4 text-xs leading-relaxed text-white/80 whitespace-pre-line text-center font-medium my-auto">
                     {_lyrics.plainLyrics}
                   </div>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2.5">
-                    <Mic2 className="w-8 h-8 opacity-30 theme-accent-text" />
-                    <p className="font-semibold text-white/70">
+                  <div className="flex-1 flex flex-col items-center justify-center py-10 text-center text-white/40 text-xs gap-3 my-auto">
+                    <Mic2 className="w-9 h-9 opacity-35 theme-accent-text" />
+                    <p className="font-semibold text-white/70 text-sm">
                       {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
                     </p>
-                    <p className="text-[11px] text-white/40 max-w-[200px]">
+                    <p className="text-[11px] text-white/40 max-w-[210px] leading-relaxed">
                       {currentTrack
                         ? "Không tìm thấy lời đồng bộ cho bài hát này trên hệ thống"
                         : "Chọn một bài hát để bắt đầu theo dõi lời bài hát"}

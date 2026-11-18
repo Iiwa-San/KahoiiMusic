@@ -230,14 +230,17 @@ function parseSongItem(renderer: any, fallbackAuthor = ""): SearchTrackResult | 
 
   for (const r of descRuns) {
     if (!r?.text) continue;
-    const isArtist =
+    const pageType =
       r.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs
-        ?.browseEndpointContextMusicConfig?.pageType === "MUSIC_PAGE_TYPE_ARTIST" ||
-      (r.navigationEndpoint?.browseEndpoint?.browseId &&
-        r.navigationEndpoint.browseEndpoint.browseId.startsWith("UC"));
+        ?.browseEndpointContextMusicConfig?.pageType;
+    const browseId = r.navigationEndpoint?.browseEndpoint?.browseId;
+    const isArtist =
+      pageType === "MUSIC_PAGE_TYPE_ARTIST" ||
+      pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL" ||
+      (browseId && browseId.startsWith("UC"));
     if (isArtist) {
       author = r.text.trim();
-      artistBrowseId = r.navigationEndpoint.browseEndpoint.browseId;
+      artistBrowseId = browseId;
       break;
     }
   }
@@ -254,8 +257,11 @@ function parseSongItem(renderer: any, fallbackAuthor = ""): SearchTrackResult | 
         txt !== "Song" &&
         txt !== "Nghệ sĩ" &&
         txt !== "Artist" &&
+        txt !== "Kênh" &&
+        txt !== "Channel" &&
         !/^\d+[\s\u00a0]*(Tr|T|k|N|M|B)?\s*(lượt|views|plays)/i.test(txt) &&
-        !/^\d+:\d+(?::\d+)?$/.test(txt)
+        !/^\d+:\d+(?::\d+)?$/.test(txt) &&
+        !/^\d{4}$/.test(txt)
       ) {
         author = txt;
         break;
@@ -263,18 +269,39 @@ function parseSongItem(renderer: any, fallbackAuthor = ""): SearchTrackResult | 
     }
   }
 
-  if (!author && fallbackAuthor && fallbackAuthor !== "Nghệ sĩ") {
-    author = fallbackAuthor;
-  }
-
+  // Check title for artist patterns
   if (!author && title) {
-    if (title.includes(" - ")) {
-      const parts = title.split(" - ");
-      if (parts.length >= 2) author = parts[0].trim();
-    } else if (title.includes(" / ")) {
+    if (title.includes(" / ")) {
       const parts = title.split(" / ");
+      if (parts.length >= 2) author = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").trim();
+    } else if (title.includes(" - ")) {
+      const parts = title.split(" - ");
+      if (parts.length >= 2) {
+        const p0 = parts[0].trim().replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "");
+        if (p0 && !/^(mv|official|lyric|audio|video)$/i.test(p0)) author = p0;
+      }
+    } else if (title.includes(" | ")) {
+      const parts = title.split(" | ");
       if (parts.length >= 2) author = parts[1].trim();
     }
+    if (!author) {
+      const mCover = title.match(/(?:covered\s+by|cover\s+by|vocal\s*:?)\s*([^\s\(\)\[\]【】\/|]+)/i);
+      if (mCover && mCover[1]) author = mCover[1].trim();
+    }
+    if (!author) {
+      const hashMatch = title.match(/#([^\s#]+)/);
+      if (hashMatch && hashMatch[1]) author = hashMatch[1].trim();
+    }
+    if (!author) {
+      const bMatch = title.match(/【([^】]+)】/);
+      if (bMatch && bMatch[1] && !/歌ってみた|弾き語り|MV|Official|Lyric|Audio/i.test(bMatch[1])) {
+        author = bMatch[1].trim();
+      }
+    }
+  }
+
+  if (!author && fallbackAuthor && fallbackAuthor !== "Nghệ sĩ") {
+    author = fallbackAuthor;
   }
 
   const { duration, durationText } = extractDuration(renderer, descRuns);
@@ -1128,30 +1155,13 @@ export async function getArtistDetails(
       channelUploads.forEach((t) => (t.author = artistName));
       tracks = channelUploads;
     } else if (ytmTracks.length > 0) {
-      // Preserve authentic artist tracks from browse shelf; try to enrich missing duration
-      try {
-        const searchRes = await searchYouTubeMusicStructured(artistName);
-        if (searchRes.tracks && searchRes.tracks.length > 0) {
-          const durMap = new Map<string, { duration: number; durationText: string }>();
-          searchRes.tracks.forEach((st) => {
-            if (st.duration > 0) {
-              const durInfo = { duration: st.duration, durationText: st.durationText || "" };
-              durMap.set(st.id, durInfo);
-              durMap.set(st.title.toLowerCase().trim(), durInfo);
-            }
-          });
-          ytmTracks.forEach((yt) => {
-            if (yt.duration <= 0) {
-              const matched = durMap.get(yt.id) || durMap.get(yt.title.toLowerCase().trim());
-              if (matched) {
-                yt.duration = matched.duration;
-                yt.durationText = matched.durationText;
-              }
-            }
-          });
-        }
-      } catch {}
-      tracks = ytmTracks;
+      // For official artists, if duration is missing in browse shelf, enrich from search
+      const searchRes = await searchYouTubeMusicStructured(artistName);
+      if (searchRes.tracks && searchRes.tracks.length > 0) {
+        tracks = searchRes.tracks;
+      } else {
+        tracks = ytmTracks;
+      }
     } else {
       return searchYouTubeMusicStructured(artistName);
     }
