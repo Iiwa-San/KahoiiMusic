@@ -308,6 +308,61 @@ async function searchViaYtDlp(query: string, maxResults = 50): Promise<SearchTra
   });
 }
 
+async function getChannelUploadTracks(browseId: string, fallbackAuthor: string): Promise<SearchTrackResult[]> {
+  try {
+    const data = await postYTM("browse", { browseId }, 5000);
+    const tabs = data?.contents?.singleColumnBrowseResultsRenderer?.tabs || [];
+    const secList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+    const tracks: SearchTrackResult[] = [];
+    const seenIds = new Set<string>();
+
+    for (const s of secList) {
+      const shelf = s.musicShelfRenderer || s.musicCarouselShelfRenderer;
+      const items = shelf?.contents || [];
+      for (const it of items) {
+        const rend = it.musicResponsiveListItemRenderer || it.musicTwoRowItemRenderer;
+        if (!rend) continue;
+        const title = extractRunsText(
+          rend.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ||
+          rend.title?.runs
+        );
+        const sub = extractRunsText(
+          rend.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ||
+          rend.subtitle?.runs
+        );
+        const videoId =
+          rend.navigationEndpoint?.watchEndpoint?.videoId ||
+          rend.playlistItemData?.videoId ||
+          rend.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer
+            ?.playNavigationEndpoint?.watchEndpoint?.videoId;
+        if (!videoId || seenIds.has(videoId)) continue;
+        seenIds.add(videoId);
+
+        const thumbs =
+          rend.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ||
+          rend.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+        const thumbnail =
+          thumbs[thumbs.length - 1]?.url ||
+          `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+
+        const author = sub ? sub.split("•")[0].trim() : fallbackAuthor;
+        tracks.push({
+          id: videoId,
+          title,
+          author: author || fallbackAuthor,
+          duration: 0,
+          durationText: "",
+          thumbnail,
+          artistBrowseId: browseId,
+        });
+      }
+    }
+    return tracks;
+  } catch {
+    return [];
+  }
+}
+
 async function fetchArtistProfile(
   browseId: string,
   fallbackName: string,
@@ -374,12 +429,15 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
   }
 
   try {
+    const isHandleQuery = trimmed.startsWith("@") || (trimmed.includes("_") && !trimmed.includes(" "));
+    const effectiveQuery = trimmed.startsWith("@") ? trimmed : (isHandleQuery ? `@${trimmed}` : trimmed);
+
     // Run 4 queries in parallel for high speed (~700ms total)
     const [overviewData, songsData, artistsData, playlistsData] = await Promise.all([
-      postYTM("search", { query: trimmed }),
-      postYTM("search", { query: trimmed, params: "EgWKAQIIAWoSEAUQAxAJEAQQChAVEBAQERAO" }), // Songs
-      postYTM("search", { query: trimmed, params: "EgWKAQIgAWoSEAUQAxAJEAQQChAVEBAQERAO" }), // Artists
-      postYTM("search", { query: trimmed, params: "EgeKAQQoAEABahIQBRADEAkQBBAKEBUQEBAREA4%3D" }), // Playlists
+      postYTM("search", { query: effectiveQuery }),
+      postYTM("search", { query: effectiveQuery, params: "EgWKAQIIAWoSEAUQAxAJEAQQChAVEBAQERAO" }), // Songs
+      postYTM("search", { query: effectiveQuery, params: "EgWKAQIgAWoSEAUQAxAJEAQQChAVEBAQERAO" }), // Artists
+      postYTM("search", { query: effectiveQuery, params: "EgeKAQQoAEABahIQBRADEAkQBBAKEBUQEBAREA4%3D" }), // Playlists
     ]);
 
     // 1. Parse Songs
@@ -454,32 +512,49 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       }
     }
 
-    // Single pass over overview sections for artists and playlists
+    // Single pass over overview sections for artists, handles and playlists
     const overviewSections =
       overviewData?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
         ?.sectionListRenderer?.contents || [];
 
+    let matchedHandleArtist: SearchArtistItem | null = null;
+
     for (const sec of overviewSections) {
-      const item = sec.itemSectionRenderer?.contents?.[0]?.musicResponsiveListItemRenderer;
-      if (!item) continue;
+      const shelf = sec.musicShelfRenderer;
+      const items = shelf?.contents || (sec.itemSectionRenderer ? [sec.itemSectionRenderer.contents?.[0]] : []);
+      if (!items) continue;
 
-      const artist = parseArtistItem(item);
-      if (artist?.subscribers?.toLowerCase().includes("nghệ sĩ")) {
-        const key = artist.name.toLowerCase();
-        if (!seenArtistNames.has(key)) {
-          seenArtistNames.add(key);
-          artists.push(artist);
+      for (const it of items) {
+        const item = it?.musicResponsiveListItemRenderer;
+        if (!item) continue;
+
+        const isCircle = item.thumbnail?.musicThumbnailRenderer?.thumbnailCrop === "MUSIC_THUMBNAIL_CROP_CIRCLE";
+        const sub = extractRunsText(item.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs);
+        const isArtistOrProfile = isCircle || /nghệ sĩ|hồ sơ|profile|kênh|channel|@/i.test(sub);
+
+        if (isArtistOrProfile) {
+          const artist = parseArtistItem(item);
+          if (artist) {
+            const key = artist.name.toLowerCase();
+            if (!seenArtistNames.has(key)) {
+              seenArtistNames.add(key);
+              artists.push(artist);
+              if (isHandleQuery && !matchedHandleArtist) {
+                matchedHandleArtist = artist;
+              }
+            }
+          }
         }
-      }
 
-      const playlist = parsePlaylistItem(item);
-      if (
-        playlist?.id &&
-        !seenPlaylistIds.has(playlist.id) &&
-        /danh sách phát|playlist|album/i.test(playlist.trackCountText || "")
-      ) {
-        seenPlaylistIds.add(playlist.id);
-        playlists.push(playlist);
+        const playlist = parsePlaylistItem(item);
+        if (
+          playlist?.id &&
+          !seenPlaylistIds.has(playlist.id) &&
+          /danh sách phát|playlist|album/i.test(playlist.trackCountText || "")
+        ) {
+          seenPlaylistIds.add(playlist.id);
+          playlists.push(playlist);
+        }
       }
     }
 
@@ -562,6 +637,32 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
       };
     }
 
+    // Handle-based search enrichment: if user searched by @handle and a channel was resolved (e.g. @aruca_aiwa -> 愛羽あるか)
+    if (isHandleQuery && matchedHandleArtist) {
+      const hIdx = artists.findIndex((a) => a.id === matchedHandleArtist?.id);
+      if (hIdx > 0) {
+        const [h] = artists.splice(hIdx, 1);
+        artists.unshift(h);
+      }
+
+      if (matchedHandleArtist.id) {
+        const channelTracks = await getChannelUploadTracks(matchedHandleArtist.id, matchedHandleArtist.name);
+        if (channelTracks.length > 0) {
+          tracks.unshift(...channelTracks);
+          topResult = {
+            id: channelTracks[0].id,
+            title: channelTracks[0].title,
+            subtitle: `${matchedHandleArtist.name} • ${matchedHandleArtist.subscribers || "Kênh chính thức"}`,
+            author: matchedHandleArtist.name,
+            duration: channelTracks[0].duration,
+            durationText: channelTracks[0].durationText,
+            thumbnail: channelTracks[0].thumbnail,
+            type: "song",
+          };
+        }
+      }
+    }
+
     // 5. Enrich Artists with artists from matching songs (e.g. Nowlu for "swallows")
     const songArtistCandidateMap = new Map<
       string,
@@ -636,6 +737,15 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
 
       for (const sa of resolvedSongArtists) {
         seenArtistNames.add(sa.name.toLowerCase());
+      }
+    }
+
+    // Ensure matched handle artist stays at #1 for handle queries
+    if (isHandleQuery && matchedHandleArtist) {
+      const hIdx = artists.findIndex((a) => a.id === matchedHandleArtist?.id || a.name === matchedHandleArtist?.name);
+      if (hIdx > 0) {
+        const [h] = artists.splice(hIdx, 1);
+        artists.unshift(h);
       }
     }
 
