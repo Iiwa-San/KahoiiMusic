@@ -559,7 +559,8 @@ export default function App() {
 
   // Dual-Engine Playback (Audio Element + Zero-Fail YouTube Iframe Player Fallback)
   const ytPlayerRef = useRef<any>(null);
-  const activePlayerType = useRef<"audio" | "youtube">("youtube");
+  const activePlayerType = useRef<"audio" | "youtube">("audio");
+  const lastLocalPersistRef = useRef<number>(0);
   const [_lyrics, setLyrics] = useState<any>(null);
 
   // Left Sidebar
@@ -1404,6 +1405,7 @@ export default function App() {
     history?: Track[];
     playlists?: any[];
   }) => {
+    lastLocalPersistRef.current = Date.now();
     const payload = {
       favorites: updated.favorites || libraryData.favorites,
       savedTracks: updated.savedTracks || libraryData.savedTracks,
@@ -1698,8 +1700,12 @@ export default function App() {
     }
   };
 
-  const fetchLibraryData = async () => {
-    setIsLibraryLoading(true);
+  const fetchLibraryData = async (silent = false) => {
+    // Avoid overwriting freshly triggered local user actions before cloud write finishes
+    if (silent && Date.now() - lastLocalPersistRef.current < 4000) {
+      return;
+    }
+    if (!silent) setIsLibraryLoading(true);
     try {
       const res = await authenticatedFetch(`${API_BASE}/api/user/library`);
       if (res.ok) {
@@ -1755,10 +1761,24 @@ export default function App() {
 
         // Don't overwrite existing local cached library with empty data if unauthenticated response
         if (mappedFavs.length > 0 || mappedSaved.length > 0 || mappedHist.length > 0 || rawPlaylists.length > 0) {
-          setLibraryData(nextLibrary);
-          try {
-            localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
-          } catch {}
+          setLibraryData((prev) => {
+            // Check if there is actual difference to prevent unnecessary re-renders
+            if (
+              prev.favorites.length === nextLibrary.favorites.length &&
+              prev.savedTracks.length === nextLibrary.savedTracks.length &&
+              prev.history.length === nextLibrary.history.length &&
+              prev.playlists.length === nextLibrary.playlists.length &&
+              prev.favorites[0]?.id === nextLibrary.favorites[0]?.id &&
+              prev.history[0]?.id === nextLibrary.history[0]?.id &&
+              prev.playlists[0]?.id === nextLibrary.playlists[0]?.id
+            ) {
+              return prev;
+            }
+            try {
+              localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
+            } catch {}
+            return nextLibrary;
+          });
         } else {
           const sess = getAuthSession();
           if (!sess.idToken && !sess.refreshToken) {
@@ -1770,9 +1790,9 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error("Library fetch failed:", err);
+      if (!silent) console.error("Library fetch failed:", err);
     } finally {
-      setIsLibraryLoading(false);
+      if (!silent) setIsLibraryLoading(false);
     }
   };
 
@@ -1903,6 +1923,35 @@ export default function App() {
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Real-time Cloud Sync with Firestore / Android App / PC App
+  useEffect(() => {
+    if (!userSession?.isLoggedIn) return;
+
+    // 1. Periodic background sync polling every 5 seconds
+    const syncInterval = setInterval(() => {
+      fetchLibraryData(true);
+    }, 5000);
+
+    // 2. Instant sync when returning to the tab / window focus
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchLibraryData(true);
+      }
+    };
+    const handleFocus = () => {
+      fetchLibraryData(true);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      clearInterval(syncInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [userSession?.isLoggedIn]);
 
   // Preload initial track metadata, user data, home feed & YouTube Player API on mount
   useEffect(() => {
@@ -2227,8 +2276,13 @@ export default function App() {
     }
   };
 
-  const loadAndPlayTrack = async (track: Track, autoPlay = true, immediate = false) => {
+  const loadAndPlayTrack = async (track: Track, autoPlay = true, _immediate = true) => {
     if (!track) return;
+
+    // Synchronously prime / unlock native HTML5 Audio element in direct user gesture for iOS Safari
+    if (autoPlay && audioRef.current) {
+      audioRef.current.play().catch(() => {});
+    }
 
     // Instant UI update: title, artwork, active queue beam update immediately with zero lag
     setCurrentTrack(track);
@@ -2322,71 +2376,6 @@ export default function App() {
         showToast("Bạn đang ngoại tuyến! Hãy chọn bài hát trong mục 'Đã tải'", "info");
         setActiveLeftTab("offline");
         return;
-      }
-
-      // If active player is already YouTube, transition track smoothly
-      if (
-        activePlayerType.current === "youtube" &&
-        ytPlayerRef.current &&
-        typeof ytPlayerRef.current.loadVideoById === "function"
-      ) {
-        try {
-          ytPlayerRef.current.loadVideoById({
-            videoId: track.id,
-            startSeconds: 0,
-          });
-          if (autoPlay) {
-            ytPlayerRef.current.playVideo();
-            setIsPlaying(true);
-          } else {
-            ytPlayerRef.current.pauseVideo();
-            setIsPlaying(false);
-          }
-          setErrorMessage(null);
-          setIsLoading(false);
-
-          const updateAuthorAcrossApp = (newAuthor: string) => {
-            if (!newAuthor || newAuthor === "Nghệ sĩ" || newAuthor === "Kahoii Music") return;
-            track.author = newAuthor;
-            setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: newAuthor } : prev));
-            setLibraryData((prev) => {
-              const repl = (list: Track[]) =>
-                list.map((it) => (it.id === track.id ? { ...it, author: newAuthor } : it));
-              const updated = {
-                ...prev,
-                favorites: repl(prev.favorites),
-                savedTracks: repl(prev.savedTracks),
-                history: repl(prev.history),
-              };
-              persistLibraryData(updated);
-              return updated;
-            });
-          };
-
-          // Fetch Lyrics in background without delaying playback
-          fetch(
-            `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
-          )
-            .then((res) => (res.ok ? res.json() : null))
-            .then((lyricsData) => {
-              if (lyricsData) {
-                setLyrics(lyricsData);
-                if (lyricsData.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
-                  updateAuthorAcrossApp(lyricsData.artist);
-                }
-              }
-            })
-            .catch(() => {});
-
-          return;
-        } catch (ytErr) {
-          console.warn("YouTube instant transition warning:", ytErr);
-        }
-      }
-
-      // Synchronously prime/unlock HTML5 Audio on user gesture for iOS Safari background playback
-      if (audioRef.current) {
-        audioRef.current.play().catch(() => {});
       }
 
       // Stop current audio and YouTube player
@@ -2501,14 +2490,8 @@ export default function App() {
       } catch {}
     };
 
-    if (immediate) {
-      executePlayback();
-    } else {
-      // 600ms debounce ensures rapid clicks/spam settle smoothly before playing sound
-      playDebounceTimerRef.current = setTimeout(() => {
-        executePlayback();
-      }, 600);
-    }
+    // Execute playback immediately to keep iOS Safari user-gesture context valid
+    executePlayback();
   };
 
   const handleTimeUpdate = () => {
@@ -3135,21 +3118,21 @@ export default function App() {
         id="kahoii-yt-iframe"
         style={{
           position: "fixed",
-          bottom: "-40px",
-          right: "-40px",
+          top: "-9999px",
+          left: "-9999px",
           width: "200px",
           height: "200px",
-          opacity: 0.001,
+          opacity: 1,
           pointerEvents: "none",
-          zIndex: -50,
         }}
       />
 
       {/* ========================================================================= */}
-      {/* 1. TOP BAR (Seamless & Centered matching Figma mockup)                     */}
+      {/* 1. TOP BAR (Seamless & Centered matching Figma mockup, Safe-Area aware)     */}
       {/* ========================================================================= */}
-      <header className="h-[54px] w-full px-3 lg:px-5 flex items-center justify-between flex-shrink-0 z-30">
-        {/* Left: App Logo & Brand Identity */}
+      <header className="w-full flex flex-col justify-end flex-shrink-0 z-30 safe-header">
+        <div className="w-full h-[54px] flex items-center justify-between">
+          {/* Left: App Logo & Brand Identity */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <img
             src="./logo_icon.png"
@@ -3491,6 +3474,7 @@ export default function App() {
             </button>
           )}
         </div>
+        </div>
       </header>
 
       {/* Error Toast */}
@@ -3530,7 +3514,7 @@ export default function App() {
       {/* ========================================================================= */}
       {/* 2. MAIN CANVAS (Exact Figma 3-Column Layout with Real Proportions)         */}
       {/* ========================================================================= */}
-      <main className="flex-1 w-full px-2 sm:px-4 lg:px-5 pb-[76px] lg:pb-5 pt-1 flex gap-3 lg:gap-4 overflow-hidden min-h-0 relative">
+      <main className="flex-1 w-full px-2 sm:px-4 lg:px-5 pb-[calc(76px+var(--safe-bottom))] lg:pb-5 pt-1 flex gap-3 lg:gap-4 overflow-hidden min-h-0 relative">
         {/* ----------------------------------------------------------------------- */}
         {/* COLUMN 1 (LEFT): Sidebar / Library Panel (~19% Width)                   */}
         {/* ----------------------------------------------------------------------- */}
@@ -6499,7 +6483,7 @@ export default function App() {
       {/* ========================================================================= */}
       {/* MOBILE BOTTOM NAVIGATION BAR (lg:hidden)                                  */}
       {/* ========================================================================= */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-[56px] bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border-t border-white/10 z-40 flex items-center justify-around px-2 shadow-2xl">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 safe-bottom-nav bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border-t border-white/10 z-40 flex items-center justify-around px-2 shadow-2xl">
         <button
           type="button"
           onClick={() => setMobileTab("explore")}
