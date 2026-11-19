@@ -1336,3 +1336,116 @@ export async function searchYouTubeTracks(query: string): Promise<SearchTrackRes
   const structured = await searchYouTubeMusicStructured(query);
   return structured.tracks;
 }
+
+export const BOLERO_UNWANTED_REGEX =
+  /bolero|nhạc vàng|trữ tình|nhạc lính|nhạc sống|quê hương|đám cưới|hát xẩm|xẩm đời|chachacha|nhạc chế|sáo trúc|tây bắc|thôn quê|dân ca|tuyệt phẩm|tâm trạng ai nghe cũng khóc|đò bỏ bến|kiếp người|bể dâu|nghèo|bạc bẽo|rumba|phố nhạc việt|lk nhạc|liên khúc nhạc|liên khúc ca nhạc|liên khúc bolero|tone nam|tone nữ|karaoke|nhạc thiền|nhạc phật|nhạc niệm phật/i;
+
+export function isUnwantedTrack(title: string, author: string): boolean {
+  if (!title && !author) return false;
+  const str = `${title} ${author}`.toLowerCase();
+  return BOLERO_UNWANTED_REGEX.test(str);
+}
+
+interface OfficialTrendingResult {
+  tracks: SearchTrackResult[];
+  artists: SearchArtistItem[];
+  timestamp: number;
+}
+
+let cachedOfficialTrending: OfficialTrendingResult | null = null;
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+export async function getOfficialTrendingTracks(): Promise<{ tracks: SearchTrackResult[]; artists: SearchArtistItem[] }> {
+  const now = Date.now();
+  if (cachedOfficialTrending && now - cachedOfficialTrending.timestamp < CACHE_TTL_MS && cachedOfficialTrending.tracks.length > 0) {
+    return {
+      tracks: [...cachedOfficialTrending.tracks],
+      artists: [...cachedOfficialTrending.artists],
+    };
+  }
+
+  const chartPlaylistIds = [
+    "VLOLAK5uy_lEos0zuYBvGC9C0FSGG3pZ6gO4a82P6zg", // 20 video thịnh hành tại Việt Nam (Official Top 20 Trending VN)
+    "VLPL4fGSI1pDJn4FPCRZtojwqQro5GPY6cuV",         // 100 video nhạc hàng đầu tại Việt Nam (Official Top 100 VN)
+    "VLPL4fGSI1pDJn57DkisEwlIpcs9FAt5yudJ",         // Các video nhạc hàng đầu trong ngày – Việt Nam
+  ];
+
+  const tracks: SearchTrackResult[] = [];
+  const artists: SearchArtistItem[] = [];
+  const seenIds = new Set<string>();
+  const seenArtistNames = new Set<string>();
+
+  for (const plId of chartPlaylistIds) {
+    try {
+      const res = await postYTM("browse", { browseId: plId }, 8000);
+      const twoCol = res?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents?.[0];
+      const items = twoCol?.musicPlaylistShelfRenderer?.contents || [];
+
+      for (const it of items) {
+        const r = it.musicResponsiveListItemRenderer;
+        if (!r) continue;
+
+        const title = r.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.text || "";
+        const authorRuns = r.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+        const author = authorRuns.map((x: any) => x.text || "").join("").trim();
+        const videoId =
+          r.playlistItemData?.videoId ||
+          r.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+
+        if (!videoId || !title || seenIds.has(videoId)) continue;
+
+        // Discard any bolero / unwanted tracks
+        if (isUnwantedTrack(title, author)) continue;
+
+        seenIds.add(videoId);
+        const durationText =
+          r.fixedColumns?.[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs?.[0]?.text || "3:30";
+        const thumbs = r.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+        const thumbnail =
+          thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+        let artistBrowseId: string | undefined = undefined;
+        for (const ar of authorRuns) {
+          const bid = ar.navigationEndpoint?.browseEndpoint?.browseId;
+          if (bid && bid.startsWith("UC")) {
+            artistBrowseId = bid;
+            const aName = (ar.text || "").trim();
+            if (aName && aName.length > 1 && !seenArtistNames.has(aName.toLowerCase())) {
+              seenArtistNames.add(aName.toLowerCase());
+              artists.push({
+                id: bid,
+                name: aName,
+                subscribers: "Nghệ sĩ",
+                thumbnail,
+              });
+            }
+          }
+        }
+
+        tracks.push({
+          id: videoId,
+          title,
+          author,
+          duration: parseDuration(durationText),
+          durationText,
+          thumbnail,
+          artistBrowseId,
+          isMusic: true,
+        });
+      }
+    } catch (e: any) {
+      console.warn(`[getOfficialTrendingTracks] Error fetching chart ${plId}:`, e.message);
+    }
+  }
+
+  if (tracks.length > 0) {
+    cachedOfficialTrending = { tracks, artists, timestamp: now };
+    return { tracks: [...tracks], artists: [...artists] };
+  }
+
+  // Fallback if charts unavailable
+  const fallbackQuery = "top vpop hits";
+  const fallbackRes = await searchYouTubeMusicStructured(fallbackQuery);
+  const cleanFallback = fallbackRes.tracks.filter((t) => !isUnwantedTrack(t.title, t.author));
+  return { tracks: cleanFallback, artists: fallbackRes.artists };
+}

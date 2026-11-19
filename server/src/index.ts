@@ -3,7 +3,7 @@ import cors from "cors";
 import path from "path";
 import fs from "fs";
 import { resolveAudioStream } from "./services/streamResolver.js";
-import { searchYouTubeMusicStructured, searchYouTubeTracks, getPlaylistTracks, getArtistDetails, resolveTrackArtist } from "./services/youtubeSearch.js";
+import { searchYouTubeMusicStructured, searchYouTubeTracks, getPlaylistTracks, getArtistDetails, resolveTrackArtist, getOfficialTrendingTracks, isUnwantedTrack } from "./services/youtubeSearch.js";
 import { fetchLyrics } from "./services/lyricsService.js";
 import {
   extractBearerToken,
@@ -481,33 +481,15 @@ app.post("/api/user/library", async (req, res) => {
   }
 });
 
-// 10. Home Feed (Trending & New Releases with Randomization and Dynamic Rotation)
-const TRENDING_QUERIES = [
-  "nhạc trending việt nam",
-  "top bài hát vpop hot",
-  "nhạc trẻ hot tiktok thịnh hành",
-  "nhạc thịnh hành việt nam",
-  "top hits việt nam",
-  "nhạc hot triệu view việt nam",
-  "bài hát việt nam nghe nhiều nhất",
-  "v-pop trending hits",
-  "bài hát hot trend tiktok",
-  "nhạc edm remix việt nam hot",
-  "nhạc lofi chill việt nam",
-  "acoustic vpop hay nhất"
-];
-
+// 10. Home Feed (Official YouTube Music Vietnam Charts & Fresh Releases, 100% Bolero-Free)
 const NEW_RELEASE_QUERIES = [
-  "bài hát mới phát hành vpop",
-  "nhạc mới ra mắt vpop",
-  "mv mới nhất việt nam",
-  "ca khúc mới hay nhất vpop",
-  "single mới phát hành việt nam",
-  "nhạc việt mới nhất 2024",
-  "vpop mới phát hành hot",
-  "bài hát mới ra mắt việt nam",
+  "single mới vpop",
+  "vpop mới phát hành",
+  "mv vpop mới nhất",
+  "ca khúc vpop mới ra mắt",
   "nhạc trẻ mới phát hành",
-  "nhạc mới phát hành hôm nay"
+  "bài hát mới vpop",
+  "hit vpop mới nhất",
 ];
 
 const CURATED_ARTISTS = [
@@ -557,20 +539,33 @@ app.get("/api/home", async (_req, res) => {
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   try {
-    const randomTrendingQuery = TRENDING_QUERIES[Math.floor(Math.random() * TRENDING_QUERIES.length)];
     const randomNewReleaseQuery = NEW_RELEASE_QUERIES[Math.floor(Math.random() * NEW_RELEASE_QUERIES.length)];
 
-    const [trendingRes, newReleasesRes] = await Promise.all([
-      searchYouTubeMusicStructured(randomTrendingQuery),
+    // Fetch official Vietnam Trending Charts & fresh modern releases in parallel
+    const [officialTrending, newReleasesRes] = await Promise.all([
+      getOfficialTrendingTracks(),
       searchYouTubeMusicStructured(randomNewReleaseQuery),
     ]);
 
-    const trendingTracks = shuffleArray(trendingRes.tracks || []);
-    const newReleaseTracks = shuffleArray(newReleasesRes.tracks || []);
+    // 1. Trending tracks: pure official YouTube Music Vietnam Charts (zero bolero)
+    const cleanTrending = (officialTrending.tracks || []).filter(
+      (t) => !isUnwantedTrack(t.title, t.author)
+    );
+    const trendingTracks = shuffleArray(cleanTrending).slice(0, 30);
 
-    // Collect dynamic artists from YouTube Music search results
+    // 2. New releases: filter strictly to remove any bolero / unwanted tracks
+    const cleanNewReleases = (newReleasesRes.tracks || []).filter(
+      (t) => !isUnwantedTrack(t.title, t.author)
+    );
+    let newReleaseTracks = shuffleArray(cleanNewReleases);
+    if (newReleaseTracks.length < 12) {
+      const moreTracks = cleanTrending.slice(30);
+      newReleaseTracks = [...newReleaseTracks, ...shuffleArray(moreTracks)].slice(0, 24);
+    }
+
+    // 3. Dynamic artists from both official charts and new release queries
     const rawArtists = [
-      ...(trendingRes.artists || []),
+      ...(officialTrending.artists || []),
       ...(newReleasesRes.artists || []),
     ];
 
@@ -602,6 +597,13 @@ app.get("/api/home", async (_req, res) => {
       "soundtrack",
       "beat",
       "instrumental",
+      "meme media",
+      "vie channel",
+      "phố nhạc",
+      "h2o remix",
+      "ss remix",
+      "kẻ viết nhạc tình",
+      "manhhakyno",
     ];
 
     for (const a of rawArtists) {
@@ -610,6 +612,7 @@ app.get("/api/home", async (_req, res) => {
       if (
         lower.length < 2 ||
         NON_ARTIST_PATTERNS.some((p) => lower.includes(p)) ||
+        isUnwantedTrack("", lower) ||
         seenArtistNames.has(lower)
       ) {
         continue;
@@ -637,7 +640,7 @@ app.get("/api/home", async (_req, res) => {
           avatar: c.avatar,
         });
       }
-      if (homeArtists.length >= 18) break;
+      if (homeArtists.length >= 24) break;
     }
 
     const finalArtists = shuffleArray(homeArtists).slice(0, 12);

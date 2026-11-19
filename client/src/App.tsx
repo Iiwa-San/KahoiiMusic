@@ -270,6 +270,15 @@ const authenticatedFetch = async (url: string, options: RequestInit = {}): Promi
 const INITIAL_TRENDING_TRACKS: Track[] = [];
 const INITIAL_NEW_RELEASES: Track[] = [];
 
+const BOLERO_UNWANTED_REGEX =
+  /bolero|nhạc vàng|trữ tình|nhạc lính|nhạc sống|quê hương|đám cưới|hát xẩm|xẩm đời|chachacha|nhạc chế|sáo trúc|tây bắc|thôn quê|dân ca|tuyệt phẩm|tâm trạng ai nghe cũng khóc|đò bỏ bến|kiếp người|bể dâu|nghèo|bạc bẽo|rumba|phố nhạc việt|lk nhạc|liên khúc nhạc|liên khúc ca nhạc|liên khúc bolero|tone nam|tone nữ|karaoke|nhạc thiền|nhạc phật/i;
+
+function isCleanModernTrack(t: Track): boolean {
+  if (!t) return false;
+  const str = `${t.title || ""} ${t.author || ""}`.toLowerCase();
+  return !BOLERO_UNWANTED_REGEX.test(str);
+}
+
 // Nhạc Sĩ Nổi Bật (Featured Artists - High-res local avatars & rotating pool)
 const CURATED_FEATURED_ARTISTS = [
   { name: "Sơn Tùng M-TP", genre: "Pop / R&B", avatar: "./artists/son_tung.jpg", query: "Sơn Tùng M-TP" },
@@ -1963,12 +1972,14 @@ export default function App() {
         .then((data) => {
           if (data) {
             if (Array.isArray(data.trending) && data.trending.length > 0) {
-              setTrendingTracks(data.trending);
+              const filtered = data.trending.filter(isCleanModernTrack);
+              setTrendingTracks(filtered.length > 0 ? filtered : data.trending);
             } else {
               setTrendingTracks(INITIAL_TRENDING_TRACKS);
             }
             if (Array.isArray(data.newReleases) && data.newReleases.length > 0) {
-              setNewReleaseTracks(data.newReleases);
+              const filtered = data.newReleases.filter(isCleanModernTrack);
+              setNewReleaseTracks(filtered.length > 0 ? filtered : data.newReleases);
             } else {
               setNewReleaseTracks(INITIAL_NEW_RELEASES);
             }
