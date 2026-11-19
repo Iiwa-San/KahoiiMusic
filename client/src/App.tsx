@@ -2140,7 +2140,6 @@ export default function App() {
 
     // Time Tracker ticker for YouTube Player with natural end detection fallback
     useEffect(() => {
-      let lastReportedSec = -1;
       const timer = setInterval(() => {
         if (
           activePlayerType.current === "youtube" &&
@@ -2167,21 +2166,6 @@ export default function App() {
                 }
                 return prev;
               });
-            }
-
-            // Sync mediaSession positionState periodically for Lock Screen / Dynamic Island / Brave progress bar
-            const currentSec = Math.floor(ct);
-            if (currentSec !== lastReportedSec && dur > 0 && ct >= 0 && ct <= dur) {
-              lastReportedSec = currentSec;
-              if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
-                try {
-                  navigator.mediaSession.setPositionState({
-                    duration: dur,
-                    playbackRate: isPlaying ? 1 : 0,
-                    position: Math.min(ct, dur),
-                  });
-                } catch { }
-              }
             }
 
             // Fallback: If video reaches within 0.5s of the end and stops or pauses, advance to next track
@@ -2873,15 +2857,6 @@ export default function App() {
         } else if (audioRef.current) {
           audioRef.current.currentTime = clamped;
         }
-        if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession && duration > 0) {
-          try {
-            navigator.mediaSession.setPositionState({
-              duration,
-              playbackRate: isPlaying ? 1 : 0,
-              position: clamped,
-            });
-          } catch { }
-        }
       };
 
       const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2960,30 +2935,22 @@ export default function App() {
         handleStopRef.current = handleStop;
       });
 
-      // 1. MediaSession API: Register Standard Actions ONCE on Mount (Ensures Back/Next/Seek appear on Android/iOS Lock Screen)
-      // Note: Never register "stop" action because Chromium's MediaNotificationManager has logic:
-      // "if (actions.contains(STOP)) return [PLAY, STOP]" which drops PREVIOUS_TRACK and NEXT_TRACK from CompactView!
+      // 1. MediaSession API: Register Standard Actions ONCE on Mount (Ensures Back/Next appear on Android/iOS Lock Screen)
+      // Note: Only register [play, pause, previoustrack, nexttrack, seekto].
+      // Never register "stop", "seekbackward", or "seekforward" because Xiaomi HyperOS / Android MediaNotificationManager
+      // collapses the lock screen to a single pause button (podcast template) when seek/stop actions exist.
       useEffect(() => {
         if (!("mediaSession" in navigator)) return;
 
-        try {
-          // Explicitly clear stop handler so Chromium's MediaNotificationManager prioritizes [PREVIOUS_TRACK, PLAY/PAUSE, NEXT_TRACK] in compact view
-          navigator.mediaSession.setActionHandler("stop", null);
-        } catch {}
+        try { navigator.mediaSession.setActionHandler("stop", null); } catch {}
+        try { navigator.mediaSession.setActionHandler("seekbackward", null); } catch {}
+        try { navigator.mediaSession.setActionHandler("seekforward", null); } catch {}
 
         const actionList: [MediaSessionAction, MediaSessionActionHandler][] = [
           ["play", () => handlePlayRef.current()],
           ["pause", () => handlePauseRef.current()],
           ["previoustrack", () => handlePrevRef.current()],
           ["nexttrack", () => handleNextRef.current()],
-          ["seekbackward", (details) => {
-            const offset = details.seekOffset || 10;
-            handleSeekBackwardRef.current(offset);
-          }],
-          ["seekforward", (details) => {
-            const offset = details.seekOffset || 10;
-            handleSeekForwardRef.current(offset);
-          }],
           ["seekto", (details) => {
             if (details.seekTime !== undefined) {
               seekToTimeRef.current(details.seekTime);
@@ -3038,7 +3005,7 @@ export default function App() {
         }
       }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, currentTrack?.thumbnail]);
 
-      // 3. MediaSession API: Synchronize Playback State & Position on State/Track/Duration Changes
+      // 3. MediaSession API: Synchronize Playback State on Play/Pause/Track Changes
       useEffect(() => {
         if (!("mediaSession" in navigator)) return;
 
@@ -3046,20 +3013,7 @@ export default function App() {
         try {
           navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused";
         } catch {}
-
-        if ("setPositionState" in navigator.mediaSession && duration > 0) {
-          try {
-            const cur = activePlayerType.current === "audio" && audioRef.current
-              ? audioRef.current.currentTime
-              : currentTime;
-            navigator.mediaSession.setPositionState({
-              duration: duration,
-              playbackRate: effectivePlaying ? 1 : 0,
-              position: Math.min(Math.max(0, cur), duration),
-            });
-          } catch {}
-        }
-      }, [isPlaying, currentTrack?.id, duration]);
+      }, [isPlaying, currentTrack?.id]);
 
       // Top Search Submit
       const handleTopSearchSubmit = async (e?: React.FormEvent) => {
