@@ -196,12 +196,39 @@ function buildSearchCandidates(title: string, artist: string): SearchCandidate[]
   return unique;
 }
 
-function isCandidateMatch(searchTrack: string, resultTrack: string): boolean {
+function isCandidateMatch(searchTrack: string, resultTrack: string, targetArtist?: string, resultArtist?: string): boolean {
   if (!searchTrack || !resultTrack) return false;
   const s1 = searchTrack.toLowerCase().replace(/[\s\-_/|–—「」『』【】\(\)\[\]]+/g, "");
   const s2 = resultTrack.toLowerCase().replace(/[\s\-_/|–—「」『』【】\(\)\[\]]+/g, "");
   if (!s1 || !s2) return false;
-  return s1.includes(s2) || s2.includes(s1);
+
+  // If artist names are provided and completely conflicting, reject
+  if (targetArtist && resultArtist) {
+    const a1 = targetArtist.toLowerCase().replace(/[\s\-_/|–—【】\(\)\[\]]+/g, "");
+    const a2 = resultArtist.toLowerCase().replace(/[\s\-_/|–—【】\(\)\[\]]+/g, "");
+    if (a1 && a2 && a1.length > 2 && a2.length > 2) {
+      if (!a1.includes(a2) && !a2.includes(a1)) {
+        // Different artists -> require exact track title
+        if (s1 !== s2) return false;
+      }
+    }
+  }
+
+  // Exact normalized title match
+  if (s1 === s2) return true;
+
+  // Short titles (<= 4 chars) MUST match exactly to avoid false positives (e.g. "MV", "Tu", "Me")
+  if (s1.length <= 4 || s2.length <= 4) {
+    return s1 === s2;
+  }
+
+  // Substring match only if length ratio >= 60%
+  if (s1.includes(s2) || s2.includes(s1)) {
+    const ratio = Math.min(s1.length, s2.length) / Math.max(s1.length, s2.length);
+    if (ratio >= 0.6) return true;
+  }
+
+  return false;
 }
 
 async function tryFetchFromLrclib(title: string, artist: string, duration?: number): Promise<LyricsResponse | null> {
@@ -234,34 +261,57 @@ async function tryFetchFromLrclib(title: string, artist: string, duration?: numb
     } catch {}
   }
 
-  // Pass 2: Try search on /api/search with best candidate query
-  for (const cand of candidates.slice(0, 3)) {
+  // Pass 2: Try /api/search?track_name=...&artist_name=...
+  for (const cand of candidates.slice(0, 4)) {
     try {
-      const q = cand.artist ? `${cand.track} ${cand.artist}` : cand.track;
-      const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(q)}`;
-      const res = await fetch(searchUrl, {
+      const searchUrl = new URL("https://lrclib.net/api/search");
+      searchUrl.searchParams.set("track_name", cand.track);
+      if (cand.artist) {
+        searchUrl.searchParams.set("artist_name", cand.artist);
+      }
+      let res = await fetch(searchUrl.toString(), {
         headers: { "User-Agent": "KahoiiMusic-Web/1.0" },
       });
-      if (res.ok) {
-        const list = (await res.json()) as any[];
-        if (Array.isArray(list) && list.length > 0) {
-          // Strictly validate title match to avoid fetching wrong songs (e.g. Italian rap for Japanese songs)
-          const matchingItems = list.filter((item) => isCandidateMatch(cand.track, item.trackName || ""));
-          if (matchingItems.length > 0) {
-            let match = matchingItems.find((item) => {
-              if (!duration || duration <= 0) return true;
-              return item.duration && Math.abs(item.duration - duration) <= 5;
+      let list = res.ok ? ((await res.json()) as any[]) : [];
+
+      // If empty and artist was specified, retry with track_name alone
+      if ((!list || list.length === 0) && cand.artist) {
+        const fallbackUrl = new URL("https://lrclib.net/api/search");
+        fallbackUrl.searchParams.set("track_name", cand.track);
+        res = await fetch(fallbackUrl.toString(), {
+          headers: { "User-Agent": "KahoiiMusic-Web/1.0" },
+        });
+        if (res.ok) {
+          list = (await res.json()) as any[];
+        }
+      }
+
+      if (Array.isArray(list) && list.length > 0) {
+        // Strictly validate title and artist match
+        const matchingItems = list.filter((item) =>
+          isCandidateMatch(cand.track, item.trackName || "", cand.artist, item.artistName)
+        );
+        if (matchingItems.length > 0) {
+          // Find closest duration match within 12 seconds
+          let match = matchingItems.find((item) => {
+            if (!duration || duration <= 0) return true;
+            return item.duration && Math.abs(item.duration - duration) <= 12;
+          });
+          // Fallback to within 25 seconds
+          if (!match && duration && duration > 0) {
+            match = matchingItems.find((item) => {
+              return item.duration && Math.abs(item.duration - duration) <= 25;
             });
-            if (!match) {
-              match = matchingItems.find((item) => item.syncedLyrics) || matchingItems[0];
-            }
-            if (match && (match.syncedLyrics || match.plainLyrics)) {
-              return {
-                syncedLyrics: match.syncedLyrics || null,
-                plainLyrics: match.plainLyrics || null,
-                instrumental: match.instrumental || false,
-              };
-            }
+          }
+          if (!match && (!duration || duration <= 0)) {
+            match = matchingItems.find((item) => item.syncedLyrics) || matchingItems[0];
+          }
+          if (match && (match.syncedLyrics || match.plainLyrics)) {
+            return {
+              syncedLyrics: match.syncedLyrics || null,
+              plainLyrics: match.plainLyrics || null,
+              instrumental: match.instrumental || false,
+            };
           }
         }
       }
@@ -474,17 +524,20 @@ async function enrichLinesWithRomanizationAndTranslation(
 // -------------------------------------------------------------
 
 function cleanTitleForSearch(title: string): string {
-  return (title || "")
+  let s = (title || "").replace(/[\u00A0\u200B\u3000]/g, " ");
+  s = s
     .replace(/^([【\[\(](?:MV|Official|Video|Audio|HD|4K|Music\s+Video|Lyric\s+Video|Visualizer|Teaser)[】\]\)]\s*)+/gi, "")
     .replace(/[\(\[\{【『](?:Official|Audio|Video|MV|Lyric|Lyrics|HD|4K|M\/V|Visualizer|Teaser|Full)[^\)\]\}】』]*[\)\]\}】』]/gi, "")
     .replace(/歌ってみた(?:のさ)?|Cover|弾き語り/gi, "")
     .replace(/[【】\[\]]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  return s;
 }
 
 function cleanArtistForSearch(artist: string): string {
-  return (artist || "")
+  let s = (artist || "").replace(/[\u00A0\u200B\u3000]/g, " ");
+  s = s
     .replace(/\s*-\s*Topic\b/gi, "")
     .replace(/\b(?:Official\s+(?:Channel|Music|Audio|YouTube)|VEVO|Channel)\b/gi, "")
     .replace(/(?:公式チャンネル|Official\s*Channel)/gi, "")
@@ -492,6 +545,10 @@ function cleanArtistForSearch(artist: string): string {
     .replace(/[【】\[\]]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  if (/^(mv|official|video|audio|lyrics?|hd|4k|m\/v|teaser|visualizer)$/i.test(s)) {
+    return "";
+  }
+  return s;
 }
 
 function formatAnimeRomaji(text: string): string {
