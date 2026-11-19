@@ -66,6 +66,21 @@ import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/c
 // Official App Logo & Favicon placeholder
 const DEFAULT_TRACK_ART = "./logo_icon.png";
 
+// Reliable, zero-black-bar thumbnail resolver matching PC App
+const getTrackThumbnail = (track: Track | null, quality: "hd" | "sd" = "hd"): string => {
+  if (!track) return DEFAULT_TRACK_ART;
+  if (track.thumbnail && !track.thumbnail.includes("figma") && !track.thumbnail.includes("i.ytimg.com")) {
+    return track.thumbnail;
+  }
+  const id = track.id;
+  if (!id) return DEFAULT_TRACK_ART;
+  // Prioritize hq720.jpg (pure 16:9, zero black bars) or mqdefault.jpg fallback
+  // NEVER default to hqdefault.jpg because YouTube bakes 4:3 letterbox black bars into it!
+  return quality === "hd"
+    ? `https://i.ytimg.com/vi/${id}/hq720.jpg`
+    : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+};
+
 // Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const STORAGE_USER_SESSION_KEY = "kahoii_user_session";
@@ -287,26 +302,26 @@ const CURATED_FEATURED_ARTISTS = [
   { name: "Soobin Hoàng Sơn", genre: "R&B / Ballad", avatar: "./artists/soobin.jpg", query: "Soobin Hoàng Sơn" },
   { name: "Taylor Swift", genre: "Pop Superstar", avatar: "./artists/taylor_swift.jpg", query: "Taylor Swift" },
   { name: "The Weeknd", genre: "R&B / Pop", avatar: "./artists/the_weeknd.jpg", query: "The Weeknd" },
-  { name: "HIEUTHUHAI", genre: "Rap / Hip-Hop", avatar: "https://i.ytimg.com/vi/bY8o44A_aI4/hqdefault.jpg", query: "HIEUTHUHAI" },
-  { name: "Wren Evans", genre: "Pop / R&B", avatar: "https://i.ytimg.com/vi/571_T9gKrqU/hqdefault.jpg", query: "Wren Evans" },
-  { name: "tuki.", genre: "J-Pop / Acoustic", avatar: "https://i.ytimg.com/vi/kJQP7kiw5Fk/hqdefault.jpg", query: "tuki." },
-  { name: "MCK", genre: "Hip-Hop / Trap", avatar: "https://i.ytimg.com/vi/Wk9Uj4Qk6q4/hqdefault.jpg", query: "MCK" },
-  { name: "tlinh", genre: "R&B / Hip-Hop", avatar: "https://i.ytimg.com/vi/lJgK34lZ7Zk/hqdefault.jpg", query: "tlinh" },
-  { name: "Charlie Puth", genre: "Pop / Funk", avatar: "https://i.ytimg.com/vi/3AtDnEC4zak/hqdefault.jpg", query: "Charlie Puth" },
-  { name: "MONO", genre: "Dance-Pop / R&B", avatar: "https://i.ytimg.com/vi/lX_q2rZ5Yh4/hqdefault.jpg", query: "MONO" },
-  { name: "GREY D", genre: "Pop / Acoustic", avatar: "https://i.ytimg.com/vi/E5t0k7d09m0/hqdefault.jpg", query: "GREY D" },
-  { name: "Phương Ly", genre: "Pop / R&B", avatar: "https://i.ytimg.com/vi/L4a024Wk8c4/hqdefault.jpg", query: "Phương Ly" },
-  { name: "Hoàng Dũng", genre: "Indie / Ballad", avatar: "https://i.ytimg.com/vi/2v5r8e4k_08/hqdefault.jpg", query: "Hoàng Dũng" },
-  { name: "Amee", genre: "Teen-Pop / R&B", avatar: "https://i.ytimg.com/vi/K0t2Z4o2r9s/hqdefault.jpg", query: "Amee" },
-  { name: "Bruno Mars", genre: "Funk / Pop / R&B", avatar: "https://i.ytimg.com/vi/PMivT7MJ41M/hqdefault.jpg", query: "Bruno Mars" },
-  { name: "Billie Eilish", genre: "Alt-Pop / Indie", avatar: "https://i.ytimg.com/vi/4i_T4vPzN5E/hqdefault.jpg", query: "Billie Eilish" },
-  { name: "NewJeans", genre: "K-Pop / R&B", avatar: "https://i.ytimg.com/vi/ArmDp-zijuc/hqdefault.jpg", query: "NewJeans" },
-  { name: "Rosé", genre: "K-Pop / Pop", avatar: "https://i.ytimg.com/vi/ekr2nIex040/hqdefault.jpg", query: "Rosé" },
-  { name: "Vũ Cát Tường", genre: "Pop / Ballad", avatar: "https://i.ytimg.com/vi/v5k-8s2Q7fI/hqdefault.jpg", query: "Vũ Cát Tường" },
-  { name: "B Ray", genre: "Rap / Hip-Hop", avatar: "https://i.ytimg.com/vi/N7vX8Zq9j5I/hqdefault.jpg", query: "B Ray" },
-  { name: "JustaTee", genre: "R&B / Hip-Hop", avatar: "https://i.ytimg.com/vi/6jK39tZk8c8/hqdefault.jpg", query: "JustaTee" },
-  { name: "Quốc Thiên", genre: "Vocal / Ballad", avatar: "https://i.ytimg.com/vi/7j5h2Y6h8c8/hqdefault.jpg", query: "Quốc Thiên" },
-  { name: "Rhymastic", genre: "Rap / Producer", avatar: "https://i.ytimg.com/vi/8j5h2Y6h8c8/hqdefault.jpg", query: "Rhymastic" },
+  { name: "HIEUTHUHAI", genre: "Rap / Hip-Hop", avatar: "https://i.ytimg.com/vi/bY8o44A_aI4/mqdefault.jpg", query: "HIEUTHUHAI" },
+  { name: "Wren Evans", genre: "Pop / R&B", avatar: "https://i.ytimg.com/vi/571_T9gKrqU/mqdefault.jpg", query: "Wren Evans" },
+  { name: "tuki.", genre: "J-Pop / Acoustic", avatar: "https://i.ytimg.com/vi/kJQP7kiw5Fk/mqdefault.jpg", query: "tuki." },
+  { name: "MCK", genre: "Hip-Hop / Trap", avatar: "https://i.ytimg.com/vi/Wk9Uj4Qk6q4/mqdefault.jpg", query: "MCK" },
+  { name: "tlinh", genre: "R&B / Hip-Hop", avatar: "https://i.ytimg.com/vi/lJgK34lZ7Zk/mqdefault.jpg", query: "tlinh" },
+  { name: "Charlie Puth", genre: "Pop / Funk", avatar: "https://i.ytimg.com/vi/3AtDnEC4zak/mqdefault.jpg", query: "Charlie Puth" },
+  { name: "MONO", genre: "Dance-Pop / R&B", avatar: "https://i.ytimg.com/vi/lX_q2rZ5Yh4/mqdefault.jpg", query: "MONO" },
+  { name: "GREY D", genre: "Pop / Acoustic", avatar: "https://i.ytimg.com/vi/E5t0k7d09m0/mqdefault.jpg", query: "GREY D" },
+  { name: "Phương Ly", genre: "Pop / R&B", avatar: "https://i.ytimg.com/vi/L4a024Wk8c4/mqdefault.jpg", query: "Phương Ly" },
+  { name: "Hoàng Dũng", genre: "Indie / Ballad", avatar: "https://i.ytimg.com/vi/2v5r8e4k_08/mqdefault.jpg", query: "Hoàng Dũng" },
+  { name: "Amee", genre: "Teen-Pop / R&B", avatar: "https://i.ytimg.com/vi/K0t2Z4o2r9s/mqdefault.jpg", query: "Amee" },
+  { name: "Bruno Mars", genre: "Funk / Pop / R&B", avatar: "https://i.ytimg.com/vi/PMivT7MJ41M/mqdefault.jpg", query: "Bruno Mars" },
+  { name: "Billie Eilish", genre: "Alt-Pop / Indie", avatar: "https://i.ytimg.com/vi/4i_T4vPzN5E/mqdefault.jpg", query: "Billie Eilish" },
+  { name: "NewJeans", genre: "K-Pop / R&B", avatar: "https://i.ytimg.com/vi/ArmDp-zijuc/mqdefault.jpg", query: "NewJeans" },
+  { name: "Rosé", genre: "K-Pop / Pop", avatar: "https://i.ytimg.com/vi/ekr2nIex040/mqdefault.jpg", query: "Rosé" },
+  { name: "Vũ Cát Tường", genre: "Pop / Ballad", avatar: "https://i.ytimg.com/vi/v5k-8s2Q7fI/mqdefault.jpg", query: "Vũ Cát Tường" },
+  { name: "B Ray", genre: "Rap / Hip-Hop", avatar: "https://i.ytimg.com/vi/N7vX8Zq9j5I/mqdefault.jpg", query: "B Ray" },
+  { name: "JustaTee", genre: "R&B / Hip-Hop", avatar: "https://i.ytimg.com/vi/6jK39tZk8c8/mqdefault.jpg", query: "JustaTee" },
+  { name: "Quốc Thiên", genre: "Vocal / Ballad", avatar: "https://i.ytimg.com/vi/7j5h2Y6h8c8/mqdefault.jpg", query: "Quốc Thiên" },
+  { name: "Rhymastic", genre: "Rap / Producer", avatar: "https://i.ytimg.com/vi/8j5h2Y6h8c8/mqdefault.jpg", query: "Rhymastic" },
 ];
 
 type LeftTab = "library" | "favorites" | "offline" | "history";
@@ -393,20 +408,25 @@ function formatTrackArtist(title?: string, author?: string): string {
 
   // 1. Try extracting artist from title with smart patterns
   if (rawTitle) {
+    // Strip leading video metadata like 【MV】, [Official Video], (4K) before parsing
+    const titleCleaned = rawTitle
+      .replace(/^([【\[\(](?:MV|Official|Video|Audio|HD|4K|Music\s+Video|Lyric\s+Video|Visualizer|Teaser)[】\]\)]\s*)+/gi, "")
+      .replace(/(\s*[【\[\(](?:MV|Official|Video|Audio|HD|4K|Music\s+Video|Lyric\s+Video|Visualizer|Teaser)[】\]\)])+$/gi, "")
+      .trim();
+
     // " / ": e.g. "『ラベンダー』 / MIMI feat. saewool (Music Video)" -> "MIMI feat. saewool"
-    // "私は、私達は / Guiano - Coverd by しほ" -> "Guiano - Coverd by しほ"
     // "【MV】「言っといてよ」 / 9Lana" -> "9Lana"
-    if (rawTitle.includes(" / ")) {
-      const parts = rawTitle.split(" / ");
+    if (titleCleaned.includes(" / ")) {
+      const parts = titleCleaned.split(" / ");
       if (parts.length >= 2) {
         let cand = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").replace(/\(.*?\)/g, "").trim();
-        if (cand) return cand;
+        if (cand && !/^(mv|official|video|audio|lyrics?)$/i.test(cand)) return cand;
       }
     }
 
     // " - ": e.g. "Orangestar - 花筏 (feat. 夏背)" -> "Orangestar"
-    if (rawTitle.includes(" - ")) {
-      const parts = rawTitle.split(" - ");
+    if (titleCleaned.includes(" - ")) {
+      const parts = titleCleaned.split(" - ");
       if (parts.length >= 2) {
         let cand = parts[0].trim();
         cand = cand.replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "").trim();
@@ -417,29 +437,32 @@ function formatTrackArtist(title?: string, author?: string): string {
     }
 
     // " | ": e.g. "Title | Artist"
-    if (rawTitle.includes(" | ")) {
-      const parts = rawTitle.split(" | ");
+    if (titleCleaned.includes(" | ")) {
+      const parts = titleCleaned.split(" | ");
       if (parts.length >= 2) {
         const cand = parts[1].trim();
-        if (cand) return cand;
+        if (cand && !/^(mv|official|lyric|audio|video)$/i.test(cand)) return cand;
       }
     }
 
     // "Covered by X" / "Cover by X"
-    const mCover = rawTitle.match(/(?:covered\s+by|cover\s+by|vocal\s*:?)\s*([^\s\(\)\[\]【】\/|]+)/i);
+    const mCover = titleCleaned.match(/(?:covered\s+by|cover\s+by|vocal\s*:?)\s*([^\s\(\)\[\]【】\/|]+)/i);
     if (mCover && mCover[1]) {
       return mCover[1].trim();
     }
 
     // Japanese quotes: 「Track」Artist or Artist「Track」
-    const mQuotes = rawTitle.match(/([^\s\u300C\u300E\u3010]+)\s*[\u300C\u300E\u3010][^\u300D\u300F\u3011]+[\u300D\u300F\u3011]/);
-    if (mQuotes && mQuotes[1] && !/^(mv|official|video|audio|lyrics?|弾き語り|歌ってみた)$/i.test(mQuotes[1])) {
-      return mQuotes[1].trim();
+    const mQuotes = titleCleaned.match(/([^\s\u300C\u300E\u3010\u300D\u300F\u3011\[\]\(\)]+)\s*[\u300C\u300E\u3010][^\u300D\u300F\u3011]+[\u300D\u300F\u3011]/);
+    if (mQuotes && mQuotes[1]) {
+      const cleanCand = mQuotes[1].replace(/[【】\[\]\(\)]/g, "").trim();
+      if (cleanCand && !/^(mv|official|video|audio|lyrics?|弾き語り|歌ってみた)$/i.test(cleanCand)) {
+        return cleanCand;
+      }
     }
 
     // Check brackets like 【Artist】 if not standard tags
-    const bracketMatch = rawTitle.match(/【([^】]+)】/);
-    if (bracketMatch && bracketMatch[1] && !/歌ってみた|弾き語り|MV|Official|Lyric|Audio|HD|4K/i.test(bracketMatch[1])) {
+    const bracketMatch = titleCleaned.match(/【([^】]+)】/);
+    if (bracketMatch && bracketMatch[1] && !/歌ってみた|弾き語り|MV|Official|Lyric|Audio|HD|4K|Visualizer|Teaser/i.test(bracketMatch[1])) {
       return bracketMatch[1].trim();
     }
 
@@ -2486,9 +2509,8 @@ export default function App() {
             }
 
             if (data.streamUrl && audioRef.current) {
-              const playableUrl = data.streamUrl.includes("googlevideo.com")
-                ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
-                : data.streamUrl;
+              // Direct stream from Google Video CDN: high-speed, zero-timeout native HTML5 audio for smooth background playback
+              const playableUrl = data.streamUrl;
 
               // Silence YouTube iframe
               if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
@@ -2867,14 +2889,7 @@ export default function App() {
         if (!("mediaSession" in navigator)) return;
 
         if (currentTrack) {
-          const artUrl =
-            currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-              ? currentTrack.thumbnail.includes("i.ytimg.com")
-                ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                : currentTrack.thumbnail
-              : currentTrack.id
-                ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg`
-                : DEFAULT_TRACK_ART;
+          const artUrl = getTrackThumbnail(currentTrack, "hd");
 
           try {
             navigator.mediaSession.metadata = new MediaMetadata({
@@ -2897,6 +2912,17 @@ export default function App() {
         try {
           const effectivePlaying = isPlaying || (!isUserPausedRef.current && !!currentTrack);
           navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused";
+
+          // Keep lockscreen and notification scrubber dynamically synchronized without freezing
+          if ("setPositionState" in navigator.mediaSession && duration > 0 && currentTime >= 0) {
+            try {
+              navigator.mediaSession.setPositionState({
+                duration: Math.max(1, duration),
+                playbackRate: effectivePlaying ? 1 : 0,
+                position: Math.min(currentTime, duration),
+              });
+            } catch { }
+          }
 
           navigator.mediaSession.setActionHandler("play", () => {
             isUserPausedRef.current = false;
@@ -2969,7 +2995,7 @@ export default function App() {
             title: "YouTube Video",
             author: "YouTube",
             duration: 0,
-            thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            thumbnail: `https://i.ytimg.com/vi/${videoId}/hq720.jpg`,
           };
           playSearchResult(directTrack);
           setTopSearchText("");
@@ -2996,7 +3022,7 @@ export default function App() {
                   title: "YouTube Video",
                   author: "YouTube",
                   duration: 0,
-                  thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                  thumbnail: `https://i.ytimg.com/vi/${videoId}/hq720.jpg`,
                 };
                 playSearchResult(directTrack);
                 setTopSearchText("");
@@ -5352,18 +5378,17 @@ export default function App() {
                           </div>
                         ) : (
                           <img
-                            src={
-                              currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                                ? (currentTrack.thumbnail.includes("i.ytimg.com")
-                                  ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                                  : currentTrack.thumbnail)
-                                : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
-                            }
+                            src={getTrackThumbnail(currentTrack, "hd")}
                             alt={currentTrack.title || ""}
                             onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                              const target = e.currentTarget;
+                              if (target.src.includes("hq720.jpg") && currentTrack?.id) {
+                                target.src = `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`;
+                              } else if (!target.src.includes(DEFAULT_TRACK_ART)) {
+                                target.src = DEFAULT_TRACK_ART;
+                              }
                             }}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover scale-[1.04] select-none"
                           />
                         )}
 
@@ -5479,22 +5504,22 @@ export default function App() {
                           />
                         </button>
 
-                        {/* Seekbar Progress Line with Timestamp Indicators (strictly above control buttons) */}
-                        <div className="absolute left-3 right-3 bottom-[56px] flex flex-col gap-1 z-20">
-                          <div className="relative w-full h-5 flex items-center group/seek touch-none">
-                            <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/25 overflow-hidden" />
+                        {/* Seekbar Progress Line with Timestamp Indicators (strictly above control buttons at ~72% Y, matching PC App) */}
+                        <div className="absolute left-3 right-3 bottom-[38px] flex flex-col gap-0.5 z-20">
+                          <div className="relative w-full h-4 flex items-center group/seek touch-none">
+                            <div className="absolute left-0 right-0 h-1 rounded-full bg-white/20 overflow-hidden" />
                             <div
-                              className="absolute left-0 h-1.5 rounded-full"
+                              className="absolute left-0 h-1 rounded-full"
                               style={{
                                 width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
                                 background: "var(--theme-btn-gradient)",
                               }}
                             />
                             <div
-                              className="absolute w-3 h-3 rounded-full bg-white shadow-md pointer-events-none transition-transform"
+                              className="absolute w-2.5 h-2.5 rounded-full bg-white shadow-md pointer-events-none transition-transform"
                               style={{
-                                left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 6px)`,
-                                boxShadow: "0 0 8px var(--theme-accent)",
+                                left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 5px)`,
+                                boxShadow: "0 0 6px var(--theme-accent)",
                               }}
                             />
                             <input
@@ -5507,14 +5532,14 @@ export default function App() {
                               className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
                             />
                           </div>
-                          <div className="flex justify-between text-[9.5px] text-white/80 font-mono px-0.5 -mt-1 font-semibold drop-shadow">
+                          <div className="flex justify-between text-[8.5px] text-white/70 font-mono px-0.5 -mt-0.5 font-medium select-none drop-shadow">
                             <span>{formatTime(currentTime)}</span>
                             <span>{formatTime(duration)}</span>
                           </div>
                         </div>
 
                         {/* 5 Playback Control Buttons Row */}
-                        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-0.5 z-20">
+                        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-0.5 z-20">
                           {/* Loop / Shuffle */}
                           <button
                             type="button"
@@ -5860,18 +5885,17 @@ export default function App() {
                           </div>
                         ) : (
                           <img
-                            src={
-                              currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                                ? (currentTrack.thumbnail.includes("i.ytimg.com")
-                                  ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                                  : currentTrack.thumbnail)
-                                : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
-                            }
+                            src={getTrackThumbnail(currentTrack, "hd")}
                             alt={currentTrack.title || "Track Artwork"}
                             onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                              const target = e.currentTarget;
+                              if (target.src.includes("hq720.jpg") && currentTrack?.id) {
+                                target.src = `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`;
+                              } else if (!target.src.includes(DEFAULT_TRACK_ART)) {
+                                target.src = DEFAULT_TRACK_ART;
+                              }
                             }}
-                            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+                            className="w-full h-full object-cover scale-[1.04] transition-all duration-700 group-hover:scale-110 select-none"
                           />
                         )}
 
@@ -6556,18 +6580,15 @@ export default function App() {
                   className="lg:hidden fixed safe-mini-player left-2.5 right-2.5 z-40 bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border theme-accent-border rounded-2xl p-2 flex items-center gap-2.5 shadow-2xl cursor-pointer animate-fade-in"
                 >
                   <img
-                    src={
-                      currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                        ? (currentTrack.thumbnail.includes("i.ytimg.com")
-                          ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                          : currentTrack.thumbnail)
-                        : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
-                    }
+                    src={getTrackThumbnail(currentTrack, "sd")}
                     alt=""
                     onError={(e) => {
-                      e.currentTarget.src = DEFAULT_TRACK_ART;
+                      const target = e.currentTarget;
+                      if (!target.src.includes(DEFAULT_TRACK_ART)) {
+                        target.src = DEFAULT_TRACK_ART;
+                      }
                     }}
-                    className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md"
+                    className="w-10 h-10 rounded-xl object-cover scale-[1.04] flex-shrink-0 shadow-md select-none"
                   />
                   <div className="flex-1 min-w-0 pr-1">
                     <p className="text-xs font-bold text-white truncate drop-shadow-sm">{currentTrack.title}</p>

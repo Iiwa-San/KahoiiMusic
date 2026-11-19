@@ -62,7 +62,7 @@ async function resolveViaInnerTubeVR(videoId: string): Promise<StreamInfo | null
         title,
         author,
         duration,
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/hq720.jpg`,
         provider: "innertube",
       };
     }
@@ -135,7 +135,7 @@ async function resolveViaVisionOS(videoId: string): Promise<StreamInfo | null> {
         title,
         author,
         duration,
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/hq720.jpg`,
         provider: "visionos",
       };
     }

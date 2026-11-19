@@ -849,7 +849,7 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
           author,
           duration: cardDur,
           durationText: cardDurText,
-          thumbnail: bestThumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          thumbnail: bestThumb || `https://i.ytimg.com/vi/${videoId}/hq720.jpg`,
           type: "song",
         };
       } else if (isArtist && !seenArtistNames.has(cardTitle.toLowerCase())) {
@@ -1402,7 +1402,7 @@ export async function getOfficialTrendingTracks(): Promise<{ tracks: SearchTrack
           r.fixedColumns?.[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs?.[0]?.text || "3:30";
         const thumbs = r.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
         const thumbnail =
-          thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+          thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${videoId}/hq720.jpg`;
 
         let artistBrowseId: string | undefined = undefined;
         for (const ar of authorRuns) {
