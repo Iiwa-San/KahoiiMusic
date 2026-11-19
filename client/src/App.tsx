@@ -66,6 +66,21 @@ import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/c
 // Official App Logo & Favicon placeholder
 const DEFAULT_TRACK_ART = "./logo_icon.png";
 
+// Reliable, zero-black-bar thumbnail resolver matching PC App
+const getTrackThumbnail = (track: Track | null, quality: "hd" | "sd" = "hd"): string => {
+  if (!track) return DEFAULT_TRACK_ART;
+  if (track.thumbnail && !track.thumbnail.includes("figma") && !track.thumbnail.includes("i.ytimg.com")) {
+    return track.thumbnail;
+  }
+  const id = track.id;
+  if (!id) return DEFAULT_TRACK_ART;
+  // Prioritize hq720.jpg (pure 16:9, zero black bars) or mqdefault.jpg fallback
+  // NEVER default to hqdefault.jpg because YouTube bakes 4:3 letterbox black bars into it!
+  return quality === "hd"
+    ? `https://i.ytimg.com/vi/${id}/hq720.jpg`
+    : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+};
+
 // Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const STORAGE_USER_SESSION_KEY = "kahoii_user_session";
@@ -383,14 +398,16 @@ function formatTrackArtist(title?: string, author?: string): string {
   const rawTitle = (title || "").replace(/[\u00A0\u200B\u3000]/g, " ").trim();
 
   // Check if author is a generic placeholder or video metadata tag
+  const strippedAuthor = cleanAuthor.replace(/[【】\[\]\(\)]/g, " ").trim();
   const isGeneric =
     !cleanAuthor ||
+    !strippedAuthor ||
     cleanAuthor === "Kahoii Music" ||
     cleanAuthor === "YouTube Music" ||
     cleanAuthor === "Nghệ sĩ" ||
     cleanAuthor === "Artist" ||
     cleanAuthor === "Various Artists" ||
-    /^(mv|official|video|audio|lyrics?|hd|4k|m\/v|teaser|visualizer)[】\]\)]*$/i.test(cleanAuthor);
+    /^(mv|official|video|audio|lyrics?|hd|4k|m\/v|teaser|visualizer|channel)[】\]\)]*$/i.test(strippedAuthor);
 
   // 1. Try extracting artist from title with smart patterns
   if (rawTitle) {
@@ -2935,9 +2952,9 @@ export default function App() {
         handleStopRef.current = handleStop;
       });
 
-      // 1. MediaSession API: Register Standard Actions ONCE on Mount (Ensures Back/Next appear on Android/iOS Lock Screen)
-      // Note: Only register [play, pause, previoustrack, nexttrack, seekto].
-      // Never register "stop", "seekbackward", or "seekforward" because Xiaomi HyperOS / Android MediaNotificationManager
+      // 1. MediaSession API: Register Standard 4 Actions ONCE on Mount (Ensures Back/Next appear on Android/iOS Lock Screen)
+      // Note: Only register [play, pause, previoustrack, nexttrack].
+      // Never register "stop", "seekbackward", "seekforward", or "seekto" because Xiaomi HyperOS / Android MediaNotificationManager
       // collapses the lock screen to a single pause button (podcast template) when seek/stop actions exist.
       useEffect(() => {
         if (!("mediaSession" in navigator)) return;
@@ -2945,17 +2962,13 @@ export default function App() {
         try { navigator.mediaSession.setActionHandler("stop", null); } catch {}
         try { navigator.mediaSession.setActionHandler("seekbackward", null); } catch {}
         try { navigator.mediaSession.setActionHandler("seekforward", null); } catch {}
+        try { navigator.mediaSession.setActionHandler("seekto", null); } catch {}
 
         const actionList: [MediaSessionAction, MediaSessionActionHandler][] = [
           ["play", () => handlePlayRef.current()],
           ["pause", () => handlePauseRef.current()],
           ["previoustrack", () => handlePrevRef.current()],
           ["nexttrack", () => handleNextRef.current()],
-          ["seekto", (details) => {
-            if (details.seekTime !== undefined) {
-              seekToTimeRef.current(details.seekTime);
-            }
-          }],
         ];
 
         for (const [action, handler] of actionList) {
@@ -2978,14 +2991,7 @@ export default function App() {
           return;
         }
 
-        const artUrl =
-          currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-            ? currentTrack.thumbnail.includes("hqdefault.jpg")
-              ? currentTrack.thumbnail.replace("hqdefault.jpg", "mqdefault.jpg")
-              : currentTrack.thumbnail
-            : currentTrack.id
-              ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`
-              : DEFAULT_TRACK_ART;
+        const artUrl = getTrackThumbnail(currentTrack, "hd");
 
         try {
           navigator.mediaSession.metadata = new MediaMetadata({
@@ -5413,18 +5419,17 @@ export default function App() {
                           </div>
                         ) : (
                           <img
-                            src={
-                              currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                                ? (currentTrack.thumbnail.includes("hqdefault.jpg")
-                                  ? currentTrack.thumbnail.replace("hqdefault.jpg", "mqdefault.jpg")
-                                  : currentTrack.thumbnail)
-                                : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg` : DEFAULT_TRACK_ART)
-                            }
+                            src={getTrackThumbnail(currentTrack, "hd")}
                             alt={currentTrack.title || ""}
                             onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                              const target = e.currentTarget;
+                              if (target.src.includes("hq720.jpg") && currentTrack?.id) {
+                                target.src = `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`;
+                              } else if (!target.src.includes(DEFAULT_TRACK_ART)) {
+                                target.src = DEFAULT_TRACK_ART;
+                              }
                             }}
-                            className="w-full h-full object-cover scale-[1.03]"
+                            className="w-full h-full object-cover scale-[1.10] select-none"
                           />
                         )}
 
@@ -5541,8 +5546,8 @@ export default function App() {
                         </button>
 
                         {/* Seekbar Progress Line with Timestamp Indicators (sleek & compact right above controls, matching PC App) */}
-                        <div className="absolute left-2.5 right-2.5 bottom-[38px] flex flex-col gap-0.5 z-20">
-                          <div className="relative w-full h-4 flex items-center group/seek touch-none">
+                        <div className="absolute left-2.5 right-2.5 bottom-[31px] flex flex-col gap-0.5 z-20">
+                          <div className="relative w-full h-3.5 flex items-center group/seek touch-none">
                             <div className="absolute left-0 right-0 h-1 rounded-full bg-white/25 overflow-hidden" />
                             <div
                               className="absolute left-0 h-1 rounded-full"
@@ -5568,14 +5573,14 @@ export default function App() {
                               className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
                             />
                           </div>
-                          <div className="flex justify-between text-[9px] text-white/80 font-mono px-0.5 -mt-0.5 font-semibold drop-shadow">
+                          <div className="flex justify-between text-[8.5px] text-white/70 font-mono px-0.5 -mt-1 font-medium select-none drop-shadow">
                             <span>{formatTime(currentTime)}</span>
                             <span>{formatTime(duration)}</span>
                           </div>
                         </div>
 
                         {/* 5 Playback Control Buttons Row */}
-                        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between px-0.5 z-20">
+                        <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between px-0.5 z-20">
                           {/* Loop / Shuffle */}
                           <button
                             type="button"
@@ -5921,18 +5926,17 @@ export default function App() {
                           </div>
                         ) : (
                           <img
-                            src={
-                              currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                                ? (currentTrack.thumbnail.includes("hqdefault.jpg")
-                                  ? currentTrack.thumbnail.replace("hqdefault.jpg", "mqdefault.jpg")
-                                  : currentTrack.thumbnail)
-                                : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg` : DEFAULT_TRACK_ART)
-                            }
+                            src={getTrackThumbnail(currentTrack, "hd")}
                             alt={currentTrack.title || "Track Artwork"}
                             onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                              const target = e.currentTarget;
+                              if (target.src.includes("hq720.jpg") && currentTrack?.id) {
+                                target.src = `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`;
+                              } else if (!target.src.includes(DEFAULT_TRACK_ART)) {
+                                target.src = DEFAULT_TRACK_ART;
+                              }
                             }}
-                            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+                            className="w-full h-full object-cover scale-[1.08] select-none transition-all duration-700 group-hover:scale-115"
                           />
                         )}
 

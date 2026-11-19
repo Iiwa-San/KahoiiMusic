@@ -121,8 +121,10 @@ app.get("/api/lyrics", async (req, res) => {
     if (resolved) artist = resolved;
   }
 
+  const refresh = req.query.refresh === "true";
+
   try {
-    const lyrics = await fetchLyrics(title, artist, duration, videoId);
+    const lyrics = await fetchLyrics(title, artist, duration, videoId, refresh);
     return res.json({ ...lyrics, artist: artist || undefined });
   } catch (err: any) {
     console.error("[API Lyrics Error]", err.message);

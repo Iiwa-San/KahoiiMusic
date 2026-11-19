@@ -33,7 +33,8 @@ export async function fetchLyrics(
   title: string,
   artist?: string,
   duration?: number,
-  videoId?: string
+  videoId?: string,
+  refresh?: boolean
 ): Promise<LyricsResponse> {
   const cleanT = (title || "").trim();
   const cleanA = (artist || "").trim();
@@ -44,7 +45,7 @@ export async function fetchLyrics(
   }
 
   const cacheKey = `${vid || cleanT.toLowerCase()}::${cleanA.toLowerCase()}::${Math.round(duration || 0)}`;
-  if (lyricsMemoryCache.has(cacheKey)) {
+  if (!refresh && lyricsMemoryCache.has(cacheKey)) {
     return lyricsMemoryCache.get(cacheKey)!;
   }
 
@@ -118,6 +119,11 @@ function buildSearchCandidates(title: string, artist: string): SearchCandidate[]
   const list: SearchCandidate[] = [];
   if (!title) return list;
 
+  const isGenericWord = (w: string) =>
+    !w ||
+    /^(mv|official|video|audio|lyrics?|hd|4k|m\/v|teaser|visualizer|full|trailer|remix|topic)[】\]\)]*$/i.test(w.trim()) ||
+    w.trim().length < 2;
+
   const cleanT = cleanTitleForSearch(title);
   const cleanA = cleanArtistForSearch(artist);
 
@@ -127,19 +133,23 @@ function buildSearchCandidates(title: string, artist: string): SearchCandidate[]
   if (mHash && !cleanA) {
     hashArtist = cleanArtistForSearch(mHash[1]);
   }
+  const effectiveArtist = !isGenericWord(cleanA) ? cleanA : !isGenericWord(hashArtist) ? hashArtist : "";
 
   // 1. Japanese quotes: 「Track」 or 『Track』 (Never match 【MV】 as track name)
   const mQuotes = cleanT.match(/[「『]([^」』]+)[」』]/) || title.match(/[「『]([^」』]+)[」』]/);
   if (mQuotes) {
     const inner = mQuotes[1].trim();
-    if (inner && !/^(mv|official|video|audio|lyrics?|hd|4k)$/i.test(inner)) {
+    if (!isGenericWord(inner)) {
       if (inner.includes("/")) {
         const parts = inner.split("/");
-        list.push({ track: parts[0].trim(), artist: parts[1].trim() });
-        list.push({ track: parts[1].trim(), artist: parts[0].trim() });
+        const p0 = parts[0].trim();
+        const p1 = parts[1].trim();
+        if (!isGenericWord(p0) && !isGenericWord(p1)) {
+          list.push({ track: p0, artist: p1 });
+          list.push({ track: p1, artist: p0 });
+        }
       } else {
-        list.push({ track: inner, artist: cleanA || hashArtist });
-        if (cleanA) list.push({ track: inner, artist: cleanA });
+        list.push({ track: inner, artist: effectiveArtist });
         list.push({ track: inner, artist: "" });
       }
     }
@@ -153,11 +163,19 @@ function buildSearchCandidates(title: string, artist: string): SearchCandidate[]
       if (parts.length >= 2) {
         const p0 = parts[0].trim();
         const p1 = parts[1].trim();
-        list.push({ track: p1, artist: p0 });
-        list.push({ track: p0, artist: p1 });
-        if (cleanA) {
-          list.push({ track: p0, artist: cleanA });
-          list.push({ track: p1, artist: cleanA });
+        const gen0 = isGenericWord(p0);
+        const gen1 = isGenericWord(p1);
+        if (!gen0 && !gen1) {
+          list.push({ track: p1, artist: p0 });
+          list.push({ track: p0, artist: p1 });
+          if (effectiveArtist) {
+            list.push({ track: p0, artist: effectiveArtist });
+            list.push({ track: p1, artist: effectiveArtist });
+          }
+        } else if (!gen0 && gen1) {
+          list.push({ track: p0, artist: effectiveArtist });
+        } else if (gen0 && !gen1) {
+          list.push({ track: p1, artist: effectiveArtist });
         }
       }
       break;
@@ -168,29 +186,31 @@ function buildSearchCandidates(title: string, artist: string): SearchCandidate[]
   const mFeat = title.match(/(?:feat\.|ft\.|featuring)\s*([^/|()\[\]–—]+)/i);
   if (mFeat) {
     const featArtist = mFeat[1].trim();
-    if (featArtist && cleanA) {
-      list.push({ track: cleanT, artist: `${cleanA} feat. ${featArtist}` });
-      list.push({ track: cleanT, artist: `${cleanA} & ${featArtist}` });
+    if (featArtist && effectiveArtist) {
+      list.push({ track: cleanT, artist: `${effectiveArtist} feat. ${featArtist}` });
+      list.push({ track: cleanT, artist: `${effectiveArtist} & ${featArtist}` });
     }
   }
 
   // 4. Clean full title without brackets or quotes
   const unquoted = cleanT.replace(/[「」『』"']/g, "").trim();
-  if (unquoted) {
-    if (cleanA) {
-      list.push({ track: unquoted, artist: cleanA });
+  if (unquoted && !isGenericWord(unquoted)) {
+    if (effectiveArtist) {
+      list.push({ track: unquoted, artist: effectiveArtist });
     }
     list.push({ track: unquoted, artist: "" });
   }
 
-  // Deduplicate
+  // Deduplicate and filter out any generic tokens
   const seen = new Set<string>();
   const unique: SearchCandidate[] = [];
   for (const c of list) {
-    const key = `${c.track.toLowerCase()}||${c.artist.toLowerCase()}`;
-    if (!seen.has(key) && c.track && c.track.length > 1) {
+    if (isGenericWord(c.track)) continue;
+    const finalArtist = isGenericWord(c.artist) ? "" : c.artist;
+    const key = `${c.track.toLowerCase()}||${finalArtist.toLowerCase()}`;
+    if (!seen.has(key)) {
       seen.add(key);
-      unique.push(c);
+      unique.push({ track: c.track, artist: finalArtist });
     }
   }
   return unique;
@@ -201,6 +221,14 @@ function isCandidateMatch(searchTrack: string, resultTrack: string, targetArtist
   const s1 = searchTrack.toLowerCase().replace(/[\s\-_/|–—「」『』【】\(\)\[\]]+/g, "");
   const s2 = resultTrack.toLowerCase().replace(/[\s\-_/|–—「」『』【】\(\)\[\]]+/g, "");
   if (!s1 || !s2) return false;
+
+  // CJK Safeguard: If target title has CJK (Japanese/Chinese/Korean),
+  // resultTrack MUST ALSO contain CJK characters! Never match a CJK title to pure Latin ASCII like "STRESSY"!
+  const hasCjk1 = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF]/.test(searchTrack);
+  const hasCjk2 = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF]/.test(resultTrack);
+  if (hasCjk1 && !hasCjk2) {
+    return false;
+  }
 
   // If artist names are provided and completely conflicting, reject
   if (targetArtist && resultArtist) {

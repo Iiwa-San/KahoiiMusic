@@ -1,5 +1,5 @@
 // Service Worker for Kahoii Music PWA & Offline Support
-const CACHE_NAME = 'kahoii-music-v2';
+const CACHE_NAME = 'kahoii-music-v3';
 
 const STATIC_ASSETS = [
   '/',
