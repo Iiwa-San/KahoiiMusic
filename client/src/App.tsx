@@ -136,7 +136,7 @@ const saveAuthSession = (newTokens: { idToken?: string; refreshToken?: string; e
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("kahoii_auth_updated", { detail: session }));
     }
-  } catch {}
+  } catch { }
 };
 
 // Singleton promise to prevent multiple concurrent token refresh calls
@@ -270,44 +270,34 @@ const authenticatedFetch = async (url: string, options: RequestInit = {}): Promi
 const INITIAL_TRENDING_TRACKS: Track[] = [];
 const INITIAL_NEW_RELEASES: Track[] = [];
 
-// Nhạc Sĩ Nổi Bật (Featured Artists - High-res local avatars)
-const FEATURED_ARTISTS = [
-  {
-    name: "Sơn Tùng M-TP",
-    genre: "Pop / R&B",
-    avatar: "./artists/son_tung.jpg",
-    query: "Sơn Tùng M-TP",
-  },
-  {
-    name: "Vũ.",
-    genre: "Indie / Acoustic",
-    avatar: "./artists/vu.jpg",
-    query: "Vũ",
-  },
-  {
-    name: "Đen",
-    genre: "Rap / Hip-Hop",
-    avatar: "./artists/den.jpg",
-    query: "Đen Vâu",
-  },
-  {
-    name: "Soobin Hoàng Sơn",
-    genre: "R&B / Ballad",
-    avatar: "./artists/soobin.jpg",
-    query: "Soobin Hoàng Sơn",
-  },
-  {
-    name: "Taylor Swift",
-    genre: "Pop Superstar",
-    avatar: "./artists/taylor_swift.jpg",
-    query: "Taylor Swift",
-  },
-  {
-    name: "The Weeknd",
-    genre: "R&B / Pop",
-    avatar: "./artists/the_weeknd.jpg",
-    query: "The Weeknd",
-  },
+// Nhạc Sĩ Nổi Bật (Featured Artists - High-res local avatars & rotating pool)
+const CURATED_FEATURED_ARTISTS = [
+  { name: "Sơn Tùng M-TP", genre: "Pop / R&B", avatar: "./artists/son_tung.jpg", query: "Sơn Tùng M-TP" },
+  { name: "Vũ.", genre: "Indie / Acoustic", avatar: "./artists/vu.jpg", query: "Vũ" },
+  { name: "Đen", genre: "Rap / Hip-Hop", avatar: "./artists/den.jpg", query: "Đen Vâu" },
+  { name: "Soobin Hoàng Sơn", genre: "R&B / Ballad", avatar: "./artists/soobin.jpg", query: "Soobin Hoàng Sơn" },
+  { name: "Taylor Swift", genre: "Pop Superstar", avatar: "./artists/taylor_swift.jpg", query: "Taylor Swift" },
+  { name: "The Weeknd", genre: "R&B / Pop", avatar: "./artists/the_weeknd.jpg", query: "The Weeknd" },
+  { name: "HIEUTHUHAI", genre: "Rap / Hip-Hop", avatar: "https://i.ytimg.com/vi/bY8o44A_aI4/hqdefault.jpg", query: "HIEUTHUHAI" },
+  { name: "Wren Evans", genre: "Pop / R&B", avatar: "https://i.ytimg.com/vi/571_T9gKrqU/hqdefault.jpg", query: "Wren Evans" },
+  { name: "tuki.", genre: "J-Pop / Acoustic", avatar: "https://i.ytimg.com/vi/kJQP7kiw5Fk/hqdefault.jpg", query: "tuki." },
+  { name: "MCK", genre: "Hip-Hop / Trap", avatar: "https://i.ytimg.com/vi/Wk9Uj4Qk6q4/hqdefault.jpg", query: "MCK" },
+  { name: "tlinh", genre: "R&B / Hip-Hop", avatar: "https://i.ytimg.com/vi/lJgK34lZ7Zk/hqdefault.jpg", query: "tlinh" },
+  { name: "Charlie Puth", genre: "Pop / Funk", avatar: "https://i.ytimg.com/vi/3AtDnEC4zak/hqdefault.jpg", query: "Charlie Puth" },
+  { name: "MONO", genre: "Dance-Pop / R&B", avatar: "https://i.ytimg.com/vi/lX_q2rZ5Yh4/hqdefault.jpg", query: "MONO" },
+  { name: "GREY D", genre: "Pop / Acoustic", avatar: "https://i.ytimg.com/vi/E5t0k7d09m0/hqdefault.jpg", query: "GREY D" },
+  { name: "Phương Ly", genre: "Pop / R&B", avatar: "https://i.ytimg.com/vi/L4a024Wk8c4/hqdefault.jpg", query: "Phương Ly" },
+  { name: "Hoàng Dũng", genre: "Indie / Ballad", avatar: "https://i.ytimg.com/vi/2v5r8e4k_08/hqdefault.jpg", query: "Hoàng Dũng" },
+  { name: "Amee", genre: "Teen-Pop / R&B", avatar: "https://i.ytimg.com/vi/K0t2Z4o2r9s/hqdefault.jpg", query: "Amee" },
+  { name: "Bruno Mars", genre: "Funk / Pop / R&B", avatar: "https://i.ytimg.com/vi/PMivT7MJ41M/hqdefault.jpg", query: "Bruno Mars" },
+  { name: "Billie Eilish", genre: "Alt-Pop / Indie", avatar: "https://i.ytimg.com/vi/4i_T4vPzN5E/hqdefault.jpg", query: "Billie Eilish" },
+  { name: "NewJeans", genre: "K-Pop / R&B", avatar: "https://i.ytimg.com/vi/ArmDp-zijuc/hqdefault.jpg", query: "NewJeans" },
+  { name: "Rosé", genre: "K-Pop / Pop", avatar: "https://i.ytimg.com/vi/ekr2nIex040/hqdefault.jpg", query: "Rosé" },
+  { name: "Vũ Cát Tường", genre: "Pop / Ballad", avatar: "https://i.ytimg.com/vi/v5k-8s2Q7fI/hqdefault.jpg", query: "Vũ Cát Tường" },
+  { name: "B Ray", genre: "Rap / Hip-Hop", avatar: "https://i.ytimg.com/vi/N7vX8Zq9j5I/hqdefault.jpg", query: "B Ray" },
+  { name: "JustaTee", genre: "R&B / Hip-Hop", avatar: "https://i.ytimg.com/vi/6jK39tZk8c8/hqdefault.jpg", query: "JustaTee" },
+  { name: "Quốc Thiên", genre: "Vocal / Ballad", avatar: "https://i.ytimg.com/vi/7j5h2Y6h8c8/hqdefault.jpg", query: "Quốc Thiên" },
+  { name: "Rhymastic", genre: "Rap / Producer", avatar: "https://i.ytimg.com/vi/8j5h2Y6h8c8/hqdefault.jpg", query: "Rhymastic" },
 ];
 
 type LeftTab = "library" | "favorites" | "offline" | "history";
@@ -493,9 +483,8 @@ const UnifiedPlayOverlay: React.FC<UnifiedPlayOverlayProps> = ({
 
   return (
     <div
-      className={`absolute inset-0 bg-black/45 flex items-center justify-center transition-all duration-200 z-10 ${
-        isCurrent ? "opacity-100 backdrop-blur-[1px]" : "opacity-0 group-hover:opacity-100"
-      } ${className}`}
+      className={`absolute inset-0 bg-black/45 flex items-center justify-center transition-all duration-200 z-10 ${isCurrent ? "opacity-100 backdrop-blur-[1px]" : "opacity-0 group-hover:opacity-100"
+        } ${className}`}
     >
       <button
         type="button"
@@ -540,7 +529,7 @@ export default function App() {
   const currentIndexRef = useRef<number>(0);
   const shuffleHistoryRef = useRef<number[]>([]);
   const isTransitioningRef = useRef<boolean>(false);
-  const handleTrackEndedRef = useRef<() => void>(() => {});
+  const handleTrackEndedRef = useRef<() => void>(() => { });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -556,6 +545,9 @@ export default function App() {
   const [isLibraryLoading, setIsLibraryLoading] = useState<boolean>(true);
   const [trendingTracks, setTrendingTracks] = useState<Track[]>([]);
   const [newReleaseTracks, setNewReleaseTracks] = useState<Track[]>([]);
+  const [homeArtists, setHomeArtists] = useState<any[]>(() =>
+    [...CURATED_FEATURED_ARTISTS].sort(() => Math.random() - 0.5).slice(0, 12)
+  );
 
   // Dual-Engine Playback (Audio Element + Zero-Fail YouTube Iframe Player Fallback)
   const ytPlayerRef = useRef<any>(null);
@@ -603,7 +595,7 @@ export default function App() {
           return parsed;
         }
       }
-    } catch {}
+    } catch { }
     return null;
   });
 
@@ -624,7 +616,7 @@ export default function App() {
           playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
         };
       }
-    } catch {}
+    } catch { }
     return {
       favorites: [],
       savedTracks: [],
@@ -690,7 +682,7 @@ export default function App() {
       const updated = [trimmed, ...filtered].slice(0, 10);
       try {
         localStorage.setItem("kahoii_search_history", JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
   };
@@ -701,7 +693,7 @@ export default function App() {
       const updated = prev.filter((item) => item !== itemToRemove);
       try {
         localStorage.setItem("kahoii_search_history", JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
   };
@@ -711,7 +703,7 @@ export default function App() {
     setSearchHistory([]);
     try {
       localStorage.removeItem("kahoii_search_history");
-    } catch {}
+    } catch { }
   };
 
   const executeSearch = async (query: string) => {
@@ -786,12 +778,12 @@ export default function App() {
     if (audioRef.current) {
       try {
         audioRef.current.pause();
-      } catch {}
+      } catch { }
     }
     if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
       try {
         ytPlayerRef.current.pauseVideo();
-      } catch {}
+      } catch { }
     }
     setIsPlaying(false);
   };
@@ -955,7 +947,7 @@ export default function App() {
       const next = prev === "dual" ? "romanized" : prev === "romanized" ? "original" : "dual";
       try {
         localStorage.setItem("kahoii_lyric_display_mode", next);
-      } catch {}
+      } catch { }
       return next;
     });
   };
@@ -1069,7 +1061,7 @@ export default function App() {
           }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => {
       isCancelled = true;
@@ -1230,7 +1222,7 @@ export default function App() {
             },
           });
         }
-      } catch {}
+      } catch { }
     };
 
     fetchLatestDownloads();
@@ -1286,7 +1278,7 @@ export default function App() {
         if (outcome === "accepted") {
           showToast("Đang cài đặt ứng dụng Kahoii Music...", "success");
         }
-      } catch {}
+      } catch { }
       setDeferredPrompt(null);
     } else {
       showToast("Để cài đặt: Bấm biểu tượng 'Cài đặt' trên thanh địa chỉ URL của trình duyệt!", "info");
@@ -1371,7 +1363,7 @@ export default function App() {
         if (lyrRes.ok) {
           lyricsData = await lyrRes.json();
         }
-      } catch {}
+      } catch { }
 
       // 3. Store into IndexedDB
       await saveTrackOffline(track, audioBlob, lyricsData);
@@ -1414,7 +1406,7 @@ export default function App() {
     };
     try {
       localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(payload));
-    } catch {}
+    } catch { }
 
     try {
       await authenticatedFetch(`${API_BASE}/api/user/library`, {
@@ -1469,7 +1461,7 @@ export default function App() {
         next.delete(track.id);
         try {
           localStorage.setItem("kahoii_downloaded_track_ids", JSON.stringify(Array.from(next)));
-        } catch {}
+        } catch { }
         return next;
       });
       showToast(`Đã gỡ bài hát "${track.title}" khỏi danh sách tải xuống`, "info");
@@ -1481,7 +1473,7 @@ export default function App() {
       next.add(track.id);
       try {
         localStorage.setItem("kahoii_downloaded_track_ids", JSON.stringify(Array.from(next)));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -1611,8 +1603,8 @@ export default function App() {
       currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
         ? currentTrack.thumbnail
         : currentTrack.id
-        ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`
-        : "";
+          ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`
+          : "";
 
     if (thumbUrl) {
       loadAndExtractTheme(thumbUrl).then((palette) => {
@@ -1672,7 +1664,7 @@ export default function App() {
           }
           try {
             localStorage.removeItem(STORAGE_USER_SESSION_KEY);
-          } catch {}
+          } catch { }
           setUserSession({ isLoggedIn: false, user: null });
         }
       } else if (res.status === 401) {
@@ -1692,7 +1684,7 @@ export default function App() {
         }
         try {
           localStorage.removeItem(STORAGE_USER_SESSION_KEY);
-        } catch {}
+        } catch { }
         setUserSession({ isLoggedIn: false, user: null });
       }
     } catch (err) {
@@ -1702,181 +1694,187 @@ export default function App() {
 
   const fetchLibraryData = async (silent = false) => {
     // Avoid overwriting freshly triggered local user actions before cloud write finishes
-    if (silent && Date.now() - lastLocalPersistRef.current < 4000) {
-      return;
-    }
-    if (!silent) setIsLibraryLoading(true);
-    try {
-      const res = await authenticatedFetch(`${API_BASE}/api/user/library`);
-      if (res.ok) {
-        const data = await res.json();
-        const cleanAuthorField = (obj: any) => {
-          const raw = (obj?.author || obj?.Author || obj?.Artist || obj?.channel || "").trim();
-          return (raw && raw !== "Nghệ sĩ" && raw !== "Kahoii Music" && raw !== "YouTube Music") ? raw : "";
-        };
-        const mappedFavs: Track[] = (data.favorites || []).map((f: any) => ({
-          id: f.id || f.Id,
-          title: f.title || f.Title,
-          author: cleanAuthorField(f),
-          duration: Number(f.DurationSeconds ?? f.duration ?? f.durationSeconds ?? f.Duration ?? 0),
-          thumbnail: `https://i.ytimg.com/vi/${f.id || f.Id}/mqdefault.jpg`,
-        }));
-        const mappedSaved: Track[] = (data.savedTracks || data.SavedTracks || []).map((s: any) => ({
-          id: s.id || s.Id,
-          title: s.title || s.Title,
-          author: cleanAuthorField(s),
-          duration: Number(s.DurationSeconds ?? s.duration ?? s.durationSeconds ?? s.Duration ?? 0),
-          thumbnail: `https://i.ytimg.com/vi/${s.id || s.Id}/mqdefault.jpg`,
-        }));
-        const mappedHist: Track[] = (data.history || []).map((h: any) => ({
-          id: h.id || h.Id,
-          title: h.title || h.Title,
-          author: cleanAuthorField(h),
-          duration: Number(h.DurationSeconds ?? h.duration ?? h.durationSeconds ?? h.Duration ?? 0),
-          thumbnail: `https://i.ytimg.com/vi/${h.id || h.Id}/mqdefault.jpg`,
-        }));
-        const rawPlaylists = (data.playlists || data.collections || []).map((pl: any) => {
-          const rawItems = pl.Items || pl.items || pl.Tracks || pl.tracks || [];
-          const mapped = rawItems.map((it: any) => ({
-            id: it.id || it.Id,
-            title: it.title || it.Title,
-            author: it.author || it.Author || it.Artist || "",
-            duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
-            thumbnail: it.thumbnail || `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
-          }));
-          return {
-            id: pl.id || pl.Id || pl.Name || pl.name,
-            name: pl.name || pl.Name || "Danh sách phát",
-            created: pl.created || pl.CreatedAt,
-            items: mapped,
-            tracks: mapped,
+      if (silent && Date.now() - lastLocalPersistRef.current < 4000) {
+        return;
+      }
+      if (!silent) setIsLibraryLoading(true);
+      try {
+        const res = await authenticatedFetch(`${API_BASE}/api/user/library`);
+        if (res.ok) {
+          const data = await res.json();
+          const cleanAuthorField = (obj: any) => {
+            const raw = (obj?.author || obj?.Author || obj?.Artist || obj?.channel || "").trim();
+            return (raw && raw !== "Nghệ sĩ" && raw !== "Kahoii Music" && raw !== "YouTube Music") ? raw : "";
           };
-        });
-        const nextLibrary = {
-          favorites: mappedFavs,
-          savedTracks: mappedSaved,
-          history: mappedHist,
-          playlists: rawPlaylists,
-        };
-
-        // Don't overwrite existing local cached library with empty data if unauthenticated response
-        if (mappedFavs.length > 0 || mappedSaved.length > 0 || mappedHist.length > 0 || rawPlaylists.length > 0) {
-          setLibraryData((prev) => {
-            // Check if there is actual difference to prevent unnecessary re-renders
-            if (
-              prev.favorites.length === nextLibrary.favorites.length &&
-              prev.savedTracks.length === nextLibrary.savedTracks.length &&
-              prev.history.length === nextLibrary.history.length &&
-              prev.playlists.length === nextLibrary.playlists.length &&
-              prev.favorites[0]?.id === nextLibrary.favorites[0]?.id &&
-              prev.history[0]?.id === nextLibrary.history[0]?.id &&
-              prev.playlists[0]?.id === nextLibrary.playlists[0]?.id
-            ) {
-              return prev;
-            }
-            try {
-              localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
-            } catch {}
-            return nextLibrary;
+          const mappedFavs: Track[] = (data.favorites || []).map((f: any) => ({
+            id: f.id || f.Id,
+            title: f.title || f.Title,
+            author: cleanAuthorField(f),
+            duration: Number(f.DurationSeconds ?? f.duration ?? f.durationSeconds ?? f.Duration ?? 0),
+            thumbnail: `https://i.ytimg.com/vi/${f.id || f.Id}/mqdefault.jpg`,
+          }));
+          const mappedSaved: Track[] = (data.savedTracks || data.SavedTracks || []).map((s: any) => ({
+            id: s.id || s.Id,
+            title: s.title || s.Title,
+            author: cleanAuthorField(s),
+            duration: Number(s.DurationSeconds ?? s.duration ?? s.durationSeconds ?? s.Duration ?? 0),
+            thumbnail: `https://i.ytimg.com/vi/${s.id || s.Id}/mqdefault.jpg`,
+          }));
+          const mappedHist: Track[] = (data.history || []).map((h: any) => ({
+            id: h.id || h.Id,
+            title: h.title || h.Title,
+            author: cleanAuthorField(h),
+            duration: Number(h.DurationSeconds ?? h.duration ?? h.durationSeconds ?? h.Duration ?? 0),
+            thumbnail: `https://i.ytimg.com/vi/${h.id || h.Id}/mqdefault.jpg`,
+          }));
+          const rawPlaylists = (data.playlists || data.collections || []).map((pl: any) => {
+            const rawItems = pl.Items || pl.items || pl.Tracks || pl.tracks || [];
+            const mapped = rawItems.map((it: any) => ({
+              id: it.id || it.Id,
+              title: it.title || it.Title,
+              author: it.author || it.Author || it.Artist || "",
+              duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
+              thumbnail: it.thumbnail || `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
+            }));
+            return {
+              id: pl.id || pl.Id || pl.Name || pl.name,
+              name: pl.name || pl.Name || "Danh sách phát",
+              created: pl.created || pl.CreatedAt,
+              items: mapped,
+              tracks: mapped,
+            };
           });
-        } else {
-          const sess = getAuthSession();
-          if (!sess.idToken && !sess.refreshToken) {
+          const nextLibrary = {
+            favorites: mappedFavs,
+            savedTracks: mappedSaved,
+            history: mappedHist,
+            playlists: rawPlaylists,
+          };
+
+          // Don't overwrite existing local cached library with empty data if unauthenticated response
+          if (mappedFavs.length > 0 || mappedSaved.length > 0 || mappedHist.length > 0 || rawPlaylists.length > 0) {
             setLibraryData(nextLibrary);
             try {
               localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
-            } catch {}
+            } catch { }
+            setLibraryData((prev) => {
+              // Check if there is actual difference to prevent unnecessary re-renders
+              if (
+                prev.favorites.length === nextLibrary.favorites.length &&
+                prev.savedTracks.length === nextLibrary.savedTracks.length &&
+                prev.history.length === nextLibrary.history.length &&
+                prev.playlists.length === nextLibrary.playlists.length &&
+                prev.favorites[0]?.id === nextLibrary.favorites[0]?.id &&
+                prev.history[0]?.id === nextLibrary.history[0]?.id &&
+                prev.playlists[0]?.id === nextLibrary.playlists[0]?.id
+              ) {
+                return prev;
+              }
+              try {
+                localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
+              } catch { }
+              return nextLibrary;
+            });
+          } else {
+            const sess = getAuthSession();
+            if (!sess.idToken && !sess.refreshToken) {
+              setLibraryData(nextLibrary);
+              try {
+                localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
+              } catch { }
+            }
           }
         }
+      } catch (err) {
+        console.error("Library fetch failed:", err);
+        if (!silent) console.error("Library fetch failed:", err);
+      } finally {
+        setIsLibraryLoading(false);
+        if (!silent) setIsLibraryLoading(false);
       }
-    } catch (err) {
-      if (!silent) console.error("Library fetch failed:", err);
-    } finally {
-      if (!silent) setIsLibraryLoading(false);
-    }
-  };
+    };
 
-  const openArtistDetail = async (artist: {
-    id?: string;
-    name: string;
-    avatar?: string;
-    subscribers?: string;
-    genre?: string;
-  }) => {
-    setSelectedArtist({
-      id: artist.id,
-      name: artist.name,
-      avatar: artist.avatar || DEFAULT_TRACK_ART,
-      subscribers: artist.subscribers || "Nghệ sĩ",
-      genre: artist.genre,
-    });
-    setActiveArtistTab("all");
-    setIsArtistLoading(true);
-    setArtistTracks([]);
-    setArtistPlaylists([]);
+    const openArtistDetail = async (artist: {
+      id?: string;
+      name: string;
+      avatar?: string;
+      subscribers?: string;
+      genre?: string;
+    }) => {
+      setSelectedArtist({
+        id: artist.id,
+        name: artist.name,
+        avatar: artist.avatar || DEFAULT_TRACK_ART,
+        subscribers: artist.subscribers || "Nghệ sĩ",
+        genre: artist.genre,
+      });
+      setActiveArtistTab("all");
+      setIsArtistLoading(true);
+      setArtistTracks([]);
+      setArtistPlaylists([]);
 
-    try {
-      let data: StructuredSearchResult;
+      try {
+        let data: StructuredSearchResult;
 
-      // If we have a browseId (starts with UC or valid channel ID), query authentic channel uploads
-      if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb"))) {
-        const res = await fetch(
-          `${API_BASE}/api/artist?id=${encodeURIComponent(artist.id)}&name=${encodeURIComponent(artist.name)}`
-        );
-        if (res.ok) {
-          data = await res.json();
+        // If we have a browseId (starts with UC or valid channel ID), query authentic channel uploads
+        if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb"))) {
+          const res = await fetch(
+            `${API_BASE}/api/artist?id=${encodeURIComponent(artist.id)}&name=${encodeURIComponent(artist.name)}`
+          );
+          if (res.ok) {
+            data = await res.json();
+          } else {
+            // Fallback to text search if /api/artist failed
+            const sRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
+            if (!sRes.ok) throw new Error("Artist search failed");
+            data = await sRes.json();
+          }
         } else {
-          // Fallback to text search if /api/artist failed
-          const sRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
-          if (!sRes.ok) throw new Error("Artist search failed");
-          data = await sRes.json();
+          const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
+          if (!res.ok) throw new Error("Artist search failed");
+          data = await res.json();
         }
-      } else {
-        const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
-        if (!res.ok) throw new Error("Artist search failed");
-        data = await res.json();
-      }
 
-      const rawTracks: Track[] = data.tracks || [];
-      const lower = artist.name.toLowerCase().trim();
+        const rawTracks: Track[] = data.tracks || [];
+        const lower = artist.name.toLowerCase().trim();
 
-      // If loaded directly from channel endpoint, rawTracks are already authentic channel uploads!
-      if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb")) && rawTracks.length > 0) {
-        setArtistTracks(rawTracks);
-      } else {
-        // Refine tracks: singles/tracks specifically by this artist
-        const matched = rawTracks.filter((t) => {
-          const a = (t.author || "").toLowerCase();
-          const tit = (t.title || "").toLowerCase();
-          return a.includes(lower) || tit.includes(lower);
-        });
-        setArtistTracks(matched.length >= 4 ? matched : rawTracks);
-      }
+        // If loaded directly from channel endpoint, rawTracks are already authentic channel uploads!
+        if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb")) && rawTracks.length > 0) {
+          setArtistTracks(rawTracks);
+        } else {
+          // Refine tracks: singles/tracks specifically by this artist
+          const matched = rawTracks.filter((t) => {
+            const a = (t.author || "").toLowerCase();
+            const tit = (t.title || "").toLowerCase();
+            return a.includes(lower) || tit.includes(lower);
+          });
+          setArtistTracks(matched.length >= 4 ? matched : rawTracks);
+        }
 
-      // Playlists / albums
-      const rawPlaylists = data.playlists || [];
-      if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb")) && rawPlaylists.length > 0) {
-        setArtistPlaylists(rawPlaylists);
-      } else {
-        const matchedPl = rawPlaylists.filter((p) => {
-          const a = (p.author || "").toLowerCase();
-          const tit = (p.title || "").toLowerCase();
-          return a.includes(lower) || tit.includes(lower);
-        });
-        setArtistPlaylists(matchedPl.length > 0 ? matchedPl : rawPlaylists);
-      }
+        // Playlists / albums
+        const rawPlaylists = data.playlists || [];
+        if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb")) && rawPlaylists.length > 0) {
+          setArtistPlaylists(rawPlaylists);
+        } else {
+          const matchedPl = rawPlaylists.filter((p) => {
+            const a = (p.author || "").toLowerCase();
+            const tit = (p.title || "").toLowerCase();
+            return a.includes(lower) || tit.includes(lower);
+          });
+          setArtistPlaylists(matchedPl.length > 0 ? matchedPl : rawPlaylists);
+        }
 
-      // Enrich artist info if available
-      if (data.artists && data.artists.length > 0) {
-        const matchedArtist =
-          data.artists.find(
-            (a) => (a.id && a.id === artist.id) || a.name.toLowerCase() === lower || lower.includes(a.name.toLowerCase())
-          ) || data.artists[0];
+        // Enrich artist info if available
+        if (data.artists && data.artists.length > 0) {
+          const matchedArtist =
+            data.artists.find(
+              (a) => (a.id && a.id === artist.id) || a.name.toLowerCase() === lower || lower.includes(a.name.toLowerCase())
+            ) || data.artists[0];
 
-        if (matchedArtist) {
-          setSelectedArtist((prev) =>
-            prev
-              ? {
+          if (matchedArtist) {
+            setSelectedArtist((prev) =>
+              prev
+                ? {
                   ...prev,
                   avatar:
                     prev.avatar && !prev.avatar.includes("logo_icon")
@@ -1884,1234 +1882,1302 @@ export default function App() {
                       : (matchedArtist.thumbnail || prev.avatar),
                   subscribers: matchedArtist.subscribers || prev.subscribers || "Nghệ sĩ chính thức",
                 }
-              : null
-          );
+                : null
+            );
+          }
         }
-      }
-    } catch (err) {
-      console.error("Artist detail fetch error:", err);
-    } finally {
-      setIsArtistLoading(false);
-    }
-  };
-
-  // Listen for background token updates to update React userSession state in real time
-  useEffect(() => {
-    const handleAuthUpdated = (e: any) => {
-      if (e.detail?.user) {
-        setUserSession((prev) => {
-          if (!prev) return e.detail;
-          return {
-            ...prev,
-            isLoggedIn: true,
-            user: {
-              ...prev.user,
-              ...e.detail.user,
-            },
-          };
-        });
+      } catch (err) {
+        console.error("Artist detail fetch error:", err);
+      } finally {
+        setIsArtistLoading(false);
       }
     };
-    window.addEventListener("kahoii_auth_updated", handleAuthUpdated);
-    return () => window.removeEventListener("kahoii_auth_updated", handleAuthUpdated);
-  }, []);
 
-  // Proactive background keep-alive interval (runs every 5 minutes to keep Firebase token fresh)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      getValidAuthToken().catch(() => {});
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+    // Listen for background token updates to update React userSession state in real time
+    useEffect(() => {
+      const handleAuthUpdated = (e: any) => {
+        if (e.detail?.user) {
+          setUserSession((prev) => {
+            if (!prev) return e.detail;
+            return {
+              ...prev,
+              isLoggedIn: true,
+              user: {
+                ...prev.user,
+                ...e.detail.user,
+              },
+            };
+          });
+        }
+      };
+      window.addEventListener("kahoii_auth_updated", handleAuthUpdated);
+      return () => window.removeEventListener("kahoii_auth_updated", handleAuthUpdated);
+    }, []);
 
-  // Real-time Cloud Sync with Firestore / Android App / PC App
-  useEffect(() => {
-    if (!userSession?.isLoggedIn) return;
+    // Proactive background keep-alive interval (runs every 5 minutes to keep Firebase token fresh)
+    useEffect(() => {
+      const interval = setInterval(() => {
+        getValidAuthToken().catch(() => { });
+      }, 5 * 60 * 1000);
+      return () => clearInterval(interval);
+    }, []);
 
-    // 1. Periodic background sync polling every 5 seconds
-    const syncInterval = setInterval(() => {
-      fetchLibraryData(true);
-    }, 5000);
+    // Real-time Cloud Sync with Firestore / Android App / PC App
+    useEffect(() => {
+      if (!userSession?.isLoggedIn) return;
 
-    // 2. Instant sync when returning to the tab / window focus
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      // 1. Periodic background sync polling every 5 seconds
+      const syncInterval = setInterval(() => {
         fetchLibraryData(true);
-      }
-    };
-    const handleFocus = () => {
-      fetchLibraryData(true);
-    };
+      }, 5000);
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleFocus);
+      // 2. Instant sync when returning to the tab / window focus
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "visible") {
+          fetchLibraryData(true);
+        }
+      };
+      const handleFocus = () => {
+        fetchLibraryData(true);
+      };
 
-    return () => {
-      clearInterval(syncInterval);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [userSession?.isLoggedIn]);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      window.addEventListener("focus", handleFocus);
 
-  // Preload initial track metadata, user data, home feed & YouTube Player API on mount
-  useEffect(() => {
-    fetchUserSession();
-    fetchLibraryData();
+      return () => {
+        clearInterval(syncInterval);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        window.removeEventListener("focus", handleFocus);
+      };
+    }, [userSession?.isLoggedIn]);
 
-    // Fetch Live Home Feed (Trending & New Releases)
-    setIsHomeLoading(true);
-    fetch(`${API_BASE}/api/home?_t=${Date.now()}`, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) {
-          if (Array.isArray(data.trending) && data.trending.length > 0) {
-            setTrendingTracks(data.trending);
+    // Preload initial track metadata, user data, home feed & YouTube Player API on mount
+    useEffect(() => {
+      fetchUserSession();
+      fetchLibraryData();
+
+      // Fetch Live Home Feed (Trending & New Releases)
+      setIsHomeLoading(true);
+      fetch(`${API_BASE}/api/home?_t=${Date.now()}`, { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            if (Array.isArray(data.trending) && data.trending.length > 0) {
+              setTrendingTracks(data.trending);
+            } else {
+              setTrendingTracks(INITIAL_TRENDING_TRACKS);
+            }
+            if (Array.isArray(data.newReleases) && data.newReleases.length > 0) {
+              setNewReleaseTracks(data.newReleases);
+            } else {
+              setNewReleaseTracks(INITIAL_NEW_RELEASES);
+            }
+            if (Array.isArray(data.artists) && data.artists.length > 0) {
+              setHomeArtists(data.artists);
+            }
           } else {
             setTrendingTracks(INITIAL_TRENDING_TRACKS);
-          }
-          if (Array.isArray(data.newReleases) && data.newReleases.length > 0) {
-            setNewReleaseTracks(data.newReleases);
-          } else {
             setNewReleaseTracks(INITIAL_NEW_RELEASES);
           }
-        } else {
+        })
+        .catch(() => {
           setTrendingTracks(INITIAL_TRENDING_TRACKS);
           setNewReleaseTracks(INITIAL_NEW_RELEASES);
+        })
+        .finally(() => {
+          setIsHomeLoading(false);
+        });
+
+      // Initialize YouTube Iframe Player
+      const loadYtScript = () => {
+        if (!(window as any).YT) {
+          const tag = document.createElement("script");
+          tag.src = "https://www.youtube.com/iframe_api";
+          const firstScript = document.getElementsByTagName("script")[0];
+          firstScript.parentNode?.insertBefore(tag, firstScript);
         }
-      })
-      .catch(() => {
-        setTrendingTracks(INITIAL_TRENDING_TRACKS);
-        setNewReleaseTracks(INITIAL_NEW_RELEASES);
-      })
-      .finally(() => {
-        setIsHomeLoading(false);
-      });
+      };
 
-    // Initialize YouTube Iframe Player
-    const loadYtScript = () => {
-      if (!(window as any).YT) {
-        const tag = document.createElement("script");
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScript = document.getElementsByTagName("script")[0];
-        firstScript.parentNode?.insertBefore(tag, firstScript);
-      }
-    };
+      const setupYtPlayer = () => {
+        if ((window as any).YT && (window as any).YT.Player) {
+          try {
+            ytPlayerRef.current = new (window as any).YT.Player("kahoii-yt-iframe", {
+              height: "140",
+              width: "240",
+              playerVars: {
+                autoplay: 0,
+                controls: 0,
+                disablekb: 1,
+                fs: 0,
+                rel: 0,
+                modestbranding: 1,
+                playsinline: 1,
+                enablejsapi: 1,
+                origin: window.location.origin,
+              },
+              events: {
+                onReady: () => {
+                  if (typeof ytPlayerRef.current?.setVolume === "function") {
+                    ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
+                  }
+                },
+                onStateChange: (event: any) => {
+                  if (event.data === 1) {
+                    setIsPlaying(true);
+                    setIsLoading(false);
+                    setErrorMessage(null);
+                  } else if (event.data === 2) {
+                    setIsPlaying(false);
+                    setIsLoading(false);
+                  } else if (event.data === 0) {
+                    handleTrackEndedRef.current();
+                  } else if (event.data === 3) {
+                    // Buffer event: clear loading spinner after 2.5s max to prevent freeze on iOS
+                    setTimeout(() => setIsLoading(false), 2500);
+                  } else if (event.data === -1) {
+                    setIsLoading(false);
+                  }
+                },
+                onError: () => {
+                  setIsLoading(false);
+                  setTimeout(() => {
+                    handleTrackEndedRef.current();
+                  }, 1000);
+                },
+              },
+            });
+          } catch (e) {
+            console.warn("YouTube Player init error:", e);
+          }
+        }
+      };
 
-    const setupYtPlayer = () => {
       if ((window as any).YT && (window as any).YT.Player) {
-        try {
-          ytPlayerRef.current = new (window as any).YT.Player("kahoii-yt-iframe", {
-            height: "140",
-            width: "240",
-            playerVars: {
-              autoplay: 0,
-              controls: 0,
-              disablekb: 1,
-              fs: 0,
-              rel: 0,
-              modestbranding: 1,
-              playsinline: 1,
-              enablejsapi: 1,
-              origin: window.location.origin,
-            },
-            events: {
-              onReady: () => {
-                if (typeof ytPlayerRef.current?.setVolume === "function") {
-                  ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
-                }
-              },
-              onStateChange: (event: any) => {
-                if (event.data === 1) {
-                  setIsPlaying(true);
-                  setIsLoading(false);
-                  setErrorMessage(null);
-                } else if (event.data === 2) {
-                  setIsPlaying(false);
-                  setIsLoading(false);
-                } else if (event.data === 0) {
-                  handleTrackEndedRef.current();
-                } else if (event.data === 3) {
-                  // Buffer event: clear loading spinner after 2.5s max to prevent freeze on iOS
-                  setTimeout(() => setIsLoading(false), 2500);
-                } else if (event.data === -1) {
-                  setIsLoading(false);
-                }
-              },
-              onError: () => {
-                setIsLoading(false);
-                setTimeout(() => {
-                  handleTrackEndedRef.current();
-                }, 1000);
-              },
-            },
-          });
-        } catch (e) {
-          console.warn("YouTube Player init error:", e);
-        }
+        setupYtPlayer();
+      } else {
+        (window as any).onYouTubeIframeAPIReady = setupYtPlayer;
+        loadYtScript();
       }
-    };
+    }, []);
 
-    if ((window as any).YT && (window as any).YT.Player) {
-      setupYtPlayer();
-    } else {
-      (window as any).onYouTubeIframeAPIReady = setupYtPlayer;
-      loadYtScript();
-    }
-  }, []);
+    // Time Tracker ticker for YouTube Player with natural end detection fallback
+    useEffect(() => {
+      const timer = setInterval(() => {
+        if (
+          activePlayerType.current === "youtube" &&
+          ytPlayerRef.current &&
+          typeof ytPlayerRef.current.getCurrentTime === "function"
+        ) {
+          try {
+            const ct = ytPlayerRef.current.getCurrentTime() || 0;
+            const rawDur = ytPlayerRef.current.getDuration() || 0;
+            const dur = Math.round(rawDur);
+            if (ct > 0) setCurrentTime(ct);
+            if (dur > 0 && Math.abs(dur - duration) > 1) {
+              setDuration(dur);
+              setCurrentTrack((prev) => (prev && (!prev.duration || prev.duration <= 0) ? { ...prev, duration: dur } : prev));
+              setQueueTracks((prev) => {
+                const curIdx = currentIndexRef.current;
+                if (prev[curIdx] && (!prev[curIdx].duration || prev[curIdx].duration <= 0)) {
+                  const copy = [...prev];
+                  copy[curIdx] = { ...copy[curIdx], duration: dur };
+                  return copy;
+                }
+                return prev;
+              });
+            }
 
-  // Time Tracker ticker for YouTube Player with natural end detection fallback
-  useEffect(() => {
-    const timer = setInterval(() => {
+            // Fallback: If video reaches within 0.5s of the end and stops or pauses, advance to next track
+            if (dur > 5 && ct >= dur - 0.5 && !isTransitioningRef.current) {
+              const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
+              if (playerState === 0 || playerState === 2) {
+                handleTrackEndedRef.current();
+              }
+            }
+          } catch { }
+        }
+      }, 250);
+      return () => clearInterval(timer);
+    }, [duration]);
+
+    // Sync volume with YouTube Player
+    useEffect(() => {
       if (
         activePlayerType.current === "youtube" &&
         ytPlayerRef.current &&
-        typeof ytPlayerRef.current.getCurrentTime === "function"
+        typeof ytPlayerRef.current.setVolume === "function"
       ) {
         try {
-          const ct = ytPlayerRef.current.getCurrentTime() || 0;
-          const rawDur = ytPlayerRef.current.getDuration() || 0;
-          const dur = Math.round(rawDur);
-          if (ct > 0) setCurrentTime(ct);
-          if (dur > 0 && Math.abs(dur - duration) > 1) {
-            setDuration(dur);
-            setCurrentTrack((prev) => (prev && (!prev.duration || prev.duration <= 0) ? { ...prev, duration: dur } : prev));
-            setQueueTracks((prev) => {
-              const curIdx = currentIndexRef.current;
-              if (prev[curIdx] && (!prev[curIdx].duration || prev[curIdx].duration <= 0)) {
-                const copy = [...prev];
-                copy[curIdx] = { ...copy[curIdx], duration: dur };
-                return copy;
-              }
-              return prev;
+          ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
+          if (isMuted) ytPlayerRef.current.mute();
+          else ytPlayerRef.current.unMute();
+        } catch { }
+      }
+    }, [volume, isMuted]);
+
+    const handleSyncCloud = async () => {
+      const token = getAuthToken();
+      const refreshToken = getRefreshToken();
+      if (!token && !refreshToken) {
+        showToast("Vui lòng đăng nhập để đồng bộ Cloud", "warning");
+        return;
+      }
+      setIsSyncing(true);
+      setSyncSuccessMsg(null);
+      try {
+        const res = await authenticatedFetch(`${API_BASE}/api/user/sync`, {
+          method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Đồng bộ thất bại");
+        const freshIdToken = res.headers.get("x-refreshed-id-token") || data.user?.idToken || token;
+        const freshRefreshToken = res.headers.get("x-refreshed-refresh-token") || userSession?.user?.refreshToken || data.user?.refreshToken || refreshToken;
+        const updatedSession = {
+          ...data,
+          user: {
+            ...data.user,
+            idToken: freshIdToken,
+            refreshToken: freshRefreshToken,
+          },
+        };
+        setUserSession(updatedSession);
+        try {
+          localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(updatedSession));
+        } catch { }
+        setAvatarKey(Date.now());
+        await fetchLibraryData();
+        setSyncSuccessMsg("Đã đồng bộ dữ liệu mới nhất từ Cloud thành công!");
+        showToast("Đã đồng bộ dữ liệu từ Cloud Firestore!", "success");
+        setTimeout(() => setSyncSuccessMsg(null), 4000);
+      } catch (err: any) {
+        showToast("Lỗi đồng bộ: " + err.message, "warning");
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!loginEmail || !loginPassword) {
+        setLoginError("Vui lòng nhập đầy đủ email và mật khẩu");
+        return;
+      }
+      setIsLoggingIn(true);
+      setLoginError(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/user/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Đăng nhập thất bại");
+        setUserSession(data);
+        saveAuthSession({
+          idToken: data.user?.idToken,
+          refreshToken: data.user?.refreshToken,
+          expiryTimestamp: data.user?.expiryTimestamp,
+        });
+        setAvatarKey(Date.now());
+
+        await fetchLibraryData();
+        setLoginPassword("");
+        setSyncSuccessMsg("Đăng nhập và tự động đồng bộ Cloud thành công!");
+        showToast("Đã đăng nhập và đồng bộ thư viện cá nhân!", "success");
+        setTimeout(() => {
+          setSyncSuccessMsg(null);
+          setIsAccountOpen(false);
+        }, 1500);
+      } catch (err: any) {
+        setLoginError(err.message || "Lỗi đăng nhập");
+      } finally {
+        setIsLoggingIn(false);
+      }
+    };
+
+    const handleLogout = () => {
+      setShowLogoutConfirm(true);
+    };
+
+    const confirmLogout = async () => {
+      setShowLogoutConfirm(false);
+      const token = getAuthToken();
+      try {
+        await fetch(`${API_BASE}/api/user/logout`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch (err) {
+        console.warn("Logout error:", err);
+      }
+      try {
+        localStorage.removeItem(STORAGE_USER_SESSION_KEY);
+        localStorage.removeItem(STORAGE_LIBRARY_KEY);
+      } catch { }
+      setUserSession({ isLoggedIn: false, user: null });
+      setLibraryData({ favorites: [], savedTracks: [], history: [], playlists: [] });
+      pausePlayback();
+      setCurrentTrack(null);
+      currentTrackRef.current = null;
+      setQueueTracks([]);
+      queueTracksRef.current = [];
+      setPlaylist([]);
+      playlistRef.current = [];
+      setIsAccountOpen(false);
+      showToast("Đã đăng xuất tài khoản thành công!", "info");
+    };
+
+    const handleRegister = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!loginEmail.trim() || !loginPassword.trim()) {
+        setLoginError("Vui lòng điền đầy đủ email và mật khẩu.");
+        return;
+      }
+      if (loginPassword.length < 6) {
+        setLoginError("Mật khẩu phải có tối thiểu 6 ký tự.");
+        return;
+      }
+      if (loginPassword !== registerConfirmPassword) {
+        setLoginError("Mật khẩu xác nhận không khớp.");
+        return;
+      }
+
+      setIsRegistering(true);
+      setLoginError(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/user/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Đăng ký thất bại");
+        }
+        setUserSession(data);
+        saveAuthSession({
+          idToken: data.user?.idToken,
+          refreshToken: data.user?.refreshToken,
+          expiryTimestamp: data.user?.expiryTimestamp,
+        });
+        setAvatarKey(Date.now());
+        await fetchLibraryData();
+        setLoginPassword("");
+        setRegisterConfirmPassword("");
+        showToast("Đăng ký tài khoản thành công!", "success");
+        setSyncSuccessMsg("Đăng ký tài khoản mới thành công!");
+        setTimeout(() => {
+          setSyncSuccessMsg(null);
+          setIsAccountOpen(false);
+        }, 1500);
+      } catch (err: any) {
+        setLoginError(err.message || "Đăng ký thất bại");
+      } finally {
+        setIsRegistering(false);
+      }
+    };
+
+    const loadAndPlayTrack = async (track: Track, autoPlay = true, _immediate = true) => {
+      if (!track) return;
+
+        // Synchronously prime / unlock native HTML5 Audio element in direct user gesture for iOS Safari
+        if (autoPlay && audioRef.current) {
+          audioRef.current.play().catch(() => { });
+        }
+
+        // Instant UI update: title, artwork, active queue beam update immediately with zero lag
+        setCurrentTrack(track);
+        currentTrackRef.current = track;
+        setIsLoading(true);
+        setErrorMessage(null);
+        setCurrentTime(0);
+        setLyrics(null);
+
+        // Cancel existing pending debounce timer
+        if (playDebounceTimerRef.current) {
+          clearTimeout(playDebounceTimerRef.current);
+          playDebounceTimerRef.current = null;
+        }
+
+        // Cancel in-flight audio stream fetch
+        if (playAbortControllerRef.current) {
+          playAbortControllerRef.current.abort();
+          playAbortControllerRef.current = null;
+        }
+
+        const executePlayback = async () => {
+          // Record to history if user is logged in (only when actually played)
+          if (userSession?.isLoggedIn) {
+            setLibraryData((prev) => {
+              const filtered = prev.history.filter((h) => h.id !== track.id);
+              const updated = [track, ...filtered].slice(0, 100);
+              persistLibraryData({ history: updated });
+              return { ...prev, history: updated };
             });
           }
 
-          // Fallback: If video reaches within 0.5s of the end and stops or pauses, advance to next track
-          if (dur > 5 && ct >= dur - 0.5 && !isTransitioningRef.current) {
-            const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
-            if (playerState === 0 || playerState === 2) {
-              handleTrackEndedRef.current();
+          // Strategy 0: Offline IndexedDB Playback (Zero network bytes, 100% offline)
+          try {
+            const offlineItem = await getOfflineTrack(track.id);
+            if (offlineItem && offlineItem.audioBlob && audioRef.current) {
+              if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+                try {
+                  ytPlayerRef.current.stopVideo();
+                } catch { }
+              }
+              const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
+              audioRef.current.src = blobUrl;
+              audioRef.current.load();
+              activePlayerType.current = "audio";
+              if (autoPlay) {
+                const playPromise = audioRef.current.play();
+                if (playPromise !== undefined) {
+                  playPromise
+                    .then(() => {
+                      setIsPlaying(true);
+                      setIsLoading(false);
+                    })
+                    .catch(() => {
+                      setIsPlaying(false);
+                      setIsLoading(false);
+                    });
+                }
+              } else {
+                setIsPlaying(false);
+                setIsLoading(false);
+              }
+              if (offlineItem.lyrics) {
+                setLyrics(offlineItem.lyrics);
+              }
+              // If offline lyrics don't have .lines, fetch enriched lyrics in background and update IndexedDB
+              if ((!(offlineItem.lyrics as any)?.lines || (offlineItem.lyrics as any).lines.length === 0) && typeof navigator !== "undefined" && navigator.onLine) {
+                fetch(
+                  `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+                )
+                  .then((res) => (res.ok ? res.json() : null))
+                  .then((lyricsData) => {
+                    if (lyricsData?.lines && lyricsData.lines.length > 0) {
+                      setLyrics(lyricsData);
+                      saveTrackOffline(track, offlineItem.audioBlob, lyricsData);
+                    }
+                  })
+                  .catch(() => { });
+              }
+              setErrorMessage(null);
+              return;
+            }
+          } catch (offlineErr) {
+            console.warn("[Offline Playback Error]", offlineErr);
+          }
+
+          // Check if user is offline without internet and the track is not downloaded
+          if (typeof navigator !== "undefined" && !navigator.onLine) {
+            setIsLoading(false);
+            setErrorMessage("Bạn đang ngoại tuyến. Hãy mở tab 'Đã tải' để nghe các bài đã lưu.");
+            showToast("Bạn đang ngoại tuyến! Hãy chọn bài hát trong mục 'Đã tải'", "info");
+            setActiveLeftTab("offline");
+            return;
+          }
+
+          // If active player is already YouTube, transition track smoothly
+          if (
+            activePlayerType.current === "youtube" &&
+            ytPlayerRef.current &&
+            typeof ytPlayerRef.current.loadVideoById === "function"
+          ) {
+            try {
+              ytPlayerRef.current.loadVideoById({
+                videoId: track.id,
+                startSeconds: 0,
+              });
+              if (autoPlay) {
+                ytPlayerRef.current.playVideo();
+                setIsPlaying(true);
+              } else {
+                ytPlayerRef.current.pauseVideo();
+                setIsPlaying(false);
+              }
+              setErrorMessage(null);
+              setIsLoading(false);
+
+              const updateAuthorAcrossApp = (newAuthor: string) => {
+                if (!newAuthor || newAuthor === "Nghệ sĩ" || newAuthor === "Kahoii Music") return;
+                track.author = newAuthor;
+                setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: newAuthor } : prev));
+                setLibraryData((prev) => {
+                  const repl = (list: Track[]) =>
+                    list.map((it) => (it.id === track.id ? { ...it, author: newAuthor } : it));
+                  const updated = {
+                    ...prev,
+                    favorites: repl(prev.favorites),
+                    savedTracks: repl(prev.savedTracks),
+                    history: repl(prev.history),
+                  };
+                  persistLibraryData(updated);
+                  return updated;
+                });
+              };
+
+              // Fetch Lyrics in background without delaying playback
+              fetch(
+                `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+              )
+                .then((res) => (res.ok ? res.json() : null))
+                .then((lyricsData) => {
+                  if (lyricsData) {
+                    setLyrics(lyricsData);
+                    if (lyricsData.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
+                      updateAuthorAcrossApp(lyricsData.artist);
+                    }
+                  }
+                })
+                .catch(() => { });
+
+              return;
+            } catch (ytErr) {
+              console.warn("YouTube instant transition warning:", ytErr);
             }
           }
-        } catch {}
-      }
-    }, 250);
-    return () => clearInterval(timer);
-  }, [duration]);
 
-  // Sync volume with YouTube Player
-  useEffect(() => {
-    if (
-      activePlayerType.current === "youtube" &&
-      ytPlayerRef.current &&
-      typeof ytPlayerRef.current.setVolume === "function"
-    ) {
-      try {
-        ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
-        if (isMuted) ytPlayerRef.current.mute();
-        else ytPlayerRef.current.unMute();
-      } catch {}
-    }
-  }, [volume, isMuted]);
+          // Synchronously prime/unlock HTML5 Audio on user gesture for iOS Safari background playback
+          if (audioRef.current) {
+            audioRef.current.play().catch(() => { });
+          }
 
-  const handleSyncCloud = async () => {
-    const token = getAuthToken();
-    const refreshToken = getRefreshToken();
-    if (!token && !refreshToken) {
-      showToast("Vui lòng đăng nhập để đồng bộ Cloud", "warning");
-      return;
-    }
-    setIsSyncing(true);
-    setSyncSuccessMsg(null);
-    try {
-      const res = await authenticatedFetch(`${API_BASE}/api/user/sync`, {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Đồng bộ thất bại");
-      const freshIdToken = res.headers.get("x-refreshed-id-token") || data.user?.idToken || token;
-      const freshRefreshToken = res.headers.get("x-refreshed-refresh-token") || userSession?.user?.refreshToken || data.user?.refreshToken || refreshToken;
-      const updatedSession = {
-        ...data,
-        user: {
-          ...data.user,
-          idToken: freshIdToken,
-          refreshToken: freshRefreshToken,
-        },
-      };
-      setUserSession(updatedSession);
-      try {
-        localStorage.setItem(STORAGE_USER_SESSION_KEY, JSON.stringify(updatedSession));
-      } catch {}
-      setAvatarKey(Date.now());
-      await fetchLibraryData();
-      setSyncSuccessMsg("Đã đồng bộ dữ liệu mới nhất từ Cloud thành công!");
-      showToast("Đã đồng bộ dữ liệu từ Cloud Firestore!", "success");
-      setTimeout(() => setSyncSuccessMsg(null), 4000);
-    } catch (err: any) {
-      showToast("Lỗi đồng bộ: " + err.message, "warning");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginEmail || !loginPassword) {
-      setLoginError("Vui lòng nhập đầy đủ email và mật khẩu");
-      return;
-    }
-    setIsLoggingIn(true);
-    setLoginError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/user/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Đăng nhập thất bại");
-      setUserSession(data);
-      saveAuthSession({
-        idToken: data.user?.idToken,
-        refreshToken: data.user?.refreshToken,
-        expiryTimestamp: data.user?.expiryTimestamp,
-      });
-      setAvatarKey(Date.now());
-
-      await fetchLibraryData();
-      setLoginPassword("");
-      setSyncSuccessMsg("Đăng nhập và tự động đồng bộ Cloud thành công!");
-      showToast("Đã đăng nhập và đồng bộ thư viện cá nhân!", "success");
-      setTimeout(() => {
-        setSyncSuccessMsg(null);
-        setIsAccountOpen(false);
-      }, 1500);
-    } catch (err: any) {
-      setLoginError(err.message || "Lỗi đăng nhập");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const handleLogout = () => {
-    setShowLogoutConfirm(true);
-  };
-
-  const confirmLogout = async () => {
-    setShowLogoutConfirm(false);
-    const token = getAuthToken();
-    try {
-      await fetch(`${API_BASE}/api/user/logout`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-    } catch (err) {
-      console.warn("Logout error:", err);
-    }
-    try {
-      localStorage.removeItem(STORAGE_USER_SESSION_KEY);
-      localStorage.removeItem(STORAGE_LIBRARY_KEY);
-    } catch {}
-    setUserSession({ isLoggedIn: false, user: null });
-    setLibraryData({ favorites: [], savedTracks: [], history: [], playlists: [] });
-    pausePlayback();
-    setCurrentTrack(null);
-    currentTrackRef.current = null;
-    setQueueTracks([]);
-    queueTracksRef.current = [];
-    setPlaylist([]);
-    playlistRef.current = [];
-    setIsAccountOpen(false);
-    showToast("Đã đăng xuất tài khoản thành công!", "info");
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginEmail.trim() || !loginPassword.trim()) {
-      setLoginError("Vui lòng điền đầy đủ email và mật khẩu.");
-      return;
-    }
-    if (loginPassword.length < 6) {
-      setLoginError("Mật khẩu phải có tối thiểu 6 ký tự.");
-      return;
-    }
-    if (loginPassword !== registerConfirmPassword) {
-      setLoginError("Mật khẩu xác nhận không khớp.");
-      return;
-    }
-
-    setIsRegistering(true);
-    setLoginError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/user/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Đăng ký thất bại");
-      }
-      setUserSession(data);
-      saveAuthSession({
-        idToken: data.user?.idToken,
-        refreshToken: data.user?.refreshToken,
-        expiryTimestamp: data.user?.expiryTimestamp,
-      });
-      setAvatarKey(Date.now());
-      await fetchLibraryData();
-      setLoginPassword("");
-      setRegisterConfirmPassword("");
-      showToast("Đăng ký tài khoản thành công!", "success");
-      setSyncSuccessMsg("Đăng ký tài khoản mới thành công!");
-      setTimeout(() => {
-        setSyncSuccessMsg(null);
-        setIsAccountOpen(false);
-      }, 1500);
-    } catch (err: any) {
-      setLoginError(err.message || "Đăng ký thất bại");
-    } finally {
-      setIsRegistering(false);
-    }
-  };
-
-  const loadAndPlayTrack = async (track: Track, autoPlay = true, _immediate = true) => {
-    if (!track) return;
-
-    // Synchronously prime / unlock native HTML5 Audio element in direct user gesture for iOS Safari
-    if (autoPlay && audioRef.current) {
-      audioRef.current.play().catch(() => {});
-    }
-
-    // Instant UI update: title, artwork, active queue beam update immediately with zero lag
-    setCurrentTrack(track);
-    currentTrackRef.current = track;
-    setIsLoading(true);
-    setErrorMessage(null);
-    setCurrentTime(0);
-    setLyrics(null);
-
-    // Cancel existing pending debounce timer
-    if (playDebounceTimerRef.current) {
-      clearTimeout(playDebounceTimerRef.current);
-      playDebounceTimerRef.current = null;
-    }
-
-    // Cancel in-flight audio stream fetch
-    if (playAbortControllerRef.current) {
-      playAbortControllerRef.current.abort();
-      playAbortControllerRef.current = null;
-    }
-
-    const executePlayback = async () => {
-      // Record to history if user is logged in (only when actually played)
-      if (userSession?.isLoggedIn) {
-        setLibraryData((prev) => {
-          const filtered = prev.history.filter((h) => h.id !== track.id);
-          const updated = [track, ...filtered].slice(0, 100);
-          persistLibraryData({ history: updated });
-          return { ...prev, history: updated };
-        });
-      }
-
-      // Strategy 0: Offline IndexedDB Playback (Zero network bytes, 100% offline)
-      try {
-        const offlineItem = await getOfflineTrack(track.id);
-        if (offlineItem && offlineItem.audioBlob && audioRef.current) {
+          // Stop current audio and YouTube player
+          if (audioRef.current) {
+            try {
+              audioRef.current.pause();
+            } catch { }
+          }
           if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
             try {
               ytPlayerRef.current.stopVideo();
-            } catch {}
+            } catch { }
           }
-          const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
-          audioRef.current.src = blobUrl;
-          audioRef.current.load();
-          activePlayerType.current = "audio";
-          if (autoPlay) {
-            const playPromise = audioRef.current.play();
-            if (playPromise !== undefined) {
-              playPromise
-                .then(() => {
-                  setIsPlaying(true);
-                  setIsLoading(false);
-                })
-                .catch(() => {
+
+          // Strategy 1: Attempt to resolve direct audio stream from server (real HTML5 audio for background playback)
+          let streamPlayed = false;
+          try {
+            const controller = new AbortController();
+            playAbortControllerRef.current = controller;
+            const timeoutId = setTimeout(() => controller.abort(), 7000); // 7s realistic stream resolve timeout
+
+            const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+              const data = await res.json();
+              if (data.author && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
+                track.author = data.author;
+                setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: data.author } : prev));
+              }
+              if (data.streamUrl && audioRef.current) {
+                const playableUrl = data.streamUrl.includes("googlevideo.com")
+                  ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
+                  : data.streamUrl;
+
+                audioRef.current.src = playableUrl;
+                audioRef.current.load();
+                activePlayerType.current = "audio";
+                streamPlayed = true;
+
+                if (autoPlay) {
+                  const playPromise = audioRef.current.play();
+                  if (playPromise !== undefined) {
+                    playPromise
+                      .then(() => {
+                        setIsPlaying(true);
+                        setIsLoading(false);
+                      })
+                      .catch(() => {
+                        setIsPlaying(false);
+                        setIsLoading(false);
+                      });
+                  }
+                } else {
                   setIsPlaying(false);
                   setIsLoading(false);
-                });
-            }
-          } else {
-            setIsPlaying(false);
-            setIsLoading(false);
-          }
-          if (offlineItem.lyrics) {
-            setLyrics(offlineItem.lyrics);
-          }
-          // If offline lyrics don't have .lines, fetch enriched lyrics in background and update IndexedDB
-          if ((!(offlineItem.lyrics as any)?.lines || (offlineItem.lyrics as any).lines.length === 0) && typeof navigator !== "undefined" && navigator.onLine) {
-            fetch(
-              `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
-            )
-              .then((res) => (res.ok ? res.json() : null))
-              .then((lyricsData) => {
-                if (lyricsData?.lines && lyricsData.lines.length > 0) {
-                  setLyrics(lyricsData);
-                  saveTrackOffline(track, offlineItem.audioBlob, lyricsData);
                 }
-              })
-              .catch(() => {});
+              }
+            }
+          } catch {
+            // Backend stream unavailable or blocked
           }
-          setErrorMessage(null);
-          return;
-        }
-      } catch (offlineErr) {
-        console.warn("[Offline Playback Error]", offlineErr);
-      }
 
-      // Check if user is offline without internet and the track is not downloaded
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
-        setIsLoading(false);
-        setErrorMessage("Bạn đang ngoại tuyến. Hãy mở tab 'Đã tải' để nghe các bài đã lưu.");
-        showToast("Bạn đang ngoại tuyến! Hãy chọn bài hát trong mục 'Đã tải'", "info");
-        setActiveLeftTab("offline");
-        return;
-      }
-
-      // Stop current audio and YouTube player
-      if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-        } catch {}
-      }
-      if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
-        try {
-          ytPlayerRef.current.stopVideo();
-        } catch {}
-      }
-
-      // Strategy 1: Attempt to resolve direct audio stream from server (real HTML5 audio for background playback)
-      let streamPlayed = false;
-      try {
-        const controller = new AbortController();
-        playAbortControllerRef.current = controller;
-        const timeoutId = setTimeout(() => controller.abort(), 7000); // 7s realistic stream resolve timeout
-
-        const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.author && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
-            track.author = data.author;
-            setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: data.author } : prev));
-          }
-          if (data.streamUrl && audioRef.current) {
-            const playableUrl = data.streamUrl.includes("googlevideo.com")
-              ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
-              : data.streamUrl;
-
-            audioRef.current.src = playableUrl;
-            audioRef.current.load();
-            activePlayerType.current = "audio";
-            streamPlayed = true;
-
-            if (autoPlay) {
-              const playPromise = audioRef.current.play();
-              if (playPromise !== undefined) {
-                playPromise
-                  .then(() => {
-                    setIsPlaying(true);
-                    setIsLoading(false);
-                  })
-                  .catch(() => {
-                    setIsPlaying(false);
-                    setIsLoading(false);
-                  });
+          // Strategy 2: Zero-failure YouTube Web Player fallback (plays 100% on Vercel)
+          if (!streamPlayed) {
+            activePlayerType.current = "youtube";
+            if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+              try {
+                ytPlayerRef.current.loadVideoById({
+                  videoId: track.id,
+                  startSeconds: 0,
+                });
+                if (autoPlay) {
+                  ytPlayerRef.current.playVideo();
+                  setIsPlaying(true);
+                } else {
+                  ytPlayerRef.current.pauseVideo();
+                  setIsPlaying(false);
+                }
+                setErrorMessage(null);
+                // Clear loading after short delay so iPhone never freezes in loading state
+                setTimeout(() => setIsLoading(false), 1500);
+              } catch (ytErr) {
+                console.warn("YouTube player fallback warning:", ytErr);
+                setIsLoading(false);
               }
             } else {
-              setIsPlaying(false);
               setIsLoading(false);
             }
           }
-        }
-      } catch {
-        // Backend stream unavailable or blocked
-      }
 
-      // Strategy 2: Zero-failure YouTube Web Player fallback (plays 100% on Vercel)
-      if (!streamPlayed) {
-        activePlayerType.current = "youtube";
-        if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+          // Safety watchdog: ensure loading spinner is cleared after 6s max if stalled
+          setTimeout(() => {
+            setIsLoading(false);
+          }, 6000);
+
+          // Fetch Lyrics in background
           try {
-            ytPlayerRef.current.loadVideoById({
-              videoId: track.id,
-              startSeconds: 0,
-            });
-            if (autoPlay) {
-              ytPlayerRef.current.playVideo();
-              setIsPlaying(true);
-            } else {
+            const lyricsRes = await fetch(
+              `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+            );
+            if (lyricsRes.ok) {
+              const lyricsData = await lyricsRes.json();
+              setLyrics(lyricsData);
+              if (lyricsData?.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
+                track.author = lyricsData.artist;
+                setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: lyricsData.artist } : prev));
+              }
+            }
+          } catch { }
+        };
+
+        // Execute playback immediately to keep iOS Safari user-gesture context valid
+        executePlayback();
+      };
+
+      const handleTimeUpdate = () => {
+        if (activePlayerType.current === "audio" && audioRef.current) {
+          setCurrentTime(audioRef.current.currentTime);
+        }
+      };
+
+      const togglePlayPause = () => {
+        if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+          try {
+            if (isPlaying) {
               ytPlayerRef.current.pauseVideo();
               setIsPlaying(false);
+            } else {
+              ytPlayerRef.current.playVideo();
+              setIsPlaying(true);
             }
-            setErrorMessage(null);
-            // Clear loading after short delay so iPhone never freezes in loading state
-            setTimeout(() => setIsLoading(false), 1500);
-          } catch (ytErr) {
-            console.warn("YouTube player fallback warning:", ytErr);
-            setIsLoading(false);
-          }
-        } else {
-          setIsLoading(false);
+            return;
+          } catch { }
         }
-      }
 
-      // Safety watchdog: ensure loading spinner is cleared after 6s max if stalled
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 6000);
-
-      // Fetch Lyrics in background
-      try {
-        const lyricsRes = await fetch(
-          `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
-        );
-        if (lyricsRes.ok) {
-          const lyricsData = await lyricsRes.json();
-          setLyrics(lyricsData);
-          if (lyricsData?.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
-            track.author = lyricsData.artist;
-            setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: lyricsData.artist } : prev));
+        if (!currentTrack) {
+          if (trendingTracks.length > 0) {
+            setPlaylist(trendingTracks);
+            setQueueTracks(trendingTracks);
+            setCurrentIndex(0);
+            loadAndPlayTrack(trendingTracks[0], true);
+          } else {
+            showToast("Đang tải dữ liệu, vui lòng đợi trong giây lát...", "info");
           }
+          return;
         }
-      } catch {}
-    };
 
-    // Execute playback immediately to keep iOS Safari user-gesture context valid
-    executePlayback();
-  };
-
-  const handleTimeUpdate = () => {
-    if (activePlayerType.current === "audio" && audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
-
-  const togglePlayPause = () => {
-    if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
-      try {
+        if (!audioRef.current) return;
         if (isPlaying) {
-          ytPlayerRef.current.pauseVideo();
+          audioRef.current.pause();
           setIsPlaying(false);
         } else {
-          ytPlayerRef.current.playVideo();
-          setIsPlaying(true);
-        }
-        return;
-      } catch {}
-    }
-
-    if (!currentTrack) {
-      if (trendingTracks.length > 0) {
-        setPlaylist(trendingTracks);
-        setQueueTracks(trendingTracks);
-        setCurrentIndex(0);
-        loadAndPlayTrack(trendingTracks[0], true);
-      } else {
-        showToast("Đang tải dữ liệu, vui lòng đợi trong giây lát...", "info");
-      }
-      return;
-    }
-
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      if (!audioRef.current.src) {
-        loadAndPlayTrack(currentTrack, true);
-        return;
-      }
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => setIsPlaying(true))
-          .catch(() => {
+          if (!audioRef.current.src) {
             loadAndPlayTrack(currentTrack, true);
-          });
-      }
-    }
-  };
+            return;
+          }
+          const playPromise = audioRef.current.play();
+          if (playPromise !== undefined) {
+            playPromise
+              .then(() => setIsPlaying(true))
+              .catch(() => {
+                loadAndPlayTrack(currentTrack, true);
+              });
+          }
+        }
+      };
 
-  const cycleRepeatMode = () => {
-    let nextMode: "all" | "one" | "shuffle" | "off";
-    if (repeatMode === "all") nextMode = "one";
-    else if (repeatMode === "one") nextMode = "shuffle";
-    else if (repeatMode === "shuffle") nextMode = "off";
-    else nextMode = "all";
+      const cycleRepeatMode = () => {
+        let nextMode: "all" | "one" | "shuffle" | "off";
+        if (repeatMode === "all") nextMode = "one";
+        else if (repeatMode === "one") nextMode = "shuffle";
+        else if (repeatMode === "shuffle") nextMode = "off";
+        else nextMode = "all";
 
-    setRepeatMode(nextMode);
-    repeatModeRef.current = nextMode;
+        setRepeatMode(nextMode);
+        repeatModeRef.current = nextMode;
 
-    const labelMap = {
-      all: "Lặp lại toàn bộ danh sách",
-      one: "Lặp lại bài hát hiện tại",
-      shuffle: "Phát ngẫu nhiên (Shuffle)",
-      off: "Tắt chế độ lặp lại",
-    };
-    showToast(labelMap[nextMode], "info");
-  };
+        const labelMap = {
+          all: "Lặp lại toàn bộ danh sách",
+          one: "Lặp lại bài hát hiện tại",
+          shuffle: "Phát ngẫu nhiên (Shuffle)",
+          off: "Tắt chế độ lặp lại",
+        };
+        showToast(labelMap[nextMode], "info");
+      };
 
-  const handleTrackEnded = () => {
-    if (isTransitioningRef.current) return;
-    isTransitioningRef.current = true;
-    setTimeout(() => {
-      isTransitioningRef.current = false;
-    }, 1200);
+      const handleTrackEnded = () => {
+        if (isTransitioningRef.current) return;
+        isTransitioningRef.current = true;
+        setTimeout(() => {
+          isTransitioningRef.current = false;
+        }, 1200);
 
-    const mode = repeatModeRef.current;
-    const activeQueue = queueTracksRef.current.length > 0 ? queueTracksRef.current : playlistRef.current;
-    if (activeQueue.length === 0) return;
+        const mode = repeatModeRef.current;
+        const activeQueue = queueTracksRef.current.length > 0 ? queueTracksRef.current : playlistRef.current;
+        if (activeQueue.length === 0) return;
 
-    let curIdx = activeQueue.findIndex((t) => t.id === currentTrackRef.current?.id);
-    if (curIdx === -1) curIdx = currentIndexRef.current;
-    if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
+        let curIdx = activeQueue.findIndex((t) => t.id === currentTrackRef.current?.id);
+        if (curIdx === -1) curIdx = currentIndexRef.current;
+        if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
 
-    if (mode === "one") {
-      // Loop current track at position 0
-      if (
-        activePlayerType.current === "youtube" &&
-        ytPlayerRef.current &&
-        typeof ytPlayerRef.current.seekTo === "function"
-      ) {
-        try {
-          ytPlayerRef.current.seekTo(0, true);
-          ytPlayerRef.current.playVideo();
-          setIsPlaying(true);
-        } catch {}
-      } else if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => {});
-        setIsPlaying(true);
-      }
-      return;
-    }
+        if (mode === "one") {
+          // Loop current track at position 0
+          if (
+            activePlayerType.current === "youtube" &&
+            ytPlayerRef.current &&
+            typeof ytPlayerRef.current.seekTo === "function"
+          ) {
+            try {
+              ytPlayerRef.current.seekTo(0, true);
+              ytPlayerRef.current.playVideo();
+              setIsPlaying(true);
+            } catch { }
+          } else if (audioRef.current) {
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(() => { });
+            setIsPlaying(true);
+          }
+          return;
+        }
 
-    if (mode === "shuffle") {
-      if (activeQueue.length <= 1) {
-        loadAndPlayTrack(activeQueue[0], true, true);
-        return;
-      }
-      let randIdx = Math.floor(Math.random() * activeQueue.length);
-      let attempts = 0;
-      while (randIdx === curIdx && attempts < 15) {
-        randIdx = Math.floor(Math.random() * activeQueue.length);
-        attempts++;
-      }
-      shuffleHistoryRef.current.push(curIdx);
-      setCurrentIndex(randIdx);
-      currentIndexRef.current = randIdx;
-      loadAndPlayTrack(activeQueue[randIdx], true, true);
-      return;
-    }
+        if (mode === "shuffle") {
+          if (activeQueue.length <= 1) {
+            loadAndPlayTrack(activeQueue[0], true, true);
+            return;
+          }
+          let randIdx = Math.floor(Math.random() * activeQueue.length);
+          let attempts = 0;
+          while (randIdx === curIdx && attempts < 15) {
+            randIdx = Math.floor(Math.random() * activeQueue.length);
+            attempts++;
+          }
+          shuffleHistoryRef.current.push(curIdx);
+          setCurrentIndex(randIdx);
+          currentIndexRef.current = randIdx;
+          loadAndPlayTrack(activeQueue[randIdx], true, true);
+          return;
+        }
 
-    if (mode === "off") {
-      if (curIdx >= activeQueue.length - 1) {
-        pausePlayback();
-        showToast("Đã phát hết danh sách bài hát", "info");
-        return;
-      }
-      const nextIdx = curIdx + 1;
-      setCurrentIndex(nextIdx);
-      currentIndexRef.current = nextIdx;
-      loadAndPlayTrack(activeQueue[nextIdx], true, true);
-      return;
-    }
+        if (mode === "off") {
+          if (curIdx >= activeQueue.length - 1) {
+            pausePlayback();
+            showToast("Đã phát hết danh sách bài hát", "info");
+            return;
+          }
+          const nextIdx = curIdx + 1;
+          setCurrentIndex(nextIdx);
+          currentIndexRef.current = nextIdx;
+          loadAndPlayTrack(activeQueue[nextIdx], true, true);
+          return;
+        }
 
-    // Default: mode === "all" (Sequential playback through the queue)
-    const nextIdx = (curIdx + 1) % activeQueue.length;
-    setCurrentIndex(nextIdx);
-    currentIndexRef.current = nextIdx;
-    loadAndPlayTrack(activeQueue[nextIdx], true, true);
-  };
+        // Default: mode === "all" (Sequential playback through the queue)
+        const nextIdx = (curIdx + 1) % activeQueue.length;
+        setCurrentIndex(nextIdx);
+        currentIndexRef.current = nextIdx;
+        loadAndPlayTrack(activeQueue[nextIdx], true, true);
+      };
 
-  const handleNext = () => {
-    const activeQueue = queueTracks.length > 0 ? queueTracks : playlist;
-    if (activeQueue.length === 0) return;
+      const handleNext = () => {
+        const activeQueue = queueTracks.length > 0 ? queueTracks : playlist;
+        if (activeQueue.length === 0) return;
 
-    let curIdx = activeQueue.findIndex((t) => t.id === currentTrack?.id);
-    if (curIdx === -1) curIdx = currentIndex;
-    if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
+        let curIdx = activeQueue.findIndex((t) => t.id === currentTrack?.id);
+        if (curIdx === -1) curIdx = currentIndex;
+        if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
 
-    if (repeatModeRef.current === "shuffle") {
-      if (activeQueue.length <= 1) {
-        loadAndPlayTrack(activeQueue[0], true);
-        return;
-      }
-      let randIdx = Math.floor(Math.random() * activeQueue.length);
-      let attempts = 0;
-      while (randIdx === curIdx && attempts < 15) {
-        randIdx = Math.floor(Math.random() * activeQueue.length);
-        attempts++;
-      }
-      shuffleHistoryRef.current.push(curIdx);
-      setCurrentIndex(randIdx);
-      currentIndexRef.current = randIdx;
-      loadAndPlayTrack(activeQueue[randIdx], true);
-      return;
-    }
+        if (repeatModeRef.current === "shuffle") {
+          if (activeQueue.length <= 1) {
+            loadAndPlayTrack(activeQueue[0], true);
+            return;
+          }
+          let randIdx = Math.floor(Math.random() * activeQueue.length);
+          let attempts = 0;
+          while (randIdx === curIdx && attempts < 15) {
+            randIdx = Math.floor(Math.random() * activeQueue.length);
+            attempts++;
+          }
+          shuffleHistoryRef.current.push(curIdx);
+          setCurrentIndex(randIdx);
+          currentIndexRef.current = randIdx;
+          loadAndPlayTrack(activeQueue[randIdx], true);
+          return;
+        }
 
-    if (repeatModeRef.current === "off") {
-      if (curIdx + 1 < activeQueue.length) {
-        const nextIdx = curIdx + 1;
+        if (repeatModeRef.current === "off") {
+          if (curIdx + 1 < activeQueue.length) {
+            const nextIdx = curIdx + 1;
+            setCurrentIndex(nextIdx);
+            currentIndexRef.current = nextIdx;
+            loadAndPlayTrack(activeQueue[nextIdx], true);
+          } else {
+            showToast("Đã đến cuối danh sách phát", "info");
+          }
+          return;
+        }
+
+        const nextIdx = (curIdx + 1) % activeQueue.length;
         setCurrentIndex(nextIdx);
         currentIndexRef.current = nextIdx;
         loadAndPlayTrack(activeQueue[nextIdx], true);
-      } else {
-        showToast("Đã đến cuối danh sách phát", "info");
-      }
-      return;
-    }
-
-    const nextIdx = (curIdx + 1) % activeQueue.length;
-    setCurrentIndex(nextIdx);
-    currentIndexRef.current = nextIdx;
-    loadAndPlayTrack(activeQueue[nextIdx], true);
-  };
-
-  const handlePrev = () => {
-    const activeQueue = queueTracks.length > 0 ? queueTracks : playlist;
-    if (activeQueue.length === 0) return;
-
-    if (currentTime > 3) {
-      if (
-        activePlayerType.current === "youtube" &&
-        ytPlayerRef.current &&
-        typeof ytPlayerRef.current.seekTo === "function"
-      ) {
-        try { ytPlayerRef.current.seekTo(0, true); } catch {}
-      } else if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-      }
-      setCurrentTime(0);
-      return;
-    }
-
-    let curIdx = activeQueue.findIndex((t) => t.id === currentTrack?.id);
-    if (curIdx === -1) curIdx = currentIndex;
-    if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
-
-    if (repeatModeRef.current === "shuffle" && shuffleHistoryRef.current.length > 0) {
-      const prevIdx = shuffleHistoryRef.current.pop()!;
-      setCurrentIndex(prevIdx);
-      currentIndexRef.current = prevIdx;
-      loadAndPlayTrack(activeQueue[prevIdx], true);
-      return;
-    }
-
-    const prevIdx = (curIdx - 1 + activeQueue.length) % activeQueue.length;
-    setCurrentIndex(prevIdx);
-    currentIndexRef.current = prevIdx;
-    loadAndPlayTrack(activeQueue[prevIdx], true);
-  };
-
-  const seekToTime = (newTime: number) => {
-    setCurrentTime(newTime);
-    if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
-      try { ytPlayerRef.current.seekTo(newTime, true); } catch {}
-    } else if (audioRef.current) {
-      audioRef.current.currentTime = newTime;
-    }
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    seekToTime(parseFloat(e.target.value));
-  };
-
-  // MediaSession API Integration for Background Audio, Lock Screen Controls & Mobile Playback
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-
-    if (currentTrack) {
-      const artUrl =
-        currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-          ? currentTrack.thumbnail.includes("i.ytimg.com")
-            ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-            : currentTrack.thumbnail
-          : currentTrack.id
-          ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg`
-          : DEFAULT_TRACK_ART;
-
-      try {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: currentTrack.title || "Kahoii Music",
-          artist: formatTrackArtist(currentTrack.title, currentTrack.author) || "Kahoii Music",
-          album: "Kahoii Music",
-          artwork: [
-            { src: artUrl, sizes: "96x96", type: "image/jpeg" },
-            { src: artUrl, sizes: "128x128", type: "image/jpeg" },
-            { src: artUrl, sizes: "192x192", type: "image/jpeg" },
-            { src: artUrl, sizes: "256x256", type: "image/jpeg" },
-            { src: artUrl, sizes: "512x512", type: "image/jpeg" },
-          ],
-        });
-      } catch (err) {
-        console.warn("MediaSession metadata error:", err);
-      }
-    }
-
-    try {
-      navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
-
-      navigator.mediaSession.setActionHandler("play", () => {
-        if (activePlayerType.current === "audio" && audioRef.current) {
-          audioRef.current.play().catch(() => {});
-        } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
-          try { ytPlayerRef.current.playVideo(); } catch {}
-        }
-        setIsPlaying(true);
-      });
-
-      navigator.mediaSession.setActionHandler("pause", () => {
-        if (activePlayerType.current === "audio" && audioRef.current) {
-          audioRef.current.pause();
-        } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
-          try { ytPlayerRef.current.pauseVideo(); } catch {}
-        }
-        setIsPlaying(false);
-      });
-
-      navigator.mediaSession.setActionHandler("previoustrack", () => {
-        handlePrev();
-      });
-
-      navigator.mediaSession.setActionHandler("nexttrack", () => {
-        handleNext();
-      });
-
-      navigator.mediaSession.setActionHandler("seekto", (details) => {
-        if (details.seekTime !== undefined) {
-          seekToTime(details.seekTime);
-        }
-      });
-    } catch (e) {
-      console.warn("MediaSession action handler error:", e);
-    }
-  }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, isPlaying]);
-
-  // Top Search Submit
-  const handleTopSearchSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!topSearchText.trim()) return;
-
-    const ytMatch = topSearchText.match(
-      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
-    );
-    if (ytMatch && ytMatch[1]) {
-      const videoId = ytMatch[1];
-      const directTrack: Track = {
-        id: videoId,
-        title: "YouTube Video",
-        author: "YouTube",
-        duration: 0,
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       };
-      playSearchResult(directTrack);
-      setTopSearchText("");
-      return;
-    }
 
-    executeSearch(topSearchText);
-  };
+      const handlePrev = () => {
+        const activeQueue = queueTracks.length > 0 ? queueTracks : playlist;
+        if (activeQueue.length === 0) return;
 
-  // Paste action
-  const handlePasteClick = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        setTopSearchText(text);
-        if (text.includes("youtube.com") || text.includes("youtu.be")) {
-          const ytMatch = text.match(
-            /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
-          );
-          if (ytMatch && ytMatch[1]) {
-            const videoId = ytMatch[1];
-            const directTrack: Track = {
-              id: videoId,
-              title: "YouTube Video",
-              author: "YouTube",
-              duration: 0,
-              thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-            };
-            playSearchResult(directTrack);
-            setTopSearchText("");
-            return;
+        if (currentTime > 3) {
+          if (
+            activePlayerType.current === "youtube" &&
+            ytPlayerRef.current &&
+            typeof ytPlayerRef.current.seekTo === "function"
+          ) {
+            try { ytPlayerRef.current.seekTo(0, true); } catch { }
+          } else if (audioRef.current) {
+            audioRef.current.currentTime = 0;
+          }
+          setCurrentTime(0);
+          return;
+        }
+
+        let curIdx = activeQueue.findIndex((t) => t.id === currentTrack?.id);
+        if (curIdx === -1) curIdx = currentIndex;
+        if (curIdx < 0 || curIdx >= activeQueue.length) curIdx = 0;
+
+        if (repeatModeRef.current === "shuffle" && shuffleHistoryRef.current.length > 0) {
+          const prevIdx = shuffleHistoryRef.current.pop()!;
+          setCurrentIndex(prevIdx);
+          currentIndexRef.current = prevIdx;
+          loadAndPlayTrack(activeQueue[prevIdx], true);
+          return;
+        }
+
+        const prevIdx = (curIdx - 1 + activeQueue.length) % activeQueue.length;
+        setCurrentIndex(prevIdx);
+        currentIndexRef.current = prevIdx;
+        loadAndPlayTrack(activeQueue[prevIdx], true);
+      };
+
+      const seekToTime = (newTime: number) => {
+        setCurrentTime(newTime);
+        if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
+          try { ytPlayerRef.current.seekTo(newTime, true); } catch { }
+        } else if (audioRef.current) {
+          audioRef.current.currentTime = newTime;
+        }
+      };
+
+      const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        seekToTime(parseFloat(e.target.value));
+      };
+
+      // MediaSession API Integration for Background Audio, Lock Screen Controls & Mobile Playback
+      useEffect(() => {
+        if (!("mediaSession" in navigator)) return;
+
+        if (currentTrack) {
+          const artUrl =
+            currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+              ? currentTrack.thumbnail.includes("i.ytimg.com")
+                ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+                : currentTrack.thumbnail
+              : currentTrack.id
+                ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg`
+                : DEFAULT_TRACK_ART;
+
+          try {
+            navigator.mediaSession.metadata = new MediaMetadata({
+              title: currentTrack.title || "Kahoii Music",
+              artist: formatTrackArtist(currentTrack.title, currentTrack.author) || "Kahoii Music",
+              album: "Kahoii Music",
+              artwork: [
+                { src: artUrl, sizes: "96x96", type: "image/jpeg" },
+                { src: artUrl, sizes: "128x128", type: "image/jpeg" },
+                { src: artUrl, sizes: "192x192", type: "image/jpeg" },
+                { src: artUrl, sizes: "256x256", type: "image/jpeg" },
+                { src: artUrl, sizes: "512x512", type: "image/jpeg" },
+              ],
+            });
+          } catch (err) {
+            console.warn("MediaSession metadata error:", err);
           }
         }
-      }
-    } catch {
-      const pasted = window.prompt("Dán link YouTube vào đây:");
-      if (pasted) {
-        setTopSearchText(pasted);
-      }
-    }
-  };
 
-  const handlePlaySongItem = (
-    track: Track,
-    contextList?: Track[],
-    startIndex?: number
-  ) => {
-    if (currentTrack?.id === track.id) {
-      togglePlayPause();
-      return;
-    }
-    const list = contextList && contextList.length > 0 ? contextList : [track, ...queueTracks];
-    setPlaylist(list);
-    playlistRef.current = list;
-    setQueueTracks(list);
-    queueTracksRef.current = list;
-    const idx = startIndex !== undefined && startIndex >= 0
-      ? startIndex
-      : list.findIndex((t) => t.id === track.id);
-    const playIdx = idx !== -1 ? idx : 0;
-    setCurrentIndex(playIdx);
-    currentIndexRef.current = playIdx;
-    loadAndPlayTrack(track, true);
-  };
+        try {
+          navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
 
-  const playSearchResult = (track: Track) => {
-    if (currentTrack?.id === track.id) {
-      togglePlayPause();
-      return;
-    }
-    if (searchResults && searchResults.length > 0) {
-      setPlaylist(searchResults);
-      playlistRef.current = searchResults;
-      setQueueTracks(searchResults);
-      queueTracksRef.current = searchResults;
-      const idx = searchResults.findIndex((t) => t.id === track.id);
-      const playIdx = idx !== -1 ? idx : 0;
-      setCurrentIndex(playIdx);
-      currentIndexRef.current = playIdx;
-      loadAndPlayTrack(track, true);
-    } else {
-      const existingIdx = queueTracks.findIndex((t) => t.id === track.id);
-      if (existingIdx !== -1) {
-        setCurrentIndex(existingIdx);
-        currentIndexRef.current = existingIdx;
+          navigator.mediaSession.setActionHandler("play", () => {
+            if (activePlayerType.current === "audio" && audioRef.current) {
+              audioRef.current.play().catch(() => { });
+            } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+              try { ytPlayerRef.current.playVideo(); } catch { }
+            }
+            setIsPlaying(true);
+          });
+
+          navigator.mediaSession.setActionHandler("pause", () => {
+            if (activePlayerType.current === "audio" && audioRef.current) {
+              audioRef.current.pause();
+            } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+              try { ytPlayerRef.current.pauseVideo(); } catch { }
+            }
+            setIsPlaying(false);
+          });
+
+          navigator.mediaSession.setActionHandler("previoustrack", () => {
+            handlePrev();
+          });
+
+          navigator.mediaSession.setActionHandler("nexttrack", () => {
+            handleNext();
+          });
+
+          navigator.mediaSession.setActionHandler("seekto", (details) => {
+            if (details.seekTime !== undefined) {
+              seekToTime(details.seekTime);
+            }
+          });
+        } catch (e) {
+          console.warn("MediaSession action handler error:", e);
+        }
+      }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, isPlaying]);
+
+      // Top Search Submit
+      const handleTopSearchSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!topSearchText.trim()) return;
+
+        const ytMatch = topSearchText.match(
+          /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
+        );
+        if (ytMatch && ytMatch[1]) {
+          const videoId = ytMatch[1];
+          const directTrack: Track = {
+            id: videoId,
+            title: "YouTube Video",
+            author: "YouTube",
+            duration: 0,
+            thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          };
+          playSearchResult(directTrack);
+          setTopSearchText("");
+          return;
+        }
+
+        executeSearch(topSearchText);
+      };
+
+      // Paste action
+      const handlePasteClick = async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            setTopSearchText(text);
+            if (text.includes("youtube.com") || text.includes("youtu.be")) {
+              const ytMatch = text.match(
+                /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
+              );
+              if (ytMatch && ytMatch[1]) {
+                const videoId = ytMatch[1];
+                const directTrack: Track = {
+                  id: videoId,
+                  title: "YouTube Video",
+                  author: "YouTube",
+                  duration: 0,
+                  thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                };
+                playSearchResult(directTrack);
+                setTopSearchText("");
+                return;
+              }
+            }
+          }
+        } catch {
+          const pasted = window.prompt("Dán link YouTube vào đây:");
+          if (pasted) {
+            setTopSearchText(pasted);
+          }
+        }
+      };
+
+      const handlePlaySongItem = (
+        track: Track,
+        contextList?: Track[],
+        startIndex?: number
+      ) => {
+        if (currentTrack?.id === track.id) {
+          togglePlayPause();
+          return;
+        }
+        const list = contextList && contextList.length > 0 ? contextList : [track, ...queueTracks];
+        setPlaylist(list);
+        playlistRef.current = list;
+        setQueueTracks(list);
+        queueTracksRef.current = list;
+        const idx = startIndex !== undefined && startIndex >= 0
+          ? startIndex
+          : list.findIndex((t) => t.id === track.id);
+        const playIdx = idx !== -1 ? idx : 0;
+        setCurrentIndex(playIdx);
+        currentIndexRef.current = playIdx;
         loadAndPlayTrack(track, true);
-      } else {
-        const updated = [track, ...queueTracks];
-        setQueueTracks(updated);
-        queueTracksRef.current = updated;
-        setPlaylist(updated);
-        playlistRef.current = updated;
-        setCurrentIndex(0);
-        currentIndexRef.current = 0;
-        loadAndPlayTrack(track, true);
-      }
-    }
-  };
+      };
 
-  const playTrackDirectly = (track: Track) => {
-    if (currentTrack?.id === track.id) {
-      togglePlayPause();
-      return;
-    }
-    const existingIdx = queueTracks.findIndex((t) => t.id === track.id);
-    if (existingIdx !== -1) {
-      setCurrentIndex(existingIdx);
-      currentIndexRef.current = existingIdx;
-      loadAndPlayTrack(track, true);
-    } else {
-      const updated = [track, ...queueTracks];
-      setQueueTracks(updated);
-      queueTracksRef.current = updated;
-      setPlaylist(updated);
-      playlistRef.current = updated;
-      setCurrentIndex(0);
-      currentIndexRef.current = 0;
-      loadAndPlayTrack(track, true);
-    }
-  };
+      const playSearchResult = (track: Track) => {
+        if (currentTrack?.id === track.id) {
+          togglePlayPause();
+          return;
+        }
+        if (searchResults && searchResults.length > 0) {
+          setPlaylist(searchResults);
+          playlistRef.current = searchResults;
+          setQueueTracks(searchResults);
+          queueTracksRef.current = searchResults;
+          const idx = searchResults.findIndex((t) => t.id === track.id);
+          const playIdx = idx !== -1 ? idx : 0;
+          setCurrentIndex(playIdx);
+          currentIndexRef.current = playIdx;
+          loadAndPlayTrack(track, true);
+        } else {
+          const existingIdx = queueTracks.findIndex((t) => t.id === track.id);
+          if (existingIdx !== -1) {
+            setCurrentIndex(existingIdx);
+            currentIndexRef.current = existingIdx;
+            loadAndPlayTrack(track, true);
+          } else {
+            const updated = [track, ...queueTracks];
+            setQueueTracks(updated);
+            queueTracksRef.current = updated;
+            setPlaylist(updated);
+            playlistRef.current = updated;
+            setCurrentIndex(0);
+            currentIndexRef.current = 0;
+            loadAndPlayTrack(track, true);
+          }
+        }
+      };
 
-  // Filtered Left list based on active tab and query
-  const getSidebarItems = () => {
-    const q = leftSearchQuery.toLowerCase().trim();
-    let items: any[] = [];
+      const playTrackDirectly = (track: Track) => {
+        if (currentTrack?.id === track.id) {
+          togglePlayPause();
+          return;
+        }
+        const existingIdx = queueTracks.findIndex((t) => t.id === track.id);
+        if (existingIdx !== -1) {
+          setCurrentIndex(existingIdx);
+          currentIndexRef.current = existingIdx;
+          loadAndPlayTrack(track, true);
+        } else {
+          const updated = [track, ...queueTracks];
+          setQueueTracks(updated);
+          queueTracksRef.current = updated;
+          setPlaylist(updated);
+          playlistRef.current = updated;
+          setCurrentIndex(0);
+          currentIndexRef.current = 0;
+          loadAndPlayTrack(track, true);
+        }
+      };
 
-    if (activeLeftTab === "favorites") {
-      const favs = libraryData.favorites;
-      if (favs.length > 0) {
-        items = favs
-          .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
-          .map((t) => {
-            const artistName = formatTrackArtist(t.title, t.author);
-            return {
+      // Filtered Left list based on active tab and query
+      const getSidebarItems = () => {
+        const q = leftSearchQuery.toLowerCase().trim();
+        let items: any[] = [];
+
+        if (activeLeftTab === "favorites") {
+          const favs = libraryData.favorites;
+          if (favs.length > 0) {
+            items = favs
+              .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
+              .map((t) => {
+                const artistName = formatTrackArtist(t.title, t.author);
+                return {
+                  id: t.id,
+                  title: t.title,
+                  subtitle: t.duration && t.duration > 0
+                    ? (artistName ? `${artistName} • ${formatTime(t.duration)}` : formatTime(t.duration))
+                    : (artistName || "Bài hát"),
+                  thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+                  rawTrack: t,
+                  rawPlaylist: null as any,
+                };
+              });
+          }
+        } else if (activeLeftTab === "offline") {
+          const mergedMap = new Map<string, any>();
+
+          // 1. Add all tracks from Firebase cloud (synced from PC / Android / Web)
+          libraryData.savedTracks.forEach((t) => {
+            const localOffline = offlineTracks.find((ot) => ot.id === t.id);
+            const isLocalCached = !!localOffline;
+            const sizeStr = isLocalCached
+              ? formatBytes(localOffline?.sizeBytes || localOffline?.audioBlob?.size || 0)
+              : null;
+            mergedMap.set(t.id, {
               id: t.id,
               title: t.title,
-              subtitle: t.duration && t.duration > 0
-                ? (artistName ? `${artistName} • ${formatTime(t.duration)}` : formatTime(t.duration))
-                : (artistName || "Bài hát"),
-              thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
-              rawTrack: t,
-              rawPlaylist: null as any,
-            };
+              author: t.author,
+              duration: t.duration,
+              durationText: t.durationText,
+              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+              isLocalCached,
+              sizeStr,
+            });
           });
-      }
-    } else if (activeLeftTab === "offline") {
-      const mergedMap = new Map<string, any>();
 
-      // 1. Add all tracks from Firebase cloud (synced from PC / Android / Web)
-      libraryData.savedTracks.forEach((t) => {
-        const localOffline = offlineTracks.find((ot) => ot.id === t.id);
-        const isLocalCached = !!localOffline;
-        const sizeStr = isLocalCached
-          ? formatBytes(localOffline?.sizeBytes || localOffline?.audioBlob?.size || 0)
-          : null;
-        mergedMap.set(t.id, {
-          id: t.id,
-          title: t.title,
-          author: t.author,
-          duration: t.duration,
-          durationText: t.durationText,
-          thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
-          isLocalCached,
-          sizeStr,
-        });
-      });
+          // 2. Add local IndexedDB tracks that might not be in cloud
+          offlineTracks.forEach((ot) => {
+            if (!mergedMap.has(ot.id)) {
+              const sizeStr = formatBytes(ot.sizeBytes || ot.audioBlob?.size || 0);
+              mergedMap.set(ot.id, {
+                id: ot.id,
+                title: ot.title,
+                author: ot.author,
+                duration: ot.duration,
+                durationText: ot.durationText,
+                thumbnail: ot.thumbnail || `https://i.ytimg.com/vi/${ot.id}/mqdefault.jpg`,
+                isLocalCached: true,
+                sizeStr,
+              });
+            }
+          });
 
-      // 2. Add local IndexedDB tracks that might not be in cloud
-      offlineTracks.forEach((ot) => {
-        if (!mergedMap.has(ot.id)) {
-          const sizeStr = formatBytes(ot.sizeBytes || ot.audioBlob?.size || 0);
-          mergedMap.set(ot.id, {
-            id: ot.id,
-            title: ot.title,
-            author: ot.author,
-            duration: ot.duration,
-            durationText: ot.durationText,
-            thumbnail: ot.thumbnail || `https://i.ytimg.com/vi/${ot.id}/mqdefault.jpg`,
-            isLocalCached: true,
-            sizeStr,
+          const allSaved = Array.from(mergedMap.values());
+          if (allSaved.length > 0) {
+            items = allSaved
+              .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
+              .map((t) => {
+                const artistName = formatTrackArtist(t.title, t.author);
+                const prefix = artistName ? `${artistName} • ` : "";
+                const dur = t.duration && t.duration > 0 ? `${formatTime(t.duration)} • ` : "";
+                const sub = t.isLocalCached ? `${prefix}${dur}${t.sizeStr}` : `${prefix}${dur}Đám mây`;
+                return {
+                  id: t.id,
+                  title: t.title,
+                  subtitle: sub,
+                  thumb: t.thumbnail,
+                  rawTrack: {
+                    id: t.id,
+                    title: t.title,
+                    author: t.author,
+                    duration: t.duration,
+                    durationText: t.durationText,
+                    thumbnail: t.thumbnail,
+                  },
+                  isOffline: true,
+                  isLocalCached: t.isLocalCached,
+                  rawPlaylist: null as any,
+                };
+              });
+          }
+        } else if (activeLeftTab === "history") {
+          const hist = libraryData.history;
+          if (hist.length > 0) {
+            items = hist
+              .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
+              .map((t) => {
+                const artistName = formatTrackArtist(t.title, t.author);
+                return {
+                  id: t.id,
+                  title: t.title,
+                  subtitle: t.duration && t.duration > 0
+                    ? (artistName ? `${artistName} • ${formatTime(t.duration)}` : formatTime(t.duration))
+                    : (artistName || "Bài hát"),
+                  thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
+                  rawTrack: t,
+                  rawPlaylist: null as any,
+                };
+              });
+          }
+        } else if (libraryData.playlists.length > 0) {
+          items = libraryData.playlists
+            .filter((p) => !q || (p.name && p.name.toLowerCase().includes(q)))
+            .map((p, idx) => {
+              const list = p.items || p.tracks || [];
+              return {
+                id: p.id || `pl-${idx}`,
+                title: p.name || "Danh sách phát",
+                subtitle: `${list.length} bài hát`,
+                thumb: list[0]?.thumbnail || (list[0]?.id ? `https://i.ytimg.com/vi/${list[0].id}/mqdefault.jpg` : DEFAULT_TRACK_ART),
+                rawTrack: null as any,
+                rawPlaylist: p,
+              };
+            });
+        }
+
+        if (isLeftSorted && items.length > 0) {
+          items = [...items].sort((a, b) => {
+            const itemA = {
+              title: a.title,
+              name: a.rawPlaylist?.name || a.title,
+              author: a.rawTrack?.author || "",
+            };
+            const itemB = {
+              title: b.title,
+              name: b.rawPlaylist?.name || b.title,
+              author: b.rawTrack?.author || "",
+            };
+            return compareSortItems(itemA, itemB);
           });
         }
-      });
 
-      const allSaved = Array.from(mergedMap.values());
-      if (allSaved.length > 0) {
-        items = allSaved
-          .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
-          .map((t) => {
-            const artistName = formatTrackArtist(t.title, t.author);
-            const prefix = artistName ? `${artistName} • ` : "";
-            const dur = t.duration && t.duration > 0 ? `${formatTime(t.duration)} • ` : "";
-            const sub = t.isLocalCached ? `${prefix}${dur}${t.sizeStr}` : `${prefix}${dur}Đám mây`;
-            return {
-              id: t.id,
-              title: t.title,
-              subtitle: sub,
-              thumb: t.thumbnail,
-              rawTrack: {
-                id: t.id,
-                title: t.title,
-                author: t.author,
-                duration: t.duration,
-                durationText: t.durationText,
-                thumbnail: t.thumbnail,
-              },
-              isOffline: true,
-              isLocalCached: t.isLocalCached,
-              rawPlaylist: null as any,
-            };
-          });
-      }
-    } else if (activeLeftTab === "history") {
-      const hist = libraryData.history;
-      if (hist.length > 0) {
-        items = hist
-          .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.author && t.author.toLowerCase().includes(q)))
-          .map((t) => {
-            const artistName = formatTrackArtist(t.title, t.author);
-            return {
-              id: t.id,
-              title: t.title,
-              subtitle: t.duration && t.duration > 0
-                ? (artistName ? `${artistName} • ${formatTime(t.duration)}` : formatTime(t.duration))
-                : (artistName || "Bài hát"),
-              thumb: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
-              rawTrack: t,
-              rawPlaylist: null as any,
-            };
-          });
-      }
-    } else if (libraryData.playlists.length > 0) {
-      items = libraryData.playlists
-        .filter((p) => !q || (p.name && p.name.toLowerCase().includes(q)))
-        .map((p, idx) => {
-          const list = p.items || p.tracks || [];
-          return {
-            id: p.id || `pl-${idx}`,
-            title: p.name || "Danh sách phát",
-            subtitle: `${list.length} bài hát`,
-            thumb: list[0]?.thumbnail || (list[0]?.id ? `https://i.ytimg.com/vi/${list[0].id}/mqdefault.jpg` : DEFAULT_TRACK_ART),
-            rawTrack: null as any,
-            rawPlaylist: p,
-          };
-        });
-    }
+        return items;
+      };
 
-    if (isLeftSorted && items.length > 0) {
-      items = [...items].sort((a, b) => {
-        const itemA = {
-          title: a.title,
-          name: a.rawPlaylist?.name || a.title,
-          author: a.rawTrack?.author || "",
-        };
-        const itemB = {
-          title: b.title,
-          name: b.rawPlaylist?.name || b.title,
-          author: b.rawTrack?.author || "",
-        };
-        return compareSortItems(itemA, itemB);
-      });
-    }
+      // Real tracks to display in Discovery Feed (Center Canvas)
+      const recentTracksToDisplay = libraryData.history.slice(0, 12);
+      const recommendedTracksToDisplay = libraryData.favorites.slice(0, 12);
 
-    return items;
-  };
-
-  // Real tracks to display in Discovery Feed (Center Canvas)
-  const recentTracksToDisplay = libraryData.history.slice(0, 12);
-  const recommendedTracksToDisplay = libraryData.favorites.slice(0, 12);
-
-  return (
-    <div className="w-screen h-screen h-[100dvh] flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
-      <audio
-        ref={audioRef}
-        preload="auto"
-        playsInline
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={() => {
-          setDuration(audioRef.current?.duration || currentTrack?.duration || 207);
-          setIsLoading(false);
-        }}
-        onCanPlay={() => setIsLoading(false)}
-        onPlaying={() => {
-          setIsPlaying(true);
-          setIsLoading(false);
-        }}
-        onEnded={() => handleTrackEndedRef.current()}
-        onPlay={() => {
-          setIsPlaying(true);
-          setIsLoading(false);
-        }}
-        onPause={() => setIsPlaying(false)}
-        onError={() => setIsLoading(false)}
-      />
+      return (
+        <div className="w-screen h-screen h-[100dvh] flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
+          <audio
+            ref={audioRef}
+            preload="auto"
+            playsInline
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={() => {
+              setDuration(audioRef.current?.duration || currentTrack?.duration || 207);
+              setIsLoading(false);
+            }}
+            onCanPlay={() => setIsLoading(false)}
+            onPlaying={() => {
+              setIsPlaying(true);
+              setIsLoading(false);
+            }}
+            onEnded={() => handleTrackEndedRef.current()}
+            onPlay={() => {
+              setIsPlaying(true);
+              setIsLoading(false);
+            }}
+            onPause={() => setIsPlaying(false)}
+            onError={() => setIsLoading(false)}
+          />
 
       {/* Hidden YouTube Iframe Container for 100% Reliable Playback */}
       <div
@@ -3133,1324 +3199,1626 @@ export default function App() {
       <header className="w-full flex flex-col justify-end flex-shrink-0 z-30 safe-header">
         <div className="w-full h-[54px] flex items-center justify-between">
           {/* Left: App Logo & Brand Identity */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <img
-            src="./logo_icon.png"
-            alt="Kahoii Music"
-            className="w-7 h-7 rounded-lg object-contain shadow-md shadow-black/40"
-          />
-          <span className="hidden sm:inline font-extrabold text-sm tracking-wide bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
-            Kahoii Music
-          </span>
-        </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <img
+                    src="./logo_icon.png"
+                    alt="Kahoii Music"
+                    className="w-7 h-7 rounded-lg object-contain shadow-md shadow-black/40"
+                  />
+                  <span className="hidden sm:inline font-extrabold text-sm tracking-wide bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
+                    Kahoii Music
+                  </span>
+                </div>
 
-        {/* Center: Search Pill with Search History Suggestions Dropdown */}
-        <div ref={searchDropdownRef} className="relative flex-1 max-w-[580px] mx-2 sm:mx-4">
-          <form
-            onSubmit={handleTopSearchSubmit}
-            className="w-full h-[36px] px-3 sm:px-4 rounded-full theme-input-pill flex items-center gap-2 sm:gap-2.5 shadow-inner transition-all"
-          >
-            <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
-            <input
-              type="text"
-              placeholder="Search"
-              value={topSearchText}
-              onFocus={() => setIsSearchFocused(true)}
-              onChange={(e) => setTopSearchText(e.target.value)}
-              className="flex-1 bg-transparent text-base sm:text-sm text-white placeholder-white/40 focus:outline-none min-w-0"
-            />
-            {(topSearchText || isSearchOpen) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setTopSearchText("");
-                  setSearchQueryTitle("");
-                  setIsSearchOpen(false);
-                  setIsSearchFocused(false);
-                }}
-                title="Xóa tìm kiếm"
-                className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handlePasteClick}
-              title="Dán từ Clipboard"
-              className="hidden sm:flex px-4 py-0.5 rounded-full bg-white/10 hover:theme-accent-bg hover:text-white border border-white/20 text-xs font-semibold text-white transition-all cursor-pointer items-center gap-1"
-            >
-              <ClipboardPaste className="w-3 h-3 text-white/80" />
-              <span>Dán</span>
-            </button>
-          </form>
-
-          {/* Quick Search History Dropdown Popover */}
-          {isSearchFocused && searchHistory.length > 0 && (
-            <div className="absolute top-[42px] left-0 right-0 rounded-2xl theme-menu-glass shadow-2xl p-3 z-50 animate-fade-in flex flex-col gap-1.5 border border-white/15">
-              <div className="flex items-center justify-between px-2 pb-1.5 border-b border-white/10 text-[11px] font-semibold text-white/60">
-                <span className="flex items-center gap-1.5 theme-accent-text">
-                  <Clock className="w-3.5 h-3.5 theme-accent-text" />
-                  Lịch sử tìm kiếm
-                </span>
-                <button
-                  type="button"
-                  onClick={clearSearchHistory}
-                  className="text-white/40 hover:text-red-400 text-[10px] transition-colors cursor-pointer"
-                >
-                  Xóa tất cả
-                </button>
-              </div>
-              <div className="max-h-[250px] overflow-y-auto flex flex-col gap-0.5 pt-1">
-                {searchHistory.map((query, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => handleHistoryItemClick(query)}
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-xs text-white/90 hover:theme-accent-text transition-colors cursor-pointer group"
+                {/* Center: Search Pill with Search History Suggestions Dropdown */}
+                <div ref={searchDropdownRef} className="relative flex-1 max-w-[580px] mx-2 sm:mx-4">
+                  <form
+                    onSubmit={handleTopSearchSubmit}
+                    className="w-full h-[36px] px-3 sm:px-4 rounded-full theme-input-pill flex items-center gap-2 sm:gap-2.5 shadow-inner transition-all"
                   >
-                    <div className="flex items-center gap-2 truncate flex-1 min-w-0 pr-2">
-                      <Clock className="w-3.5 h-3.5 text-white/30 group-hover:theme-accent-text flex-shrink-0" />
-                      <span className="truncate">{query}</span>
-                    </div>
+                    <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Search"
+                      value={topSearchText}
+                      onFocus={() => setIsSearchFocused(true)}
+                      onChange={(e) => setTopSearchText(e.target.value)}
+                      className="flex-1 bg-transparent text-base sm:text-sm text-white placeholder-white/40 focus:outline-none min-w-0"
+                    />
+                    {(topSearchText || isSearchOpen) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTopSearchText("");
+                          setSearchQueryTitle("");
+                          setIsSearchOpen(false);
+                          setIsSearchFocused(false);
+                        }}
+                        title="Xóa tìm kiếm"
+                        className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={(e) => removeFromSearchHistory(query, e)}
-                      title="Xóa mục này"
-                      className="text-white/20 hover:text-white transition-colors p-1 flex-shrink-0"
+                      onClick={handlePasteClick}
+                      title="Dán từ Clipboard"
+                      className="hidden sm:flex px-4 py-0.5 rounded-full bg-white/10 hover:theme-accent-bg hover:text-white border border-white/20 text-xs font-semibold text-white transition-all cursor-pointer items-center gap-1"
                     >
-                      <X className="w-3 h-3" />
+                      <ClipboardPaste className="w-3 h-3 text-white/80" />
+                      <span>Dán</span>
                     </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+                  </form>
 
-        {/* Right: Offline Indicator, Download Apps & User Avatar Pill Buttons */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {!isOnline && (
-            <div
-              title="Bạn đang ngoại tuyến. Các bài hát đã lưu trong mục 'Đã tải' vẫn nghe được bình thường!"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-medium animate-pulse cursor-pointer"
-              onClick={() => setActiveLeftTab("offline")}
-            >
-              <WifiOff className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Ngoại tuyến (Offline)</span>
-            </div>
-          )}
+                  {/* Quick Search History Dropdown Popover */}
+                  {isSearchFocused && searchHistory.length > 0 && (
+                    <div className="absolute top-[42px] left-0 right-0 rounded-2xl theme-menu-glass shadow-2xl p-3 z-50 animate-fade-in flex flex-col gap-1.5 border border-white/15">
+                      <div className="flex items-center justify-between px-2 pb-1.5 border-b border-white/10 text-[11px] font-semibold text-white/60">
+                        <span className="flex items-center gap-1.5 theme-accent-text">
+                          <Clock className="w-3.5 h-3.5 theme-accent-text" />
+                          Lịch sử tìm kiếm
+                        </span>
+                        <button
+                          type="button"
+                          onClick={clearSearchHistory}
+                          className="text-white/40 hover:text-red-400 text-[10px] transition-colors cursor-pointer"
+                        >
+                          Xóa tất cả
+                        </button>
+                      </div>
+                      <div className="max-h-[250px] overflow-y-auto flex flex-col gap-0.5 pt-1">
+                        {searchHistory.map((query, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => handleHistoryItemClick(query)}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-xs text-white/90 hover:theme-accent-text transition-colors cursor-pointer group"
+                          >
+                            <div className="flex items-center gap-2 truncate flex-1 min-w-0 pr-2">
+                              <Clock className="w-3.5 h-3.5 text-white/30 group-hover:theme-accent-text flex-shrink-0" />
+                              <span className="truncate">{query}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => removeFromSearchHistory(query, e)}
+                              title="Xóa mục này"
+                              className="text-white/20 hover:text-white transition-colors p-1 flex-shrink-0"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-          {/* Download App Button & Dropdown */}
-          <div className="relative" ref={downloadMenuRef}>
-            <button
-              type="button"
-              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-              title="Tải ứng dụng Kahoii Music (PC, Extension, Android, iOS, PWA)"
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer shadow-md border ${
-                showDownloadMenu
-                  ? "theme-badge-active scale-105"
-                  : "theme-badge hover:theme-btn-primary hover:text-white text-white/90 hover:scale-105 border-white/10"
-              }`}
-            >
-              <Download className="w-3.5 h-3.5 theme-accent-text" />
-              <span className="hidden sm:inline text-xs font-semibold">Tải ứng dụng</span>
-            </button>
+                {/* Right: Offline Indicator, Download Apps & User Avatar Pill Buttons */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {!isOnline && (
+                    <div
+                      title="Bạn đang ngoại tuyến. Các bài hát đã lưu trong mục 'Đã tải' vẫn nghe được bình thường!"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-medium animate-pulse cursor-pointer"
+                      onClick={() => setActiveLeftTab("offline")}
+                    >
+                      <WifiOff className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Ngoại tuyến (Offline)</span>
+                    </div>
+                  )}
 
-            {/* Download Dropdown Popover */}
-            {showDownloadMenu && (
-              <div className="absolute top-[44px] right-0 z-50 w-[310px] sm:w-[350px] theme-menu-glass rounded-2xl shadow-2xl p-3 border theme-accent-border animate-fade-in flex flex-col gap-2">
-                <div className="flex items-center justify-between px-1 pb-1.5 border-b border-white/10">
-                  <div>
-                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                  {/* Download App Button & Dropdown */}
+                  <div className="relative" ref={downloadMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                      title="Tải ứng dụng Kahoii Music (PC, Extension, Android, iOS, PWA)"
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer shadow-md border ${showDownloadMenu
+                          ? "theme-badge-active scale-105"
+                          : "theme-badge hover:theme-btn-primary hover:text-white text-white/90 hover:scale-105 border-white/10"
+                        }`}
+                    >
                       <Download className="w-3.5 h-3.5 theme-accent-text" />
-                      <span>Tải ứng dụng Kahoii Music</span>
-                    </p>
-                    <p className="text-[10px] text-white/50">Tự động lấy bản mới nhất từ GitHub</p>
+                      <span className="hidden sm:inline text-xs font-semibold">Tải ứng dụng</span>
+                    </button>
+
+                    {/* Download Dropdown Popover */}
+                    {showDownloadMenu && (
+                      <div className="absolute top-[44px] right-0 z-50 w-[310px] sm:w-[350px] theme-menu-glass rounded-2xl shadow-2xl p-3 border theme-accent-border animate-fade-in flex flex-col gap-2">
+                        <div className="flex items-center justify-between px-1 pb-1.5 border-b border-white/10">
+                          <div>
+                            <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <Download className="w-3.5 h-3.5 theme-accent-text" />
+                              <span>Tải ứng dụng Kahoii Music</span>
+                            </p>
+                            <p className="text-[10px] text-white/50">Tự động lấy bản mới nhất từ GitHub</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowDownloadMenu(false)}
+                            className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Platforms List */}
+                        <div className="flex flex-col gap-1.5">
+                          {/* 0. Cài đặt Web App (PWA) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowDownloadMenu(false);
+                              handleInstallPwa();
+                            }}
+                            className="flex items-center justify-between p-2 rounded-xl bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-indigo-500/15 hover:from-pink-500/25 hover:to-purple-500/25 transition-all group border border-pink-500/30 hover:border-pink-500/60 cursor-pointer text-left w-full"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                                <Sparkles className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                                  <span>Cài đặt Web App (PWA)</span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-pink-500/30 text-pink-300 font-semibold flex-shrink-0">
+                                    Mở Offline
+                                  </span>
+                                </p>
+                                <p className="text-[10px] text-white/60 truncate">
+                                  Mở ngay trên máy tính/điện thoại khi mất mạng
+                                </p>
+                              </div>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-white/10 group-hover:theme-btn-primary group-hover:text-white text-white/80 transition-all flex-shrink-0 ml-2">
+                              <Plus className="w-3.5 h-3.5" />
+                            </div>
+                          </button>
+                          {/* 1. PC (Windows) */}
+                          <a
+                            href={downloadData.pc.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                                <Laptop className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                                  <span>Windows PC</span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-300 font-mono flex-shrink-0">
+                                    {downloadData.pc.version}
+                                  </span>
+                                </p>
+                                <p className="text-[10px] text-white/50 truncate">
+                                  {downloadData.pc.fileName} {downloadData.pc.size ? `• ${downloadData.pc.size}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
+                              <Download className="w-3.5 h-3.5" />
+                            </div>
+                          </a>
+
+                          {/* 2. Chrome Extension */}
+                          <a
+                            href={downloadData.extension.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                                <Puzzle className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                                  <span>Extension</span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono flex-shrink-0">
+                                    {downloadData.extension.version}
+                                  </span>
+                                </p>
+                                <p className="text-[10px] text-white/50 truncate">
+                                  Chrome, Edge, Cốc Cốc (.zip)
+                                </p>
+                              </div>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
+                              <Download className="w-3.5 h-3.5" />
+                            </div>
+                          </a>
+
+                          {/* 3. Android */}
+                          <a
+                            href={downloadData.android.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                                <Smartphone className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                                  <span>Android</span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono flex-shrink-0">
+                                    APK
+                                  </span>
+                                </p>
+                                <p className="text-[10px] text-white/50 truncate">
+                                  Cài trực tiếp {downloadData.android.size ? `• ${downloadData.android.size}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
+                              <Download className="w-3.5 h-3.5" />
+                            </div>
+                          </a>
+
+                          {/* 4. iOS */}
+                          <a
+                            href={downloadData.ios.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                                <Tablet className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
+                                  <span>iOS (iPhone/iPad)</span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-mono flex-shrink-0">
+                                    IPA
+                                  </span>
+                                </p>
+                                <p className="text-[10px] text-white/50 truncate">
+                                  Sideloadly / AltStore / TrollStore
+                                </p>
+                              </div>
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
+                              <Download className="w-3.5 h-3.5" />
+                            </div>
+                          </a>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="pt-1.5 border-t border-white/10 flex items-center justify-between text-[10px] text-white/40 px-1">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Tự động lấy bản mới nhất
+                          </span>
+                          <a
+                            href="https://github.com/Iiwa-San/KahoiiMusic/releases"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="theme-accent-text hover:underline flex items-center gap-0.5"
+                          >
+                            <span>Releases</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowDownloadMenu(false)}
-                    className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
 
-                {/* Platforms List */}
-                <div className="flex flex-col gap-1.5">
-                  {/* 0. Cài đặt Web App (PWA) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDownloadMenu(false);
-                      handleInstallPwa();
-                    }}
-                    className="flex items-center justify-between p-2 rounded-xl bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-indigo-500/15 hover:from-pink-500/25 hover:to-purple-500/25 transition-all group border border-pink-500/30 hover:border-pink-500/60 cursor-pointer text-left w-full"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <Sparkles className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
-                          <span>Cài đặt Web App (PWA)</span>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-pink-500/30 text-pink-300 font-semibold flex-shrink-0">
-                            Mở Offline
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-white/60 truncate">
-                          Mở ngay trên máy tính/điện thoại khi mất mạng
-                        </p>
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-white/10 group-hover:theme-btn-primary group-hover:text-white text-white/80 transition-all flex-shrink-0 ml-2">
-                      <Plus className="w-3.5 h-3.5" />
-                    </div>
-                  </button>
-                  {/* 1. PC (Windows) */}
-                  <a
-                    href={downloadData.pc.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <Laptop className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
-                          <span>Windows PC</span>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-300 font-mono flex-shrink-0">
-                            {downloadData.pc.version}
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-white/50 truncate">
-                          {downloadData.pc.fileName} {downloadData.pc.size ? `• ${downloadData.pc.size}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
-                      <Download className="w-3.5 h-3.5" />
-                    </div>
-                  </a>
-
-                  {/* 2. Chrome Extension */}
-                  <a
-                    href={downloadData.extension.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <Puzzle className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
-                          <span>Extension</span>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-mono flex-shrink-0">
-                            {downloadData.extension.version}
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-white/50 truncate">
-                          Chrome, Edge, Cốc Cốc (.zip)
-                        </p>
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
-                      <Download className="w-3.5 h-3.5" />
-                    </div>
-                  </a>
-
-                  {/* 3. Android */}
-                  <a
-                    href={downloadData.android.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <Smartphone className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
-                          <span>Android</span>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono flex-shrink-0">
-                            APK
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-white/50 truncate">
-                          Cài trực tiếp {downloadData.android.size ? `• ${downloadData.android.size}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
-                      <Download className="w-3.5 h-3.5" />
-                    </div>
-                  </a>
-
-                  {/* 4. iOS */}
-                  <a
-                    href={downloadData.ios.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <Tablet className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-white group-hover:theme-accent-text transition-colors flex items-center gap-1.5 truncate">
-                          <span>iOS (iPhone/iPad)</span>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-mono flex-shrink-0">
-                            IPA
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-white/50 truncate">
-                          Sideloadly / AltStore / TrollStore
-                        </p>
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:theme-btn-primary group-hover:text-white text-white/60 transition-all flex-shrink-0 ml-2">
-                      <Download className="w-3.5 h-3.5" />
-                    </div>
-                  </a>
-                </div>
-
-                {/* Footer */}
-                <div className="pt-1.5 border-t border-white/10 flex items-center justify-between text-[10px] text-white/40 px-1">
-                  <span className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Tự động lấy bản mới nhất
-                  </span>
-                  <a
-                    href="https://github.com/Iiwa-San/KahoiiMusic/releases"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="theme-accent-text hover:underline flex items-center gap-0.5"
-                  >
-                    <span>Releases</span>
-                    <ExternalLink className="w-2.5 h-2.5" />
-                  </a>
+                  {/* User Avatar Pill Button (Real avatar from database) */}
+                  {userSession?.isLoggedIn ? (
+                    <button
+                      onClick={() => setIsAccountOpen(true)}
+                      title={`Tài khoản: ${userSession.user?.name || "Kahoii User"}`}
+                      className="flex items-center gap-1.5 p-1 sm:pl-1.5 sm:pr-3.5 sm:py-1 rounded-full theme-badge hover:theme-btn-primary hover:text-white text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 border theme-accent-border group"
+                    >
+                      <img
+                        src={
+                          userSession?.user?.avatarBase64
+                            ? `data:image/png;base64,${userSession.user.avatarBase64}`
+                            : `${API_BASE}/api/user/avatar?t=${avatarKey}${getAuthToken() ? `&token=${getAuthToken()}` : ""}`
+                        }
+                        alt="Avatar"
+                        onError={(e) => {
+                          e.currentTarget.src = DEFAULT_TRACK_ART;
+                        }}
+                        className="w-6 h-6 rounded-full object-cover border border-white/20 shadow-sm"
+                      />
+                      <span className="hidden sm:inline max-w-[75px] truncate text-white/90 group-hover:text-white font-semibold">
+                        {userSession.user?.name || "avatar"}
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsAccountOpen(true)}
+                      title="Đăng nhập"
+                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-full theme-btn-primary hover:opacity-90 text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Đăng nhập</span>
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
+            </header>
 
-          {/* User Avatar Pill Button (Real avatar from database) */}
-          {userSession?.isLoggedIn ? (
-            <button
-              onClick={() => setIsAccountOpen(true)}
-              title={`Tài khoản: ${userSession.user?.name || "Kahoii User"}`}
-              className="flex items-center gap-1.5 p-1 sm:pl-1.5 sm:pr-3.5 sm:py-1 rounded-full theme-badge hover:theme-btn-primary hover:text-white text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 border theme-accent-border group"
-            >
-              <img
-                src={
-                  userSession?.user?.avatarBase64
-                    ? `data:image/png;base64,${userSession.user.avatarBase64}`
-                    : `${API_BASE}/api/user/avatar?t=${avatarKey}${getAuthToken() ? `&token=${getAuthToken()}` : ""}`
-                }
-                alt="Avatar"
-                onError={(e) => {
-                  e.currentTarget.src = DEFAULT_TRACK_ART;
-                }}
-                className="w-6 h-6 rounded-full object-cover border border-white/20 shadow-sm"
-              />
-              <span className="hidden sm:inline max-w-[75px] truncate text-white/90 group-hover:text-white font-semibold">
-                {userSession.user?.name || "avatar"}
-              </span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsAccountOpen(true)}
-              title="Đăng nhập"
-              className="px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-full theme-btn-primary hover:opacity-90 text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
-            >
-              <User className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Đăng nhập</span>
-            </button>
-          )}
-        </div>
-        </div>
-      </header>
-
-      {/* Error Toast */}
-      {errorMessage && (
-        <div className="absolute top-[56px] left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-red-950/90 border border-red-500/50 text-red-200 text-xs flex items-center gap-2 shadow-xl backdrop-blur-md">
-          <span>{errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-white cursor-pointer">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Global Interactive Notification Toast */}
-      {toast && (
-        <div
-          className={`absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl border backdrop-blur-xl shadow-2xl flex items-center gap-2.5 text-xs font-medium animate-fade-in ${
-            toast.type === "warning"
-              ? "bg-amber-950/90 border-amber-500/60 text-amber-200 shadow-amber-500/20"
-              : toast.type === "success"
-              ? "bg-emerald-950/90 border-emerald-500/60 text-emerald-200 shadow-emerald-500/20"
-              : "theme-card-bg theme-accent-text shadow-xl"
-          }`}
-        >
-          {toast.type === "warning" && <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />}
-          {toast.type === "success" && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
-          {toast.type === "info" && <Sparkles className="w-4 h-4 theme-accent-text flex-shrink-0" />}
-          <span>{toast.text}</span>
-          <button
-            onClick={() => setToast(null)}
-            className="ml-1 text-white/50 hover:text-white cursor-pointer"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 2. MAIN CANVAS (Exact Figma 3-Column Layout with Real Proportions)         */}
-      {/* ========================================================================= */}
-      <main className="flex-1 w-full px-2 sm:px-4 lg:px-5 pb-[calc(76px+var(--safe-bottom))] lg:pb-5 pt-1 flex gap-3 lg:gap-4 overflow-hidden min-h-0 relative">
-        {/* ----------------------------------------------------------------------- */}
-        {/* COLUMN 1 (LEFT): Sidebar / Library Panel (~19% Width)                   */}
-        {/* ----------------------------------------------------------------------- */}
-        <aside
-          className={`${
-            mobileTab === "library" ? "flex w-full" : "hidden"
-          } lg:flex lg:w-[290px] xl:w-[320px] flex-shrink-0 figma-panel flex-col min-h-0 overflow-hidden p-4 sm:p-5 lg:px-[18px] lg:pt-[30px] lg:pb-[22px]`}
-        >
-          {/* Top 4 Tabs Row: Silky Smooth Sliding Indicator Animation */}
-          <div className="relative grid grid-cols-4 gap-1.5" style={{ marginBottom: "20px" }}>
-            {/* Static Capsule Backgrounds */}
-            <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pointer-events-none">
-              <div className="rounded-xl theme-tab-inactive" />
-              <div className="rounded-xl theme-tab-inactive" />
-              <div className="rounded-xl theme-tab-inactive" />
-              <div className="rounded-xl theme-tab-inactive" />
-            </div>
-
-            {/* Active Sliding Glowing Pill */}
-            <div
-              className="absolute top-0 bottom-0 rounded-xl pointer-events-none z-10"
-              style={{
-                width: "calc((100% - 18px) / 4)",
-                left: 0,
-                transform: `translateX(calc(${activeTabIndex} * (100% + 6px)))`,
-                transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.8s ease, box-shadow 0.8s ease",
-                background: "var(--theme-btn-gradient)",
-                boxShadow: "0 4px 18px var(--theme-panel-border)",
-              }}
-            />
-
-            {/* Clickable Buttons */}
-            {SIDEBAR_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveLeftTab(tab.key)}
-                className={`relative z-20 py-2 px-0.5 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer truncate flex items-center justify-center gap-1 ${
-                  activeLeftTab === tab.key ? "text-white" : "text-white/70 hover:text-white"
-                }`}
-              >
-                <span>{tab.label}</span>
-                {tab.key === "offline" && Math.max(libraryData.savedTracks.length, offlineTracks.length) > 0 && (
-                  <span className="text-[9px] px-1 py-0.2 rounded-full bg-white/20 font-mono">
-                    {Math.max(libraryData.savedTracks.length, offlineTracks.length)}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {!userSession?.isLoggedIn ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-3 bg-white/5 rounded-2xl border border-white/10 my-auto">
-              <div className="w-12 h-12 rounded-full theme-badge flex items-center justify-center theme-accent-text shadow-md">
-                <FolderHeart className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">Thư viện cá nhân</p>
-                <p className="text-xs text-white/50 mt-1 leading-relaxed">
-                  Đăng nhập để xem danh sách phát, bài hát yêu thích, lịch sử nghe nhạc và các bài hát đã tải về của bạn.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAccountOpen(true)}
-                className="mt-2 px-4 py-2 rounded-xl theme-btn-primary text-white text-xs font-semibold hover:opacity-95 active:scale-95 transition-all cursor-pointer shadow-lg"
-              >
-                Đăng nhập ngay
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Search Box in Sidebar with Sort Icon (Matching Figma: Centered text, pink icons) */}
-              <div
-                className="relative flex items-center h-10 px-3.5 rounded-full theme-input-pill transition-all flex-shrink-0"
-                style={{ marginBottom: "16px" }}
-              >
-                <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search"
-                  value={leftSearchQuery}
-                  onChange={(e) => setLeftSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent text-xs text-center font-medium text-white placeholder-white/50 focus:outline-none px-2"
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsLeftSorted(!isLeftSorted)}
-                  title={isLeftSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
-                  className={`p-1 rounded-md transition-all cursor-pointer flex-shrink-0 ${
-                    isLeftSorted ? "theme-badge-active" : "theme-accent-text hover:text-white"
-                  }`}
-                >
-                  <ArrowDownAZ className="w-4 h-4" />
+            {/* Error Toast */}
+            {errorMessage && (
+              <div className="absolute top-[56px] left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-red-950/90 border border-red-500/50 text-red-200 text-xs flex items-center gap-2 shadow-xl backdrop-blur-md">
+                <span>{errorMessage}</span>
+                <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-white cursor-pointer">
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
+            )}
 
-              {/* Offline Storage Summary & Play All Action */}
-              {activeLeftTab === "offline" && getSidebarItems().length > 0 && (
-                <div className="flex items-center justify-between px-1 mb-2.5 text-xs flex-shrink-0">
-                  <span className="text-white/60 text-[11px]">
-                    {getSidebarItems().length} bài hát {offlineTracks.length > 0 ? `• ${formatBytes(offlineTotalBytes)} offline` : "• Đám mây"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handlePlayAllOffline}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg theme-btn-primary text-white text-[11px] font-semibold hover:opacity-90 active:scale-95 transition-all cursor-pointer shadow-sm"
-                  >
-                    <Play className="w-3 h-3 fill-current" />
-                    <span>Phát tất cả</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Vertical List of Playlist Items (Matching Figma) */}
+            {/* Global Interactive Notification Toast */}
+            {toast && (
               <div
-                className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
-                style={{ gap: "12px" }}
+                className={`absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl border backdrop-blur-xl shadow-2xl flex items-center gap-2.5 text-xs font-medium animate-fade-in ${toast.type === "warning"
+                    ? "bg-amber-950/90 border-amber-500/60 text-amber-200 shadow-amber-500/20"
+                    : toast.type === "success"
+                      ? "bg-emerald-950/90 border-emerald-500/60 text-emerald-200 shadow-emerald-500/20"
+                      : "theme-card-bg theme-accent-text shadow-xl"
+                  }`}
               >
-                {getSidebarItems().length > 0 ? (
-                  getSidebarItems().map((item, idx) => (
+                {toast.type === "warning" && <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+                {toast.type === "success" && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+                {toast.type === "info" && <Sparkles className="w-4 h-4 theme-accent-text flex-shrink-0" />}
+                <span>{toast.text}</span>
+                <button
+                  onClick={() => setToast(null)}
+                  className="ml-1 text-white/50 hover:text-white cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* 2. MAIN CANVAS (Exact Figma 3-Column Layout with Real Proportions)         */}
+            {/* ========================================================================= */}
+            <main className="flex-1 w-full px-2 sm:px-4 lg:px-5 pb-[calc(76px+var(--safe-bottom))] lg:pb-5 pt-1 flex gap-3 lg:gap-4 overflow-hidden min-h-0 relative">
+                {/* ----------------------------------------------------------------------- */}
+                {/* COLUMN 1 (LEFT): Sidebar / Library Panel (~19% Width)                   */}
+                {/* ----------------------------------------------------------------------- */}
+                <aside
+                  className={`${mobileTab === "library" ? "flex w-full" : "hidden"
+                    } lg:flex lg:w-[290px] xl:w-[320px] flex-shrink-0 figma-panel flex-col min-h-0 overflow-hidden p-4 sm:p-5 lg:px-[18px] lg:pt-[30px] lg:pb-[22px]`}
+                >
+                  {/* Top 4 Tabs Row: Silky Smooth Sliding Indicator Animation */}
+                  <div className="relative grid grid-cols-4 gap-1.5" style={{ marginBottom: "20px" }}>
+                    {/* Static Capsule Backgrounds */}
+                    <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pointer-events-none">
+                      <div className="rounded-xl theme-tab-inactive" />
+                      <div className="rounded-xl theme-tab-inactive" />
+                      <div className="rounded-xl theme-tab-inactive" />
+                      <div className="rounded-xl theme-tab-inactive" />
+                    </div>
+
+                    {/* Active Sliding Glowing Pill */}
                     <div
-                      key={item.id + idx}
-                      onClick={() => {
-                        if (item.rawTrack) {
-                          if (activeLeftTab === "favorites") {
-                            const favList = libraryData.favorites;
-                            handlePlaySongItem(item.rawTrack, favList);
-                          } else if (activeLeftTab === "offline") {
-                            const offlineList = getSidebarItems().map((it) => it.rawTrack).filter(Boolean);
-                            handlePlaySongItem(item.rawTrack, offlineList);
-                          } else if (activeLeftTab === "history") {
-                            const histList = libraryData.history;
-                            handlePlaySongItem(item.rawTrack, histList);
-                          } else {
-                            playTrackDirectly(item.rawTrack);
-                          }
-                        } else if (item.rawPlaylist?.items?.length) {
-                          const plTracks: Track[] = item.rawPlaylist.items.map((it: any) => ({
-                            id: it.id || it.Id,
-                            title: it.title || it.Title,
-                            author: it.author || it.Author || it.Artist || "",
-                            duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
-                            thumbnail: `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
-                          }));
-                          setActiveLibraryPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
-                          setActivePlayingPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
-                          setPlaylist(plTracks);
-                          setCurrentIndex(0);
-                          currentIndexRef.current = 0;
-                          loadAndPlayTrack(plTracks[0], true);
-                          setQueueTracks(plTracks);
-                        } else if (playlist[idx % playlist.length]) {
-                          playTrackDirectly(playlist[idx % playlist.length]);
-                        }
+                      className="absolute top-0 bottom-0 rounded-xl pointer-events-none z-10"
+                      style={{
+                        width: "calc((100% - 18px) / 4)",
+                        left: 0,
+                        transform: `translateX(calc(${activeTabIndex} * (100% + 6px)))`,
+                        transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.8s ease, box-shadow 0.8s ease",
+                        background: "var(--theme-btn-gradient)",
+                        boxShadow: "0 4px 18px var(--theme-panel-border)",
                       }}
-                      className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group ${
-                        (activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                        ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)
-                          ? "active-queue-beam shadow-md scale-[1.01]"
-                          : "hover:bg-white/10 hover:translate-x-1"
-                      }`}
-                      style={{ marginBottom: "2px" }}
-                    >
-                      <div className="relative w-11 h-11 flex-shrink-0">
-                        <img
-                          src={item.thumb}
-                          alt=""
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_TRACK_ART;
-                          }}
-                          className="w-full h-full rounded-[14px] object-cover border border-white/10 shadow-sm"
+                    />
+
+                    {/* Clickable Buttons */}
+                    {SIDEBAR_TABS.map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setActiveLeftTab(tab.key)}
+                        className={`relative z-20 py-2 px-0.5 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer truncate flex items-center justify-center gap-1 ${activeLeftTab === tab.key ? "text-white" : "text-white/70 hover:text-white"
+                          }`}
+                      >
+                        <span>{tab.label}</span>
+                        {tab.key === "offline" && Math.max(libraryData.savedTracks.length, offlineTracks.length) > 0 && (
+                          <span className="text-[9px] px-1 py-0.2 rounded-full bg-white/20 font-mono">
+                            {Math.max(libraryData.savedTracks.length, offlineTracks.length)}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {!userSession?.isLoggedIn ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4 gap-3 bg-white/5 rounded-2xl border border-white/10 my-auto">
+                      <div className="w-12 h-12 rounded-full theme-badge flex items-center justify-center theme-accent-text shadow-md">
+                        <FolderHeart className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">Thư viện cá nhân</p>
+                        <p className="text-xs text-white/50 mt-1 leading-relaxed">
+                          Đăng nhập để xem danh sách phát, bài hát yêu thích, lịch sử nghe nhạc và các bài hát đã tải về của bạn.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsAccountOpen(true)}
+                        className="mt-2 px-4 py-2 rounded-xl theme-btn-primary text-white text-xs font-semibold hover:opacity-95 active:scale-95 transition-all cursor-pointer shadow-lg"
+                      >
+                        Đăng nhập ngay
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Search Box in Sidebar with Sort Icon (Matching Figma: Centered text, pink icons) */}
+                      <div
+                        className="relative flex items-center h-10 px-3.5 rounded-full theme-input-pill transition-all flex-shrink-0"
+                        style={{ marginBottom: "16px" }}
+                      >
+                        <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Search"
+                          value={leftSearchQuery}
+                          onChange={(e) => setLeftSearchQuery(e.target.value)}
+                          className="flex-1 bg-transparent text-xs text-center font-medium text-white placeholder-white/50 focus:outline-none px-2"
                         />
-                        {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                          ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
-                          <div className="absolute inset-0 bg-black/55 rounded-[14px] flex items-center justify-center">
-                            {isPlaying ? (
-                              <Volume2 className="w-5 h-5 theme-accent-text animate-pulse" />
-                            ) : (
-                              <Play className="w-4 h-4 fill-current text-white/90" />
+                        <button
+                          type="button"
+                          onClick={() => setIsLeftSorted(!isLeftSorted)}
+                          title={isLeftSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
+                          className={`p-1 rounded-md transition-all cursor-pointer flex-shrink-0 ${isLeftSorted ? "theme-badge-active" : "theme-accent-text hover:text-white"
+                            }`}
+                        >
+                          <ArrowDownAZ className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Offline Storage Summary & Play All Action */}
+                      {activeLeftTab === "offline" && getSidebarItems().length > 0 && (
+                        <div className="flex items-center justify-between px-1 mb-2.5 text-xs flex-shrink-0">
+                          <span className="text-white/60 text-[11px]">
+                            {getSidebarItems().length} bài hát {offlineTracks.length > 0 ? `• ${formatBytes(offlineTotalBytes)} offline` : "• Đám mây"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handlePlayAllOffline}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg theme-btn-primary text-white text-[11px] font-semibold hover:opacity-90 active:scale-95 transition-all cursor-pointer shadow-sm"
+                          >
+                            <Play className="w-3 h-3 fill-current" />
+                            <span>Phát tất cả</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Vertical List of Playlist Items (Matching Figma) */}
+                      <div
+                        className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
+                        style={{ gap: "12px" }}
+                      >
+                        {getSidebarItems().length > 0 ? (
+                          getSidebarItems().map((item, idx) => (
+                            <div
+                              key={item.id + idx}
+                              onClick={() => {
+                                if (item.rawTrack) {
+                                  if (activeLeftTab === "favorites") {
+                                    const favList = libraryData.favorites;
+                                    handlePlaySongItem(item.rawTrack, favList);
+                                  } else if (activeLeftTab === "offline") {
+                                    const offlineList = getSidebarItems().map((it) => it.rawTrack).filter(Boolean);
+                                    handlePlaySongItem(item.rawTrack, offlineList);
+                                  } else if (activeLeftTab === "history") {
+                                    const histList = libraryData.history;
+                                    handlePlaySongItem(item.rawTrack, histList);
+                                  } else {
+                                    playTrackDirectly(item.rawTrack);
+                                  }
+                                } else if (item.rawPlaylist?.items?.length) {
+                                  const plTracks: Track[] = item.rawPlaylist.items.map((it: any) => ({
+                                    id: it.id || it.Id,
+                                    title: it.title || it.Title,
+                                    author: it.author || it.Author || it.Artist || "",
+                                    duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
+                                    thumbnail: `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
+                                  }));
+                                  setActiveLibraryPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
+                                  setActivePlayingPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
+                                  setPlaylist(plTracks);
+                                  setCurrentIndex(0);
+                                  currentIndexRef.current = 0;
+                                  loadAndPlayTrack(plTracks[0], true);
+                                  setQueueTracks(plTracks);
+                                } else if (playlist[idx % playlist.length]) {
+                                  playTrackDirectly(playlist[idx % playlist.length]);
+                                }
+                              }}
+                              className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group ${(activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                                  ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)
+                                  ? "active-queue-beam shadow-md scale-[1.01]"
+                                  : "hover:bg-white/10 hover:translate-x-1"
+                                }`}
+                              style={{ marginBottom: "2px" }}
+                            >
+                              <div className="relative w-11 h-11 flex-shrink-0">
+                                <img
+                                  src={item.thumb}
+                                  alt=""
+                                  onError={(e) => {
+                                    e.currentTarget.src = DEFAULT_TRACK_ART;
+                                  }}
+                                  className="w-full h-full rounded-[14px] object-cover border border-white/10 shadow-sm"
+                                />
+                                {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                                  ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
+                                    <div className="absolute inset-0 bg-black/55 rounded-[14px] flex items-center justify-center">
+                                      {isPlaying ? (
+                                        <Volume2 className="w-5 h-5 theme-accent-text animate-pulse" />
+                                      ) : (
+                                        <Play className="w-4 h-4 fill-current text-white/90" />
+                                      )}
+                                    </div>
+                                  )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <p className="text-[13.5px] font-semibold text-white group-hover:theme-accent-text truncate transition-colors">
+                                    {item.title}
+                                  </p>
+                                  {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                                    ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
+                                      <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider flex-shrink-0">
+                                        {isPlaying ? "Đang phát" : "Tạm dừng"}
+                                      </span>
+                                    )}
+                                </div>
+                                <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
+                                  {item.subtitle}
+                                </p>
+                              </div>
+                              {activeLeftTab === "offline" && (
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {!item.isLocalCached ? (
+                                    <button
+                                      type="button"
+                                      title="Tải về bộ nhớ máy này (để nghe offline không cần mạng)"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (item.rawTrack) handleSaveOfflineTrack(item.rawTrack);
+                                      }}
+                                      className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:theme-accent-text transition-colors cursor-pointer"
+                                    >
+                                      <HardDriveDownload className="w-3.5 h-3.5" />
+                                    </button>
+                                  ) : (
+                                    <span title="Đã lưu offline trên máy này" className="p-1 text-emerald-400">
+                                      <Check className="w-3.5 h-3.5" />
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    title="Xóa khỏi danh sách đã tải"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteOfflineTrack(item.id, item.title);
+                                    }}
+                                    className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-rose-400 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-16 text-center text-white/40 text-xs px-2">
+                            <p>
+                              {activeLeftTab === "library"
+                                ? "Chưa có danh sách phát nào"
+                                : activeLeftTab === "favorites"
+                                  ? "Chưa có bài hát yêu thích nào"
+                                  : activeLeftTab === "offline"
+                                    ? "Chưa có bài hát ngoại tuyến nào"
+                                    : "Chưa có lịch sử phát nhạc"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </aside>
+
+                {/* ----------------------------------------------------------------------- */}
+                {/* COLUMN 2 (CENTER): Main Discovery Feed / Search View (~58% Width)        */}
+                {/* ----------------------------------------------------------------------- */}
+                <section
+                  className={`${mobileTab === "explore" ? "flex w-full" : "hidden"
+                    } lg:flex flex-1 h-full figma-panel flex-col min-h-0 overflow-hidden p-2.5 sm:p-4 lg:p-7`}
+                >
+                  {selectedArtist ? (
+                    /* ===================================================================== */
+                    /* ARTIST DETAIL VIEW (Session giữa lấy data của đúng artist đó)         */
+                    /* ===================================================================== */
+                    <div className="flex flex-col h-full min-h-0 overflow-y-auto lg:overflow-hidden custom-scrollbar">
+                      {/* FIXED ARTIST HEADER CLUSTER (Back Bar + Hero Banner + Tags) */}
+                      <div className="lg:flex-shrink-0">
+                        {/* Back Bar */}
+                        <div className="flex items-center justify-between pb-2 sm:pb-3.5 border-b border-white/10 mb-3 sm:mb-5 lg:flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedArtist(null)}
+                            className="px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 text-xs font-semibold group"
+                          >
+                            <ArrowLeft className="w-4 h-4 theme-accent-text group-hover:-translate-x-0.5 transition-transform" />
+                            <span>Quay lại</span>
+                          </button>
+                          <span className="text-[11px] sm:text-xs text-white/50 font-mono">
+                            Thông tin Nghệ sĩ
+                          </span>
+                        </div>
+
+                        {/* Artist Hero Header Card */}
+                        <div className="w-full rounded-2xl sm:rounded-[24px] p-3.5 sm:p-5 lg:p-6 theme-card-bg shadow-xl sm:shadow-2xl mb-3 sm:mb-4 lg:mb-6 flex flex-col sm:flex-row items-center sm:items-start gap-3.5 sm:gap-5 lg:gap-6 border theme-accent-border relative overflow-hidden lg:flex-shrink-0">
+                          <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
+
+                          {/* Big Avatar */}
+                          <div className="relative w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shadow-xl flex-shrink-0 border-2 sm:border-[3px] theme-accent-border bg-black/40">
+                            <img
+                              src={selectedArtist.avatar}
+                              alt={selectedArtist.name}
+                              onError={(e) => {
+                                e.currentTarget.src = DEFAULT_TRACK_ART;
+                              }}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+
+                          {/* Info & Action Buttons */}
+                          <div className="flex-1 min-w-0 flex flex-col items-center sm:items-start text-center sm:text-left justify-center">
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
+                              <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider theme-badge flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 theme-accent-text" />
+                                Nghệ sĩ chính thức
+                              </span>
+                              {selectedArtist.genre && (
+                                <span className="text-[10px] sm:text-[11px] text-white/60">
+                                  • {selectedArtist.genre}
+                                </span>
+                              )}
+                            </div>
+
+                            <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white tracking-wide truncate max-w-full">
+                              {selectedArtist.name}
+                            </h1>
+
+                            <p className="text-[11px] sm:text-xs text-white/60 mt-0.5 sm:mt-1 mb-2.5 sm:mb-4">
+                              {selectedArtist.subscribers || "Nghệ sĩ trên YouTube Music"}
+                              {artistTracks.length > 0 && ` • ${artistTracks.length} bài hát single`}
+                              {artistPlaylists.length > 0 && ` • ${artistPlaylists.length} danh sách phát`}
+                            </p>
+
+                            {/* Play Actions */}
+                            <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center sm:justify-start">
+                              <button
+                                type="button"
+                                disabled={artistTracks.length === 0}
+                                onClick={() => {
+                                  if (artistTracks.length > 0) {
+                                    setPlaylist(artistTracks);
+                                    setQueueTracks(artistTracks);
+                                    setCurrentIndex(0);
+                                    loadAndPlayTrack(artistTracks[0], true);
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                              >
+                                <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current translate-x-0.5" />
+                                <span>Phát tất cả</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={artistTracks.length === 0}
+                                onClick={() => {
+                                  if (artistTracks.length > 0) {
+                                    const shuffled = [...artistTracks].sort(() => Math.random() - 0.5);
+                                    setPlaylist(shuffled);
+                                    setQueueTracks(shuffled);
+                                    setCurrentIndex(0);
+                                    loadAndPlayTrack(shuffled[0], true);
+                                    setRepeatMode("shuffle");
+                                  }
+                                }}
+                                className="px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all text-xs font-semibold flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:opacity-50"
+                              >
+                                <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                <span>Phát ngẫu nhiên</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Tag Selection Bar (Fixed together in this header cluster) */}
+                        <div className="py-1.5 sm:py-2.5 mb-2.5 sm:mb-4 border-b border-white/10 flex items-center gap-1.5 sm:gap-2 flex-wrap lg:flex-shrink-0">
+                          {[
+                            { key: "all", label: "Tất cả", count: artistTracks.length + artistPlaylists.length },
+                            { key: "singles", label: "Nhạc Single / Bài hát", count: artistTracks.length },
+                            { key: "playlists", label: "Danh sách phát", count: artistPlaylists.length },
+                          ].map((tab) => {
+                            const isActive = activeArtistTab === tab.key;
+                            return (
+                              <button
+                                key={tab.key}
+                                type="button"
+                                onClick={() => setActiveArtistTab(tab.key as any)}
+                                className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${isActive
+                                    ? "theme-badge-active scale-[1.02]"
+                                    : "theme-badge hover:theme-accent-border"
+                                  }`}
+                              >
+                                <span>{tab.label}</span>
+                                {typeof tab.count === "number" && tab.count > 0 && (
+                                  <span
+                                    className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono ${isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
+                                      }`}
+                                  >
+                                    {tab.count}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* SCROLLABLE BODY CONTENT (Singles & Playlists) */}
+                      <div className="flex-1 lg:min-h-0 lg:overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-8">
+                        {isArtistLoading ? (
+                          <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
+                            <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
+                            <p className="text-sm font-medium text-white/70">
+                              Đang tải dữ liệu của {selectedArtist.name}...
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-7">
+                            {/* Section Singles */}
+                            {(activeArtistTab === "all" || activeArtistTab === "singles") && (
+                              <div>
+                                <div className="flex items-center justify-between mb-3.5">
+                                  <div className="flex items-center gap-2">
+                                    <Music className="w-4 h-4 theme-accent-text" />
+                                    <h3 className="text-[17px] font-bold text-white tracking-wide">
+                                      Nhạc Single & Bài hát ({artistTracks.length})
+                                    </h3>
+                                  </div>
+                                </div>
+
+                                {artistTracks.length > 0 ? (
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                                    {artistTracks.map((item, idx) => {
+                                      const isCurrentPlaying = currentTrack?.id === item.id;
+                                      return (
+                                        <div
+                                          key={item.id + idx}
+                                          onClick={() => {
+                                            if (isCurrentPlaying) {
+                                              togglePlayPause();
+                                            } else {
+                                              setPlaylist(artistTracks);
+                                              setQueueTracks(artistTracks);
+                                              setCurrentIndex(idx);
+                                              loadAndPlayTrack(item, true);
+                                            }
+                                          }}
+                                          className="w-full flex flex-col cursor-pointer group"
+                                        >
+                                          <div
+                                            className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${isCurrentPlaying
+                                                ? "theme-accent-border shadow-lg"
+                                                : "border-white/5 bg-black/30"
+                                              }`}
+                                          >
+                                            <img
+                                              src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                              alt={item.title}
+                                              onError={(e) => {
+                                                e.currentTarget.src = DEFAULT_TRACK_ART;
+                                              }}
+                                              className="w-full h-full object-cover"
+                                            />
+                                            <UnifiedPlayOverlay
+                                              isCurrent={isCurrentPlaying}
+                                              isPlaying={isCurrentPlaying && isPlaying}
+                                              onToggle={() => {
+                                                if (isCurrentPlaying) {
+                                                  togglePlayPause();
+                                                } else {
+                                                  setPlaylist(artistTracks);
+                                                  setQueueTracks(artistTracks);
+                                                  setCurrentIndex(idx);
+                                                  loadAndPlayTrack(item, true);
+                                                }
+                                              }}
+                                            />
+                                            {(item.duration > 0 || !!item.durationText) && (
+                                              <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
+                                                {item.isMusic !== false && (
+                                                  <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                                )}
+                                                <span>{item.durationText || formatTime(item.duration)}</span>
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p
+                                            className={`text-[12px] font-semibold truncate mt-2 transition-colors ${isCurrentPlaying
+                                                ? "theme-accent-text font-bold"
+                                                : "text-white/90 group-hover:theme-accent-text"
+                                              }`}
+                                          >
+                                            {item.title}
+                                          </p>
+                                          <p className="text-[10px] text-white/50 truncate mt-0.5">
+                                            {item.author || selectedArtist.name}
+                                          </p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-white/40 italic py-6 text-center bg-white/5 rounded-xl border border-white/5">
+                                    Chưa tìm thấy bài hát single nào của nghệ sĩ này.
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Section Playlists */}
+                            {(activeArtistTab === "all" || activeArtistTab === "playlists") && (
+                              <div>
+                                <div className="flex items-center justify-between mb-3.5">
+                                  <div className="flex items-center gap-2">
+                                    <ListMusic className="w-4 h-4 theme-accent-text" />
+                                    <h3 className="text-[17px] font-bold text-white tracking-wide">
+                                      Danh sách phát & Album ({artistPlaylists.length})
+                                    </h3>
+                                  </div>
+                                </div>
+
+                                {artistPlaylists.length > 0 ? (
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                                    {artistPlaylists.map((pl, idx) => (
+                                      <div
+                                        key={pl.id || idx}
+                                        onClick={() => playPlaylistItem(pl)}
+                                        className="w-full flex flex-col cursor-pointer group"
+                                      >
+                                        <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-black/30">
+                                          <img
+                                            src={pl.thumbnail || DEFAULT_TRACK_ART}
+                                            alt={pl.title}
+                                            onError={(e) => {
+                                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                                            }}
+                                            className="w-full h-full object-cover"
+                                          />
+                                          <UnifiedPlayOverlay
+                                            isCurrent={activePlayingPlaylistId === pl.id}
+                                            isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
+                                            isLoading={loadingPlaylistId === pl.id}
+                                            onToggle={() => playPlaylistItem(pl)}
+                                          />
+                                          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                            Playlist
+                                          </span>
+                                        </div>
+                                        <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2">
+                                          {pl.title}
+                                        </p>
+                                        <p className="text-[10px] text-white/50 truncate mt-0.5">
+                                          {pl.author || selectedArtist.name}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-white/40 italic py-6 text-center bg-white/5 rounded-xl border border-white/5">
+                                    Chưa có danh sách phát nào của nghệ sĩ này.
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-[13.5px] font-semibold text-white group-hover:theme-accent-text truncate transition-colors">
-                            {item.title}
-                          </p>
-                          {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                            ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
-                            <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider flex-shrink-0">
-                              {isPlaying ? "Đang phát" : "Tạm dừng"}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
-                          {item.subtitle}
-                        </p>
-                      </div>
-                      {activeLeftTab === "offline" && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {!item.isLocalCached ? (
+                    </div>
+                  ) : isSearchOpen ? (
+                    /* ===================================================================== */
+                    /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
+                    /* ===================================================================== */
+                    <div className="flex flex-col h-full min-h-0 overflow-y-auto lg:overflow-hidden custom-scrollbar">
+                      {/* FIXED SEARCH HEADER CLUSTER (Back Bar + Navigation Tabs + Top Match) */}
+                      <div className="lg:flex-shrink-0">
+                        {/* Header with Back button, search title and result count */}
+                        <div className="flex items-center justify-between pb-2 sm:pb-3.5 border-b border-white/10 mb-2.5 sm:mb-4 lg:flex-shrink-0">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                             <button
                               type="button"
-                              title="Tải về bộ nhớ máy này (để nghe offline không cần mạng)"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (item.rawTrack) handleSaveOfflineTrack(item.rawTrack);
+                              onClick={() => {
+                                setIsSearchOpen(false);
+                                setTopSearchText("");
+                                setSearchQueryTitle("");
+                                setActiveSearchTab("all");
                               }}
-                              className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:theme-accent-text transition-colors cursor-pointer"
+                              className="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 text-xs font-semibold group flex-shrink-0"
                             >
-                              <HardDriveDownload className="w-3.5 h-3.5" />
+                              <ArrowLeft className="w-4 h-4 theme-accent-text group-hover:-translate-x-0.5 transition-transform" />
+                              <span>Quay lại</span>
                             </button>
-                          ) : (
-                            <span title="Đã lưu offline trên máy này" className="p-1 text-emerald-400">
-                              <Check className="w-3.5 h-3.5" />
+                            <h2 className="text-base sm:text-[20px] font-bold text-white tracking-wide truncate">
+                              {searchQueryTitle ? `Kết quả: "${searchQueryTitle}"` : "Kết quả tìm kiếm"}
+                            </h2>
+                          </div>
+                          {searchResults.length > 0 && (
+                            <span className="text-[11px] sm:text-xs text-purple-200/60 font-mono flex-shrink-0 ml-2">
+                              {searchResults.length} bài hát
                             </span>
                           )}
-                          <button
-                            type="button"
-                            title="Xóa khỏi danh sách đã tải"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteOfflineTrack(item.id, item.title);
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-rose-400 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
                         </div>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-16 text-center text-white/40 text-xs px-2">
-                    <p>
-                      {activeLeftTab === "library"
-                        ? "Chưa có danh sách phát nào"
-                        : activeLeftTab === "favorites"
-                        ? "Chưa có bài hát yêu thích nào"
-                        : activeLeftTab === "offline"
-                        ? "Chưa có bài hát ngoại tuyến nào"
-                        : "Chưa có lịch sử phát nhạc"}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </aside>
 
-        {/* ----------------------------------------------------------------------- */}
-        {/* COLUMN 2 (CENTER): Main Discovery Feed / Search View (~58% Width)        */}
-        {/* ----------------------------------------------------------------------- */}
-        <section
-          className={`${
-            mobileTab === "explore" ? "flex w-full" : "hidden"
-          } lg:flex flex-1 h-full figma-panel flex-col min-h-0 overflow-hidden p-2.5 sm:p-4 lg:p-7`}
-        >
-          {selectedArtist ? (
-            /* ===================================================================== */
-            /* ARTIST DETAIL VIEW (Session giữa lấy data của đúng artist đó)         */
-            /* ===================================================================== */
-            <div className="flex flex-col h-full min-h-0 overflow-y-auto lg:overflow-hidden custom-scrollbar">
-              {/* FIXED ARTIST HEADER CLUSTER (Back Bar + Hero Banner + Tags) */}
-              <div className="lg:flex-shrink-0">
-                {/* Back Bar */}
-              <div className="flex items-center justify-between pb-2 sm:pb-3.5 border-b border-white/10 mb-3 sm:mb-5 lg:flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedArtist(null)}
-                  className="px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 text-xs font-semibold group"
-                >
-                  <ArrowLeft className="w-4 h-4 theme-accent-text group-hover:-translate-x-0.5 transition-transform" />
-                  <span>Quay lại</span>
-                </button>
-                <span className="text-[11px] sm:text-xs text-white/50 font-mono">
-                  Thông tin Nghệ sĩ
-                </span>
-              </div>
-
-              {/* Artist Hero Header Card */}
-              <div className="w-full rounded-2xl sm:rounded-[24px] p-3.5 sm:p-5 lg:p-6 theme-card-bg shadow-xl sm:shadow-2xl mb-3 sm:mb-4 lg:mb-6 flex flex-col sm:flex-row items-center sm:items-start gap-3.5 sm:gap-5 lg:gap-6 border theme-accent-border relative overflow-hidden lg:flex-shrink-0">
-                <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
-
-                {/* Big Avatar */}
-                <div className="relative w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden shadow-xl flex-shrink-0 border-2 sm:border-[3px] theme-accent-border bg-black/40">
-                  <img
-                    src={selectedArtist.avatar}
-                    alt={selectedArtist.name}
-                    onError={(e) => {
-                      e.currentTarget.src = DEFAULT_TRACK_ART;
-                    }}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-
-                {/* Info & Action Buttons */}
-                <div className="flex-1 min-w-0 flex flex-col items-center sm:items-start text-center sm:text-left justify-center">
-                  <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
-                    <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider theme-badge flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 theme-accent-text" />
-                      Nghệ sĩ chính thức
-                    </span>
-                    {selectedArtist.genre && (
-                      <span className="text-[10px] sm:text-[11px] text-white/60">
-                        • {selectedArtist.genre}
-                      </span>
-                    )}
-                  </div>
-
-                  <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white tracking-wide truncate max-w-full">
-                    {selectedArtist.name}
-                  </h1>
-
-                  <p className="text-[11px] sm:text-xs text-white/60 mt-0.5 sm:mt-1 mb-2.5 sm:mb-4">
-                    {selectedArtist.subscribers || "Nghệ sĩ trên YouTube Music"}
-                    {artistTracks.length > 0 && ` • ${artistTracks.length} bài hát single`}
-                    {artistPlaylists.length > 0 && ` • ${artistPlaylists.length} danh sách phát`}
-                  </p>
-
-                  {/* Play Actions */}
-                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center sm:justify-start">
-                    <button
-                      type="button"
-                      disabled={artistTracks.length === 0}
-                      onClick={() => {
-                        if (artistTracks.length > 0) {
-                          setPlaylist(artistTracks);
-                          setQueueTracks(artistTracks);
-                          setCurrentIndex(0);
-                          loadAndPlayTrack(artistTracks[0], true);
-                        }
-                      }}
-                      className="px-3.5 py-1.5 sm:px-5 sm:py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current translate-x-0.5" />
-                      <span>Phát tất cả</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={artistTracks.length === 0}
-                      onClick={() => {
-                        if (artistTracks.length > 0) {
-                          const shuffled = [...artistTracks].sort(() => Math.random() - 0.5);
-                          setPlaylist(shuffled);
-                          setQueueTracks(shuffled);
-                          setCurrentIndex(0);
-                          loadAndPlayTrack(shuffled[0], true);
-                          setRepeatMode("shuffle");
-                        }
-                      }}
-                      className="px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all text-xs font-semibold flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      <span>Phát ngẫu nhiên</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tag Selection Bar (Fixed together in this header cluster) */}
-                <div className="py-1.5 sm:py-2.5 mb-2.5 sm:mb-4 border-b border-white/10 flex items-center gap-1.5 sm:gap-2 flex-wrap lg:flex-shrink-0">
-                  {[
-                    { key: "all", label: "Tất cả", count: artistTracks.length + artistPlaylists.length },
-                    { key: "singles", label: "Nhạc Single / Bài hát", count: artistTracks.length },
-                    { key: "playlists", label: "Danh sách phát", count: artistPlaylists.length },
-                  ].map((tab) => {
-                    const isActive = activeArtistTab === tab.key;
-                    return (
-                      <button
-                        key={tab.key}
-                        type="button"
-                        onClick={() => setActiveArtistTab(tab.key as any)}
-                        className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
-                          isActive
-                            ? "theme-badge-active scale-[1.02]"
-                            : "theme-badge hover:theme-accent-border"
-                        }`}
-                      >
-                        <span>{tab.label}</span>
-                        {typeof tab.count === "number" && tab.count > 0 && (
-                          <span
-                            className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono ${
-                              isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
-                            }`}
-                          >
-                            {tab.count}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* SCROLLABLE BODY CONTENT (Singles & Playlists) */}
-              <div className="flex-1 lg:min-h-0 lg:overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-8">
-                {isArtistLoading ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
-                    <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
-                    <p className="text-sm font-medium text-white/70">
-                      Đang tải dữ liệu của {selectedArtist.name}...
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-7">
-                  {/* Section Singles */}
-                  {(activeArtistTab === "all" || activeArtistTab === "singles") && (
-                    <div>
-                      <div className="flex items-center justify-between mb-3.5">
-                        <div className="flex items-center gap-2">
-                          <Music className="w-4 h-4 theme-accent-text" />
-                          <h3 className="text-[17px] font-bold text-white tracking-wide">
-                            Nhạc Single & Bài hát ({artistTracks.length})
-                          </h3>
-                        </div>
-                      </div>
-
-                      {artistTracks.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                          {artistTracks.map((item, idx) => {
-                            const isCurrentPlaying = currentTrack?.id === item.id;
+                        {/* Navigation Tabs */}
+                        <div className="py-1.5 sm:py-2.5 mb-2.5 sm:mb-4 border-b border-white/10 flex items-center gap-1.5 sm:gap-2 flex-wrap lg:flex-shrink-0">
+                          {[
+                            { key: "all", label: "Tất cả" },
+                            {
+                              key: "tracks",
+                              label: "Nhạc",
+                              count: searchStructured?.tracks?.length || searchResults.length,
+                            },
+                            {
+                              key: "artists",
+                              label: "Nhạc sĩ",
+                              count: searchStructured?.artists?.length || 0,
+                            },
+                            {
+                              key: "playlists",
+                              label: "Playlist",
+                              count: searchStructured?.playlists?.length || 0,
+                            },
+                          ].map((tab) => {
+                            const isActive = activeSearchTab === tab.key;
                             return (
+                              <button
+                                key={tab.key}
+                                type="button"
+                                onClick={() =>
+                                  setActiveSearchTab(tab.key as "all" | "tracks" | "artists" | "playlists")
+                                }
+                                className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${isActive
+                                    ? "theme-badge-active scale-[1.02]"
+                                    : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5"
+                                  }`}
+                              >
+                                <span>{tab.label}</span>
+                                {typeof tab.count === "number" && tab.count > 0 && (
+                                  <span
+                                    className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono ${isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
+                                      }`}
+                                  >
+                                    {tab.count}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Fixed Top Match Card (Pinned at top together with header in "Tất cả" tab) */}
+                        {!isSearching && activeSearchTab === "all" && (() => {
+                          const top =
+                            searchStructured?.topResult ||
+                            (searchResults.length > 0
+                              ? {
+                                id: searchResults[0].id,
+                                title: searchResults[0].title,
+                                author: searchResults[0].author,
+                                subtitle: `${searchResults[0].author}${searchResults[0].duration > 0
+                                    ? " • " + formatTime(searchResults[0].duration)
+                                    : ""
+                                  }`,
+                                duration: searchResults[0].duration,
+                                durationText:
+                                  searchResults[0].duration > 0
+                                    ? formatTime(searchResults[0].duration)
+                                    : "",
+                                thumbnail: searchResults[0].thumbnail,
+                                type: "song" as const,
+                              }
+                              : null);
+
+                          if (!top) return null;
+                          const isCurrentPlaying = currentTrack?.id === top.id;
+
+                          return (
+                            <div className="w-full mb-3 sm:mb-4 lg:flex-shrink-0">
                               <div
-                                key={item.id + idx}
                                 onClick={() => {
                                   if (isCurrentPlaying) {
                                     togglePlayPause();
                                   } else {
-                                    setPlaylist(artistTracks);
-                                    setQueueTracks(artistTracks);
-                                    setCurrentIndex(idx);
-                                    loadAndPlayTrack(item, true);
+                                    playSearchResult({
+                                      id: top.id,
+                                      title: top.title,
+                                      author: top.author,
+                                      duration: top.duration,
+                                      thumbnail: top.thumbnail,
+                                    });
                                   }
                                 }}
-                                className="w-full flex flex-col cursor-pointer group"
+                                className="w-full rounded-2xl sm:rounded-[20px] p-2.5 sm:p-4 theme-card-bg shadow-lg sm:shadow-xl transition-all flex items-center justify-between gap-3 sm:gap-4 group cursor-pointer"
                               >
-                                <div
-                                  className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
-                                    isCurrentPlaying
-                                      ? "theme-accent-border shadow-lg"
-                                      : "border-white/5 bg-black/30"
-                                  }`}
-                                >
-                                  <img
-                                    src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                                    alt={item.title}
-                                    onError={(e) => {
-                                      e.currentTarget.src = DEFAULT_TRACK_ART;
-                                    }}
-                                    className="w-full h-full object-cover"
-                                  />
-                                  <UnifiedPlayOverlay
-                                    isCurrent={isCurrentPlaying}
-                                    isPlaying={isCurrentPlaying && isPlaying}
-                                    onToggle={() => {
+                                <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+                                  {/* Artwork */}
+                                  <div className="relative w-16 h-16 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
+                                    <img
+                                      src={top.thumbnail || DEFAULT_TRACK_ART}
+                                      alt={top.title}
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                                      }}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    />
+                                    {(top.duration > 0 || !!top.durationText) && (
+                                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[9px] sm:text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
+                                        {top.isMusic !== false && (
+                                          <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                        )}
+                                        <span>{top.durationText || formatTime(top.duration)}</span>
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Track Info */}
+                                  <div className="min-w-0 flex flex-col justify-center">
+                                    <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-widest theme-accent-text mb-0.5 sm:mb-1 flex items-center gap-1.5">
+                                      <Sparkles className="w-3 h-3 theme-accent-text" />
+                                      BÀI HÁT PHÙ HỢP NHẤT
+                                    </span>
+                                    <h3 className="text-sm sm:text-lg font-bold text-white tracking-wide truncate group-hover:theme-accent-text transition-colors">
+                                      {top.title}
+                                    </h3>
+                                    <p className="text-[11px] sm:text-xs text-purple-200/70 truncate mt-0.5 sm:mt-1">
+                                      {top.author} •{" "}
+                                      {top.durationText ||
+                                        (top.duration > 0
+                                          ? formatTime(top.duration)
+                                          : "YouTube Music")}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Play Action Button */}
+                                <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       if (isCurrentPlaying) {
                                         togglePlayPause();
                                       } else {
-                                        setPlaylist(artistTracks);
-                                        setQueueTracks(artistTracks);
-                                        setCurrentIndex(idx);
-                                        loadAndPlayTrack(item, true);
+                                        playSearchResult({
+                                          id: top.id,
+                                          title: top.title,
+                                          author: top.author,
+                                          duration: top.duration,
+                                          thumbnail: top.thumbnail,
+                                        });
                                       }
                                     }}
-                                  />
-                                  {(item.duration > 0 || !!item.durationText) && (
-                                    <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
-                                      {item.isMusic !== false && (
-                                        <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                      )}
-                                      <span>{item.durationText || formatTime(item.duration)}</span>
-                                    </span>
-                                  )}
+                                    className="p-2 sm:px-5 sm:py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                                  >
+                                    {isCurrentPlaying && isPlaying ? (
+                                      <>
+                                        <Pause className="w-4 h-4 fill-current" />
+                                        <span className="hidden sm:inline">Tạm dừng</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                                        <span className="hidden sm:inline">Phát ngay</span>
+                                      </>
+                                    )}
+                                  </button>
                                 </div>
-                                <p
-                                  className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
-                                    isCurrentPlaying
-                                      ? "theme-accent-text font-bold"
-                                      : "text-white/90 group-hover:theme-accent-text"
-                                  }`}
-                                >
-                                  {item.title}
-                                </p>
-                                <p className="text-[10px] text-white/50 truncate mt-0.5">
-                                  {item.author || selectedArtist.name}
-                                </p>
                               </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-white/40 italic py-6 text-center bg-white/5 rounded-xl border border-white/5">
-                          Chưa tìm thấy bài hát single nào của nghệ sĩ này.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Section Playlists */}
-                  {(activeArtistTab === "all" || activeArtistTab === "playlists") && (
-                    <div>
-                      <div className="flex items-center justify-between mb-3.5">
-                        <div className="flex items-center gap-2">
-                          <ListMusic className="w-4 h-4 theme-accent-text" />
-                          <h3 className="text-[17px] font-bold text-white tracking-wide">
-                            Danh sách phát & Album ({artistPlaylists.length})
-                          </h3>
-                        </div>
-                      </div>
-
-                      {artistPlaylists.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                          {artistPlaylists.map((pl, idx) => (
-                            <div
-                              key={pl.id || idx}
-                              onClick={() => playPlaylistItem(pl)}
-                              className="w-full flex flex-col cursor-pointer group"
-                            >
-                              <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-black/30">
-                                <img
-                                  src={pl.thumbnail || DEFAULT_TRACK_ART}
-                                  alt={pl.title}
-                                  onError={(e) => {
-                                    e.currentTarget.src = DEFAULT_TRACK_ART;
-                                  }}
-                                  className="w-full h-full object-cover"
-                                />
-                                <UnifiedPlayOverlay
-                                  isCurrent={activePlayingPlaylistId === pl.id}
-                                  isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
-                                  isLoading={loadingPlaylistId === pl.id}
-                                  onToggle={() => playPlaylistItem(pl)}
-                                />
-                                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
-                                  Playlist
-                                </span>
-                              </div>
-                              <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2">
-                                {pl.title}
-                              </p>
-                              <p className="text-[10px] text-white/50 truncate mt-0.5">
-                                {pl.author || selectedArtist.name}
-                              </p>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-white/40 italic py-6 text-center bg-white/5 rounded-xl border border-white/5">
-                          Chưa có danh sách phát nào của nghệ sĩ này.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              </div>
-            </div>
-          ) : isSearchOpen ? (
-            /* ===================================================================== */
-            /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
-            /* ===================================================================== */
-            <div className="flex flex-col h-full min-h-0 overflow-y-auto lg:overflow-hidden custom-scrollbar">
-              {/* FIXED SEARCH HEADER CLUSTER (Back Bar + Navigation Tabs + Top Match) */}
-              <div className="lg:flex-shrink-0">
-              {/* Header with Back button, search title and result count */}
-              <div className="flex items-center justify-between pb-2 sm:pb-3.5 border-b border-white/10 mb-2.5 sm:mb-4 lg:flex-shrink-0">
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSearchOpen(false);
-                      setTopSearchText("");
-                      setSearchQueryTitle("");
-                      setActiveSearchTab("all");
-                    }}
-                    className="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 text-xs font-semibold group flex-shrink-0"
-                  >
-                    <ArrowLeft className="w-4 h-4 theme-accent-text group-hover:-translate-x-0.5 transition-transform" />
-                    <span>Quay lại</span>
-                  </button>
-                  <h2 className="text-base sm:text-[20px] font-bold text-white tracking-wide truncate">
-                    {searchQueryTitle ? `Kết quả: "${searchQueryTitle}"` : "Kết quả tìm kiếm"}
-                  </h2>
-                </div>
-                {searchResults.length > 0 && (
-                  <span className="text-[11px] sm:text-xs text-purple-200/60 font-mono flex-shrink-0 ml-2">
-                    {searchResults.length} bài hát
-                  </span>
-                )}
-              </div>
-
-              {/* Navigation Tabs */}
-                <div className="py-1.5 sm:py-2.5 mb-2.5 sm:mb-4 border-b border-white/10 flex items-center gap-1.5 sm:gap-2 flex-wrap lg:flex-shrink-0">
-                {[
-                  { key: "all", label: "Tất cả" },
-                  {
-                    key: "tracks",
-                    label: "Nhạc",
-                    count: searchStructured?.tracks?.length || searchResults.length,
-                  },
-                  {
-                    key: "artists",
-                    label: "Nhạc sĩ",
-                    count: searchStructured?.artists?.length || 0,
-                  },
-                  {
-                    key: "playlists",
-                    label: "Playlist",
-                    count: searchStructured?.playlists?.length || 0,
-                  },
-                ].map((tab) => {
-                  const isActive = activeSearchTab === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() =>
-                        setActiveSearchTab(tab.key as "all" | "tracks" | "artists" | "playlists")
-                      }
-                      className={`px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer ${
-                        isActive
-                          ? "theme-badge-active scale-[1.02]"
-                          : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5"
-                      }`}
-                    >
-                      <span>{tab.label}</span>
-                      {typeof tab.count === "number" && tab.count > 0 && (
-                        <span
-                          className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-mono ${
-                            isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
-                          }`}
-                        >
-                          {tab.count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-                {/* Fixed Top Match Card (Pinned at top together with header in "Tất cả" tab) */}
-                {!isSearching && activeSearchTab === "all" && (() => {
-                  const top =
-                    searchStructured?.topResult ||
-                    (searchResults.length > 0
-                      ? {
-                          id: searchResults[0].id,
-                          title: searchResults[0].title,
-                          author: searchResults[0].author,
-                          subtitle: `${searchResults[0].author}${
-                            searchResults[0].duration > 0
-                              ? " • " + formatTime(searchResults[0].duration)
-                              : ""
-                          }`,
-                          duration: searchResults[0].duration,
-                          durationText:
-                            searchResults[0].duration > 0
-                              ? formatTime(searchResults[0].duration)
-                              : "",
-                          thumbnail: searchResults[0].thumbnail,
-                          type: "song" as const,
-                        }
-                      : null);
-
-                  if (!top) return null;
-                  const isCurrentPlaying = currentTrack?.id === top.id;
-
-                  return (
-                    <div className="w-full mb-3 sm:mb-4 lg:flex-shrink-0">
-                      <div
-                        onClick={() => {
-                          if (isCurrentPlaying) {
-                            togglePlayPause();
-                          } else {
-                            playSearchResult({
-                              id: top.id,
-                              title: top.title,
-                              author: top.author,
-                              duration: top.duration,
-                              thumbnail: top.thumbnail,
-                            });
-                          }
-                        }}
-                        className="w-full rounded-2xl sm:rounded-[20px] p-2.5 sm:p-4 theme-card-bg shadow-lg sm:shadow-xl transition-all flex items-center justify-between gap-3 sm:gap-4 group cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
-                          {/* Artwork */}
-                          <div className="relative w-16 h-16 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
-                            <img
-                              src={top.thumbnail || DEFAULT_TRACK_ART}
-                              alt={top.title}
-                              onError={(e) => {
-                                e.currentTarget.src = DEFAULT_TRACK_ART;
-                              }}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                            {(top.duration > 0 || !!top.durationText) && (
-                              <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[9px] sm:text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
-                                {top.isMusic !== false && (
-                                  <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                )}
-                                <span>{top.durationText || formatTime(top.duration)}</span>
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Track Info */}
-                          <div className="min-w-0 flex flex-col justify-center">
-                            <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-widest theme-accent-text mb-0.5 sm:mb-1 flex items-center gap-1.5">
-                              <Sparkles className="w-3 h-3 theme-accent-text" />
-                              BÀI HÁT PHÙ HỢP NHẤT
-                            </span>
-                            <h3 className="text-sm sm:text-lg font-bold text-white tracking-wide truncate group-hover:theme-accent-text transition-colors">
-                              {top.title}
-                            </h3>
-                            <p className="text-[11px] sm:text-xs text-purple-200/70 truncate mt-0.5 sm:mt-1">
-                              {top.author} •{" "}
-                              {top.durationText ||
-                                (top.duration > 0
-                                  ? formatTime(top.duration)
-                                  : "YouTube Music")}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Play Action Button */}
-                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isCurrentPlaying) {
-                                togglePlayPause();
-                              } else {
-                                playSearchResult({
-                                  id: top.id,
-                                  title: top.title,
-                                  author: top.author,
-                                  duration: top.duration,
-                                  thumbnail: top.thumbnail,
-                                });
-                              }
-                            }}
-                            className="p-2 sm:px-5 sm:py-2.5 rounded-full theme-btn-primary text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                          >
-                            {isCurrentPlaying && isPlaying ? (
-                              <>
-                                <Pause className="w-4 h-4 fill-current" />
-                                <span className="hidden sm:inline">Tạm dừng</span>
-                              </>
-                            ) : (
-                              <>
-                                <Play className="w-4 h-4 fill-current translate-x-0.5" />
-                                <span className="hidden sm:inline">Phát ngay</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
+                          );
+                        })()}
                       </div>
-                    </div>
-                  );
-                })()}
-              </div>
 
-              {/* SCROLLABLE SEARCH BODY (Artists, Playlists, Tracks) */}
-              <div className="flex-1 lg:min-h-0 lg:overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-8">
-                {isSearching ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
-                    <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
-                    <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
-                  </div>
-                ) : searchResults.length > 0 || (searchStructured && (searchStructured.artists.length > 0 || searchStructured.playlists.length > 0)) ? (
-                  <div className="flex flex-col gap-6">
-                    {/* ========================================================================= */}
-                    {/* TAB: TẤT CẢ                                                               */}
-                    {/* ========================================================================= */}
-                    {activeSearchTab === "all" && (
-                      <>
-
-
-                      {/* TẦNG 2: Nhạc sĩ (Row of Artists - Enlarged Items) */}
-                      {searchStructured?.artists && searchStructured.artists.length > 0 && (
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <h3
-                              onClick={() => setActiveSearchTab("artists")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
-                            >
-                              <span>Nhạc sĩ</span>
-                            </h3>
-                            <button
-                              type="button"
-                              onClick={() => setActiveSearchTab("artists")}
-                              className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
-                            >
-                              Xem tất cả ({searchStructured.artists.length})
-                            </button>
+                      {/* SCROLLABLE SEARCH BODY (Artists, Playlists, Tracks) */}
+                      <div className="flex-1 lg:min-h-0 lg:overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-8">
+                        {isSearching ? (
+                          <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
+                            <Loader2 className="w-8 h-8 animate-spin theme-accent-text" />
+                            <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
                           </div>
-                          <div className="flex items-start gap-3 sm:gap-7 overflow-x-auto pb-2 custom-scrollbar">
-                            {searchStructured.artists.map((artist) => (
-                              <div
-                                key={artist.id || artist.name}
-                                onClick={() => openArtistDetail({ id: artist.id, name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
-                                className="flex flex-col items-center p-2 sm:p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0 w-[110px] sm:w-[150px] lg:w-[170px]"
-                              >
-                                <div className="w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden border-2 sm:border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-2 sm:mb-2.5 relative">
-                                  <img
-                                    src={artist.thumbnail || DEFAULT_TRACK_ART}
-                                    alt={artist.name}
-                                    onError={(e) => {
-                                      e.currentTarget.src = DEFAULT_TRACK_ART;
-                                    }}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                  />
-                                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
-                                      <Search className="w-4 h-4 text-white" />
+                        ) : searchResults.length > 0 || (searchStructured && (searchStructured.artists.length > 0 || searchStructured.playlists.length > 0)) ? (
+                          <div className="flex flex-col gap-6">
+                            {/* ========================================================================= */}
+                            {/* TAB: TẤT CẢ                                                               */}
+                            {/* ========================================================================= */}
+                            {activeSearchTab === "all" && (
+                              <>
+
+
+                                {/* TẦNG 2: Nhạc sĩ (Row of Artists - Enlarged Items) */}
+                                {searchStructured?.artists && searchStructured.artists.length > 0 && (
+                                  <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h3
+                                        onClick={() => setActiveSearchTab("artists")}
+                                        className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
+                                      >
+                                        <span>Nhạc sĩ</span>
+                                      </h3>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveSearchTab("artists")}
+                                        className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
+                                      >
+                                        Xem tất cả ({searchStructured.artists.length})
+                                      </button>
+                                    </div>
+                                    <div className="flex items-start gap-3 sm:gap-7 overflow-x-auto pb-2 custom-scrollbar">
+                                      {searchStructured.artists.map((artist) => (
+                                        <div
+                                          key={artist.id || artist.name}
+                                          onClick={() => openArtistDetail({ id: artist.id, name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
+                                          className="flex flex-col items-center p-2 sm:p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0 w-[110px] sm:w-[150px] lg:w-[170px]"
+                                        >
+                                          <div className="w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full overflow-hidden border-2 sm:border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-2 sm:mb-2.5 relative">
+                                            <img
+                                              src={artist.thumbnail || DEFAULT_TRACK_ART}
+                                              alt={artist.name}
+                                              onError={(e) => {
+                                                e.currentTarget.src = DEFAULT_TRACK_ART;
+                                              }}
+                                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                            />
+                                            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
+                                                <Search className="w-4 h-4 text-white" />
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <p className="text-xs sm:text-sm font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
+                                            {artist.name}
+                                          </p>
+                                          <p className="text-[10px] sm:text-[11px] text-purple-200/60 text-center truncate w-full mt-0.5">
+                                            {artist.subscribers || "Nghệ sĩ"}
+                                          </p>
+                                        </div>
+                                      ))}
                                     </div>
                                   </div>
-                                </div>
-                                <p className="text-xs sm:text-sm font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
-                                  {artist.name}
-                                </p>
-                                <p className="text-[10px] sm:text-[11px] text-purple-200/60 text-center truncate w-full mt-0.5">
-                                  {artist.subscribers || "Nghệ sĩ"}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                                )}
 
-                      {/* TẦNG 3: Playlist (Row of Playlists) */}
-                      {searchStructured?.playlists && searchStructured.playlists.length > 0 && (
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <h3
-                              onClick={() => setActiveSearchTab("playlists")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
-                            >
-                              <span>Playlist</span>
-                            </h3>
+                                {/* TẦNG 3: Playlist (Row of Playlists) */}
+                                {searchStructured?.playlists && searchStructured.playlists.length > 0 && (
+                                  <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h3
+                                        onClick={() => setActiveSearchTab("playlists")}
+                                        className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
+                                      >
+                                        <span>Playlist</span>
+                                      </h3>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveSearchTab("playlists")}
+                                        className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
+                                      >
+                                        Xem tất cả ({searchStructured.playlists.length})
+                                      </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4">
+                                      {searchStructured.playlists.slice(0, 6).map((pl) => (
+                                        <div
+                                          key={pl.id || pl.title}
+                                          onClick={() => playPlaylistItem(pl)}
+                                          className="flex flex-col cursor-pointer group"
+                                        >
+                                          <div className="w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
+                                            <img
+                                              src={pl.thumbnail || DEFAULT_TRACK_ART}
+                                              alt={pl.title}
+                                              onError={(e) => {
+                                                e.currentTarget.src = DEFAULT_TRACK_ART;
+                                              }}
+                                              className="w-full h-full object-cover"
+                                            />
+                                            <UnifiedPlayOverlay
+                                              isCurrent={activePlayingPlaylistId === pl.id}
+                                              isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
+                                              isLoading={loadingPlaylistId === pl.id}
+                                              onToggle={() => playPlaylistItem(pl)}
+                                            />
+                                            <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                              Playlist
+                                            </span>
+                                          </div>
+                                          <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-1.5">
+                                            {pl.title}
+                                          </p>
+                                          <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                            {pl.author || "YouTube Music"}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* TẦNG 4: Bài hát (Songs Grid) */}
+                                {searchResults.length > 0 && (
+                                  <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h3
+                                        onClick={() => setActiveSearchTab("tracks")}
+                                        className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
+                                      >
+                                        <span>Bài hát</span>
+                                      </h3>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveSearchTab("tracks")}
+                                        className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
+                                      >
+                                        Xem tất cả ({searchResults.length})
+                                      </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                                      {searchResults.slice(0, 12).map((item) => {
+                                        const isCurrentPlaying = currentTrack?.id === item.id;
+                                        return (
+                                          <div
+                                            key={item.id}
+                                            onClick={() => {
+                                              if (isCurrentPlaying) {
+                                                togglePlayPause();
+                                              } else {
+                                                playSearchResult(item);
+                                              }
+                                            }}
+                                            className="w-full flex flex-col cursor-pointer group"
+                                          >
+                                            <div
+                                              className={`w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${isCurrentPlaying
+                                                  ? "theme-accent-border shadow-lg"
+                                                  : "border-white/5 bg-purple-900/30"
+                                                }`}
+                                            >
+                                              <img
+                                                src={
+                                                  item.thumbnail ||
+                                                  `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
+                                                }
+                                                alt={item.title}
+                                                onError={(e) => {
+                                                  e.currentTarget.src = DEFAULT_TRACK_ART;
+                                                }}
+                                                className="w-full h-full object-cover"
+                                              />
+                                              <UnifiedPlayOverlay
+                                                isCurrent={isCurrentPlaying}
+                                                isPlaying={isCurrentPlaying && isPlaying}
+                                                onToggle={() => {
+                                                  if (isCurrentPlaying) {
+                                                    togglePlayPause();
+                                                  } else {
+                                                    playSearchResult(item);
+                                                  }
+                                                }}
+                                              />
+                                              {(item.duration > 0 || !!item.durationText) && (
+                                                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
+                                                  {item.isMusic !== false && (
+                                                    <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                                  )}
+                                                  <span>{item.durationText || formatTime(item.duration)}</span>
+                                                </span>
+                                              )}
+                                            </div>
+                                            <p
+                                              className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${isCurrentPlaying
+                                                  ? "theme-accent-text font-bold"
+                                                  : "text-white/90 group-hover:theme-accent-text"
+                                                }`}
+                                            >
+                                              {item.title}
+                                            </p>
+                                            <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                              {item.author || "Kahoii Music"}
+                                            </p>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            {/* ========================================================================= */}
+                            {/* TAB: NHẠC (Tất cả bài hát)                                                */}
+                            {/* ========================================================================= */}
+                            {activeSearchTab === "tracks" && (
+                              <div>
+                                <div className="flex items-center justify-between mb-4">
+                                  <h3 className="text-[18px] font-bold text-white tracking-wide">
+                                    Tất cả bài hát ({searchResults.length})
+                                  </h3>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                                  {searchResults.map((item) => {
+                                    const isCurrentPlaying = currentTrack?.id === item.id;
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        onClick={() => {
+                                          if (isCurrentPlaying) {
+                                            togglePlayPause();
+                                          } else {
+                                            playSearchResult(item);
+                                          }
+                                        }}
+                                        className="w-full flex flex-col cursor-pointer group"
+                                      >
+                                        <div
+                                          className={`w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${isCurrentPlaying
+                                              ? "theme-accent-border shadow-lg"
+                                              : "border-white/5 bg-purple-900/30"
+                                            }`}
+                                        >
+                                          <img
+                                            src={
+                                              item.thumbnail ||
+                                              `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
+                                            }
+                                            alt={item.title}
+                                            onError={(e) => {
+                                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                                            }}
+                                            className="w-full h-full object-cover"
+                                          />
+                                          <UnifiedPlayOverlay
+                                            isCurrent={isCurrentPlaying}
+                                            isPlaying={isCurrentPlaying && isPlaying}
+                                            onToggle={() => {
+                                              if (isCurrentPlaying) {
+                                                togglePlayPause();
+                                              } else {
+                                                playSearchResult(item);
+                                              }
+                                            }}
+                                          />
+                                          {(item.duration > 0 || !!item.durationText) && (
+                                            <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
+                                              {item.isMusic !== false && (
+                                                <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                              )}
+                                              <span>{item.durationText || formatTime(item.duration)}</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p
+                                          className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${isCurrentPlaying
+                                              ? "theme-accent-text font-bold"
+                                              : "text-white/90 group-hover:theme-accent-text"
+                                            }`}
+                                        >
+                                          {item.title}
+                                        </p>
+                                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                          {item.author || "Kahoii Music"}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ========================================================================= */}
+                            {/* TAB: NHẠC SĨ (Tất cả nghệ sĩ - Enlarged Grid)                             */}
+                            {/* ========================================================================= */}
+                            {activeSearchTab === "artists" && (
+                              <div>
+                                <div className="flex items-center justify-between mb-4">
+                                  <h3 className="text-[18px] font-bold text-white tracking-wide">
+                                    Tất cả nhạc sĩ ({searchStructured?.artists?.length || 0})
+                                  </h3>
+                                </div>
+                                {searchStructured?.artists && searchStructured.artists.length > 0 ? (
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
+                                    {searchStructured.artists.map((artist) => (
+                                      <div
+                                        key={artist.id || artist.name}
+                                        onClick={() => openArtistDetail({ id: artist.id, name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
+                                        className="flex flex-col items-center p-2 sm:p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
+                                      >
+                                        <div className="w-20 h-20 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-full overflow-hidden border-2 sm:border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-2 sm:mb-3 relative">
+                                          <img
+                                            src={artist.thumbnail || DEFAULT_TRACK_ART}
+                                            alt={artist.name}
+                                            onError={(e) => {
+                                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                                            }}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                          />
+                                          <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
+                                              <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <p className="text-sm sm:text-base font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
+                                          {artist.name}
+                                        </p>
+                                        <p className="text-[10px] sm:text-xs text-purple-200/60 text-center truncate w-full mt-0.5 sm:mt-1">
+                                          {artist.subscribers || "Nghệ sĩ"}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-white/50 italic py-10 text-center">
+                                    Không tìm thấy thông tin nhạc sĩ phù hợp.
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* ========================================================================= */}
+                            {/* TAB: PLAYLIST (Tất cả danh sách phát)                                      */}
+                            {/* ========================================================================= */}
+                            {activeSearchTab === "playlists" && (
+                              <div>
+                                <div className="flex items-center justify-between mb-4">
+                                  <h3 className="text-[18px] font-bold text-white tracking-wide">
+                                    Tất cả danh sách phát ({searchStructured?.playlists?.length || 0})
+                                  </h3>
+                                </div>
+                                {searchStructured?.playlists && searchStructured.playlists.length > 0 ? (
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4">
+                                    {searchStructured.playlists.map((pl) => (
+                                      <div
+                                        key={pl.id || pl.title}
+                                        onClick={() => playPlaylistItem(pl)}
+                                        className="flex flex-col cursor-pointer group"
+                                      >
+                                        <div className="w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
+                                          <img
+                                            src={pl.thumbnail || DEFAULT_TRACK_ART}
+                                            alt={pl.title}
+                                            onError={(e) => {
+                                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                                            }}
+                                            className="w-full h-full object-cover"
+                                          />
+                                          <UnifiedPlayOverlay
+                                            isCurrent={activePlayingPlaylistId === pl.id}
+                                            isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
+                                            isLoading={loadingPlaylistId === pl.id}
+                                            onToggle={() => playPlaylistItem(pl)}
+                                          />
+                                          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                            Playlist
+                                          </span>
+                                        </div>
+                                        <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-1.5">
+                                          {pl.title}
+                                        </p>
+                                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                          {pl.author || "YouTube Music"}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-white/50 italic py-10 text-center">
+                                    Không tìm thấy danh sách phát phù hợp.
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
+                            <p className="text-sm text-white/50 italic">Không tìm thấy dữ liệu phù hợp.</p>
                             <button
                               type="button"
-                              onClick={() => setActiveSearchTab("playlists")}
-                              className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
+                              onClick={() => {
+                                setIsSearchOpen(false);
+                                setTopSearchText("");
+                                setSearchQueryTitle("");
+                                setActiveSearchTab("all");
+                              }}
+                              className="px-4 py-2 rounded-xl bg-white/10 hover:theme-accent-bg text-xs font-semibold text-white transition-all cursor-pointer"
                             >
-                              Xem tất cả ({searchStructured.playlists.length})
+                              Quay lại Khám phá
                             </button>
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4">
-                            {searchStructured.playlists.slice(0, 6).map((pl) => (
-                              <div
-                                key={pl.id || pl.title}
-                                onClick={() => playPlaylistItem(pl)}
-                                className="flex flex-col cursor-pointer group"
-                              >
-                                <div className="w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
-                                  <img
-                                    src={pl.thumbnail || DEFAULT_TRACK_ART}
-                                    alt={pl.title}
-                                    onError={(e) => {
-                                      e.currentTarget.src = DEFAULT_TRACK_ART;
-                                    }}
-                                    className="w-full h-full object-cover"
-                                  />
-                                  <UnifiedPlayOverlay
-                                    isCurrent={activePlayingPlaylistId === pl.id}
-                                    isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
-                                    isLoading={loadingPlaylistId === pl.id}
-                                    onToggle={() => playPlaylistItem(pl)}
-                                  />
-                                  <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
-                                    Playlist
-                                  </span>
-                                </div>
-                                <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-1.5">
-                                  {pl.title}
-                                </p>
-                                <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                                  {pl.author || "YouTube Music"}
-                                </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* ===================================================================== */
+                    /* DISCOVERY VIEW (Nhạc Trending, Mới Phát Hành, Nhạc Sĩ Nổi Bật, ...)   */
+                    /* ===================================================================== */
+                    <div className="flex flex-col gap-5 sm:gap-8 flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-6">
+                      {/* Section 1: Nhạc Trending */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3 sm:mb-3.5">
+                          <div className="flex items-center gap-2 sm:gap-2.5">
+                            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 theme-accent-text" />
+                            <h2 className="text-base sm:text-[20px] font-bold text-white tracking-wide">
+                              Nhạc Trending
+                            </h2>
+                            {isHomeLoading && (
+                              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full theme-badge animate-pulse font-medium">
+                                <Loader2 className="w-3 h-3 animate-spin theme-accent-text" />
+                                <span>Đang tải...</span>
                               </div>
-                            ))}
+                            )}
                           </div>
-                        </div>
-                      )}
-
-                      {/* TẦNG 4: Bài hát (Songs Grid) */}
-                      {searchResults.length > 0 && (
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <h3
-                              onClick={() => setActiveSearchTab("tracks")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:theme-accent-text transition-colors"
-                            >
-                              <span>Bài hát</span>
-                            </h3>
+                          {!isHomeLoading && trendingTracks.length > 0 && (
                             <button
                               type="button"
-                              onClick={() => setActiveSearchTab("tracks")}
-                              className="text-xs theme-accent-text hover:brightness-125 font-medium transition-colors cursor-pointer"
+                              onClick={() => {
+                                if (trendingTracks.length > 0) {
+                                  setPlaylist(trendingTracks);
+                                  setQueueTracks(trendingTracks);
+                                  setCurrentIndex(0);
+                                  loadAndPlayTrack(trendingTracks[0], true);
+                                }
+                              }}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
                             >
-                              Xem tất cả ({searchResults.length})
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Phát tất cả</span>
                             </button>
-                          </div>
+                          )}
+                        </div>
+
+                        {isHomeLoading ? (
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                            {searchResults.slice(0, 12).map((item) => {
-                              const isCurrentPlaying = currentTrack?.id === item.id;
+                            {Array.from({ length: 6 }).map((_, idx) => (
+                              <div key={idx} className="w-full flex flex-col animate-pulse">
+                                <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                                  <Sparkles className="w-8 h-8 text-white/20 animate-pulse" />
+                                </div>
+                                <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                                <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                            {trendingTracks.slice(0, 12).map((item, idx) => {
+                              const isCurrent = currentTrack?.id === item.id;
+                              const isThisPlaying = isCurrent && isPlaying;
                               return (
                                 <div
-                                  key={item.id}
-                                  onClick={() => {
-                                    if (isCurrentPlaying) {
-                                      togglePlayPause();
-                                    } else {
-                                      playSearchResult(item);
-                                    }
-                                  }}
+                                  key={item.id + "-" + idx}
+                                  onClick={() => handlePlaySongItem(item, trendingTracks, idx)}
                                   className="w-full flex flex-col cursor-pointer group"
                                 >
                                   <div
-                                    className={`w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
-                                      isCurrentPlaying
-                                        ? "theme-accent-border shadow-lg"
-                                        : "border-white/5 bg-purple-900/30"
-                                    }`}
+                                    className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
+                                      }`}
                                   >
                                     <img
-                                      src={
-                                        item.thumbnail ||
-                                        `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
-                                      }
+                                      src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
                                       alt={item.title}
                                       onError={(e) => {
                                         e.currentTarget.src = DEFAULT_TRACK_ART;
@@ -4458,18 +4826,12 @@ export default function App() {
                                       className="w-full h-full object-cover"
                                     />
                                     <UnifiedPlayOverlay
-                                      isCurrent={isCurrentPlaying}
-                                      isPlaying={isCurrentPlaying && isPlaying}
-                                      onToggle={() => {
-                                        if (isCurrentPlaying) {
-                                          togglePlayPause();
-                                        } else {
-                                          playSearchResult(item);
-                                        }
-                                      }}
+                                      isCurrent={isCurrent}
+                                      isPlaying={isThisPlaying}
+                                      onToggle={() => handlePlaySongItem(item, trendingTracks, idx)}
                                     />
                                     {(item.duration > 0 || !!item.durationText) && (
-                                      <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
+                                      <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow z-10">
                                         {item.isMusic !== false && (
                                           <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
                                         )}
@@ -4478,11 +4840,8 @@ export default function App() {
                                     )}
                                   </div>
                                   <p
-                                    className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
-                                      isCurrentPlaying
-                                        ? "theme-accent-text font-bold"
-                                        : "text-white/90 group-hover:theme-accent-text"
-                                    }`}
+                                    className={`text-[12px] font-semibold truncate mt-2 transition-colors ${isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
+                                      }`}
                                   >
                                     {item.title}
                                   </p>
@@ -4493,2411 +4852,2073 @@ export default function App() {
                               );
                             })}
                           </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* ========================================================================= */}
-                  {/* TAB: NHẠC (Tất cả bài hát)                                                */}
-                  {/* ========================================================================= */}
-                  {activeSearchTab === "tracks" && (
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[18px] font-bold text-white tracking-wide">
-                          Tất cả bài hát ({searchResults.length})
-                        </h3>
+                        )}
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                        {searchResults.map((item) => {
-                          const isCurrentPlaying = currentTrack?.id === item.id;
-                          return (
-                            <div
-                              key={item.id}
+
+                      {/* Section 2: Mới Phát Hành */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <Flame className="w-5 h-5 text-orange-400" />
+                            <h2 className="text-[20px] font-bold text-white tracking-wide">
+                              Mới Phát Hành
+                            </h2>
+                            {isHomeLoading && (
+                              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/30 text-[11px] text-orange-300 animate-pulse font-medium">
+                                <Loader2 className="w-3 h-3 animate-spin text-orange-400" />
+                                <span>Đang tải...</span>
+                              </div>
+                            )}
+                          </div>
+                          {!isHomeLoading && newReleaseTracks.length > 0 && (
+                            <button
+                              type="button"
                               onClick={() => {
-                                if (isCurrentPlaying) {
-                                  togglePlayPause();
-                                } else {
-                                  playSearchResult(item);
+                                if (newReleaseTracks.length > 0) {
+                                  setPlaylist(newReleaseTracks);
+                                  setQueueTracks(newReleaseTracks);
+                                  setCurrentIndex(0);
+                                  loadAndPlayTrack(newReleaseTracks[0], true);
                                 }
                               }}
-                              className="w-full flex flex-col cursor-pointer group"
+                              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
                             >
-                              <div
-                                className={`w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
-                                  isCurrentPlaying
-                                    ? "theme-accent-border shadow-lg"
-                                    : "border-white/5 bg-purple-900/30"
-                                }`}
-                              >
-                                <img
-                                  src={
-                                    item.thumbnail ||
-                                    `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
-                                  }
-                                  alt={item.title}
-                                  onError={(e) => {
-                                    e.currentTarget.src = DEFAULT_TRACK_ART;
-                                  }}
-                                  className="w-full h-full object-cover"
-                                />
-                                <UnifiedPlayOverlay
-                                  isCurrent={isCurrentPlaying}
-                                  isPlaying={isCurrentPlaying && isPlaying}
-                                  onToggle={() => {
-                                    if (isCurrentPlaying) {
-                                      togglePlayPause();
-                                    } else {
-                                      playSearchResult(item);
-                                    }
-                                  }}
-                                />
-                                {(item.duration > 0 || !!item.durationText) && (
-                                  <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow">
-                                    {item.isMusic !== false && (
-                                      <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                    )}
-                                    <span>{item.durationText || formatTime(item.duration)}</span>
-                                  </span>
-                                )}
-                              </div>
-                              <p
-                                className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
-                                  isCurrentPlaying
-                                    ? "theme-accent-text font-bold"
-                                    : "text-white/90 group-hover:theme-accent-text"
-                                }`}
-                              >
-                                {item.title}
-                              </p>
-                              <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                                {item.author || "Kahoii Music"}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Phát tất cả</span>
+                            </button>
+                          )}
+                        </div>
 
-                  {/* ========================================================================= */}
-                  {/* TAB: NHẠC SĨ (Tất cả nghệ sĩ - Enlarged Grid)                             */}
-                  {/* ========================================================================= */}
-                  {activeSearchTab === "artists" && (
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[18px] font-bold text-white tracking-wide">
-                          Tất cả nhạc sĩ ({searchStructured?.artists?.length || 0})
-                        </h3>
-                      </div>
-                      {searchStructured?.artists && searchStructured.artists.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
-                          {searchStructured.artists.map((artist) => (
-                            <div
-                              key={artist.id || artist.name}
-                              onClick={() => openArtistDetail({ id: artist.id, name: artist.name, avatar: artist.thumbnail, subscribers: artist.subscribers })}
-                              className="flex flex-col items-center p-2 sm:p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
-                            >
-                              <div className="w-20 h-20 sm:w-28 sm:h-28 lg:w-36 lg:h-36 rounded-full overflow-hidden border-2 sm:border-[3px] border-white/20 group-hover:theme-accent-border group-hover:scale-105 transition-all duration-300 shadow-xl bg-black/40 mb-2 sm:mb-3 relative">
-                                <img
-                                  src={artist.thumbnail || DEFAULT_TRACK_ART}
-                                  alt={artist.name}
-                                  onError={(e) => {
-                                    e.currentTarget.src = DEFAULT_TRACK_ART;
-                                  }}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                                <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full theme-btn-primary flex items-center justify-center shadow-lg">
-                                    <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                                  </div>
+                        {isHomeLoading ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                            {Array.from({ length: 6 }).map((_, idx) => (
+                              <div key={idx} className="w-full flex flex-col animate-pulse">
+                                <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-orange-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                                  <Flame className="w-8 h-8 text-orange-400/20 animate-pulse" />
                                 </div>
+                                <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                                <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
                               </div>
-                              <p className="text-sm sm:text-base font-bold text-white group-hover:theme-accent-text text-center truncate w-full">
-                                {artist.name}
-                              </p>
-                              <p className="text-[10px] sm:text-xs text-purple-200/60 text-center truncate w-full mt-0.5 sm:mt-1">
-                                {artist.subscribers || "Nghệ sĩ"}
-                              </p>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                            {newReleaseTracks.slice(0, 12).map((item, idx) => {
+                              const isCurrent = currentTrack?.id === item.id;
+                              const isThisPlaying = isCurrent && isPlaying;
+                              return (
+                                <div
+                                  key={item.id + "-" + idx}
+                                  onClick={() => handlePlaySongItem(item, newReleaseTracks, idx)}
+                                  className="w-full flex flex-col cursor-pointer group"
+                                >
+                                  <div
+                                    className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
+                                      }`}
+                                  >
+                                    <img
+                                      src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                      alt={item.title}
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                                      }}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <UnifiedPlayOverlay
+                                      isCurrent={isCurrent}
+                                      isPlaying={isThisPlaying}
+                                      onToggle={() => handlePlaySongItem(item, newReleaseTracks, idx)}
+                                    />
+                                    {(item.duration > 0 || !!item.durationText) && (
+                                      <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow z-10">
+                                        {item.isMusic !== false && (
+                                          <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                        )}
+                                        <span>{item.durationText || formatTime(item.duration)}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p
+                                    className={`text-[12px] font-semibold truncate mt-2 transition-colors ${isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
+                                      }`}
+                                  >
+                                    {item.title}
+                                  </p>
+                                  <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                    {item.author || "Kahoii Music"}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Section 3: Nhạc Sĩ Nổi Bật (Đổi từ Nhạc Sĩ) */}
+                      <div>
+                        <div className="flex items-center gap-2.5 mb-3.5">
+                          <Mic2 className="w-5 h-5 theme-sec-accent-text" />
+                          <h2 className="text-[20px] font-bold text-white tracking-wide">
+                            Nhạc Sĩ Nổi Bật
+                          </h2>
+                          {isHomeLoading && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full theme-badge animate-pulse font-medium">
+                              <Loader2 className="w-3 h-3 animate-spin theme-accent-text" />
+                              <span>Đang tải...</span>
                             </div>
-                          ))}
+                          )}
                         </div>
-                      ) : (
-                        <p className="text-sm text-white/50 italic py-10 text-center">
-                          Không tìm thấy thông tin nhạc sĩ phù hợp.
-                        </p>
+
+                        {isHomeLoading ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                            {Array.from({ length: 6 }).map((_, idx) => (
+                              <div key={idx} className="w-full flex flex-col items-center animate-pulse">
+                                <div className="w-full aspect-square rounded-full bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border-2 border-white/5 flex items-center justify-center">
+                                  <Mic2 className="w-8 h-8 text-purple-400/20 animate-pulse" />
+                                </div>
+                                <div className="h-3 w-1/2 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                                <div className="h-2.5 w-1/3 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                            {homeArtists.slice(0, 6).map((artist, idx) => {
+                              const artistAvatar = artist.avatar || artist.thumbnail || DEFAULT_TRACK_ART;
+                              const artistLabel = artist.genre || artist.subscribers || "Nghệ sĩ";
+                              return (
+                                <div
+                                  key={artist.id || artist.name || idx}
+                                  onClick={() =>
+                                    openArtistDetail({
+                                      id: artist.id,
+                                      name: artist.name,
+                                      avatar: artistAvatar,
+                                      genre: artist.genre,
+                                      subscribers: artist.subscribers,
+                                    })
+                                  }
+                                  className="w-full flex flex-col items-center cursor-pointer group"
+                                >
+                                  <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:theme-accent-border group-hover:scale-[1.04] transition-all duration-200">
+                                    <img
+                                      src={artistAvatar}
+                                      alt={artist.name}
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                                      }}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 text-center w-full transition-colors">
+                                    {artist.name}
+                                  </p>
+                                  <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
+                                    {artistLabel}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Section 4 & 5: Gần đây & Có thể bạn sẽ thích (CHỈ XUẤT HIỆN KHI ĐÃ ĐĂNG NHẬP) */}
+                      {userSession?.isLoggedIn && (
+                        <>
+                          {/* Section 4: Gần đây */}
+                          <div>
+                            <div className="flex items-center gap-2.5 mb-3.5">
+                              <Clock className="w-5 h-5 text-emerald-400" />
+                              <h2 className="text-[20px] font-bold text-white tracking-wide">
+                                Gần đây
+                              </h2>
+                              {isLibraryLoading && (
+                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300 animate-pulse font-medium">
+                                  <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                                  <span>Đang tải...</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {isLibraryLoading ? (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                                {Array.from({ length: 6 }).map((_, idx) => (
+                                  <div key={idx} className="w-full flex flex-col animate-pulse">
+                                    <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-emerald-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                                      <Clock className="w-8 h-8 text-emerald-400/20 animate-pulse" />
+                                    </div>
+                                    <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                                    <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : recentTracksToDisplay.length > 0 ? (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                                {recentTracksToDisplay.map((item, idx) => {
+                                  const isCurrent = currentTrack?.id === item.id;
+                                  const isThisPlaying = isCurrent && isPlaying;
+                                  return (
+                                    <div
+                                      key={item.id + "-" + idx}
+                                      onClick={() => handlePlaySongItem(item, recentTracksToDisplay, idx)}
+                                      className="w-full flex flex-col cursor-pointer group"
+                                    >
+                                      <div
+                                        className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
+                                          }`}
+                                      >
+                                        <img
+                                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                          alt={item.title}
+                                          onError={(e) => {
+                                            e.currentTarget.src = DEFAULT_TRACK_ART;
+                                          }}
+                                          className="w-full h-full object-cover"
+                                        />
+                                        <UnifiedPlayOverlay
+                                          isCurrent={isCurrent}
+                                          isPlaying={isThisPlaying}
+                                          onToggle={() => handlePlaySongItem(item, recentTracksToDisplay, idx)}
+                                        />
+                                        {(item.duration > 0 || !!item.durationText) && (
+                                          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow z-10">
+                                            {item.isMusic !== false && (
+                                              <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                            )}
+                                            <span>{item.durationText || formatTime(item.duration)}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p
+                                        className={`text-[12px] font-semibold truncate mt-2 transition-colors ${isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
+                                          }`}
+                                      >
+                                        {item.title}
+                                      </p>
+                                      <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                        {item.author || "Kahoii Music"}
+                                      </p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
+                                Chưa có bài hát nào gần đây. Hãy chọn hoặc tìm kiếm bài hát để phát.
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Section 5: Có thể bạn sẽ thích */}
+                          <div>
+                            <div className="flex items-center gap-2.5 mb-3.5">
+                              <Heart className="w-5 h-5 text-rose-400 fill-rose-500/20" />
+                              <h2 className="text-[20px] font-bold text-white tracking-wide">
+                                Có thể bạn sẽ thích
+                              </h2>
+                              {isLibraryLoading && (
+                                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-300 animate-pulse font-medium">
+                                  <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                                  <span>Đang tải...</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {isLibraryLoading ? (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                                {Array.from({ length: 6 }).map((_, idx) => (
+                                  <div key={idx} className="w-full flex flex-col animate-pulse">
+                                    <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-rose-950/20 to-black/40 border border-white/5 flex items-center justify-center">
+                                      <Heart className="w-8 h-8 text-rose-400/20 animate-pulse" />
+                                    </div>
+                                    <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
+                                    <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : recommendedTracksToDisplay.length > 0 ? (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
+                                {recommendedTracksToDisplay.map((item, idx) => {
+                                  const isCurrent = currentTrack?.id === item.id;
+                                  const isThisPlaying = isCurrent && isPlaying;
+                                  return (
+                                    <div
+                                      key={item.id + "-" + idx}
+                                      onClick={() => handlePlaySongItem(item, recommendedTracksToDisplay, idx)}
+                                      className="w-full flex flex-col cursor-pointer group"
+                                    >
+                                      <div
+                                        className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
+                                          }`}
+                                      >
+                                        <img
+                                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                          alt={item.title}
+                                          onError={(e) => {
+                                            e.currentTarget.src = DEFAULT_TRACK_ART;
+                                          }}
+                                          className="w-full h-full object-cover"
+                                        />
+                                        <UnifiedPlayOverlay
+                                          isCurrent={isCurrent}
+                                          isPlaying={isThisPlaying}
+                                          onToggle={() => handlePlaySongItem(item, recommendedTracksToDisplay, idx)}
+                                        />
+                                        {(item.duration > 0 || !!item.durationText) && (
+                                          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow z-10">
+                                            {item.isMusic !== false && (
+                                              <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
+                                            )}
+                                            <span>{item.durationText || formatTime(item.duration)}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p
+                                        className={`text-[12px] font-semibold truncate mt-2 transition-colors ${isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
+                                          }`}
+                                      >
+                                        {item.title}
+                                      </p>
+                                      <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                        {item.author || "Kahoii Music"}
+                                      </p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
+                                Chưa có bài hát yêu thích nào.
+                              </div>
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
+                </section>
 
-                  {/* ========================================================================= */}
-                  {/* TAB: PLAYLIST (Tất cả danh sách phát)                                      */}
-                  {/* ========================================================================= */}
-                  {activeSearchTab === "playlists" && (
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[18px] font-bold text-white tracking-wide">
-                          Tất cả danh sách phát ({searchStructured?.playlists?.length || 0})
-                        </h3>
-                      </div>
-                      {searchStructured?.playlists && searchStructured.playlists.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4">
-                          {searchStructured.playlists.map((pl) => (
-                            <div
-                              key={pl.id || pl.title}
-                              onClick={() => playPlaylistItem(pl)}
-                              className="flex flex-col cursor-pointer group"
-                            >
-                              <div className="w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
-                                <img
-                                  src={pl.thumbnail || DEFAULT_TRACK_ART}
-                                  alt={pl.title}
-                                  onError={(e) => {
-                                    e.currentTarget.src = DEFAULT_TRACK_ART;
-                                  }}
-                                  className="w-full h-full object-cover"
-                                />
-                                <UnifiedPlayOverlay
-                                  isCurrent={activePlayingPlaylistId === pl.id}
-                                  isPlaying={activePlayingPlaylistId === pl.id && isPlaying}
-                                  isLoading={loadingPlaylistId === pl.id}
-                                  onToggle={() => playPlaylistItem(pl)}
-                                />
-                                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
-                                  Playlist
-                                </span>
-                              </div>
-                              <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-1.5">
-                                {pl.title}
-                              </p>
-                              <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                                {pl.author || "YouTube Music"}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-white/50 italic py-10 text-center">
-                          Không tìm thấy danh sách phát phù hợp.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
-                  <p className="text-sm text-white/50 italic">Không tìm thấy dữ liệu phù hợp.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSearchOpen(false);
-                      setTopSearchText("");
-                      setSearchQueryTitle("");
-                      setActiveSearchTab("all");
-                    }}
-                    className="px-4 py-2 rounded-xl bg-white/10 hover:theme-accent-bg text-xs font-semibold text-white transition-all cursor-pointer"
-                  >
-                    Quay lại Khám phá
-                  </button>
-                </div>
-              )}
-              </div>
-            </div>
-          ) : (
-            /* ===================================================================== */
-            /* DISCOVERY VIEW (Nhạc Trending, Mới Phát Hành, Nhạc Sĩ Nổi Bật, ...)   */
-            /* ===================================================================== */
-            <div className="flex flex-col gap-5 sm:gap-8 flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-28 lg:pb-6">
-              {/* Section 1: Nhạc Trending */}
-              <div>
-                <div className="flex items-center justify-between mb-3 sm:mb-3.5">
-                  <div className="flex items-center gap-2 sm:gap-2.5">
-                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 theme-accent-text" />
-                    <h2 className="text-base sm:text-[20px] font-bold text-white tracking-wide">
-                      Nhạc Trending
-                    </h2>
-                    {isHomeLoading && (
-                      <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full theme-badge animate-pulse font-medium">
-                        <Loader2 className="w-3 h-3 animate-spin theme-accent-text" />
-                        <span>Đang tải...</span>
-                      </div>
-                    )}
-                  </div>
-                  {!isHomeLoading && trendingTracks.length > 0 && (
+                {/* ----------------------------------------------------------------------- */}
+                {/* COLUMN 3 (RIGHT): Now Playing & Queue Player (~23% Width)               */}
+                {/* ----------------------------------------------------------------------- */}
+                <aside
+                  className={`${mobileTab === "player" ? "flex w-full h-full" : "hidden"
+                    } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-3 sm:p-4 lg:px-[18px] lg:pt-[26px] pb-3 lg:pb-[20px]`}
+                  style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}
+                >
+                  {/* Mobile Collapse / Back Header */}
+                  <div className="lg:hidden flex items-center justify-between pb-2 mb-2 border-b border-white/10 flex-shrink-0">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (trendingTracks.length > 0) {
-                          setPlaylist(trendingTracks);
-                          setQueueTracks(trendingTracks);
-                          setCurrentIndex(0);
-                          loadAndPlayTrack(trendingTracks[0], true);
-                        }
-                      }}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
+                      onClick={() => setMobileTab("explore")}
+                      className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white cursor-pointer group"
                     >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Phát tất cả</span>
+                      <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                      <span>Thu nhỏ trình phát</span>
                     </button>
-                  )}
-                </div>
-
-                {isHomeLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                    {Array.from({ length: 6 }).map((_, idx) => (
-                      <div key={idx} className="w-full flex flex-col animate-pulse">
-                        <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border border-white/5 flex items-center justify-center">
-                          <Sparkles className="w-8 h-8 text-white/20 animate-pulse" />
-                        </div>
-                        <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
-                        <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
-                      </div>
-                    ))}
+                    <span className="text-[11px] font-bold theme-accent-text uppercase tracking-wider">Đang phát</span>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                    {trendingTracks.slice(0, 12).map((item, idx) => {
-                      const isCurrent = currentTrack?.id === item.id;
-                      const isThisPlaying = isCurrent && isPlaying;
-                      return (
-                        <div
-                          key={item.id + "-" + idx}
-                          onClick={() => handlePlaySongItem(item, trendingTracks, idx)}
-                          className="w-full flex flex-col cursor-pointer group"
-                        >
-                          <div
-                            className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
-                              isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
-                            }`}
-                          >
-                            <img
-                              src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                              alt={item.title}
-                              onError={(e) => {
-                                e.currentTarget.src = DEFAULT_TRACK_ART;
-                              }}
-                              className="w-full h-full object-cover"
-                            />
-                            <UnifiedPlayOverlay
-                              isCurrent={isCurrent}
-                              isPlaying={isThisPlaying}
-                              onToggle={() => handlePlaySongItem(item, trendingTracks, idx)}
-                            />
-                            {(item.duration > 0 || !!item.durationText) && (
-                              <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow z-10">
-                                {item.isMusic !== false && (
-                                  <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                )}
-                                <span>{item.durationText || formatTime(item.duration)}</span>
-                              </span>
-                            )}
+
+                  {/* ========================================================================= */}
+                  {/* 1. MOBILE TAB "ĐANG PHÁT" (EXACT PC MINI APP MODE, lg:hidden)             */}
+                  {/* ========================================================================= */}
+                  <div className="lg:hidden flex flex-col w-full h-full flex-1 min-h-0 gap-2.5 sm:gap-3">
+                    {/* TOP CARD: PLAYER CONTROLS + LIVE LYRICS SPLIT */}
+                    <div className="w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 flex flex-col min-[380px]:flex-row gap-3 sm:gap-3.5 items-start relative overflow-hidden flex-shrink-0">
+                      {/* Left Column: Artwork with Player Controls Inside (Square 1:1, Rounded Corners) */}
+                      <div className="w-[170px] h-[170px] min-[420px]:w-[185px] min-[420px]:h-[185px] sm:w-[195px] sm:h-[195px] aspect-square rounded-[18px] sm:rounded-[22px] relative overflow-hidden flex-shrink-0 self-start shadow-xl bg-black/60 border border-white/10 select-none mx-auto min-[380px]:mx-0">
+                        {/* Artwork Image */}
+                        {!currentTrack ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden">
+                            <img src="./logo_icon.png" alt="Kahoii Music" className="w-10 h-10 object-contain drop-shadow mb-1" />
+                            <span className="text-[11px] font-bold text-white/80">Kahoii Music</span>
                           </div>
-                          <p
-                            className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
-                              isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
-                            }`}
-                          >
-                            {item.title}
-                          </p>
-                          <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                            {item.author || "Kahoii Music"}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Section 2: Mới Phát Hành */}
-              <div>
-                <div className="flex items-center justify-between mb-3.5">
-                  <div className="flex items-center gap-2.5">
-                    <Flame className="w-5 h-5 text-orange-400" />
-                    <h2 className="text-[20px] font-bold text-white tracking-wide">
-                      Mới Phát Hành
-                    </h2>
-                    {isHomeLoading && (
-                      <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/30 text-[11px] text-orange-300 animate-pulse font-medium">
-                        <Loader2 className="w-3 h-3 animate-spin text-orange-400" />
-                        <span>Đang tải...</span>
-                      </div>
-                    )}
-                  </div>
-                  {!isHomeLoading && newReleaseTracks.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (newReleaseTracks.length > 0) {
-                          setPlaylist(newReleaseTracks);
-                          setQueueTracks(newReleaseTracks);
-                          setCurrentIndex(0);
-                          loadAndPlayTrack(newReleaseTracks[0], true);
-                        }
-                      }}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Phát tất cả</span>
-                    </button>
-                  )}
-                </div>
-
-                {isHomeLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                    {Array.from({ length: 6 }).map((_, idx) => (
-                      <div key={idx} className="w-full flex flex-col animate-pulse">
-                        <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-orange-950/20 to-black/40 border border-white/5 flex items-center justify-center">
-                          <Flame className="w-8 h-8 text-orange-400/20 animate-pulse" />
-                        </div>
-                        <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
-                        <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                    {newReleaseTracks.slice(0, 12).map((item, idx) => {
-                      const isCurrent = currentTrack?.id === item.id;
-                      const isThisPlaying = isCurrent && isPlaying;
-                      return (
-                        <div
-                          key={item.id + "-" + idx}
-                          onClick={() => handlePlaySongItem(item, newReleaseTracks, idx)}
-                          className="w-full flex flex-col cursor-pointer group"
-                        >
-                          <div
-                            className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
-                              isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
-                            }`}
-                          >
-                            <img
-                              src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                              alt={item.title}
-                              onError={(e) => {
-                                e.currentTarget.src = DEFAULT_TRACK_ART;
-                              }}
-                              className="w-full h-full object-cover"
-                            />
-                            <UnifiedPlayOverlay
-                              isCurrent={isCurrent}
-                              isPlaying={isThisPlaying}
-                              onToggle={() => handlePlaySongItem(item, newReleaseTracks, idx)}
-                            />
-                            {(item.duration > 0 || !!item.durationText) && (
-                              <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow z-10">
-                                {item.isMusic !== false && (
-                                  <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                )}
-                                <span>{item.durationText || formatTime(item.duration)}</span>
-                              </span>
-                            )}
-                          </div>
-                          <p
-                            className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
-                              isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
-                            }`}
-                          >
-                            {item.title}
-                          </p>
-                          <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                            {item.author || "Kahoii Music"}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Section 3: Nhạc Sĩ Nổi Bật (Đổi từ Nhạc Sĩ) */}
-              <div>
-                <div className="flex items-center gap-2.5 mb-3.5">
-                  <Mic2 className="w-5 h-5 theme-sec-accent-text" />
-                  <h2 className="text-[20px] font-bold text-white tracking-wide">
-                    Nhạc Sĩ Nổi Bật
-                  </h2>
-                  {isHomeLoading && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full theme-badge animate-pulse font-medium">
-                      <Loader2 className="w-3 h-3 animate-spin theme-accent-text" />
-                      <span>Đang tải...</span>
-                    </div>
-                  )}
-                </div>
-
-                {isHomeLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                    {Array.from({ length: 6 }).map((_, idx) => (
-                      <div key={idx} className="w-full flex flex-col items-center animate-pulse">
-                        <div className="w-full aspect-square rounded-full bg-gradient-to-br from-purple-900/30 via-purple-950/20 to-black/40 border-2 border-white/5 flex items-center justify-center">
-                          <Mic2 className="w-8 h-8 text-purple-400/20 animate-pulse" />
-                        </div>
-                        <div className="h-3 w-1/2 rounded-md bg-white/10 mt-2.5 animate-pulse" />
-                        <div className="h-2.5 w-1/3 rounded-md bg-white/5 mt-1.5 animate-pulse" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                    {FEATURED_ARTISTS.map((artist, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => openArtistDetail({ name: artist.name, avatar: artist.avatar, genre: artist.genre })}
-                        className="w-full flex flex-col items-center cursor-pointer group"
-                      >
-                        <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:theme-accent-border group-hover:scale-[1.04] transition-all duration-200">
+                        ) : (
                           <img
-                            src={artist.avatar}
-                            alt={artist.name}
+                            src={
+                              currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+                                ? (currentTrack.thumbnail.includes("i.ytimg.com")
+                                  ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+                                  : currentTrack.thumbnail)
+                                : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
+                            }
+                            alt={currentTrack.title || ""}
                             onError={(e) => {
                               e.currentTarget.src = DEFAULT_TRACK_ART;
                             }}
                             className="w-full h-full object-cover"
                           />
-                        </div>
-                        <p className="text-[12px] font-semibold text-white/90 group-hover:theme-accent-text truncate mt-2 text-center w-full transition-colors">
-                          {artist.name}
-                        </p>
-                        <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
-                          {artist.genre}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                        )}
 
-              {/* Section 4 & 5: Gần đây & Có thể bạn sẽ thích (CHỈ XUẤT HIỆN KHI ĐÃ ĐĂNG NHẬP) */}
-              {userSession?.isLoggedIn && (
-                <>
-                  {/* Section 4: Gần đây */}
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-3.5">
-                      <Clock className="w-5 h-5 text-emerald-400" />
-                      <h2 className="text-[20px] font-bold text-white tracking-wide">
-                        Gần đây
-                      </h2>
-                      {isLibraryLoading && (
-                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300 animate-pulse font-medium">
-                          <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                          <span>Đang tải...</span>
-                        </div>
-                      )}
-                    </div>
+                        {/* Dark gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent pointer-events-none" />
 
-                    {isLibraryLoading ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                        {Array.from({ length: 6 }).map((_, idx) => (
-                          <div key={idx} className="w-full flex flex-col animate-pulse">
-                            <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-emerald-950/20 to-black/40 border border-white/5 flex items-center justify-center">
-                              <Clock className="w-8 h-8 text-emerald-400/20 animate-pulse" />
-                            </div>
-                            <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
-                            <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
-                          </div>
-                        ))}
-                      </div>
-                    ) : recentTracksToDisplay.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                        {recentTracksToDisplay.map((item, idx) => {
-                          const isCurrent = currentTrack?.id === item.id;
-                          const isThisPlaying = isCurrent && isPlaying;
-                          return (
-                            <div
-                              key={item.id + "-" + idx}
-                              onClick={() => handlePlaySongItem(item, recentTracksToDisplay, idx)}
-                              className="w-full flex flex-col cursor-pointer group"
-                            >
-                              <div
-                                className={`relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
-                                  isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
-                                }`}
-                              >
-                                <img
-                                  src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                                  alt={item.title}
-                                  onError={(e) => {
-                                    e.currentTarget.src = DEFAULT_TRACK_ART;
-                                  }}
-                                  className="w-full h-full object-cover"
-                                />
-                                <UnifiedPlayOverlay
-                                  isCurrent={isCurrent}
-                                  isPlaying={isThisPlaying}
-                                  onToggle={() => handlePlaySongItem(item, recentTracksToDisplay, idx)}
-                                />
-                                {(item.duration > 0 || !!item.durationText) && (
-                                  <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow z-10">
-                                    {item.isMusic !== false && (
-                                      <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                    )}
-                                    <span>{item.durationText || formatTime(item.duration)}</span>
-                                  </span>
-                                )}
-                              </div>
-                              <p
-                                className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
-                                  isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
-                                }`}
-                              >
-                                {item.title}
-                              </p>
-                              <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                                {item.author || "Kahoii Music"}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
-                        Chưa có bài hát nào gần đây. Hãy chọn hoặc tìm kiếm bài hát để phát.
-                      </div>
-                    )}
-                  </div>
+                        {/* Top-left Menu Button */}
+                        <div className="absolute top-2.5 left-2.5 z-30" ref={playerMenuRef}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!currentTrack) {
+                                showToast("Vui lòng phát một bài hát trước khi tùy chọn!", "warning");
+                                return;
+                              }
+                              setShowPlayerMenu(!showPlayerMenu);
+                            }}
+                            className="w-7 h-7 rounded-lg bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center text-white/90 hover:text-white cursor-pointer transition-all border border-white/15 shadow-sm"
+                            title="Tùy chọn bài hát"
+                          >
+                            <Menu className="w-4 h-4" />
+                          </button>
 
-                  {/* Section 5: Có thể bạn sẽ thích */}
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-3.5">
-                      <Heart className="w-5 h-5 text-rose-400 fill-rose-500/20" />
-                      <h2 className="text-[20px] font-bold text-white tracking-wide">
-                        Có thể bạn sẽ thích
-                      </h2>
-                      {isLibraryLoading && (
-                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-300 animate-pulse font-medium">
-                          <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
-                          <span>Đang tải...</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {isLibraryLoading ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                        {Array.from({ length: 6 }).map((_, idx) => (
-                          <div key={idx} className="w-full flex flex-col animate-pulse">
-                            <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-rose-950/20 to-black/40 border border-white/5 flex items-center justify-center">
-                              <Heart className="w-8 h-8 text-rose-400/20 animate-pulse" />
-                            </div>
-                            <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
-                            <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
-                          </div>
-                        ))}
-                      </div>
-                    ) : recommendedTracksToDisplay.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                        {recommendedTracksToDisplay.map((item, idx) => {
-                          const isCurrent = currentTrack?.id === item.id;
-                          const isThisPlaying = isCurrent && isPlaying;
-                          return (
-                            <div
-                              key={item.id + "-" + idx}
-                              onClick={() => handlePlaySongItem(item, recommendedTracksToDisplay, idx)}
-                              className="w-full flex flex-col cursor-pointer group"
-                            >
-                              <div
-                                className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
-                                  isCurrent ? "theme-accent-border shadow-lg" : "border-white/5 bg-purple-900/30"
-                                }`}
-                              >
-                                <img
-                                  src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                                  alt={item.title}
-                                  onError={(e) => {
-                                    e.currentTarget.src = DEFAULT_TRACK_ART;
-                                  }}
-                                  className="w-full h-full object-cover"
-                                />
-                                <UnifiedPlayOverlay
-                                  isCurrent={isCurrent}
-                                  isPlaying={isThisPlaying}
-                                  onToggle={() => handlePlaySongItem(item, recommendedTracksToDisplay, idx)}
-                                />
-                                {(item.duration > 0 || !!item.durationText) && (
-                                  <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90 flex items-center gap-1 backdrop-blur-sm shadow z-10">
-                                    {item.isMusic !== false && (
-                                      <Music className="w-2.5 h-2.5 text-purple-300 opacity-90" />
-                                    )}
-                                    <span>{item.durationText || formatTime(item.duration)}</span>
-                                  </span>
-                                )}
-                              </div>
-                              <p
-                                className={`text-[12px] font-semibold truncate mt-2 transition-colors ${
-                                  isCurrent ? "theme-accent-text font-bold" : "text-white/90 group-hover:theme-accent-text"
-                                }`}
-                              >
-                                {item.title}
-                              </p>
-                              <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                                {item.author || "Kahoii Music"}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
-                        Chưa có bài hát yêu thích nào.
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* ----------------------------------------------------------------------- */}
-        {/* COLUMN 3 (RIGHT): Now Playing & Queue Player (~23% Width)               */}
-        {/* ----------------------------------------------------------------------- */}
-        <aside
-          className={`${
-            mobileTab === "player" ? "flex w-full h-full" : "hidden"
-          } lg:flex lg:w-[310px] xl:w-[340px] flex-shrink-0 figma-panel flex-col min-h-0 relative z-20 overflow-y-auto lg:overflow-visible p-3 sm:p-4 lg:px-[18px] lg:pt-[26px] pb-3 lg:pb-[20px]`}
-          style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}
-        >
-          {/* Mobile Collapse / Back Header */}
-          <div className="lg:hidden flex items-center justify-between pb-2 mb-2 border-b border-white/10 flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => setMobileTab("explore")}
-              className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white cursor-pointer group"
-            >
-              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
-              <span>Thu nhỏ trình phát</span>
-            </button>
-            <span className="text-[11px] font-bold theme-accent-text uppercase tracking-wider">Đang phát</span>
-          </div>
-
-          {/* ========================================================================= */}
-          {/* 1. MOBILE TAB "ĐANG PHÁT" (EXACT PC MINI APP MODE, lg:hidden)             */}
-          {/* ========================================================================= */}
-          <div className="lg:hidden flex flex-col w-full h-full flex-1 min-h-0 gap-2.5 sm:gap-3">
-            {/* TOP CARD: PLAYER CONTROLS + LIVE LYRICS SPLIT */}
-            <div className="w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 flex flex-col min-[380px]:flex-row gap-3 sm:gap-3.5 items-start relative overflow-hidden flex-shrink-0">
-              {/* Left Column: Artwork with Player Controls Inside (Square 1:1, Rounded Corners) */}
-              <div className="w-[170px] h-[170px] min-[420px]:w-[185px] min-[420px]:h-[185px] sm:w-[195px] sm:h-[195px] aspect-square rounded-[18px] sm:rounded-[22px] relative overflow-hidden flex-shrink-0 self-start shadow-xl bg-black/60 border border-white/10 select-none mx-auto min-[380px]:mx-0">
-                {/* Artwork Image */}
-                {!currentTrack ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden">
-                    <img src="./logo_icon.png" alt="Kahoii Music" className="w-10 h-10 object-contain drop-shadow mb-1" />
-                    <span className="text-[11px] font-bold text-white/80">Kahoii Music</span>
-                  </div>
-                ) : (
-                  <img
-                    src={
-                      currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                        ? (currentTrack.thumbnail.includes("i.ytimg.com")
-                            ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                            : currentTrack.thumbnail)
-                        : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
-                    }
-                    alt={currentTrack.title || ""}
-                    onError={(e) => {
-                      e.currentTarget.src = DEFAULT_TRACK_ART;
-                    }}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-
-                {/* Dark gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent pointer-events-none" />
-
-                {/* Top-left Menu Button */}
-                <div className="absolute top-2.5 left-2.5 z-30" ref={playerMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!currentTrack) {
-                        showToast("Vui lòng phát một bài hát trước khi tùy chọn!", "warning");
-                        return;
-                      }
-                      setShowPlayerMenu(!showPlayerMenu);
-                    }}
-                    className="w-7 h-7 rounded-lg bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center text-white/90 hover:text-white cursor-pointer transition-all border border-white/15 shadow-sm"
-                    title="Tùy chọn bài hát"
-                  >
-                    <Menu className="w-4 h-4" />
-                  </button>
-
-                  {/* Menu Popup */}
-                  {showPlayerMenu && currentTrack && (
-                    <div className="absolute top-8 left-0 z-50 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[190px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setShowLibrarySubmenu(!showLibrarySubmenu)}
-                        className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-left ${
-                          showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <FolderPlus className="w-3.5 h-3.5 theme-accent-text" />
-                          <span>Lưu vào playlist</span>
-                        </span>
-                        <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
-                      </button>
-
-                      {showLibrarySubmenu && (
-                        <div className="flex flex-col gap-1 pl-2 pr-1 py-1 bg-black/40 rounded-lg max-h-[120px] overflow-y-auto custom-scrollbar border border-white/5">
-                          {libraryData.playlists.map((pl) => {
-                            const hasSong = pl.items?.some((it: any) => it.id === currentTrack.id);
-                            return (
+                          {/* Menu Popup */}
+                          {showPlayerMenu && currentTrack && (
+                            <div className="absolute top-8 left-0 z-50 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[190px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40" onClick={(e) => e.stopPropagation()}>
                               <button
-                                key={pl.id}
                                 type="button"
-                                onClick={() => handleToggleTrackInPlaylist(pl.id)}
-                                className="flex items-center justify-between px-2 py-1 rounded text-[11px] hover:bg-white/10 text-white/80 transition-colors text-left"
+                                onClick={() => setShowLibrarySubmenu(!showLibrarySubmenu)}
+                                className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-left ${showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
+                                  }`}
                               >
-                                <span className="truncate pr-1">{pl.title}</span>
-                                {hasSong && <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />}
+                                <span className="flex items-center gap-2">
+                                  <FolderPlus className="w-3.5 h-3.5 theme-accent-text" />
+                                  <span>Lưu vào playlist</span>
+                                </span>
+                                <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
                               </button>
+
+                              {showLibrarySubmenu && (
+                                <div className="flex flex-col gap-1 pl-2 pr-1 py-1 bg-black/40 rounded-lg max-h-[120px] overflow-y-auto custom-scrollbar border border-white/5">
+                                  {libraryData.playlists.map((pl) => {
+                                    const hasSong = pl.items?.some((it: any) => it.id === currentTrack.id);
+                                    return (
+                                      <button
+                                        key={pl.id}
+                                        type="button"
+                                        onClick={() => handleToggleTrackInPlaylist(pl.id)}
+                                        className="flex items-center justify-between px-2 py-1 rounded text-[11px] hover:bg-white/10 text-white/80 transition-colors text-left"
+                                      >
+                                        <span className="truncate pr-1">{pl.title}</span>
+                                        {hasSong && <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                disabled={savingOfflineTrackId === currentTrack.id}
+                                onClick={() => handleSaveOfflineTrack(currentTrack)}
+                                className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                              >
+                                <span className="flex items-center gap-2">
+                                  {savingOfflineTrackId === currentTrack.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 theme-accent-text animate-spin" />
+                                  ) : (
+                                    <HardDriveDownload className="w-3.5 h-3.5 theme-accent-text" />
+                                  )}
+                                  <span className="text-[11px]">
+                                    {savingOfflineTrackId === currentTrack.id
+                                      ? "Đang lưu..."
+                                      : offlineTrackIds.has(currentTrack.id)
+                                        ? "Đã lưu offline"
+                                        : "Lưu nghe offline"}
+                                  </span>
+                                </span>
+                                {offlineTrackIds.has(currentTrack.id) && (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Top-right Favorite Heart Button */}
+                        <button
+                          type="button"
+                          disabled={!currentTrack}
+                          onClick={toggleCurrentFavorite}
+                          className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center z-30 cursor-pointer transition-all border border-white/15 shadow-sm"
+                          title="Yêu thích"
+                        >
+                          <Heart
+                            className={`w-4 h-4 transition-transform ${userSession?.isLoggedIn && currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                                ? "fill-red-500 text-red-500 scale-110 drop-shadow-[0_0_8px_rgba(239,68,68,0.9)]"
+                                : "text-white/70 hover:text-red-400"
+                              }`}
+                          />
+                        </button>
+
+                        {/* Left Volume Button directly above Seekbar */}
+                        <button
+                          type="button"
+                          onClick={() => setIsMuted(!isMuted)}
+                          title={isMuted ? "Bật âm thanh" : "Tắt tiếng"}
+                          className="absolute left-3 bottom-[66px] p-0.5 text-white/80 hover:text-white cursor-pointer z-20 hover:scale-110 active:scale-95 transition-all"
+                        >
+                          {isMuted ? (
+                            <VolumeX className="w-4 h-4 text-red-400" />
+                          ) : (
+                            <Volume2 className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        {/* Seekbar Progress Line (Matching PC Mini App - strictly above control buttons) */}
+                        <div className="absolute left-3 right-3 bottom-[50px] h-2 flex items-center group/seek z-20">
+                          <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/25 overflow-hidden" />
+                          <div
+                            className="absolute left-0 top-0 bottom-0 rounded-full"
+                            style={{
+                              width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                              background: "var(--theme-btn-gradient)",
+                            }}
+                          />
+                          <div
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white shadow-md pointer-events-none opacity-0 group-hover/seek:opacity-100 transition-opacity"
+                            style={{
+                              left: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min={0}
+                            max={duration || 100}
+                            value={currentTime}
+                            onChange={handleSeek}
+                            className="w-full h-full opacity-0 cursor-pointer z-10"
+                          />
+                        </div>
+
+                        {/* 5 Playback Control Buttons Row */}
+                        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-0.5 z-20">
+                          {/* Loop / Shuffle */}
+                          <button
+                            type="button"
+                            onClick={cycleRepeatMode}
+                            title="Chế độ lặp"
+                            className={`p-1 transition-all cursor-pointer hover:scale-115 active:scale-90 ${repeatMode === "all" || repeatMode === "one"
+                                ? "theme-accent-text"
+                                : repeatMode === "shuffle"
+                                  ? "theme-sec-accent-text"
+                                  : "text-white/60 hover:text-white"
+                              }`}
+                          >
+                            {repeatMode === "one" ? (
+                              <Repeat1 className="w-4 h-4" />
+                            ) : repeatMode === "shuffle" ? (
+                              <Shuffle className="w-4 h-4" />
+                            ) : (
+                              <Repeat className="w-4 h-4" />
+                            )}
+                          </button>
+
+                          {/* Prev */}
+                          <button
+                            type="button"
+                            onClick={handlePrev}
+                            title="Bài trước"
+                            className="p-1 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                          >
+                            <SkipBack className="w-4.5 h-4.5 fill-current" />
+                          </button>
+
+                          {/* Play / Pause (Circular Gradient Button) */}
+                          <button
+                            type="button"
+                            onClick={togglePlayPause}
+                            disabled={isLoading}
+                            title={isPlaying ? "Tạm dừng" : "Phát"}
+                            className="w-8 h-8 min-[420px]:w-9 min-[420px]:h-9 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                            style={{ background: "var(--theme-btn-gradient)" }}
+                          >
+                            {isLoading ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : isPlaying ? (
+                              <Pause className="w-4 h-4 fill-current" />
+                            ) : (
+                              <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                            )}
+                          </button>
+
+                          {/* Next */}
+                          <button
+                            type="button"
+                            onClick={handleNext}
+                            title="Bài tiếp theo"
+                            className="p-1 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                          >
+                            <SkipForward className="w-4.5 h-4.5 fill-current" />
+                          </button>
+
+                          {/* Timer */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
+                              title="Hẹn giờ tắt"
+                              className={`p-1 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
+                                }`}
+                            >
+                              <Clock className="w-4 h-4" />
+                              {sleepTimerMinutes && (
+                                <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[7px] text-white font-mono font-bold animate-pulse">
+                                  {sleepTimerMinutes}m
+                                </span>
+                              )}
+                            </button>
+
+                            {showSleepTimerMenu && (
+                              <div className="absolute bottom-8 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-50 min-w-[125px] animate-fade-in border theme-accent-border/40" onClick={(e) => e.stopPropagation()}>
+                                <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
+                                  Hẹn giờ tắt
+                                </span>
+                                {[15, 30, 45, 60].map((m) => (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => startSleepTimer(m)}
+                                    className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
+                                      }`}
+                                  >
+                                    {m} phút
+                                  </button>
+                                ))}
+                                {sleepTimerMinutes && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startSleepTimer(null)}
+                                    className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
+                                  >
+                                    Tắt hẹn giờ
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Song Metadata, Toolbar Pills & Live Lyrics Card (Height aligned with Thumbnail) */}
+                      <div className="w-full min-[380px]:w-auto min-[380px]:h-[170px] min-[420px]:h-[185px] sm:h-[195px] flex-1 min-w-0 flex flex-col justify-between">
+                        {/* Title & Artist */}
+                        <div className="min-w-0">
+                          <h3
+                            className="text-base min-[400px]:text-lg sm:text-xl font-black text-white tracking-tight truncate leading-snug"
+                            title={currentTrack?.title}
+                          >
+                            {currentTrack?.title || "Chưa phát hiện Audio"}
+                          </h3>
+                          <p className="text-xs min-[400px]:text-[13px] text-white/70 font-semibold truncate mt-0.5">
+                            {currentTrack ? formatTrackArtist(currentTrack.title, currentTrack.author) : "Kahoii Music"}
+                          </p>
+                        </div>
+
+                        {/* Toolbar Action Pills (Directly matching PC Mini App) */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 mt-1.5 flex-wrap">
+                          {/* Refresh / Re-sync button */}
+                          <button
+                            type="button"
+                            onClick={handleReloadLyrics}
+                            title="Tải lại / đồng bộ lời bài hát"
+                            className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer shadow-sm"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                          </button>
+
+                          {/* Font size button: Aa 1 / Aa 2 / Aa 3 */}
+                          <button
+                            type="button"
+                            onClick={() => setMiniLyricFontSize((f) => (f % 3) + 1)}
+                            title="Đổi kích thước chữ lời bài hát"
+                            className="px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-mono font-bold text-white/90 cursor-pointer transition-all shadow-sm"
+                          >
+                            Aa {miniLyricFontSize}
+                          </button>
+
+                          {/* Romanization / Language pill */}
+                          {hasRomanizationSupport && (
+                            <button
+                              type="button"
+                              onClick={toggleLyricDisplayMode}
+                              title="Chuyển chế độ: Song ngữ → Romaji thuần → Gốc"
+                              className="px-3 py-0.5 rounded-full text-xs font-bold border transition-all cursor-pointer theme-badge-active shadow-sm"
+                            >
+                              {romaziPillLabel}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Live Lyrics Box (_lyricsCard, fills remaining height) */}
+                        <div
+                          ref={miniLyricsContainerRef}
+                          className="rounded-[14px] bg-black/40 border border-white/10 p-2 sm:p-2.5 mt-2 flex-1 min-h-[90px] overflow-y-auto custom-scrollbar flex flex-col relative"
+                        >
+                          {parsedLyrics.length > 0 ? (
+                            parsedLyrics.map((line, idx) => {
+                              const isActive = isLyricsSynced && idx === activeLyricIndex;
+                              let primaryText = line.text || "♪";
+                              let secondaryText: string | null = null;
+                              if (lyricDisplayMode === "romanized" && line.romanized) {
+                                primaryText = line.romanized;
+                              } else if (lyricDisplayMode === "dual" && line.romanized) {
+                                primaryText = line.text;
+                                secondaryText = line.romanized;
+                              }
+
+                              const fontClass =
+                                miniLyricFontSize === 2
+                                  ? isActive ? "text-[15px] min-[400px]:text-base sm:text-[17px]" : "text-xs min-[400px]:text-[13px] sm:text-sm"
+                                  : miniLyricFontSize === 3
+                                    ? isActive ? "text-xs min-[400px]:text-[13px]" : "text-[10px] min-[400px]:text-[11px]"
+                                    : isActive ? "text-[13px] min-[400px]:text-sm sm:text-[15px]" : "text-[11px] min-[400px]:text-xs sm:text-[13px]";
+
+                              return (
+                                <div
+                                  key={idx}
+                                  ref={isActive ? miniActiveLyricRef : undefined}
+                                  onClick={() => {
+                                    if (line.time > 0) seekToTime(line.time);
+                                  }}
+                                  className={`flex flex-col py-0.5 transition-all cursor-pointer ${isActive
+                                      ? "font-bold text-white opacity-100"
+                                      : "text-white/50 hover:text-white/80 opacity-70 font-medium"
+                                    }`}
+                                >
+                                  <div className="flex items-start gap-1.5 leading-snug">
+                                    {isActive && (
+                                      <span className="w-1.5 min-h-[16px] rounded-full flex-shrink-0 mt-0.5 shadow-sm" style={{ backgroundColor: 'var(--theme-accent)' }} />
+                                    )}
+                                    <p className={fontClass}>{primaryText}</p>
+                                  </div>
+                                  {secondaryText && (
+                                    <p className={`pl-3 text-[11px] text-white/70 mt-0.5 leading-tight ${isActive ? "opacity-95 font-semibold" : "opacity-60"}`}>
+                                      {secondaryText}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : _lyrics?.plainLyrics ? (
+                            <div className="text-xs min-[420px]:text-[13px] leading-relaxed text-white/80 whitespace-pre-line my-auto text-center font-medium">
+                              {_lyrics.plainLyrics}
+                            </div>
+                          ) : (
+                            <div className="my-auto text-center text-xs text-white/40 italic">
+                              {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* BOTTOM CARD: "BÀI TIẾP THEO" (NEXT TRACK IN QUEUE) */}
+                    <div
+                      className={`w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 ${showFullQueueMobile ? "flex-1 min-h-0 flex flex-col" : "flex-shrink-0"
+                        }`}
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2 flex-shrink-0">
+                        <span className="text-sm min-[400px]:text-[15px] font-bold text-white tracking-wide">
+                          {showFullQueueMobile ? `Hàng đợi (${queueTracks.length})` : "Bài tiếp theo"}
+                        </span>
+                        {queueTracks.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullQueueMobile(!showFullQueueMobile)}
+                            className="text-xs theme-accent-text hover:brightness-125 font-semibold cursor-pointer transition-colors"
+                          >
+                            {showFullQueueMobile ? "Chỉ hiện bài kế" : `Xem tất cả (${queueTracks.length})`}
+                          </button>
+                        )}
+                      </div>
+
+                      {!showFullQueueMobile ? (
+                        nextTrack ? (
+                          <div
+                            onClick={() => {
+                              if (nextTrackIndex >= 0) {
+                                setCurrentIndex(nextTrackIndex);
+                                currentIndexRef.current = nextTrackIndex;
+                                loadAndPlayTrack(nextTrack, true);
+                              }
+                            }}
+                            className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/5 transition-all cursor-pointer group"
+                          >
+                            <div className="w-1.5 h-9 rounded-full bg-[var(--theme-accent)] flex-shrink-0 group-hover:scale-y-110 transition-transform shadow-sm" />
+                            <img
+                              src={nextTrack.thumbnail || DEFAULT_TRACK_ART}
+                              alt={nextTrack.title}
+                              onError={(e) => {
+                                e.currentTarget.src = DEFAULT_TRACK_ART;
+                              }}
+                              className="w-11 h-11 rounded-lg object-cover flex-shrink-0 border border-white/10 shadow-sm"
+                            />
+                            <div className="flex-1 min-w-0 pr-1">
+                              <p className="text-sm sm:text-[15px] font-bold text-white truncate group-hover:theme-accent-text transition-colors">
+                                {nextTrack.title}
+                              </p>
+                              <p className="text-xs text-white/60 truncate mt-0.5">
+                                {formatTrackArtist(nextTrack.title, nextTrack.author)}
+                              </p>
+                            </div>
+                            <span className="text-xs text-white/70 font-mono flex-shrink-0">
+                              {nextTrack.duration && nextTrack.duration > 0 ? formatTime(nextTrack.duration) : "--:--"}
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-white/40 italic py-3 text-center">
+                            Chưa có bài tiếp theo
+                          </p>
+                        )
+                      ) : (
+                        <div className="flex-1 min-h-0 flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1">
+                          {queueTracks.map((track, i) => {
+                            const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
+                            return (
+                              <div
+                                key={track.id + i}
+                                ref={isCurrent ? mobileActiveQueueRef : undefined}
+                                onClick={() => {
+                                  setCurrentIndex(i);
+                                  currentIndexRef.current = i;
+                                  loadAndPlayTrack(track, true);
+                                }}
+                                className={`flex items-center gap-2.5 px-2 py-1.5 transition-all cursor-pointer rounded-xl group ${isCurrent ? "theme-badge-active shadow-md" : "hover:bg-white/5"
+                                  }`}
+                              >
+                                {isCurrent && (
+                                  <div className="w-1.5 h-8 rounded-full bg-[var(--theme-accent)] flex-shrink-0" />
+                                )}
+                                <img
+                                  src={track.thumbnail || DEFAULT_TRACK_ART}
+                                  alt=""
+                                  onError={(e) => { e.currentTarget.src = DEFAULT_TRACK_ART; }}
+                                  className="w-9 h-9 rounded-md object-cover flex-shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[13px] sm:text-sm font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
+                                    {track.title}
+                                  </p>
+                                  <p className="text-[11px] sm:text-xs text-white/60 truncate mt-0.5">
+                                    {formatTrackArtist(track.title, track.author)}
+                                  </p>
+                                </div>
+                                <span className="text-xs text-white/70 font-mono flex-shrink-0">
+                                  {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
+                                </span>
+                              </div>
                             );
                           })}
                         </div>
                       )}
-
-                      <button
-                        type="button"
-                        disabled={savingOfflineTrackId === currentTrack.id}
-                        onClick={() => handleSaveOfflineTrack(currentTrack)}
-                        className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                      >
-                        <span className="flex items-center gap-2">
-                          {savingOfflineTrackId === currentTrack.id ? (
-                            <Loader2 className="w-3.5 h-3.5 theme-accent-text animate-spin" />
-                          ) : (
-                            <HardDriveDownload className="w-3.5 h-3.5 theme-accent-text" />
-                          )}
-                          <span className="text-[11px]">
-                            {savingOfflineTrackId === currentTrack.id
-                              ? "Đang lưu..."
-                              : offlineTrackIds.has(currentTrack.id)
-                              ? "Đã lưu offline"
-                              : "Lưu nghe offline"}
-                          </span>
-                        </span>
-                        {offlineTrackIds.has(currentTrack.id) && (
-                          <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        )}
-                      </button>
                     </div>
-                  )}
-                </div>
-
-                {/* Top-right Favorite Heart Button */}
-                <button
-                  type="button"
-                  disabled={!currentTrack}
-                  onClick={toggleCurrentFavorite}
-                  className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center z-30 cursor-pointer transition-all border border-white/15 shadow-sm"
-                  title="Yêu thích"
-                >
-                  <Heart
-                    className={`w-4 h-4 transition-transform ${
-                      userSession?.isLoggedIn && currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
-                        ? "fill-red-500 text-red-500 scale-110 drop-shadow-[0_0_8px_rgba(239,68,68,0.9)]"
-                        : "text-white/70 hover:text-red-400"
-                    }`}
-                  />
-                </button>
-
-                {/* Left Volume Button directly above Seekbar */}
-                <button
-                  type="button"
-                  onClick={() => setIsMuted(!isMuted)}
-                  title={isMuted ? "Bật âm thanh" : "Tắt tiếng"}
-                  className="absolute left-3 bottom-[66px] p-0.5 text-white/80 hover:text-white cursor-pointer z-20 hover:scale-110 active:scale-95 transition-all"
-                >
-                  {isMuted ? (
-                    <VolumeX className="w-4 h-4 text-red-400" />
-                  ) : (
-                    <Volume2 className="w-4 h-4" />
-                  )}
-                </button>
-
-                {/* Seekbar Progress Line (Matching PC Mini App - strictly above control buttons) */}
-                <div className="absolute left-3 right-3 bottom-[50px] h-2 flex items-center group/seek z-20">
-                  <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/25 overflow-hidden" />
-                  <div
-                    className="absolute left-0 top-0 bottom-0 rounded-full"
-                    style={{
-                      width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
-                      background: "var(--theme-btn-gradient)",
-                    }}
-                  />
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white shadow-md pointer-events-none opacity-0 group-hover/seek:opacity-100 transition-opacity"
-                    style={{
-                      left: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
-                    }}
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || 100}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    className="w-full h-full opacity-0 cursor-pointer z-10"
-                  />
-                </div>
-
-                {/* 5 Playback Control Buttons Row */}
-                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between px-0.5 z-20">
-                  {/* Loop / Shuffle */}
-                  <button
-                    type="button"
-                    onClick={cycleRepeatMode}
-                    title="Chế độ lặp"
-                    className={`p-1 transition-all cursor-pointer hover:scale-115 active:scale-90 ${
-                      repeatMode === "all" || repeatMode === "one"
-                        ? "theme-accent-text"
-                        : repeatMode === "shuffle"
-                        ? "theme-sec-accent-text"
-                        : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    {repeatMode === "one" ? (
-                      <Repeat1 className="w-4 h-4" />
-                    ) : repeatMode === "shuffle" ? (
-                      <Shuffle className="w-4 h-4" />
-                    ) : (
-                      <Repeat className="w-4 h-4" />
-                    )}
-                  </button>
-
-                  {/* Prev */}
-                  <button
-                    type="button"
-                    onClick={handlePrev}
-                    title="Bài trước"
-                    className="p-1 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
-                  >
-                    <SkipBack className="w-4.5 h-4.5 fill-current" />
-                  </button>
-
-                  {/* Play / Pause (Circular Gradient Button) */}
-                  <button
-                    type="button"
-                    onClick={togglePlayPause}
-                    disabled={isLoading}
-                    title={isPlaying ? "Tạm dừng" : "Phát"}
-                    className="w-8 h-8 min-[420px]:w-9 min-[420px]:h-9 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                    style={{ background: "var(--theme-btn-gradient)" }}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : isPlaying ? (
-                      <Pause className="w-4 h-4 fill-current" />
-                    ) : (
-                      <Play className="w-4 h-4 fill-current translate-x-0.5" />
-                    )}
-                  </button>
-
-                  {/* Next */}
-                  <button
-                    type="button"
-                    onClick={handleNext}
-                    title="Bài tiếp theo"
-                    className="p-1 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
-                  >
-                    <SkipForward className="w-4.5 h-4.5 fill-current" />
-                  </button>
-
-                  {/* Timer */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
-                      title="Hẹn giờ tắt"
-                      className={`p-1 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${
-                        sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
-                      }`}
-                    >
-                      <Clock className="w-4 h-4" />
-                      {sleepTimerMinutes && (
-                        <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[7px] text-white font-mono font-bold animate-pulse">
-                          {sleepTimerMinutes}m
-                        </span>
-                      )}
-                    </button>
-
-                    {showSleepTimerMenu && (
-                      <div className="absolute bottom-8 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-50 min-w-[125px] animate-fade-in border theme-accent-border/40" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
-                          Hẹn giờ tắt
-                        </span>
-                        {[15, 30, 45, 60].map((m) => (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => startSleepTimer(m)}
-                            className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                              sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
-                            }`}
-                          >
-                            {m} phút
-                          </button>
-                        ))}
-                        {sleepTimerMinutes && (
-                          <button
-                            type="button"
-                            onClick={() => startSleepTimer(null)}
-                            className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
-                          >
-                            Tắt hẹn giờ
-                          </button>
-                        )}
-                      </div>
-                    )}
                   </div>
-                </div>
-              </div>
 
-              {/* Right Column: Song Metadata, Toolbar Pills & Live Lyrics Card (Height aligned with Thumbnail) */}
-              <div className="w-full min-[380px]:w-auto min-[380px]:h-[170px] min-[420px]:h-[185px] sm:h-[195px] flex-1 min-w-0 flex flex-col justify-between">
-                {/* Title & Artist */}
-                <div className="min-w-0">
-                  <h3
-                    className="text-base min-[400px]:text-lg sm:text-xl font-black text-white tracking-tight truncate leading-snug"
-                    title={currentTrack?.title}
-                  >
-                    {currentTrack?.title || "Chưa phát hiện Audio"}
-                  </h3>
-                  <p className="text-xs min-[400px]:text-[13px] text-white/70 font-semibold truncate mt-0.5">
-                    {currentTrack ? formatTrackArtist(currentTrack.title, currentTrack.author) : "Kahoii Music"}
-                  </p>
-                </div>
-
-                {/* Toolbar Action Pills (Directly matching PC Mini App) */}
-                <div className="flex items-center gap-1.5 sm:gap-2 mt-1.5 flex-wrap">
-                  {/* Refresh / Re-sync button */}
-                  <button
-                    type="button"
-                    onClick={handleReloadLyrics}
-                    title="Tải lại / đồng bộ lời bài hát"
-                    className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer shadow-sm"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                  </button>
-
-                  {/* Font size button: Aa 1 / Aa 2 / Aa 3 */}
-                  <button
-                    type="button"
-                    onClick={() => setMiniLyricFontSize((f) => (f % 3) + 1)}
-                    title="Đổi kích thước chữ lời bài hát"
-                    className="px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-mono font-bold text-white/90 cursor-pointer transition-all shadow-sm"
-                  >
-                    Aa {miniLyricFontSize}
-                  </button>
-
-                  {/* Romanization / Language pill */}
-                  {hasRomanizationSupport && (
-                    <button
-                      type="button"
-                      onClick={toggleLyricDisplayMode}
-                      title="Chuyển chế độ: Song ngữ → Romaji thuần → Gốc"
-                      className="px-3 py-0.5 rounded-full text-xs font-bold border transition-all cursor-pointer theme-badge-active shadow-sm"
+                  {/* ========================================================================= */}
+                  {/* 2. DESKTOP RIGHT SIDEBAR (EXACT FIGMA 3-COLUMN RIGHT PANEL, hidden lg:flex) */}
+                  {/* ========================================================================= */}
+                  <div className="hidden lg:flex flex-col flex-1 min-h-0">
+                    {/* Top Part: Now Playing Artwork Card with Dynamic Artwork & Glow */}
+                    <div
+                      className="w-full aspect-square rounded-[22px] relative shadow-2xl bg-[#1b0833] flex-shrink-0 group max-w-[340px] mx-auto lg:max-w-none"
+                      style={{ marginBottom: "18px" }}
                     >
-                      {romaziPillLabel}
-                    </button>
-                  )}
-                </div>
-
-                {/* Live Lyrics Box (_lyricsCard, fills remaining height) */}
-                <div
-                  ref={miniLyricsContainerRef}
-                  className="rounded-[14px] bg-black/40 border border-white/10 p-2 sm:p-2.5 mt-2 flex-1 min-h-[90px] overflow-y-auto custom-scrollbar flex flex-col relative"
-                >
-                  {parsedLyrics.length > 0 ? (
-                    parsedLyrics.map((line, idx) => {
-                      const isActive = isLyricsSynced && idx === activeLyricIndex;
-                      let primaryText = line.text || "♪";
-                      let secondaryText: string | null = null;
-                      if (lyricDisplayMode === "romanized" && line.romanized) {
-                        primaryText = line.romanized;
-                      } else if (lyricDisplayMode === "dual" && line.romanized) {
-                        primaryText = line.text;
-                        secondaryText = line.romanized;
-                      }
-
-                      const fontClass =
-                        miniLyricFontSize === 2
-                          ? isActive ? "text-[15px] min-[400px]:text-base sm:text-[17px]" : "text-xs min-[400px]:text-[13px] sm:text-sm"
-                          : miniLyricFontSize === 3
-                          ? isActive ? "text-xs min-[400px]:text-[13px]" : "text-[10px] min-[400px]:text-[11px]"
-                          : isActive ? "text-[13px] min-[400px]:text-sm sm:text-[15px]" : "text-[11px] min-[400px]:text-xs sm:text-[13px]";
-
-                      return (
-                        <div
-                          key={idx}
-                          ref={isActive ? miniActiveLyricRef : undefined}
-                          onClick={() => {
-                            if (line.time > 0) seekToTime(line.time);
-                          }}
-                          className={`flex flex-col py-0.5 transition-all cursor-pointer ${
-                            isActive
-                              ? "font-bold text-white opacity-100"
-                              : "text-white/50 hover:text-white/80 opacity-70 font-medium"
-                          }`}
-                        >
-                          <div className="flex items-start gap-1.5 leading-snug">
-                            {isActive && (
-                              <span className="w-1.5 min-h-[16px] rounded-full flex-shrink-0 mt-0.5 shadow-sm" style={{ backgroundColor: 'var(--theme-accent)' }} />
-                            )}
-                            <p className={fontClass}>{primaryText}</p>
+                      {/* Clamped container for artwork & gradient so popups can overflow cleanly */}
+                      <div className="absolute inset-0 rounded-[22px] overflow-hidden pointer-events-none">
+                        {/* Real Dynamic Artwork or Idle Standby Display */}
+                        {!currentTrack ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden select-none">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.15)_0%,transparent_70%)]" />
+                            <div className="w-16 h-16 rounded-full theme-badge flex items-center justify-center theme-accent-text mb-2.5 p-3 overflow-hidden shadow-md">
+                              <img src="./logo_icon.png" alt="Kahoii Music" className="w-full h-full object-contain drop-shadow" />
+                            </div>
+                            <p className="text-xs font-bold text-white tracking-wide">Kahoii Music</p>
+                            <p className="text-[10.5px] text-white/50 mt-0.5">Sẵn sàng phát nhạc</p>
                           </div>
-                          {secondaryText && (
-                            <p className={`pl-3 text-[11px] text-white/70 mt-0.5 leading-tight ${isActive ? "opacity-95 font-semibold" : "opacity-60"}`}>
-                              {secondaryText}
-                            </p>
+                        ) : (
+                          <img
+                            src={
+                              currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+                                ? (currentTrack.thumbnail.includes("i.ytimg.com")
+                                  ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+                                  : currentTrack.thumbnail)
+                                : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
+                            }
+                            alt={currentTrack.title || "Track Artwork"}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+                          />
+                        )}
+
+                        {/* Dark gradient fade over lower half to mask controls & provide high contrast */}
+                        <div className="absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
+                      </div>
+
+                      {/* Track Title and Artist floating gently over the gradient (only rendered when track is active) */}
+                      {currentTrack && (
+                        <div className="absolute bottom-[92px] left-4 right-4 z-20 pointer-events-none">
+                          <p className="text-[13px] font-bold text-white truncate drop-shadow-md">
+                            {currentTrack.title}
+                          </p>
+                          <p className="text-[11px] text-white/70 truncate drop-shadow">
+                            {formatTrackArtist(currentTrack.title, currentTrack.author)}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Top-left Menu & Volume Controls */}
+                      <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
+                        <div className="relative" ref={playerMenuRef}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!currentTrack) {
+                                showToast("Vui lòng phát một bài hát trước khi lưu hoặc tải xuống!", "warning");
+                                return;
+                              }
+                              setShowPlayerMenu(!showPlayerMenu);
+                              if (showPlayerMenu) {
+                                setShowLibrarySubmenu(false);
+                                setIsCreatingPlaylist(false);
+                              }
+                            }}
+                            className={`w-7 h-7 rounded-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${showPlayerMenu
+                                ? "theme-badge-active shadow-md"
+                                : "bg-black/40 text-white/80 hover:text-white hover:bg-black/60"
+                              }`}
+                            title="Tùy chọn bài hát"
+                          >
+                            <Menu className="w-4 h-4" />
+                          </button>
+
+                          {/* Popup 1 (Menu chính: Combobox) */}
+                          {showPlayerMenu && currentTrack && (
+                            <div className="absolute top-9 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[205px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
+                              {/* Option 1: Lưu vào playlist */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowLibrarySubmenu(!showLibrarySubmenu);
+                                }}
+                                className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
+                                  }`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <FolderPlus className="w-4 h-4 theme-accent-text" />
+                                  <span>Lưu vào playlist</span>
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  )}
+                                  <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
+                                </div>
+                              </button>
+
+                              {/* Option 2: Lưu ngoại tuyến (nghe trong app như YouTube) */}
+                              <button
+                                type="button"
+                                disabled={savingOfflineTrackId === currentTrack.id}
+                                onClick={() => handleSaveOfflineTrack(currentTrack)}
+                                className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                              >
+                                <span className="flex items-center gap-2">
+                                  {savingOfflineTrackId === currentTrack.id ? (
+                                    <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
+                                  ) : (
+                                    <HardDriveDownload className="w-4 h-4 theme-accent-text" />
+                                  )}
+                                  <span>
+                                    {savingOfflineTrackId === currentTrack.id
+                                      ? "Đang lưu ngoại tuyến..."
+                                      : offlineTrackIds.has(currentTrack.id)
+                                        ? "Đã lưu offline (Bấm để xóa)"
+                                        : "Lưu nghe offline (như YouTube)"}
+                                  </span>
+                                </span>
+                                {offlineTrackIds.has(currentTrack.id) && (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                )}
+                              </button>
+
+                              {/* Option 3: Tải file MP3 về máy */}
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadTrack(currentTrack)}
+                                className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <Download className="w-4 h-4 theme-accent-text" />
+                                  <span>Tải file MP3 về máy</span>
+                                </span>
+                                {downloadedTrackIds.has(currentTrack.id) && (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                )}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Popup 2 (Submenu mở sang bên trái trên Desktop, và responsive trên Mobile) */}
+                          {showPlayerMenu && showLibrarySubmenu && currentTrack && (
+                            <div className="absolute top-9 left-0 lg:left-auto lg:right-[calc(100%+8px)] z-50 theme-menu-glass rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
+                              <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowLibrarySubmenu(false)}
+                                  className="lg:hidden flex items-center gap-1 text-[10px] text-white/60 hover:text-white cursor-pointer mr-1"
+                                >
+                                  <ChevronLeft className="w-3 h-3" />
+                                  <span>Quay lại</span>
+                                </button>
+                                <span>Thêm vào playlist</span>
+                              </div>
+
+                              {!userSession?.isLoggedIn ? (
+                                <div className="p-2 text-center flex flex-col gap-2">
+                                  <p className="text-[11px] text-white/60">Đăng nhập để quản lý danh sách phát của bạn</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowPlayerMenu(false);
+                                      setShowLibrarySubmenu(false);
+                                      setIsAccountOpen(true);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg theme-btn-primary text-white text-xs font-semibold cursor-pointer transition-colors"
+                                  >
+                                    Đăng nhập ngay
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  {/* Option Tạo playlist mới */}
+                                  {!isCreatingPlaylist ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsCreatingPlaylist(true)}
+                                      className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 theme-accent-text font-medium transition-colors cursor-pointer text-left"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Tạo playlist mới</span>
+                                    </button>
+                                  ) : (
+                                    <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg theme-accent-border">
+                                      <input
+                                        type="text"
+                                        placeholder="Tên playlist..."
+                                        value={newPlaylistName}
+                                        onChange={(e) => setNewPlaylistName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") handleCreatePlaylistAndAddTrack();
+                                        }}
+                                        className="flex-1 bg-transparent text-[11px] text-white focus:outline-none px-1"
+                                        autoFocus
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleCreatePlaylistAndAddTrack}
+                                        className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                        title="Tạo"
+                                      >
+                                        <Check className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setIsCreatingPlaylist(false);
+                                          setNewPlaylistName("");
+                                        }}
+                                        className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
+                                        title="Hủy"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  <div className="h-[1px] bg-white/10 my-0.5" />
+
+                                  {/* List of existing playlists */}
+                                  <div className="max-h-40 overflow-y-auto flex flex-col gap-1 pr-0.5">
+                                    {libraryData.playlists.length > 0 ? (
+                                      libraryData.playlists.map((pl) => {
+                                        const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
+                                        return (
+                                          <button
+                                            key={pl.id}
+                                            type="button"
+                                            onClick={() => handleToggleTrackInPlaylist(pl.id)}
+                                            className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors text-left group cursor-pointer"
+                                          >
+                                            <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
+                                            {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                          </button>
+                                        );
+                                      })
+                                    ) : (
+                                      <span className="text-[11px] text-white/40 italic px-2 py-1">Chưa có playlist nào</span>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
-                      );
-                    })
-                  ) : _lyrics?.plainLyrics ? (
-                    <div className="text-xs min-[420px]:text-[13px] leading-relaxed text-white/80 whitespace-pre-line my-auto text-center font-medium">
-                      {_lyrics.plainLyrics}
-                    </div>
-                  ) : (
-                    <div className="my-auto text-center text-xs text-white/40 italic">
-                      {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
 
-            {/* BOTTOM CARD: "BÀI TIẾP THEO" (NEXT TRACK IN QUEUE) */}
-            <div
-              className={`w-full rounded-[20px] p-3 sm:p-3.5 theme-card-bg shadow-xl border theme-accent-border/40 ${
-                showFullQueueMobile ? "flex-1 min-h-0 flex flex-col" : "flex-shrink-0"
-              }`}
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2 flex-shrink-0">
-                <span className="text-sm min-[400px]:text-[15px] font-bold text-white tracking-wide">
-                  {showFullQueueMobile ? `Hàng đợi (${queueTracks.length})` : "Bài tiếp theo"}
-                </span>
-                {queueTracks.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFullQueueMobile(!showFullQueueMobile)}
-                    className="text-xs theme-accent-text hover:brightness-125 font-semibold cursor-pointer transition-colors"
-                  >
-                    {showFullQueueMobile ? "Chỉ hiện bài kế" : `Xem tất cả (${queueTracks.length})`}
-                  </button>
-                )}
-              </div>
-
-              {!showFullQueueMobile ? (
-                nextTrack ? (
-                  <div
-                    onClick={() => {
-                      if (nextTrackIndex >= 0) {
-                        setCurrentIndex(nextTrackIndex);
-                        currentIndexRef.current = nextTrackIndex;
-                        loadAndPlayTrack(nextTrack, true);
-                      }
-                    }}
-                    className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/5 transition-all cursor-pointer group"
-                  >
-                    <div className="w-1.5 h-9 rounded-full bg-[var(--theme-accent)] flex-shrink-0 group-hover:scale-y-110 transition-transform shadow-sm" />
-                    <img
-                      src={nextTrack.thumbnail || DEFAULT_TRACK_ART}
-                      alt={nextTrack.title}
-                      onError={(e) => {
-                        e.currentTarget.src = DEFAULT_TRACK_ART;
-                      }}
-                      className="w-11 h-11 rounded-lg object-cover flex-shrink-0 border border-white/10 shadow-sm"
-                    />
-                    <div className="flex-1 min-w-0 pr-1">
-                      <p className="text-sm sm:text-[15px] font-bold text-white truncate group-hover:theme-accent-text transition-colors">
-                        {nextTrack.title}
-                      </p>
-                      <p className="text-xs text-white/60 truncate mt-0.5">
-                        {formatTrackArtist(nextTrack.title, nextTrack.author)}
-                      </p>
-                    </div>
-                    <span className="text-xs text-white/70 font-mono flex-shrink-0">
-                      {nextTrack.duration && nextTrack.duration > 0 ? formatTime(nextTrack.duration) : "--:--"}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-xs text-white/40 italic py-3 text-center">
-                    Chưa có bài tiếp theo
-                  </p>
-                )
-              ) : (
-                <div className="flex-1 min-h-0 flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1">
-                  {queueTracks.map((track, i) => {
-                    const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
-                    return (
-                      <div
-                        key={track.id + i}
-                        ref={isCurrent ? mobileActiveQueueRef : undefined}
-                        onClick={() => {
-                          setCurrentIndex(i);
-                          currentIndexRef.current = i;
-                          loadAndPlayTrack(track, true);
-                        }}
-                        className={`flex items-center gap-2.5 px-2 py-1.5 transition-all cursor-pointer rounded-xl group ${
-                          isCurrent ? "theme-badge-active shadow-md" : "hover:bg-white/5"
-                        }`}
-                      >
-                        {isCurrent && (
-                          <div className="w-1.5 h-8 rounded-full bg-[var(--theme-accent)] flex-shrink-0" />
-                        )}
-                        <img
-                          src={track.thumbnail || DEFAULT_TRACK_ART}
-                          alt=""
-                          onError={(e) => { e.currentTarget.src = DEFAULT_TRACK_ART; }}
-                          className="w-9 h-9 rounded-md object-cover flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] sm:text-sm font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
-                            {track.title}
-                          </p>
-                          <p className="text-[11px] sm:text-xs text-white/60 truncate mt-0.5">
-                            {formatTrackArtist(track.title, track.author)}
-                          </p>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowVolumeSlider(!showVolumeSlider)}
+                            className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:theme-accent-text hover:bg-black/60 transition-all cursor-pointer"
+                            title="Âm lượng"
+                          >
+                            {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                          </button>
+                          {showVolumeSlider && (
+                            <div className="absolute top-9 left-0 p-2.5 rounded-xl theme-menu-glass shadow-2xl flex items-center gap-2 z-30 border theme-accent-border/40">
+                              <input
+                                type="range"
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={isMuted ? 0 : volume}
+                                onChange={(e) => {
+                                  setIsMuted(false);
+                                  setVolume(parseFloat(e.target.value));
+                                }}
+                                className="w-20 h-1 bg-white/30 rounded appearance-none cursor-pointer theme-slider"
+                              />
+                              <span className="text-[10px] theme-accent-text font-mono font-bold">
+                                {Math.round((isMuted ? 0 : volume) * 100)}%
+                              </span>
+                            </div>
+                          )}
                         </div>
-                        <span className="text-xs text-white/70 font-mono flex-shrink-0">
-                          {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
-                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
 
-          {/* ========================================================================= */}
-          {/* 2. DESKTOP RIGHT SIDEBAR (EXACT FIGMA 3-COLUMN RIGHT PANEL, hidden lg:flex) */}
-          {/* ========================================================================= */}
-          <div className="hidden lg:flex flex-col flex-1 min-h-0">
-            {/* Top Part: Now Playing Artwork Card with Dynamic Artwork & Glow */}
-          <div
-            className="w-full aspect-square rounded-[22px] relative shadow-2xl bg-[#1b0833] flex-shrink-0 group max-w-[340px] mx-auto lg:max-w-none"
-            style={{ marginBottom: "18px" }}
-          >
-            {/* Clamped container for artwork & gradient so popups can overflow cleanly */}
-            <div className="absolute inset-0 rounded-[22px] overflow-hidden pointer-events-none">
-              {/* Real Dynamic Artwork or Idle Standby Display */}
-              {!currentTrack ? (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#240a50] to-[#120324] relative overflow-hidden select-none">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.15)_0%,transparent_70%)]" />
-                  <div className="w-16 h-16 rounded-full theme-badge flex items-center justify-center theme-accent-text mb-2.5 p-3 overflow-hidden shadow-md">
-                    <img src="./logo_icon.png" alt="Kahoii Music" className="w-full h-full object-contain drop-shadow" />
-                  </div>
-                  <p className="text-xs font-bold text-white tracking-wide">Kahoii Music</p>
-                  <p className="text-[10.5px] text-white/50 mt-0.5">Sẵn sàng phát nhạc</p>
-                </div>
-              ) : (
-                <img
-                  src={
-                    currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                      ? (currentTrack.thumbnail.includes("i.ytimg.com")
-                          ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                          : currentTrack.thumbnail)
-                      : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
-                  }
-                  alt={currentTrack.title || "Track Artwork"}
-                  onError={(e) => {
-                    e.currentTarget.src = DEFAULT_TRACK_ART;
-                  }}
-                  className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
-                />
-              )}
-
-              {/* Dark gradient fade over lower half to mask controls & provide high contrast */}
-              <div className="absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
-            </div>
-
-            {/* Track Title and Artist floating gently over the gradient (only rendered when track is active) */}
-            {currentTrack && (
-              <div className="absolute bottom-[92px] left-4 right-4 z-20 pointer-events-none">
-                <p className="text-[13px] font-bold text-white truncate drop-shadow-md">
-                  {currentTrack.title}
-                </p>
-                <p className="text-[11px] text-white/70 truncate drop-shadow">
-                  {formatTrackArtist(currentTrack.title, currentTrack.author)}
-                </p>
-              </div>
-            )}
-
-            {/* Top-left Menu & Volume Controls */}
-            <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
-              <div className="relative" ref={playerMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!currentTrack) {
-                      showToast("Vui lòng phát một bài hát trước khi lưu hoặc tải xuống!", "warning");
-                      return;
-                    }
-                    setShowPlayerMenu(!showPlayerMenu);
-                    if (showPlayerMenu) {
-                      setShowLibrarySubmenu(false);
-                      setIsCreatingPlaylist(false);
-                    }
-                  }}
-                  className={`w-7 h-7 rounded-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${
-                    showPlayerMenu
-                      ? "theme-badge-active shadow-md"
-                      : "bg-black/40 text-white/80 hover:text-white hover:bg-black/60"
-                  }`}
-                  title="Tùy chọn bài hát"
-                >
-                  <Menu className="w-4 h-4" />
-                </button>
-
-                {/* Popup 1 (Menu chính: Combobox) */}
-                {showPlayerMenu && currentTrack && (
-                  <div className="absolute top-9 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[205px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
-                    {/* Option 1: Lưu vào playlist */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowLibrarySubmenu(!showLibrarySubmenu);
-                      }}
-                      className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${
-                        showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <FolderPlus className="w-4 h-4 theme-accent-text" />
-                        <span>Lưu vào playlist</span>
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        )}
-                        <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
-                      </div>
-                    </button>
-
-                    {/* Option 2: Lưu ngoại tuyến (nghe trong app như YouTube) */}
-                    <button
-                      type="button"
-                      disabled={savingOfflineTrackId === currentTrack.id}
-                      onClick={() => handleSaveOfflineTrack(currentTrack)}
-                      className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                    >
-                      <span className="flex items-center gap-2">
-                        {savingOfflineTrackId === currentTrack.id ? (
-                          <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
-                        ) : (
-                          <HardDriveDownload className="w-4 h-4 theme-accent-text" />
-                        )}
-                        <span>
-                          {savingOfflineTrackId === currentTrack.id
-                            ? "Đang lưu ngoại tuyến..."
-                            : offlineTrackIds.has(currentTrack.id)
-                            ? "Đã lưu offline (Bấm để xóa)"
-                            : "Lưu nghe offline (như YouTube)"}
-                        </span>
-                      </span>
-                      {offlineTrackIds.has(currentTrack.id) && (
-                        <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                      )}
-                    </button>
-
-                    {/* Option 3: Tải file MP3 về máy */}
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadTrack(currentTrack)}
-                      className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Download className="w-4 h-4 theme-accent-text" />
-                        <span>Tải file MP3 về máy</span>
-                      </span>
-                      {downloadedTrackIds.has(currentTrack.id) && (
-                        <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Popup 2 (Submenu mở sang bên trái trên Desktop, và responsive trên Mobile) */}
-                {showPlayerMenu && showLibrarySubmenu && currentTrack && (
-                  <div className="absolute top-9 left-0 lg:left-auto lg:right-[calc(100%+8px)] z-50 theme-menu-glass rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
-                    <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
+                      {/* Top-right Bright Red Heart Icon (Matching Figma) */}
                       <button
                         type="button"
-                        onClick={() => setShowLibrarySubmenu(false)}
-                        className="lg:hidden flex items-center gap-1 text-[10px] text-white/60 hover:text-white cursor-pointer mr-1"
+                        disabled={!currentTrack}
+                        onClick={toggleCurrentFavorite}
+                        title={
+                          !currentTrack
+                            ? "Chưa phát bài hát nào"
+                            : !userSession?.isLoggedIn
+                              ? "Đăng nhập để yêu thích"
+                              : libraryData.favorites.some((t) => t.id === currentTrack.id)
+                                ? "Bỏ yêu thích"
+                                : "Thêm vào yêu thích"
+                        }
+                        className={`absolute top-3 right-3 w-8 h-8 rounded-lg backdrop-blur-md flex items-center justify-center z-20 transition-all ${!currentTrack
+                            ? "opacity-30 cursor-not-allowed bg-black/20"
+                            : "bg-black/40 hover:bg-black/60 cursor-pointer group"
+                          }`}
                       >
-                        <ChevronLeft className="w-3 h-3" />
-                        <span>Quay lại</span>
+                        <Heart
+                          className={`w-5 h-5 transition-transform ${!currentTrack
+                              ? "text-white/40"
+                              : userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                                ? "fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)] group-hover:scale-115"
+                                : "text-white/60 hover:text-red-400 group-hover:scale-115"
+                            }`}
+                        />
                       </button>
-                      <span>Thêm vào playlist</span>
-                    </div>
 
-                    {!userSession?.isLoggedIn ? (
-                      <div className="p-2 text-center flex flex-col gap-2">
-                        <p className="text-[11px] text-white/60">Đăng nhập để quản lý danh sách phát của bạn</p>
+                      {/* Elevated Seekbar Progress Line with Scrubber Handle & Time (at bottom-[66px]) */}
+                      <div className="absolute bottom-[66px] left-4 right-4 flex flex-col gap-1 z-20">
+                        <div className="relative w-full flex items-center group/seek">
+                          <div className="absolute left-0 right-0 h-1 rounded-full bg-white/20" />
+                          <div
+                            className="absolute left-0 h-1 rounded-full"
+                            style={{
+                              width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                              background: "var(--theme-btn-gradient)",
+                            }}
+                          />
+                          <input
+                            type="range"
+                            min={0}
+                            max={duration || 100}
+                            value={currentTime}
+                            onChange={handleSeek}
+                            className="w-full h-2.5 opacity-0 cursor-pointer z-10"
+                          />
+                          <div
+                            className="absolute w-3 h-3 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
+                            style={{
+                              left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 6px)`,
+                              boxShadow: "0 0 10px var(--theme-accent)",
+                            }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-white/60 font-mono px-0.5">
+                          <span>{formatTime(currentTime)}</span>
+                          <span>{formatTime(duration)}</span>
+                        </div>
+                      </div>
+
+                      {/* 5 Playback Control Buttons Row - Enlarged & Beautifully Spaced */}
+                      <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between px-1 z-20">
+                        {/* Loop / Shuffle Button */}
                         <button
                           type="button"
-                          onClick={() => {
-                            setShowPlayerMenu(false);
-                            setShowLibrarySubmenu(false);
-                            setIsAccountOpen(true);
-                          }}
-                          className="px-3 py-1.5 rounded-lg theme-btn-primary text-white text-xs font-semibold cursor-pointer transition-colors"
+                          onClick={cycleRepeatMode}
+                          title={
+                            repeatMode === "all"
+                              ? "Lặp danh sách"
+                              : repeatMode === "one"
+                                ? "Lặp 1 bài"
+                                : repeatMode === "shuffle"
+                                  ? "Phát ngẫu nhiên"
+                                  : "Tắt lặp lại"
+                          }
+                          className={`p-1.5 transition-all cursor-pointer hover:scale-115 active:scale-90 ${repeatMode === "all" || repeatMode === "one" ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)]" : repeatMode === "shuffle" ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)]" : "text-white/40 hover:text-white"
+                            }`}
                         >
-                          Đăng nhập ngay
+                          {repeatMode === "one" ? (
+                            <Repeat1 className="w-5 h-5" />
+                          ) : repeatMode === "shuffle" ? (
+                            <Shuffle className="w-5 h-5" />
+                          ) : (
+                            <Repeat className="w-5 h-5" />
+                          )}
                         </button>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Option Tạo playlist mới */}
-                        {!isCreatingPlaylist ? (
+
+                        {/* Prev */}
+                        <button
+                          type="button"
+                          onClick={handlePrev}
+                          title="Bài trước"
+                          className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
+                        >
+                          <SkipBack className="w-6 h-6 fill-current" />
+                        </button>
+
+                        {/* Large Dynamic Play / Pause Circle (w-12 h-12) */}
+                        <button
+                          type="button"
+                          onClick={togglePlayPause}
+                          disabled={isLoading}
+                          title={isPlaying ? "Tạm dừng" : "Phát"}
+                          className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                          style={{
+                            background: "var(--theme-btn-gradient)",
+                            boxShadow: "0 4px 18px var(--theme-panel-border)",
+                          }}
+                        >
+                          {isLoading ? (
+                            <Loader2 className="w-6 h-6 animate-spin text-white" />
+                          ) : isPlaying ? (
+                            <Pause className="w-6 h-6 fill-current" />
+                          ) : (
+                            <Play className="w-6 h-6 fill-current translate-x-0.5" />
+                          )}
+                        </button>
+
+                        {/* Next */}
+                        <button
+                          type="button"
+                          onClick={handleNext}
+                          title="Bài kế tiếp"
+                          className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
+                        >
+                          <SkipForward className="w-6 h-6 fill-current" />
+                        </button>
+
+                        {/* Timer */}
+                        <div className="relative">
                           <button
                             type="button"
-                            onClick={() => setIsCreatingPlaylist(true)}
-                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 theme-accent-text font-medium transition-colors cursor-pointer text-left"
+                            onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
+                            title={
+                              sleepTimerSecondsLeft
+                                ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
+                                : "Hẹn giờ tắt nhạc"
+                            }
+                            className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
+                              }`}
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Tạo playlist mới</span>
+                            <Clock className="w-5 h-5" />
+                            {sleepTimerMinutes && (
+                              <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[8px] text-white font-mono font-bold animate-pulse">
+                                {sleepTimerMinutes}m
+                              </span>
+                            )}
                           </button>
-                        ) : (
-                          <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg theme-accent-border">
-                            <input
-                              type="text"
-                              placeholder="Tên playlist..."
-                              value={newPlaylistName}
-                              onChange={(e) => setNewPlaylistName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleCreatePlaylistAndAddTrack();
-                              }}
-                              className="flex-1 bg-transparent text-[11px] text-white focus:outline-none px-1"
-                              autoFocus
-                            />
-                            <button
-                              type="button"
-                              onClick={handleCreatePlaylistAndAddTrack}
-                              className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
-                              title="Tạo"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
+                          {showSleepTimerMenu && (
+                            <div className="absolute bottom-9 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in border theme-accent-border/40">
+                              <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
+                                Hẹn giờ tắt
+                              </span>
+                              {[15, 30, 45, 60].map((m) => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => startSleepTimer(m)}
+                                  className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
+                                    }`}
+                                >
+                                  {m} phút
+                                </button>
+                              ))}
+                              {sleepTimerMinutes && (
+                                <button
+                                  type="button"
+                                  onClick={() => startSleepTimer(null)}
+                                  className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
+                                >
+                                  Tắt hẹn giờ
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sidebar 2 Tab Switcher: Hàng đợi (Queue) & Lời bài hát (Lyrics) */}
+                    <div className="relative mb-3 flex-shrink-0">
+                      {/* Inactive Background Capsules matching app theme but darker */}
+                      <div className="absolute inset-0 grid grid-cols-2 gap-1.5 pointer-events-none">
+                        <div className="rounded-xl theme-tab-inactive" />
+                        <div className="rounded-xl theme-tab-inactive" />
+                      </div>
+
+                      {/* Active Sliding Glowing Pill */}
+                      <div
+                        className="absolute top-0 bottom-0 rounded-xl pointer-events-none z-10"
+                        style={{
+                          width: "calc((100% - 6px) / 2)",
+                          left: 0,
+                          transform: `translateX(${sidebar2Tab === "queue" ? "0%" : "calc(100% + 6px)"})`,
+                          transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.8s ease, box-shadow 0.8s ease",
+                          background: "var(--theme-btn-gradient)",
+                          boxShadow: "0 4px 18px var(--theme-panel-border)",
+                        }}
+                      />
+
+                      {/* Clickable Buttons */}
+                      <div className="relative z-20 grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSidebar2Tab("queue")}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${sidebar2Tab === "queue" ? "text-white" : "text-white/70 hover:text-white"
+                            }`}
+                        >
+                          <ListMusic className="w-3.5 h-3.5" />
+                          <span>Hàng đợi {queueTracks.length > 0 && `(${queueTracks.length})`}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSidebar2Tab("lyrics")}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${sidebar2Tab === "lyrics" ? "text-white" : "text-white/70 hover:text-white"
+                            }`}
+                        >
+                          <Mic2 className="w-3.5 h-3.5" />
+                          <span>Lời bài hát</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Tab 1: Hàng đợi phát (Queue List) */}
+                    {sidebar2Tab === "queue" && (
+                      <>
+                        <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0">
+                          <span className="text-xs font-semibold text-white/70">
+                            Danh sách phát {queueTracks.length > 0 && `(${queueTracks.length})`}
+                          </span>
+                          {queueTracks.length > 0 && (
                             <button
                               type="button"
                               onClick={() => {
-                                setIsCreatingPlaylist(false);
-                                setNewPlaylistName("");
+                                const nextSorted = !isQueueSorted;
+                                setIsQueueSorted(nextSorted);
+                                if (nextSorted) {
+                                  setQueueTracks((prev) => [...prev].sort(compareSortItems));
+                                } else {
+                                  setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
+                                }
                               }}
-                              className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
-                              title="Hủy"
+                              title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
+                              className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
+                                }`}
                             >
-                              <X className="w-3.5 h-3.5" />
+                              <ArrowDownAZ className="w-3.5 h-3.5" />
+                              <span>Sort</span>
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
 
-                        <div className="h-[1px] bg-white/10 my-0.5" />
-
-                        {/* List of existing playlists */}
-                        <div className="max-h-40 overflow-y-auto flex flex-col gap-1 pr-0.5">
-                          {libraryData.playlists.length > 0 ? (
-                            libraryData.playlists.map((pl) => {
-                              const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
+                        <div
+                          className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
+                          style={{ gap: "8px" }}
+                        >
+                          {queueTracks.length > 0 ? (
+                            queueTracks.map((track, i) => {
+                              const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
+                              const artistLabel = formatTrackArtist(track.title, track.author);
                               return (
-                                <button
-                                  key={pl.id}
-                                  type="button"
-                                  onClick={() => handleToggleTrackInPlaylist(pl.id)}
-                                  className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors text-left group cursor-pointer"
+                                <div
+                                  key={track.id + i}
+                                  onClick={() => {
+                                    setCurrentIndex(i);
+                                    currentIndexRef.current = i;
+                                    loadAndPlayTrack(track, true);
+                                  }}
+                                  className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group ${isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
+                                    }`}
                                 >
-                                  <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
-                                  {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
-                                </button>
+                                  <img
+                                    src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
+                                    alt=""
+                                    onError={(e) => {
+                                      e.currentTarget.src = DEFAULT_TRACK_ART;
+                                    }}
+                                    className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
+                                      {track.title}
+                                    </p>
+                                    {artistLabel && (
+                                      <p className="text-[10px] text-white/50 truncate">
+                                        {artistLabel}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
+                                    {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
+                                  </span>
+                                </div>
                               );
                             })
                           ) : (
-                            <span className="text-[11px] text-white/40 italic px-2 py-1">Chưa có playlist nào</span>
+                            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2">
+                              <ListMusic className="w-8 h-8 opacity-30" />
+                              <p className="font-medium">Hàng đợi đang trống</p>
+                              <p className="text-[11px] text-white/30">Chọn bài hát bất kỳ từ trang chủ để bắt đầu nghe nhạc</p>
+                            </div>
                           )}
                         </div>
                       </>
                     )}
-                  </div>
-                )}
-              </div>
 
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowVolumeSlider(!showVolumeSlider)}
-                  className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:theme-accent-text hover:bg-black/60 transition-all cursor-pointer"
-                  title="Âm lượng"
-                >
-                  {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                </button>
-                {showVolumeSlider && (
-                  <div className="absolute top-9 left-0 p-2.5 rounded-xl theme-menu-glass shadow-2xl flex items-center gap-2 z-30 border theme-accent-border/40">
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={isMuted ? 0 : volume}
-                      onChange={(e) => {
-                        setIsMuted(false);
-                        setVolume(parseFloat(e.target.value));
-                      }}
-                      className="w-20 h-1 bg-white/30 rounded appearance-none cursor-pointer theme-slider"
-                    />
-                    <span className="text-[10px] theme-accent-text font-mono font-bold">
-                      {Math.round((isMuted ? 0 : volume) * 100)}%
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
+                    {/* Tab 2: Lời bài hát (Lyrics) */}
+                    {sidebar2Tab === "lyrics" && (
+                      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        {/* Lyrics Sub-header: Sync Status Badge & Dual/Romaji/Pinyin/Song ngữ Toggle Pill Button */}
+                        <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0 border-b border-white/10 mb-1">
+                          <div className="flex items-center gap-1.5">
+                            {isLyricsSynced ? (
+                              <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider theme-badge-active shadow-sm">
+                                <Sparkles className="w-3 h-3 theme-accent-text" />
+                                Audio synced
+                              </span>
+                            ) : parsedLyrics.length > 0 || _lyrics?.plainLyrics ? (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/60">
+                                Non synced
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-white/40 font-medium">
+                                Lời bài hát
+                              </span>
+                            )}
+                          </div>
 
-            {/* Top-right Bright Red Heart Icon (Matching Figma) */}
-            <button
-              type="button"
-              disabled={!currentTrack}
-              onClick={toggleCurrentFavorite}
-              title={
-                !currentTrack
-                  ? "Chưa phát bài hát nào"
-                  : !userSession?.isLoggedIn
-                  ? "Đăng nhập để yêu thích"
-                  : libraryData.favorites.some((t) => t.id === currentTrack.id)
-                  ? "Bỏ yêu thích"
-                  : "Thêm vào yêu thích"
-              }
-              className={`absolute top-3 right-3 w-8 h-8 rounded-lg backdrop-blur-md flex items-center justify-center z-20 transition-all ${
-                !currentTrack
-                  ? "opacity-30 cursor-not-allowed bg-black/20"
-                  : "bg-black/40 hover:bg-black/60 cursor-pointer group"
-              }`}
-            >
-              <Heart
-                className={`w-5 h-5 transition-transform ${
-                  !currentTrack
-                    ? "text-white/40"
-                    : userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
-                    ? "fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)] group-hover:scale-115"
-                    : "text-white/60 hover:text-red-400 group-hover:scale-115"
-                }`}
-              />
-            </button>
-
-            {/* Elevated Seekbar Progress Line with Scrubber Handle & Time (at bottom-[66px]) */}
-            <div className="absolute bottom-[66px] left-4 right-4 flex flex-col gap-1 z-20">
-              <div className="relative w-full flex items-center group/seek">
-                <div className="absolute left-0 right-0 h-1 rounded-full bg-white/20" />
-                <div
-                  className="absolute left-0 h-1 rounded-full"
-                  style={{
-                    width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
-                    background: "var(--theme-btn-gradient)",
-                  }}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={duration || 100}
-                  value={currentTime}
-                  onChange={handleSeek}
-                  className="w-full h-2.5 opacity-0 cursor-pointer z-10"
-                />
-                <div
-                  className="absolute w-3 h-3 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
-                  style={{
-                    left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 6px)`,
-                    boxShadow: "0 0 10px var(--theme-accent)",
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] text-white/60 font-mono px-0.5">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
-            </div>
-
-            {/* 5 Playback Control Buttons Row - Enlarged & Beautifully Spaced */}
-            <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between px-1 z-20">
-              {/* Loop / Shuffle Button */}
-              <button
-                type="button"
-                onClick={cycleRepeatMode}
-                title={
-                  repeatMode === "all"
-                    ? "Lặp danh sách"
-                    : repeatMode === "one"
-                    ? "Lặp 1 bài"
-                    : repeatMode === "shuffle"
-                    ? "Phát ngẫu nhiên"
-                    : "Tắt lặp lại"
-                }
-                className={`p-1.5 transition-all cursor-pointer hover:scale-115 active:scale-90 ${
-                  repeatMode === "all" || repeatMode === "one" ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)]" : repeatMode === "shuffle" ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)]" : "text-white/40 hover:text-white"
-                }`}
-              >
-                {repeatMode === "one" ? (
-                  <Repeat1 className="w-5 h-5" />
-                ) : repeatMode === "shuffle" ? (
-                  <Shuffle className="w-5 h-5" />
-                ) : (
-                  <Repeat className="w-5 h-5" />
-                )}
-              </button>
-
-              {/* Prev */}
-              <button
-                type="button"
-                onClick={handlePrev}
-                title="Bài trước"
-                className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
-              >
-                <SkipBack className="w-6 h-6 fill-current" />
-              </button>
-
-              {/* Large Dynamic Play / Pause Circle (w-12 h-12) */}
-              <button
-                type="button"
-                onClick={togglePlayPause}
-                disabled={isLoading}
-                title={isPlaying ? "Tạm dừng" : "Phát"}
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
-                style={{
-                  background: "var(--theme-btn-gradient)",
-                  boxShadow: "0 4px 18px var(--theme-panel-border)",
-                }}
-              >
-                {isLoading ? (
-                  <Loader2 className="w-6 h-6 animate-spin text-white" />
-                ) : isPlaying ? (
-                  <Pause className="w-6 h-6 fill-current" />
-                ) : (
-                  <Play className="w-6 h-6 fill-current translate-x-0.5" />
-                )}
-              </button>
-
-              {/* Next */}
-              <button
-                type="button"
-                onClick={handleNext}
-                title="Bài kế tiếp"
-                className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
-              >
-                <SkipForward className="w-6 h-6 fill-current" />
-              </button>
-
-              {/* Timer */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
-                  title={
-                    sleepTimerSecondsLeft
-                      ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
-                      : "Hẹn giờ tắt nhạc"
-                  }
-                  className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${
-                    sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
-                  }`}
-                >
-                  <Clock className="w-5 h-5" />
-                  {sleepTimerMinutes && (
-                    <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[8px] text-white font-mono font-bold animate-pulse">
-                      {sleepTimerMinutes}m
-                    </span>
-                  )}
-                </button>
-                {showSleepTimerMenu && (
-                  <div className="absolute bottom-9 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in border theme-accent-border/40">
-                    <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
-                      Hẹn giờ tắt
-                    </span>
-                    {[15, 30, 45, 60].map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => startSleepTimer(m)}
-                        className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                          sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
-                        }`}
-                      >
-                        {m} phút
-                      </button>
-                    ))}
-                    {sleepTimerMinutes && (
-                      <button
-                        type="button"
-                        onClick={() => startSleepTimer(null)}
-                        className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
-                      >
-                        Tắt hẹn giờ
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar 2 Tab Switcher: Hàng đợi (Queue) & Lời bài hát (Lyrics) */}
-          <div className="relative mb-3 flex-shrink-0">
-            {/* Inactive Background Capsules matching app theme but darker */}
-            <div className="absolute inset-0 grid grid-cols-2 gap-1.5 pointer-events-none">
-              <div className="rounded-xl theme-tab-inactive" />
-              <div className="rounded-xl theme-tab-inactive" />
-            </div>
-
-            {/* Active Sliding Glowing Pill */}
-            <div
-              className="absolute top-0 bottom-0 rounded-xl pointer-events-none z-10"
-              style={{
-                width: "calc((100% - 6px) / 2)",
-                left: 0,
-                transform: `translateX(${sidebar2Tab === "queue" ? "0%" : "calc(100% + 6px)"})`,
-                transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.8s ease, box-shadow 0.8s ease",
-                background: "var(--theme-btn-gradient)",
-                boxShadow: "0 4px 18px var(--theme-panel-border)",
-              }}
-            />
-
-            {/* Clickable Buttons */}
-            <div className="relative z-20 grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSidebar2Tab("queue")}
-                className={`py-1.5 px-2 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
-                  sidebar2Tab === "queue" ? "text-white" : "text-white/70 hover:text-white"
-                }`}
-              >
-                <ListMusic className="w-3.5 h-3.5" />
-                <span>Hàng đợi {queueTracks.length > 0 && `(${queueTracks.length})`}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSidebar2Tab("lyrics")}
-                className={`py-1.5 px-2 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
-                  sidebar2Tab === "lyrics" ? "text-white" : "text-white/70 hover:text-white"
-                }`}
-              >
-                <Mic2 className="w-3.5 h-3.5" />
-                <span>Lời bài hát</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Tab 1: Hàng đợi phát (Queue List) */}
-          {sidebar2Tab === "queue" && (
-            <>
-              <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0">
-                <span className="text-xs font-semibold text-white/70">
-                  Danh sách phát {queueTracks.length > 0 && `(${queueTracks.length})`}
-                </span>
-                {queueTracks.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextSorted = !isQueueSorted;
-                      setIsQueueSorted(nextSorted);
-                      if (nextSorted) {
-                        setQueueTracks((prev) => [...prev].sort(compareSortItems));
-                      } else {
-                        setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
-                      }
-                    }}
-                    title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${
-                      isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
-                    }`}
-                  >
-                    <ArrowDownAZ className="w-3.5 h-3.5" />
-                    <span>Sort</span>
-                  </button>
-                )}
-              </div>
-
-              <div
-                className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
-                style={{ gap: "8px" }}
-              >
-                {queueTracks.length > 0 ? (
-                  queueTracks.map((track, i) => {
-                    const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
-                    const artistLabel = formatTrackArtist(track.title, track.author);
-                    return (
-                      <div
-                        key={track.id + i}
-                        onClick={() => {
-                          setCurrentIndex(i);
-                          currentIndexRef.current = i;
-                          loadAndPlayTrack(track, true);
-                        }}
-                        className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group ${
-                          isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
-                        }`}
-                      >
-                        <img
-                          src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
-                          alt=""
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_TRACK_ART;
-                          }}
-                          className="w-8 h-8 rounded-md object-cover flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
-                            {track.title}
-                          </p>
-                          {artistLabel && (
-                            <p className="text-[10px] text-white/50 truncate">
-                              {artistLabel}
-                            </p>
+                          {hasRomanizationSupport && (
+                            <button
+                              type="button"
+                              onClick={toggleLyricDisplayMode}
+                              title="Nhấn để đổi: Romaji • 2 dòng → Romaji thuần → Aa Romaji"
+                              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-md border ${lyricDisplayMode === "dual"
+                                  ? "theme-btn-primary text-white border-transparent scale-[1.02]"
+                                  : lyricDisplayMode === "romanized"
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30"
+                                    : "theme-badge hover:theme-accent-border text-white/70"
+                                }`}
+                            >
+                              <Languages className="w-3.5 h-3.5" />
+                              <span>{romaziPillLabel}</span>
+                            </button>
                           )}
                         </div>
-                        <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
-                          {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
-                        </span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2">
-                    <ListMusic className="w-8 h-8 opacity-30" />
-                    <p className="font-medium">Hàng đợi đang trống</p>
-                    <p className="text-[11px] text-white/30">Chọn bài hát bất kỳ từ trang chủ để bắt đầu nghe nhạc</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
 
-          {/* Tab 2: Lời bài hát (Lyrics) */}
-          {sidebar2Tab === "lyrics" && (
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              {/* Lyrics Sub-header: Sync Status Badge & Dual/Romaji/Pinyin/Song ngữ Toggle Pill Button */}
-              <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0 border-b border-white/10 mb-1">
-                <div className="flex items-center gap-1.5">
-                  {isLyricsSynced ? (
-                    <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider theme-badge-active shadow-sm">
-                      <Sparkles className="w-3 h-3 theme-accent-text" />
-                      Audio synced
-                    </span>
-                  ) : parsedLyrics.length > 0 || _lyrics?.plainLyrics ? (
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/60">
-                      Non synced
-                    </span>
-                  ) : (
-                    <span className="text-[11px] text-white/40 font-medium">
-                      Lời bài hát
-                    </span>
-                  )}
-                </div>
-
-                {hasRomanizationSupport && (
-                  <button
-                    type="button"
-                    onClick={toggleLyricDisplayMode}
-                    title="Nhấn để đổi: Romaji • 2 dòng → Romaji thuần → Aa Romaji"
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-md border ${
-                      lyricDisplayMode === "dual"
-                        ? "theme-btn-primary text-white border-transparent scale-[1.02]"
-                        : lyricDisplayMode === "romanized"
-                        ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30"
-                        : "theme-badge hover:theme-accent-border text-white/70"
-                    }`}
-                  >
-                    <Languages className="w-3.5 h-3.5" />
-                    <span>{romaziPillLabel}</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Scrollable lyrics area */}
-              <div
-                ref={lyricsContainerRef}
-                className={`relative flex-1 flex flex-col min-h-0 pr-1 text-center ${
-                  parsedLyrics.length > 0 ? "overflow-y-auto custom-scrollbar" : "overflow-hidden"
-                }`}
-                style={{
-                  paddingTop: parsedLyrics.length > 0 ? "110px" : "0px",
-                  paddingBottom: parsedLyrics.length > 0 ? "150px" : "0px",
-                  gap: parsedLyrics.length > 0 ? "8px" : "0px",
-                }}
-              >
-                {parsedLyrics.length > 0 ? (
-                  parsedLyrics.map((line, idx) => {
-                    const isActive = isLyricsSynced && idx === activeLyricIndex;
-
-                    let primaryText = line.text || "♪";
-                    let secondaryText: string | null = null;
-
-                    if (lyricDisplayMode === "romanized" && line.romanized) {
-                      primaryText = line.romanized;
-                    } else if (lyricDisplayMode === "dual" && line.romanized) {
-                      primaryText = line.text;
-                      secondaryText = line.romanized;
-                    }
-
-                    return (
-                      <div
-                        key={idx}
-                        ref={isActive ? activeLyricRef : undefined}
-                        onClick={() => {
-                          if (line.time > 0) seekToTime(line.time);
-                        }}
-                        className={`transition-all select-none cursor-pointer text-center rounded-2xl px-4 py-2.5 ${
-                          isActive
-                            ? "scale-[1.04] theme-accent-text font-bold drop-shadow-md bg-white/10 border border-white/10 shadow-lg"
-                            : "scale-100 font-medium opacity-35 hover:opacity-80 hover:bg-white/5 border border-transparent"
-                        }`}
-                        style={{
-                          transition: "transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease, background-color 0.3s ease, color 0.3s ease",
-                        }}
-                      >
-                        <p className={`leading-snug tracking-wide ${isActive ? "text-[15px]" : "text-[13px] text-white"}`}>
-                          {primaryText}
-                        </p>
-                        {secondaryText && (
-                          <p
-                            className={`mt-1 font-normal leading-normal transition-opacity ${
-                              isActive ? "text-xs text-white/80 opacity-95" : "text-[11px] text-white/50 opacity-70"
+                        {/* Scrollable lyrics area */}
+                        <div
+                          ref={lyricsContainerRef}
+                          className={`relative flex-1 flex flex-col min-h-0 pr-1 text-center ${parsedLyrics.length > 0 ? "overflow-y-auto custom-scrollbar" : "overflow-hidden"
                             }`}
-                          >
-                            {secondaryText}
-                          </p>
-                        )}
+                          style={{
+                            paddingTop: parsedLyrics.length > 0 ? "110px" : "0px",
+                            paddingBottom: parsedLyrics.length > 0 ? "150px" : "0px",
+                            gap: parsedLyrics.length > 0 ? "8px" : "0px",
+                          }}
+                        >
+                          {parsedLyrics.length > 0 ? (
+                            parsedLyrics.map((line, idx) => {
+                              const isActive = isLyricsSynced && idx === activeLyricIndex;
+
+                              let primaryText = line.text || "♪";
+                              let secondaryText: string | null = null;
+
+                              if (lyricDisplayMode === "romanized" && line.romanized) {
+                                primaryText = line.romanized;
+                              } else if (lyricDisplayMode === "dual" && line.romanized) {
+                                primaryText = line.text;
+                                secondaryText = line.romanized;
+                              }
+
+                              return (
+                                <div
+                                  key={idx}
+                                  ref={isActive ? activeLyricRef : undefined}
+                                  onClick={() => {
+                                    if (line.time > 0) seekToTime(line.time);
+                                  }}
+                                  className={`transition-all select-none cursor-pointer text-center rounded-2xl px-4 py-2.5 ${isActive
+                                      ? "scale-[1.04] theme-accent-text font-bold drop-shadow-md bg-white/10 border border-white/10 shadow-lg"
+                                      : "scale-100 font-medium opacity-35 hover:opacity-80 hover:bg-white/5 border border-transparent"
+                                    }`}
+                                  style={{
+                                    transition: "transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease, background-color 0.3s ease, color 0.3s ease",
+                                  }}
+                                >
+                                  <p className={`leading-snug tracking-wide ${isActive ? "text-[15px]" : "text-[13px] text-white"}`}>
+                                    {primaryText}
+                                  </p>
+                                  {secondaryText && (
+                                    <p
+                                      className={`mt-1 font-normal leading-normal transition-opacity ${isActive ? "text-xs text-white/80 opacity-95" : "text-[11px] text-white/50 opacity-70"
+                                        }`}
+                                    >
+                                      {secondaryText}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : _lyrics?.plainLyrics ? (
+                            <div className="py-4 text-xs leading-relaxed text-white/80 whitespace-pre-line text-center font-medium my-auto">
+                              {_lyrics.plainLyrics}
+                            </div>
+                          ) : (
+                            <div className="h-full w-full flex-1 flex flex-col items-center justify-center p-6 text-center text-white/40 text-xs gap-3 my-auto">
+                              <Mic2 className="w-10 h-10 opacity-35 theme-accent-text" />
+                              <p className="font-semibold text-white/70 text-sm">
+                                {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
+                              </p>
+                              <p className="text-[11px] text-white/40 max-w-[210px] leading-relaxed">
+                                {currentTrack
+                                  ? "Không tìm thấy lời đồng bộ cho bài hát này trên hệ thống"
+                                  : "Chọn một bài hát để bắt đầu theo dõi lời bài hát"}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    );
-                  })
-                ) : _lyrics?.plainLyrics ? (
-                  <div className="py-4 text-xs leading-relaxed text-white/80 whitespace-pre-line text-center font-medium my-auto">
-                    {_lyrics.plainLyrics}
-                  </div>
-                ) : (
-                  <div className="h-full w-full flex-1 flex flex-col items-center justify-center p-6 text-center text-white/40 text-xs gap-3 my-auto">
-                    <Mic2 className="w-10 h-10 opacity-35 theme-accent-text" />
-                    <p className="font-semibold text-white/70 text-sm">
-                      {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
-                    </p>
-                    <p className="text-[11px] text-white/40 max-w-[210px] leading-relaxed">
-                      {currentTrack
-                        ? "Không tìm thấy lời đồng bộ cho bài hát này trên hệ thống"
-                        : "Chọn một bài hát để bắt đầu theo dõi lời bài hát"}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          </div>
-        </aside>
-      </main>
-
-      {/* ========================================================================= */}
-      {/* MOBILE MINI-PLAYER BAR (Floating above bottom nav when not in 'player' tab)*/}
-      {/* ========================================================================= */}
-      {currentTrack && mobileTab !== "player" && (
-        <div
-          onClick={() => setMobileTab("player")}
-          className="lg:hidden fixed bottom-[62px] left-2.5 right-2.5 z-40 bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border theme-accent-border rounded-2xl p-2 flex items-center gap-2.5 shadow-2xl cursor-pointer animate-fade-in"
-        >
-          <img
-            src={
-              currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-                ? (currentTrack.thumbnail.includes("i.ytimg.com")
-                    ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
-                    : currentTrack.thumbnail)
-                : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
-            }
-            alt=""
-            onError={(e) => {
-              e.currentTarget.src = DEFAULT_TRACK_ART;
-            }}
-            className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md"
-          />
-          <div className="flex-1 min-w-0 pr-1">
-            <p className="text-xs font-bold text-white truncate drop-shadow-sm">{currentTrack.title}</p>
-            <p className="text-[10px] text-white/60 truncate">{formatTrackArtist(currentTrack.title, currentTrack.author)}</p>
-          </div>
-          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={toggleCurrentFavorite}
-              className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-              title="Yêu thích"
-            >
-              <Heart
-                className={`w-4 h-4 ${
-                  userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
-                    ? "fill-red-500 text-red-500"
-                    : "text-white/60"
-                }`}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={handlePrev}
-              className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-90 transition-transform"
-              title="Bài trước đó"
-            >
-              <SkipBack className="w-4 h-4 fill-current" />
-            </button>
-            <button
-              type="button"
-              onClick={togglePlayPause}
-              className="w-8 h-8 rounded-full theme-btn-primary flex items-center justify-center text-white shadow-md cursor-pointer hover:scale-105 active:scale-95 transition-all"
-              title={isPlaying ? "Tạm dừng" : "Phát"}
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-              ) : isPlaying ? (
-                <Pause className="w-4 h-4 fill-current" />
-              ) : (
-                <Play className="w-4 h-4 fill-current translate-x-0.5" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-90 transition-transform"
-              title="Bài tiếp theo"
-            >
-              <SkipForward className="w-4 h-4 fill-current" />
-            </button>
-          </div>
-          {/* Micro progress line at the bottom */}
-          <div className="absolute bottom-0 left-3 right-3 h-[2px] bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full"
-              style={{
-                width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
-                background: "var(--theme-btn-gradient)",
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MOBILE BOTTOM NAVIGATION BAR (lg:hidden)                                  */}
-      {/* ========================================================================= */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 safe-bottom-nav bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border-t border-white/10 z-40 flex items-center justify-around px-2 shadow-2xl">
-        <button
-          type="button"
-          onClick={() => setMobileTab("explore")}
-          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${
-            mobileTab === "explore" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
-          }`}
-        >
-          <Compass className="w-5 h-5" />
-          <span className="text-[10px]">Khám phá</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMobileTab("library")}
-          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${
-            mobileTab === "library" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
-          }`}
-        >
-          <FolderHeart className="w-5 h-5" />
-          <span className="text-[10px]">Thư viện</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMobileTab("player")}
-          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer relative ${
-            mobileTab === "player" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
-          }`}
-        >
-          <div className="relative">
-            <Music className="w-5 h-5" />
-            {isPlaying && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            )}
-          </div>
-          <span className="text-[10px]">Đang phát</span>
-        </button>
-      </nav>
-
-      {/* ========================================================================= */}
-      {/* 3. USER PROFILE MODAL (Clicked from "avatar" button)                      */}
-      {/* ========================================================================= */}
-      {isAccountOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="w-full max-w-[430px] flex flex-col p-6 rounded-[28px] relative shadow-2xl border theme-accent-border overflow-hidden backdrop-blur-2xl bg-[var(--theme-panel-bg)]/90 transition-all duration-300 max-h-[90vh] overflow-y-auto">
-            {/* Ambient dynamic glowing orbs */}
-            <div className="absolute -top-16 -right-16 w-52 h-52 rounded-full blur-3xl opacity-35 pointer-events-none theme-accent-bg" />
-            <div className="absolute -bottom-16 -left-16 w-52 h-52 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
-
-            <div className="flex items-center justify-between pb-3.5 border-b border-white/10 relative z-20">
-              <span className="font-extrabold text-sm theme-accent-text flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Hồ sơ người dùng
-              </span>
-              <button
-                onClick={() => {
-                  setIsAccountOpen(false);
-                  setLoginError(null);
-                  setSyncSuccessMsg(null);
-                }}
-                className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {userSession?.isLoggedIn ? (
-              <div className="flex flex-col gap-4 mt-4">
-                {/* User Info Header Card */}
-                <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-black/25 border border-white/10 backdrop-blur-md shadow-inner">
-                  <div className="relative flex-shrink-0">
-                    <img
-                      src={
-                        userSession.user?.avatarBase64
-                          ? `data:image/png;base64,${userSession.user.avatarBase64}`
-                          : `${API_BASE}/api/user/avatar?t=${avatarKey}${getAuthToken() ? `&token=${getAuthToken()}` : ""}`
-                      }
-                      alt="Avatar"
-                      onError={(e) => {
-                        e.currentTarget.src = DEFAULT_TRACK_ART;
-                      }}
-                      className="w-14 h-14 rounded-full object-cover border-2 theme-accent-border shadow-lg shadow-black/40"
-                    />
-                    <div
-                      className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[var(--theme-panel-bg)] shadow-sm"
-                      title="Đang hoạt động"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="font-bold text-base text-white truncate">
-                        {userSession.user?.name || "Kahoii User"}
-                      </h3>
-                      <ShieldCheck className="w-4 h-4 theme-accent-text flex-shrink-0" />
-                    </div>
-                    <p className="text-xs text-white/70 truncate mt-0.5">
-                      {userSession.user?.email || "danlanga26@gmail.com"}
-                    </p>
-                    <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full theme-badge">
-                      Kahoii Member • Cloud Synced
-                    </span>
-                  </div>
-                </div>
-
-                {/* User Stats Grid (Synced Live with Library & Dynamic Theme Palette) */}
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveLeftTab("favorites");
-                      setIsAccountOpen(false);
-                    }}
-                    className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
-                    title="Xem danh sách bài hát yêu thích"
-                  >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
-                    <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
-                      {libraryData.favorites.length || userSession?.user?.stats?.favoritesCount || 0}
-                    </p>
-                    <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
-                      Yêu thích
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveLeftTab("offline");
-                      setIsAccountOpen(false);
-                    }}
-                    className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
-                    title="Xem danh sách bài hát đã tải"
-                  >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
-                    <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
-                      {libraryData.savedTracks.length || userSession?.user?.stats?.savedTracksCount || offlineTracks.length || 0}
-                    </p>
-                    <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
-                      Đã tải
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveLeftTab("history");
-                      setIsAccountOpen(false);
-                    }}
-                    className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
-                    title="Xem lịch sử phát nhạc"
-                  >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
-                    <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
-                      {libraryData.history.length || userSession?.user?.stats?.historyCount || 0}
-                    </p>
-                    <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
-                      Lịch sử
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveLeftTab("library");
-                      setIsAccountOpen(false);
-                    }}
-                    className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
-                    title="Xem danh sách phát cá nhân"
-                  >
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
-                    <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
-                      {libraryData.playlists.length || userSession?.user?.stats?.playlistsCount || 0}
-                    </p>
-                    <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
-                      Playlists
-                    </p>
-                  </button>
-                </div>
-
-                {/* Success Banner */}
-                {syncSuccessMsg && (
-                  <div className="p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span>{syncSuccessMsg}</span>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex flex-col gap-2 pt-1">
-                  <button
-                    onClick={handleSyncCloud}
-                    disabled={isSyncing}
-                    className="w-full py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {isSyncing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-white" />
-                        <span>Đang đồng bộ Cloud...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Đồng bộ từ Cloud Firestore</span>
-                      </>
                     )}
-                  </button>
+                  </div>
+                </aside>
+              </main>
 
-                  <button
-                    onClick={handleLogout}
-                    className="w-full py-2 rounded-xl bg-white/5 hover:bg-red-500/20 text-white/80 hover:text-red-300 font-semibold text-xs border border-white/10 hover:border-red-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Đăng xuất</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Auth Form (Login or Register with Extension-style Jelly Fluid Switch & Glass Blur) */
-              <div className="flex flex-col gap-3.5 mt-3 relative z-20">
-                {/* Segmented Liquid Tabs Container */}
-                <div className="relative flex items-center w-full p-1 rounded-2xl bg-black/40 border border-white/10 overflow-hidden mb-1">
-                  {/* Active Jelly Liquid Pill: Glides with smooth elastic cubic-bezier */}
-                  <div
-                    className="absolute top-1 bottom-1 rounded-xl pointer-events-none z-10"
-                    style={{
-                      width: "calc(50% - 4px)",
-                      left: "4px",
-                      transform: authMode === "login" ? "translateX(0%)" : "translateX(100%)",
-                      transition: "transform 0.35s cubic-bezier(0.25, 1.3, 0.45, 1), background 0.8s ease, box-shadow 0.8s ease",
-                      background: "var(--theme-btn-gradient)",
-                      boxShadow: "0 0 16px var(--theme-panel-border), 0 4px 18px rgba(0,0,0,0.4)",
+              {/* ========================================================================= */}
+              {/* MOBILE MINI-PLAYER BAR (Floating above bottom nav when not in 'player' tab)*/}
+              {/* ========================================================================= */}
+              {currentTrack && mobileTab !== "player" && (
+                <div
+                  onClick={() => setMobileTab("player")}
+                  className="lg:hidden fixed bottom-[62px] left-2.5 right-2.5 z-40 bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border theme-accent-border rounded-2xl p-2 flex items-center gap-2.5 shadow-2xl cursor-pointer animate-fade-in"
+                >
+                  <img
+                    src={
+                      currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+                        ? (currentTrack.thumbnail.includes("i.ytimg.com")
+                          ? currentTrack.thumbnail.replace("mqdefault.jpg", "hqdefault.jpg")
+                          : currentTrack.thumbnail)
+                        : (currentTrack.id ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg` : DEFAULT_TRACK_ART)
+                    }
+                    alt=""
+                    onError={(e) => {
+                      e.currentTarget.src = DEFAULT_TRACK_ART;
                     }}
+                    className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md"
                   />
-
-                  {/* Tab 1: Đăng nhập */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode("login");
-                      setLoginError(null);
-                    }}
-                    className={`relative z-20 flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer text-center ${
-                      authMode === "login" ? "text-white scale-[1.02]" : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    Đăng nhập
-                  </button>
-
-                  {/* Tab 2: Đăng ký */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode("register");
-                      setLoginError(null);
-                    }}
-                    className={`relative z-20 flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer text-center ${
-                      authMode === "register" ? "text-white scale-[1.02]" : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    Đăng ký
-                  </button>
+                  <div className="flex-1 min-w-0 pr-1">
+                    <p className="text-xs font-bold text-white truncate drop-shadow-sm">{currentTrack.title}</p>
+                    <p className="text-[10px] text-white/60 truncate">{formatTrackArtist(currentTrack.title, currentTrack.author)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={toggleCurrentFavorite}
+                      className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-95 transition-transform"
+                      title="Yêu thích"
+                    >
+                      <Heart
+                        className={`w-4 h-4 ${userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                            ? "fill-red-500 text-red-500"
+                            : "text-white/60"
+                          }`}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePrev}
+                      className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-90 transition-transform"
+                      title="Bài trước đó"
+                    >
+                      <SkipBack className="w-4 h-4 fill-current" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={togglePlayPause}
+                      className="w-8 h-8 rounded-full theme-btn-primary flex items-center justify-center text-white shadow-md cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                      title={isPlaying ? "Tạm dừng" : "Phát"}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      ) : isPlaying ? (
+                        <Pause className="w-4 h-4 fill-current" />
+                      ) : (
+                        <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      className="p-1 sm:p-1.5 text-white/70 hover:text-white cursor-pointer hover:scale-110 active:scale-90 transition-transform"
+                      title="Bài tiếp theo"
+                    >
+                      <SkipForward className="w-4 h-4 fill-current" />
+                    </button>
+                  </div>
+                  {/* Micro progress line at the bottom */}
+                  <div className="absolute bottom-0 left-3 right-3 h-[2px] bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                        background: "var(--theme-btn-gradient)",
+                      }}
+                    />
+                  </div>
                 </div>
+              )}
 
-                <p className="text-xs text-white/70 transition-all">
-                  {authMode === "login"
-                    ? "Đăng nhập tài khoản Kahoii Music để đồng bộ danh sách phát và bài hát yêu thích."
-                    : "Tạo tài khoản Kahoii Music mới để lưu trữ và đồng bộ kho nhạc của bạn lên Cloud."}
-                </p>
+              {/* ========================================================================= */}
+              {/* MOBILE BOTTOM NAVIGATION BAR (lg:hidden)                                  */}
+              {/* ========================================================================= */}
+              <nav className="lg:hidden fixed bottom-0 left-0 right-0 safe-bottom-nav bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border-t border-white/10 z-40 flex items-center justify-around px-2 shadow-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab("explore")}
+                    className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${mobileTab === "explore" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
+                      }`}
+                  >
+                    <Compass className="w-5 h-5" />
+                    <span className="text-[10px]">Khám phá</span>
+                  </button>
 
-                {loginError && (
-                  <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                    <span>{loginError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab("library")}
+                    className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${mobileTab === "library" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
+                      }`}
+                  >
+                    <FolderHeart className="w-5 h-5" />
+                    <span className="text-[10px]">Thư viện</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab("player")}
+                    className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer relative ${mobileTab === "player" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
+                      }`}
+                  >
+                    <div className="relative">
+                      <Music className="w-5 h-5" />
+                      {isPlaying && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      )}
+                    </div>
+                    <span className="text-[10px]">Đang phát</span>
+                  </button>
+                </nav>
+
+                {/* ========================================================================= */}
+                {/* 3. USER PROFILE MODAL (Clicked from "avatar" button)                      */}
+                {/* ========================================================================= */}
+                {isAccountOpen && (
+                  <div className="fixed inset-0 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-fade-in">
+                    <div className="w-full max-w-[430px] flex flex-col p-6 rounded-[28px] relative shadow-2xl border theme-accent-border overflow-hidden backdrop-blur-2xl bg-[var(--theme-panel-bg)]/90 transition-all duration-300 max-h-[90vh] overflow-y-auto">
+                      {/* Ambient dynamic glowing orbs */}
+                      <div className="absolute -top-16 -right-16 w-52 h-52 rounded-full blur-3xl opacity-35 pointer-events-none theme-accent-bg" />
+                      <div className="absolute -bottom-16 -left-16 w-52 h-52 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
+
+                      <div className="flex items-center justify-between pb-3.5 border-b border-white/10 relative z-20">
+                        <span className="font-extrabold text-sm theme-accent-text flex items-center gap-2">
+                          <User className="w-4 h-4" />
+                          Hồ sơ người dùng
+                        </span>
+                        <button
+                          onClick={() => {
+                            setIsAccountOpen(false);
+                            setLoginError(null);
+                            setSyncSuccessMsg(null);
+                          }}
+                          className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {userSession?.isLoggedIn ? (
+                        <div className="flex flex-col gap-4 mt-4">
+                          {/* User Info Header Card */}
+                          <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-black/25 border border-white/10 backdrop-blur-md shadow-inner">
+                            <div className="relative flex-shrink-0">
+                              <img
+                                src={
+                                  userSession.user?.avatarBase64
+                                    ? `data:image/png;base64,${userSession.user.avatarBase64}`
+                                    : `${API_BASE}/api/user/avatar?t=${avatarKey}${getAuthToken() ? `&token=${getAuthToken()}` : ""}`
+                                }
+                                alt="Avatar"
+                                onError={(e) => {
+                                  e.currentTarget.src = DEFAULT_TRACK_ART;
+                                }}
+                                className="w-14 h-14 rounded-full object-cover border-2 theme-accent-border shadow-lg shadow-black/40"
+                              />
+                              <div
+                                className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[var(--theme-panel-bg)] shadow-sm"
+                                title="Đang hoạt động"
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <h3 className="font-bold text-base text-white truncate">
+                                  {userSession.user?.name || "Kahoii User"}
+                                </h3>
+                                <ShieldCheck className="w-4 h-4 theme-accent-text flex-shrink-0" />
+                              </div>
+                              <p className="text-xs text-white/70 truncate mt-0.5">
+                                {userSession.user?.email || "danlanga26@gmail.com"}
+                              </p>
+                              <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full theme-badge">
+                                Kahoii Member • Cloud Synced
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* User Stats Grid (Synced Live with Library & Dynamic Theme Palette) */}
+                          <div className="grid grid-cols-4 gap-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveLeftTab("favorites");
+                                setIsAccountOpen(false);
+                              }}
+                              className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                              title="Xem danh sách bài hát yêu thích"
+                            >
+                              <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
+                              <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                                {libraryData.favorites.length || userSession?.user?.stats?.favoritesCount || 0}
+                              </p>
+                              <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
+                                Yêu thích
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveLeftTab("offline");
+                                setIsAccountOpen(false);
+                              }}
+                              className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                              title="Xem danh sách bài hát đã tải"
+                            >
+                              <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
+                              <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                                {libraryData.savedTracks.length || userSession?.user?.stats?.savedTracksCount || offlineTracks.length || 0}
+                              </p>
+                              <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
+                                Đã tải
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveLeftTab("history");
+                                setIsAccountOpen(false);
+                              }}
+                              className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                              title="Xem lịch sử phát nhạc"
+                            >
+                              <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
+                              <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                                {libraryData.history.length || userSession?.user?.stats?.historyCount || 0}
+                              </p>
+                              <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
+                                Lịch sử
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveLeftTab("library");
+                                setIsAccountOpen(false);
+                              }}
+                              className="p-2.5 rounded-2xl bg-black/25 border theme-accent-border/40 hover:border-[var(--theme-accent)] transition-all duration-300 backdrop-blur-md cursor-pointer hover:scale-[1.03] active:scale-[0.98] group flex flex-col items-center justify-center shadow-md relative overflow-hidden"
+                              title="Xem danh sách phát cá nhân"
+                            >
+                              <div className="absolute inset-0 opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none theme-accent-bg" />
+                              <p className="text-lg font-black theme-accent-text tracking-wide transition-transform group-hover:scale-110">
+                                {libraryData.playlists.length || userSession?.user?.stats?.playlistsCount || 0}
+                              </p>
+                              <p className="text-[10.5px] font-semibold text-white/80 mt-0.5 group-hover:text-white transition-colors truncate">
+                                Playlists
+                              </p>
+                            </button>
+                          </div>
+
+                          {/* Success Banner */}
+                          {syncSuccessMsg && (
+                            <div className="p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center gap-2">
+                              <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                              <span>{syncSuccessMsg}</span>
+                            </div>
+                          )}
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-col gap-2 pt-1">
+                            <button
+                              onClick={handleSyncCloud}
+                              disabled={isSyncing}
+                              className="w-full py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                            >
+                              {isSyncing ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                  <span>Đang đồng bộ Cloud...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                  <span>Đồng bộ từ Cloud Firestore</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={handleLogout}
+                              className="w-full py-2 rounded-xl bg-white/5 hover:bg-red-500/20 text-white/80 hover:text-red-300 font-semibold text-xs border border-white/10 hover:border-red-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <LogOut className="w-3.5 h-3.5" />
+                              <span>Đăng xuất</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Auth Form (Login or Register with Extension-style Jelly Fluid Switch & Glass Blur) */
+                        <div className="flex flex-col gap-3.5 mt-3 relative z-20">
+                          {/* Segmented Liquid Tabs Container */}
+                          <div className="relative flex items-center w-full p-1 rounded-2xl bg-black/40 border border-white/10 overflow-hidden mb-1">
+                            {/* Active Jelly Liquid Pill: Glides with smooth elastic cubic-bezier */}
+                            <div
+                              className="absolute top-1 bottom-1 rounded-xl pointer-events-none z-10"
+                              style={{
+                                width: "calc(50% - 4px)",
+                                left: "4px",
+                                transform: authMode === "login" ? "translateX(0%)" : "translateX(100%)",
+                                transition: "transform 0.35s cubic-bezier(0.25, 1.3, 0.45, 1), background 0.8s ease, box-shadow 0.8s ease",
+                                background: "var(--theme-btn-gradient)",
+                                boxShadow: "0 0 16px var(--theme-panel-border), 0 4px 18px rgba(0,0,0,0.4)",
+                              }}
+                            />
+
+                            {/* Tab 1: Đăng nhập */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAuthMode("login");
+                                setLoginError(null);
+                              }}
+                              className={`relative z-20 flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer text-center ${authMode === "login" ? "text-white scale-[1.02]" : "text-white/60 hover:text-white"
+                                }`}
+                            >
+                              Đăng nhập
+                            </button>
+
+                            {/* Tab 2: Đăng ký */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAuthMode("register");
+                                setLoginError(null);
+                              }}
+                              className={`relative z-20 flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer text-center ${authMode === "register" ? "text-white scale-[1.02]" : "text-white/60 hover:text-white"
+                                }`}
+                            >
+                              Đăng ký
+                            </button>
+                          </div>
+
+                          <p className="text-xs text-white/70 transition-all">
+                            {authMode === "login"
+                              ? "Đăng nhập tài khoản Kahoii Music để đồng bộ danh sách phát và bài hát yêu thích."
+                              : "Tạo tài khoản Kahoii Music mới để lưu trữ và đồng bộ kho nhạc của bạn lên Cloud."}
+                          </p>
+
+                          {loginError && (
+                            <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                              <span>{loginError}</span>
+                            </div>
+                          )}
+
+                          <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="flex flex-col gap-3">
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[11px] font-semibold text-white/80">Email</label>
+                              <input
+                                type="email"
+                                required
+                                placeholder="nhap-email@gmail.com"
+                                value={loginEmail}
+                                onChange={(e) => setLoginEmail(e.target.value)}
+                                className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
+                              />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[11px] font-semibold text-white/80">Mật khẩu</label>
+                              <input
+                                type="password"
+                                required
+                                placeholder="••••••••"
+                                value={loginPassword}
+                                onChange={(e) => setLoginPassword(e.target.value)}
+                                className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
+                              />
+                            </div>
+
+                            {/* Confirm Password Field with Smooth Jelly Accordion Animation */}
+                            <div
+                              className={`transition-all duration-300 overflow-hidden ${authMode === "register"
+                                  ? "max-h-24 opacity-100 translate-y-0 pointer-events-auto"
+                                  : "max-h-0 opacity-0 -translate-y-2 pointer-events-none"
+                                }`}
+                            >
+                              <div className="flex flex-col gap-1.5 pt-1">
+                                <label className="text-[11px] font-semibold text-white/80">Nhập lại mật khẩu</label>
+                                <input
+                                  type="password"
+                                  placeholder="••••••••"
+                                  value={registerConfirmPassword}
+                                  onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                                  className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            <button
+                              type="submit"
+                              disabled={isLoggingIn || isRegistering}
+                              className="w-full mt-2 py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                            >
+                              {isLoggingIn || isRegistering ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                  <span>{authMode === "login" ? "Đang xác thực..." : "Đang tạo tài khoản..."}</span>
+                                </>
+                              ) : authMode === "login" ? (
+                                <>
+                                  <LogIn className="w-4 h-4" />
+                                  <span>Đăng nhập</span>
+                                </>
+                              ) : (
+                                <>
+                                  <User className="w-4 h-4" />
+                                  <span>Đăng ký tài khoản</span>
+                                </>
+                              )}
+                            </button>
+
+                            <div className="text-center mt-1">
+                              {authMode === "login" ? (
+                                <p className="text-[11px] text-white/60">
+                                  Chưa có tài khoản?{" "}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAuthMode("register");
+                                      setLoginError(null);
+                                    }}
+                                    className="theme-accent-text hover:underline font-semibold cursor-pointer"
+                                  >
+                                    Đăng ký ngay
+                                  </button>
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-white/60">
+                                  Đã có tài khoản?{" "}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAuthMode("login");
+                                      setLoginError(null);
+                                    }}
+                                    className="theme-accent-text hover:underline font-semibold cursor-pointer"
+                                  >
+                                    Đăng nhập ngay
+                                  </button>
+                                </p>
+                              )}
+                            </div>
+                          </form>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                <form onSubmit={authMode === "login" ? handleLogin : handleRegister} className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-semibold text-white/80">Email</label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="nhap-email@gmail.com"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-semibold text-white/80">Mật khẩu</label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••••••"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Confirm Password Field with Smooth Jelly Accordion Animation */}
-                  <div
-                    className={`transition-all duration-300 overflow-hidden ${
-                      authMode === "register"
-                        ? "max-h-24 opacity-100 translate-y-0 pointer-events-auto"
-                        : "max-h-0 opacity-0 -translate-y-2 pointer-events-none"
-                    }`}
-                  >
-                    <div className="flex flex-col gap-1.5 pt-1">
-                      <label className="text-[11px] font-semibold text-white/80">Nhập lại mật khẩu</label>
-                      <input
-                        type="password"
-                        placeholder="••••••••"
-                        value={registerConfirmPassword}
-                        onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl theme-input-pill text-base sm:text-xs text-white placeholder-white/30 focus:outline-none"
-                      />
+                {/* Custom Sleek Logout Confirmation Dialog */}
+                {showLogoutConfirm && (
+                  <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[60] animate-fade-in">
+                    <div className="figma-panel w-full max-w-[360px] flex flex-col p-6 relative shadow-2xl border theme-accent-border text-center gap-4">
+                      <div className="w-12 h-12 rounded-full theme-badge border theme-accent-border flex items-center justify-center mx-auto text-red-400 shadow-lg">
+                        <LogOut className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-white">Xác nhận đăng xuất</h3>
+                        <p className="text-xs text-white/70 mt-1.5 leading-relaxed">
+                          Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Kahoii Music?
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowLogoutConfirm(false)}
+                          className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition-all cursor-pointer"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmLogout}
+                          className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg transition-all cursor-pointer"
+                        >
+                          Đăng xuất
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoggingIn || isRegistering}
-                    className="w-full mt-2 py-2.5 rounded-xl theme-btn-primary hover:opacity-95 text-white font-bold text-xs shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {isLoggingIn || isRegistering ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-white" />
-                        <span>{authMode === "login" ? "Đang xác thực..." : "Đang tạo tài khoản..."}</span>
-                      </>
-                    ) : authMode === "login" ? (
-                      <>
-                        <LogIn className="w-4 h-4" />
-                        <span>Đăng nhập</span>
-                      </>
-                    ) : (
-                      <>
-                        <User className="w-4 h-4" />
-                        <span>Đăng ký tài khoản</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div className="text-center mt-1">
-                    {authMode === "login" ? (
-                      <p className="text-[11px] text-white/60">
-                        Chưa có tài khoản?{" "}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAuthMode("register");
-                            setLoginError(null);
-                          }}
-                          className="theme-accent-text hover:underline font-semibold cursor-pointer"
-                        >
-                          Đăng ký ngay
-                        </button>
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-white/60">
-                        Đã có tài khoản?{" "}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAuthMode("login");
-                            setLoginError(null);
-                          }}
-                          className="theme-accent-text hover:underline font-semibold cursor-pointer"
-                        >
-                          Đăng nhập ngay
-                        </button>
-                      </p>
-                    )}
-                  </div>
-                </form>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Custom Sleek Logout Confirmation Dialog */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[60] animate-fade-in">
-          <div className="figma-panel w-full max-w-[360px] flex flex-col p-6 relative shadow-2xl border theme-accent-border text-center gap-4">
-            <div className="w-12 h-12 rounded-full theme-badge border theme-accent-border flex items-center justify-center mx-auto text-red-400 shadow-lg">
-              <LogOut className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">Xác nhận đăng xuất</h3>
-              <p className="text-xs text-white/70 mt-1.5 leading-relaxed">
-                Bạn có chắc chắn muốn đăng xuất khỏi tài khoản Kahoii Music?
-              </p>
-            </div>
-            <div className="flex items-center gap-3 mt-1">
-              <button
-                type="button"
-                onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition-all cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={confirmLogout}
-                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg transition-all cursor-pointer"
-              >
-                Đăng xuất
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+              );
 }

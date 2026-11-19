@@ -506,6 +506,39 @@ const NEW_RELEASE_QUERIES = [
   "nhạc mới phát hành hôm nay"
 ];
 
+const CURATED_ARTISTS = [
+  { name: "Sơn Tùng M-TP", genre: "Pop / R&B", avatar: "./artists/son_tung.jpg" },
+  { name: "Vũ.", genre: "Indie / Acoustic", avatar: "./artists/vu.jpg" },
+  { name: "Đen", genre: "Rap / Hip-Hop", avatar: "./artists/den.jpg" },
+  { name: "Soobin Hoàng Sơn", genre: "R&B / Ballad", avatar: "./artists/soobin.jpg" },
+  { name: "Taylor Swift", genre: "Pop Superstar", avatar: "./artists/taylor_swift.jpg" },
+  { name: "The Weeknd", genre: "R&B / Pop", avatar: "./artists/the_weeknd.jpg" },
+  { name: "HIEUTHUHAI", genre: "Rap / Hip-Hop", avatar: "https://i.ytimg.com/vi/bY8o44A_aI4/hqdefault.jpg" },
+  { name: "Wren Evans", genre: "Pop / R&B", avatar: "https://i.ytimg.com/vi/571_T9gKrqU/hqdefault.jpg" },
+  { name: "tuki.", genre: "J-Pop / Acoustic", avatar: "https://i.ytimg.com/vi/kJQP7kiw5Fk/hqdefault.jpg" },
+  { name: "MCK", genre: "Hip-Hop / Trap", avatar: "https://i.ytimg.com/vi/Wk9Uj4Qk6q4/hqdefault.jpg" },
+  { name: "tlinh", genre: "R&B / Hip-Hop", avatar: "https://i.ytimg.com/vi/lJgK34lZ7Zk/hqdefault.jpg" },
+  { name: "Charlie Puth", genre: "Pop / Funk", avatar: "https://i.ytimg.com/vi/3AtDnEC4zak/hqdefault.jpg" },
+  { name: "MONO", genre: "Dance-Pop / R&B", avatar: "https://i.ytimg.com/vi/lX_q2rZ5Yh4/hqdefault.jpg" },
+  { name: "GREY D", genre: "Pop / Acoustic", avatar: "https://i.ytimg.com/vi/E5t0k7d09m0/hqdefault.jpg" },
+  { name: "Phương Ly", genre: "Pop / R&B", avatar: "https://i.ytimg.com/vi/L4a024Wk8c4/hqdefault.jpg" },
+  { name: "Hoàng Dũng", genre: "Indie / Ballad", avatar: "https://i.ytimg.com/vi/2v5r8e4k_08/hqdefault.jpg" },
+  { name: "Amee", genre: "Teen-Pop / R&B", avatar: "https://i.ytimg.com/vi/K0t2Z4o2r9s/hqdefault.jpg" },
+  { name: "Bruno Mars", genre: "Funk / Pop / R&B", avatar: "https://i.ytimg.com/vi/PMivT7MJ41M/hqdefault.jpg" },
+  { name: "Billie Eilish", genre: "Alt-Pop / Indie", avatar: "https://i.ytimg.com/vi/4i_T4vPzN5E/hqdefault.jpg" },
+  { name: "NewJeans", genre: "K-Pop / R&B", avatar: "https://i.ytimg.com/vi/ArmDp-zijuc/hqdefault.jpg" },
+  { name: "Rosé", genre: "K-Pop / Pop", avatar: "https://i.ytimg.com/vi/ekr2nIex040/hqdefault.jpg" },
+  { name: "Vũ Cát Tường", genre: "Pop / Ballad", avatar: "https://i.ytimg.com/vi/v5k-8s2Q7fI/hqdefault.jpg" },
+  { name: "B Ray", genre: "Rap / Hip-Hop", avatar: "https://i.ytimg.com/vi/N7vX8Zq9j5I/hqdefault.jpg" },
+  { name: "JustaTee", genre: "R&B / Hip-Hop", avatar: "https://i.ytimg.com/vi/6jK39tZk8c8/hqdefault.jpg" },
+  { name: "Quốc Thiên", genre: "Vocal / Ballad", avatar: "https://i.ytimg.com/vi/7j5h2Y6h8c8/hqdefault.jpg" },
+  { name: "Rhymastic", genre: "Rap / Producer", avatar: "https://i.ytimg.com/vi/8j5h2Y6h8c8/hqdefault.jpg" },
+  { name: "Phùng Khánh Linh", genre: "City Pop / Synth", avatar: "https://i.ytimg.com/vi/4T9kL1m8Y9I/hqdefault.jpg" },
+  { name: "Erik", genre: "Pop / Ballad", avatar: "https://i.ytimg.com/vi/3h2L5T9mK8Y/hqdefault.jpg" },
+  { name: "Đức Phúc", genre: "Pop / Ballad", avatar: "https://i.ytimg.com/vi/9mK8Y3h2L5T/hqdefault.jpg" },
+  { name: "Hòa Minzy", genre: "Pop / Dân gian đương đại", avatar: "https://i.ytimg.com/vi/5T9mK8Y3h2L/hqdefault.jpg" },
+];
+
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -531,9 +564,84 @@ app.get(["/api/home", "/home"], async (_req, res) => {
     const trendingTracks = shuffleArray(trendingRes.tracks || []);
     const newReleaseTracks = shuffleArray(newReleasesRes.tracks || []);
 
+    // Collect dynamic artists from YouTube Music search results
+    const rawArtists = [
+      ...(trendingRes.artists || []),
+      ...(newReleasesRes.artists || []),
+    ];
+
+    const seenArtistNames = new Set<string>();
+    const homeArtists: any[] = [];
+
+    const NON_ARTIST_PATTERNS = [
+      "various artists",
+      "youtube music",
+      "topic",
+      "chủ đề",
+      "karaoke",
+      "sound effect",
+      "nhạc bay",
+      "nhạc phật",
+      "nhật ký",
+      "bảng xếp hạng",
+      "bxh",
+      "nhạc việt ai",
+      "production",
+      "records",
+      "tổng hợp",
+      "nhạc sống",
+      "nhạc vàng",
+      "nhạc trữ tình",
+      "nhạc chế",
+      "nhạc lofi",
+      "thư viện",
+      "soundtrack",
+      "beat",
+      "instrumental",
+    ];
+
+    for (const a of rawArtists) {
+      if (!a.name) continue;
+      const lower = a.name.toLowerCase().trim();
+      if (
+        lower.length < 2 ||
+        NON_ARTIST_PATTERNS.some((p) => lower.includes(p)) ||
+        seenArtistNames.has(lower)
+      ) {
+        continue;
+      }
+      seenArtistNames.add(lower);
+      homeArtists.push({
+        id: a.id,
+        name: a.name,
+        genre: a.subscribers || "Nghệ sĩ",
+        subscribers: a.subscribers || "Nghệ sĩ",
+        avatar: a.thumbnail || (trendingTracks[0]?.thumbnail || ""),
+      });
+    }
+
+    // Complement with rotating curated pool to guarantee variety and high-res avatars
+    const shuffledCatalog = shuffleArray(CURATED_ARTISTS);
+    for (const c of shuffledCatalog) {
+      const lower = c.name.toLowerCase().trim();
+      if (!seenArtistNames.has(lower)) {
+        seenArtistNames.add(lower);
+        homeArtists.push({
+          name: c.name,
+          genre: c.genre,
+          subscribers: c.genre,
+          avatar: c.avatar,
+        });
+      }
+      if (homeArtists.length >= 18) break;
+    }
+
+    const finalArtists = shuffleArray(homeArtists).slice(0, 12);
+
     return res.json({
       trending: trendingTracks,
       newReleases: newReleaseTracks,
+      artists: finalArtists,
     });
   } catch (err: any) {
     console.error("[Home API Error]", err.message);
