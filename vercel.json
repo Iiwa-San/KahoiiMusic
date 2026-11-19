@@ -3,6 +3,15 @@
   "outputDirectory": "client/dist",
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "mediasession=(self)"
+        }
+      ]
+    },
+    {
       "source": "/sw.js",
       "headers": [
         {

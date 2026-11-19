@@ -2092,6 +2092,13 @@ export default function App() {
               },
               events: {
                 onReady: () => {
+                  const iframe = document.getElementById("kahoii-yt-iframe") as HTMLIFrameElement;
+                  if (iframe && iframe.tagName === "IFRAME") {
+                    const cur = iframe.getAttribute("allow") || "";
+                    if (!cur.includes("mediasession 'none'")) {
+                      iframe.setAttribute("allow", `${cur}; mediasession 'none'`);
+                    }
+                  }
                   if (typeof ytPlayerRef.current?.setVolume === "function") {
                     ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
                   }
@@ -2153,6 +2160,24 @@ export default function App() {
         (window as any).onYouTubeIframeAPIReady = setupYtPlayer;
         loadYtScript();
       }
+    }, []);
+
+    // Ensure YouTube iframe never hijacks system MediaSession controls
+    useEffect(() => {
+      const applyIframePolicy = () => {
+        const iframe = document.getElementById("kahoii-yt-iframe") as HTMLIFrameElement;
+        if (iframe && iframe.tagName === "IFRAME") {
+          const cur = iframe.getAttribute("allow") || "";
+          if (!cur.includes("mediasession 'none'")) {
+            iframe.setAttribute("allow", `${cur}; mediasession 'none'`);
+          }
+        }
+      };
+
+      applyIframePolicy();
+      const obs = new MutationObserver(applyIframePolicy);
+      obs.observe(document.body, { childList: true, subtree: true });
+      return () => obs.disconnect();
     }, []);
 
     // Time Tracker ticker for YouTube Player with natural end detection fallback
@@ -2874,6 +2899,15 @@ export default function App() {
         } else if (audioRef.current) {
           audioRef.current.currentTime = clamped;
         }
+        if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession && duration > 0) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration,
+              playbackRate: isPlaying ? 1 : 0,
+              position: clamped,
+            });
+          } catch { }
+        }
       };
 
       const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2952,23 +2986,24 @@ export default function App() {
         handleStopRef.current = handleStop;
       });
 
-      // 1. MediaSession API: Register Standard 4 Actions ONCE on Mount (Ensures Back/Next appear on Android/iOS Lock Screen)
-      // Note: Only register [play, pause, previoustrack, nexttrack].
-      // Never register "stop", "seekbackward", "seekforward", or "seekto" because Xiaomi HyperOS / Android MediaNotificationManager
-      // collapses the lock screen to a single pause button (podcast template) when seek/stop actions exist.
+      // 1. MediaSession API: Register Standard Actions ONCE on Mount (Ensures Back/Next & Seekbar appear on Android/iOS Lock Screen & Desktop GMC)
       useEffect(() => {
         if (!("mediaSession" in navigator)) return;
 
         try { navigator.mediaSession.setActionHandler("stop", null); } catch {}
         try { navigator.mediaSession.setActionHandler("seekbackward", null); } catch {}
         try { navigator.mediaSession.setActionHandler("seekforward", null); } catch {}
-        try { navigator.mediaSession.setActionHandler("seekto", null); } catch {}
 
         const actionList: [MediaSessionAction, MediaSessionActionHandler][] = [
           ["play", () => handlePlayRef.current()],
           ["pause", () => handlePauseRef.current()],
           ["previoustrack", () => handlePrevRef.current()],
           ["nexttrack", () => handleNextRef.current()],
+          ["seekto", (details) => {
+            if (details.seekTime !== undefined && details.seekTime !== null) {
+              seekToTimeRef.current(details.seekTime);
+            }
+          }],
         ];
 
         for (const [action, handler] of actionList) {
@@ -3011,7 +3046,7 @@ export default function App() {
         }
       }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, currentTrack?.thumbnail]);
 
-      // 3. MediaSession API: Synchronize Playback State on Play/Pause/Track Changes
+      // 3. MediaSession API: Synchronize Playback State & Position on State/Track/Duration Changes
       useEffect(() => {
         if (!("mediaSession" in navigator)) return;
 
@@ -3019,7 +3054,22 @@ export default function App() {
         try {
           navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused";
         } catch {}
-      }, [isPlaying, currentTrack?.id]);
+
+        if ("setPositionState" in navigator.mediaSession && duration > 0) {
+          try {
+            const cur = activePlayerType.current === "audio" && audioRef.current
+              ? audioRef.current.currentTime
+              : currentTime;
+            navigator.mediaSession.setPositionState({
+              duration: duration,
+              playbackRate: effectivePlaying ? 1 : 0,
+              position: Math.min(Math.max(0, cur), duration),
+            });
+          } catch (err) {
+            console.warn("[MediaSession] Position state error:", err);
+          }
+        }
+      }, [isPlaying, currentTrack?.id, duration]);
 
       // Top Search Submit
       const handleTopSearchSubmit = async (e?: React.FormEvent) => {
