@@ -1946,18 +1946,32 @@ export default function App() {
       const handleVisibilityChange = () => {
         if (document.visibilityState === "visible") {
           fetchLibraryData(true);
-          // Restore playback position seamlessly if mobile browser paused or reset video in background/multitasking
-          if (activePlayerType.current === "youtube" && ytPlayerRef.current && !isUserPausedRef.current && currentTrackRef.current) {
+          // Sync current playback position immediately from player
+          if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
             try {
               const cur = ytPlayerRef.current.getCurrentTime?.() || 0;
-              if (lastPlayPositionRef.current > 3 && cur < 1) {
-                ytPlayerRef.current.seekTo(lastPlayPositionRef.current, true);
+              const dur = ytPlayerRef.current.getDuration?.() || 0;
+              if (cur > 0) {
+                setCurrentTime(cur);
+                lastPlayPositionRef.current = cur;
               }
-              ytPlayerRef.current.playVideo();
-              setIsPlaying(true);
+              if (dur > 0) {
+                setDuration(Math.round(dur));
+              }
+              if (!isUserPausedRef.current && currentTrackRef.current) {
+                if (typeof ytPlayerRef.current.getPlayerState === "function" && ytPlayerRef.current.getPlayerState() !== 1) {
+                  ytPlayerRef.current.playVideo();
+                }
+                setIsPlaying(true);
+              }
             } catch { }
-          } else if (activePlayerType.current === "audio" && audioRef.current && !isUserPausedRef.current && currentTrackRef.current) {
-            if (audioRef.current.paused && isPlaying) {
+          } else if (activePlayerType.current === "audio" && audioRef.current) {
+            const cur = audioRef.current.currentTime || 0;
+            if (cur > 0) {
+              setCurrentTime(cur);
+              lastPlayPositionRef.current = cur;
+            }
+            if (!isUserPausedRef.current && currentTrackRef.current && audioRef.current.paused && isPlaying) {
               audioRef.current.play().catch(() => {});
             }
           }
@@ -2110,6 +2124,7 @@ export default function App() {
 
     // Time Tracker ticker for YouTube Player with natural end detection fallback
     useEffect(() => {
+      let lastReportedSec = -1;
       const timer = setInterval(() => {
         if (
           activePlayerType.current === "youtube" &&
@@ -2138,6 +2153,21 @@ export default function App() {
               });
             }
 
+            // Sync mediaSession positionState periodically for Lock Screen / Dynamic Island / Brave progress bar
+            const currentSec = Math.floor(ct);
+            if (currentSec !== lastReportedSec && dur > 0 && ct >= 0 && ct <= dur) {
+              lastReportedSec = currentSec;
+              if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
+                try {
+                  navigator.mediaSession.setPositionState({
+                    duration: dur,
+                    playbackRate: isPlaying ? 1 : 0,
+                    position: Math.min(ct, dur),
+                  });
+                } catch { }
+              }
+            }
+
             // Fallback: If video reaches within 0.5s of the end and stops or pauses, advance to next track
             if (dur > 5 && ct >= dur - 0.5 && !isTransitioningRef.current) {
               const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
@@ -2147,9 +2177,9 @@ export default function App() {
             }
           } catch { }
         }
-      }, 250);
+      }, 500);
       return () => clearInterval(timer);
-    }, [duration]);
+    }, [duration, isPlaying]);
 
     // Sync volume with Audio element and YouTube Player
     useEffect(() => {
@@ -2559,8 +2589,22 @@ export default function App() {
 
       const handleTimeUpdate = () => {
         if (activePlayerType.current === "audio" && audioRef.current) {
-          setCurrentTime(audioRef.current.currentTime);
-          lastPlayPositionRef.current = audioRef.current.currentTime;
+          const cur = audioRef.current.currentTime;
+          setCurrentTime(cur);
+          lastPlayPositionRef.current = cur;
+          const dur = audioRef.current.duration;
+          if (dur > 0 && !isNaN(dur) && dur !== duration) {
+            setDuration(Math.round(dur));
+          }
+          if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession && dur > 0 && cur >= 0) {
+            try {
+              navigator.mediaSession.setPositionState({
+                duration: dur,
+                playbackRate: isPlaying ? 1 : 0,
+                position: Math.min(cur, dur),
+              });
+            } catch { }
+          }
         }
       };
 
@@ -2795,11 +2839,22 @@ export default function App() {
       };
 
       const seekToTime = (newTime: number) => {
-        setCurrentTime(newTime);
+        const clamped = Math.max(0, Math.min(newTime, duration || newTime));
+        setCurrentTime(clamped);
+        lastPlayPositionRef.current = clamped;
         if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
-          try { ytPlayerRef.current.seekTo(newTime, true); } catch { }
+          try { ytPlayerRef.current.seekTo(clamped, true); } catch { }
         } else if (audioRef.current) {
-          audioRef.current.currentTime = newTime;
+          audioRef.current.currentTime = clamped;
+        }
+        if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession && duration > 0) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration,
+              playbackRate: isPlaying ? 1 : 0,
+              position: clamped,
+            });
+          } catch { }
         }
       };
 
@@ -2884,10 +2939,20 @@ export default function App() {
               seekToTime(details.seekTime);
             }
           });
+
+          navigator.mediaSession.setActionHandler("seekforward", (details) => {
+            const offset = details.seekOffset || 10;
+            seekToTime(currentTime + offset);
+          });
+
+          navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+            const offset = details.seekOffset || 10;
+            seekToTime(Math.max(0, currentTime - offset));
+          });
         } catch (e) {
           console.warn("MediaSession action handler error:", e);
         }
-      }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, isPlaying]);
+      }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, isPlaying, duration, currentTime]);
 
       // Top Search Submit
       const handleTopSearchSubmit = async (e?: React.FormEvent) => {
@@ -3241,13 +3306,13 @@ export default function App() {
       {/* 1. TOP BAR (Seamless & Centered matching Figma mockup, Safe-Area aware)     */}
       {/* ========================================================================= */}
       <header className="w-full flex flex-col justify-end flex-shrink-0 z-30 safe-header">
-        <div className="w-full h-[54px] flex items-center justify-between min-w-0 gap-1.5 sm:gap-3">
+        <div className="w-full h-[54px] flex items-center justify-between min-w-0 gap-1 sm:gap-3">
           {/* Left: App Logo & Brand Identity */}
-                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                   <img
                     src="./logo_icon.png"
                     alt="Kahoii Music"
-                    className="w-7 h-7 rounded-lg object-contain shadow-md shadow-black/40"
+                    className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg object-contain shadow-md shadow-black/40"
                   />
                   <span className="hidden sm:inline font-extrabold text-sm tracking-wide bg-gradient-to-r from-pink-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
                     Kahoii Music
@@ -3258,16 +3323,16 @@ export default function App() {
                 <div ref={searchDropdownRef} className="relative flex-1 min-w-0 max-w-[580px] mx-1 sm:mx-4">
                   <form
                     onSubmit={handleTopSearchSubmit}
-                    className="w-full h-[36px] px-2.5 sm:px-4 rounded-full theme-input-pill flex items-center gap-1.5 sm:gap-2.5 shadow-inner transition-all overflow-hidden"
+                    className="w-full min-w-0 h-[34px] sm:h-[36px] px-2 sm:px-4 rounded-full theme-input-pill flex items-center gap-1.5 sm:gap-2.5 shadow-inner transition-all overflow-hidden"
                   >
-                    <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
+                    <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 theme-accent-text flex-shrink-0" />
                     <input
                       type="text"
                       placeholder="Search"
                       value={topSearchText}
                       onFocus={() => setIsSearchFocused(true)}
                       onChange={(e) => setTopSearchText(e.target.value)}
-                      className="w-full flex-1 bg-transparent text-sm text-white placeholder-white/40 focus:outline-none min-w-0"
+                      className="w-full min-w-0 flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none"
                     />
                     {(topSearchText || isSearchOpen) && (
                       <button
@@ -3338,31 +3403,31 @@ export default function App() {
                 </div>
 
                 {/* Right: Offline Indicator, Download Apps & User Avatar Pill Buttons */}
-                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                   {!isOnline && (
                     <div
                       title="Bạn đang ngoại tuyến. Các bài hát đã lưu trong mục 'Đã tải' vẫn nghe được bình thường!"
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-medium animate-pulse cursor-pointer"
+                      className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] sm:text-[11px] font-medium animate-pulse cursor-pointer flex-shrink-0"
                       onClick={() => setActiveLeftTab("offline")}
                     >
-                      <WifiOff className="w-3.5 h-3.5" />
+                      <WifiOff className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                       <span className="hidden sm:inline">Ngoại tuyến (Offline)</span>
                     </div>
                   )}
 
                   {/* Download App Button & Dropdown */}
-                  <div className="relative" ref={downloadMenuRef}>
+                  <div className="relative flex-shrink-0" ref={downloadMenuRef}>
                     <button
                       type="button"
                       onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                       title="Tải ứng dụng Kahoii Music (PC, Extension, Android, iOS, PWA)"
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer shadow-md border ${showDownloadMenu
+                      className={`flex items-center justify-center p-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer shadow-md border ${showDownloadMenu
                           ? "theme-badge-active scale-105"
                           : "theme-badge hover:theme-btn-primary hover:text-white text-white/90 hover:scale-105 border-white/10"
                         }`}
                     >
                       <Download className="w-3.5 h-3.5 theme-accent-text" />
-                      <span className="hidden sm:inline text-xs font-semibold">Tải ứng dụng</span>
+                      <span className="hidden sm:inline text-xs font-semibold ml-1.5">Tải ứng dụng</span>
                     </button>
 
                     {/* Download Dropdown Popover */}
@@ -3554,7 +3619,7 @@ export default function App() {
                     <button
                       onClick={() => setIsAccountOpen(true)}
                       title={`Tài khoản: ${userSession.user?.name || "Kahoii User"}`}
-                      className="flex items-center gap-1.5 p-1 sm:pl-1.5 sm:pr-3.5 sm:py-1 rounded-full theme-badge hover:theme-btn-primary hover:text-white text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 border theme-accent-border group"
+                      className="flex items-center gap-1.5 p-1 sm:pl-1.5 sm:pr-3.5 sm:py-1 rounded-full theme-badge hover:theme-btn-primary hover:text-white text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 border theme-accent-border group flex-shrink-0"
                     >
                       <img
                         src={
@@ -3576,7 +3641,7 @@ export default function App() {
                     <button
                       onClick={() => setIsAccountOpen(true)}
                       title="Đăng nhập"
-                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 rounded-full theme-btn-primary hover:opacity-90 text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
+                      className="p-1.5 sm:px-3.5 sm:py-1.5 rounded-full theme-btn-primary hover:opacity-90 text-white font-semibold text-xs cursor-pointer shadow-md transition-all hover:scale-105 flex items-center justify-center gap-1.5 flex-shrink-0"
                     >
                       <User className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">Đăng nhập</span>
@@ -5305,8 +5370,8 @@ export default function App() {
                         {/* Dark gradient overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-transparent pointer-events-none" />
 
-                        {/* Top-left Menu Button */}
-                        <div className="absolute top-2.5 left-2.5 z-30" ref={playerMenuRef}>
+                        {/* Top-left Menu & Volume Controls */}
+                        <div className="absolute top-2.5 left-2.5 z-30 flex items-center gap-1.5" ref={playerMenuRef}>
                           <button
                             type="button"
                             onClick={() => {
@@ -5320,6 +5385,19 @@ export default function App() {
                             title="Tùy chọn bài hát"
                           >
                             <Menu className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsMuted(!isMuted)}
+                            title={isMuted ? "Bật âm thanh" : "Tắt tiếng"}
+                            className="w-7 h-7 rounded-lg bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center text-white/90 hover:text-white cursor-pointer transition-all border border-white/15 shadow-sm"
+                          >
+                            {isMuted ? (
+                              <VolumeX className="w-4 h-4 text-red-400" />
+                            ) : (
+                              <Volume2 className="w-4 h-4" />
+                            )}
                           </button>
 
                           {/* Menu Popup */}
@@ -5401,44 +5479,38 @@ export default function App() {
                           />
                         </button>
 
-                        {/* Left Volume Button directly above Seekbar */}
-                        <button
-                          type="button"
-                          onClick={() => setIsMuted(!isMuted)}
-                          title={isMuted ? "Bật âm thanh" : "Tắt tiếng"}
-                          className="absolute left-3 bottom-[66px] p-0.5 text-white/80 hover:text-white cursor-pointer z-20 hover:scale-110 active:scale-95 transition-all"
-                        >
-                          {isMuted ? (
-                            <VolumeX className="w-4 h-4 text-red-400" />
-                          ) : (
-                            <Volume2 className="w-4 h-4" />
-                          )}
-                        </button>
-
-                        {/* Seekbar Progress Line (Matching PC Mini App - strictly above control buttons) */}
-                        <div className="absolute left-3 right-3 bottom-[50px] h-2 flex items-center group/seek z-20">
-                          <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/25 overflow-hidden" />
-                          <div
-                            className="absolute left-0 top-0 bottom-0 rounded-full"
-                            style={{
-                              width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
-                              background: "var(--theme-btn-gradient)",
-                            }}
-                          />
-                          <div
-                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white shadow-md pointer-events-none opacity-0 group-hover/seek:opacity-100 transition-opacity"
-                            style={{
-                              left: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
-                            }}
-                          />
-                          <input
-                            type="range"
-                            min={0}
-                            max={duration || 100}
-                            value={currentTime}
-                            onChange={handleSeek}
-                            className="w-full h-full opacity-0 cursor-pointer z-10"
-                          />
+                        {/* Seekbar Progress Line with Timestamp Indicators (strictly above control buttons) */}
+                        <div className="absolute left-3 right-3 bottom-[56px] flex flex-col gap-1 z-20">
+                          <div className="relative w-full h-5 flex items-center group/seek touch-none">
+                            <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/25 overflow-hidden" />
+                            <div
+                              className="absolute left-0 h-1.5 rounded-full"
+                              style={{
+                                width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                                background: "var(--theme-btn-gradient)",
+                              }}
+                            />
+                            <div
+                              className="absolute w-3 h-3 rounded-full bg-white shadow-md pointer-events-none transition-transform"
+                              style={{
+                                left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 6px)`,
+                                boxShadow: "0 0 8px var(--theme-accent)",
+                              }}
+                            />
+                            <input
+                              type="range"
+                              min={0}
+                              max={duration || 100}
+                              step={0.5}
+                              value={currentTime}
+                              onChange={handleSeek}
+                              className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
+                            />
+                          </div>
+                          <div className="flex justify-between text-[9.5px] text-white/80 font-mono px-0.5 -mt-1 font-semibold drop-shadow">
+                            <span>{formatTime(currentTime)}</span>
+                            <span>{formatTime(duration)}</span>
+                          </div>
                         </div>
 
                         {/* 5 Playback Control Buttons Row */}
@@ -6079,10 +6151,10 @@ export default function App() {
 
                       {/* Elevated Seekbar Progress Line with Scrubber Handle & Time (at bottom-[66px]) */}
                       <div className="absolute bottom-[66px] left-4 right-4 flex flex-col gap-1 z-20">
-                        <div className="relative w-full flex items-center group/seek">
-                          <div className="absolute left-0 right-0 h-1 rounded-full bg-white/20" />
+                        <div className="relative w-full h-6 flex items-center group/seek touch-none">
+                          <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/20" />
                           <div
-                            className="absolute left-0 h-1 rounded-full"
+                            className="absolute left-0 h-1.5 rounded-full"
                             style={{
                               width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
                               background: "var(--theme-btn-gradient)",
@@ -6092,14 +6164,15 @@ export default function App() {
                             type="range"
                             min={0}
                             max={duration || 100}
+                            step={0.5}
                             value={currentTime}
                             onChange={handleSeek}
-                            className="w-full h-2.5 opacity-0 cursor-pointer z-10"
+                            className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
                           />
                           <div
-                            className="absolute w-3 h-3 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
+                            className="absolute w-3.5 h-3.5 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
                             style={{
-                              left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 6px)`,
+                              left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 7px)`,
                               boxShadow: "0 0 10px var(--theme-accent)",
                             }}
                           />
