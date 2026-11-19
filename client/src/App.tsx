@@ -2960,9 +2960,16 @@ export default function App() {
         handleStopRef.current = handleStop;
       });
 
-      // 1. MediaSession API: Register All 8 Action Handlers ONCE on Mount (Ensures Back/Next/Seek appear on Android/iOS Lock Screen)
+      // 1. MediaSession API: Register Standard Actions ONCE on Mount (Ensures Back/Next/Seek appear on Android/iOS Lock Screen)
+      // Note: Never register "stop" action because Chromium's MediaNotificationManager has logic:
+      // "if (actions.contains(STOP)) return [PLAY, STOP]" which drops PREVIOUS_TRACK and NEXT_TRACK from CompactView!
       useEffect(() => {
         if (!("mediaSession" in navigator)) return;
+
+        try {
+          // Explicitly clear stop handler so Chromium's MediaNotificationManager prioritizes [PREVIOUS_TRACK, PLAY/PAUSE, NEXT_TRACK] in compact view
+          navigator.mediaSession.setActionHandler("stop", null);
+        } catch {}
 
         const actionList: [MediaSessionAction, MediaSessionActionHandler][] = [
           ["play", () => handlePlayRef.current()],
@@ -2982,7 +2989,6 @@ export default function App() {
               seekToTimeRef.current(details.seekTime);
             }
           }],
-          ["stop", () => handleStopRef.current()],
         ];
 
         for (const [action, handler] of actionList) {

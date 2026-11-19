@@ -1,5 +1,5 @@
 // Service Worker for Kahoii Music PWA & Offline Support
-const CACHE_NAME = 'kahoii-music-v1';
+const CACHE_NAME = 'kahoii-music-v2';
 
 const STATIC_ASSETS = [
   '/',
@@ -76,9 +76,10 @@ self.addEventListener('fetch', (event) => {
   );
 
   if (isStaticAsset) {
+    // Network First with Cache Fallback for instant updates and offline support
     event.respondWith(
-      caches.match(request).then((cachedResponse) => {
-        const fetchPromise = fetch(request).then((networkResponse) => {
+      fetch(request)
+        .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
@@ -86,10 +87,8 @@ self.addEventListener('fetch', (event) => {
             });
           }
           return networkResponse;
-        }).catch(() => null);
-
-        return cachedResponse || fetchPromise;
-      })
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }
