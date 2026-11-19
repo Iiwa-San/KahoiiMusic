@@ -2390,10 +2390,11 @@ export default function App() {
       }, 3000);
 
       // Pre-warm and unlock native HTML5 Audio element synchronously within direct user tap gesture (Critical for iOS Safari background privileges)
+      // Prime with silent 1-sample WAV so audio context is unlocked without leaking previous track audio
       if (audioRef.current) {
         try {
           audioRef.current.pause();
-          audioRef.current.currentTime = 0;
+          audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
           audioRef.current.play().catch(() => {});
         } catch { }
       }
@@ -2610,15 +2611,6 @@ export default function App() {
           const dur = audioRef.current.duration;
           if (dur > 0 && !isNaN(dur) && dur !== duration) {
             setDuration(Math.round(dur));
-          }
-          if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession && dur > 0 && cur >= 0) {
-            try {
-              navigator.mediaSession.setPositionState({
-                duration: dur,
-                playbackRate: isPlaying ? 1 : 0,
-                position: Math.min(cur, dur),
-              });
-            } catch { }
           }
         }
       };
@@ -2896,102 +2888,172 @@ export default function App() {
         seekToTime(parseFloat(e.target.value));
       };
 
-      // MediaSession API Integration for Background Audio, Lock Screen Controls & Mobile Playback
+      const handleSeekBackward = (offset = 10) => {
+        const cur = activePlayerType.current === "audio" && audioRef.current
+          ? audioRef.current.currentTime
+          : currentTime;
+        seekToTime(Math.max(0, cur - offset));
+      };
+
+      const handleSeekForward = (offset = 10) => {
+        const cur = activePlayerType.current === "audio" && audioRef.current
+          ? audioRef.current.currentTime
+          : currentTime;
+        const dur = duration > 0 ? duration : 3600;
+        seekToTime(Math.min(dur, cur + offset));
+      };
+
+      const handleStop = () => {
+        isUserPausedRef.current = true;
+        if (activePlayerType.current === "audio" && audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+          try { ytPlayerRef.current.pauseVideo(); } catch { }
+        }
+        setIsPlaying(false);
+        setCurrentTime(0);
+      };
+
+      // Mutable refs for MediaSession action callbacks so handlers are bound ONCE and never torn down
+      const handlePlayRef = useRef<() => void>(() => {});
+      const handlePauseRef = useRef<() => void>(() => {});
+      const handlePrevRef = useRef<() => void>(() => {});
+      const handleNextRef = useRef<() => void>(() => {});
+      const handleSeekBackwardRef = useRef<(offset?: number) => void>(() => {});
+      const handleSeekForwardRef = useRef<(offset?: number) => void>(() => {});
+      const seekToTimeRef = useRef<(newTime: number) => void>(() => {});
+      const handleStopRef = useRef<() => void>(() => {});
+
+      useEffect(() => {
+        handlePlayRef.current = () => {
+          isUserPausedRef.current = false;
+          if (activePlayerType.current === "audio" && audioRef.current) {
+            audioRef.current.play().catch(() => {});
+          } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+            if (audioRef.current) {
+              try {
+                audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                audioRef.current.loop = true;
+                audioRef.current.play().catch(() => {});
+              } catch {}
+            }
+            try { ytPlayerRef.current.playVideo(); } catch {}
+          }
+          setIsPlaying(true);
+        };
+        handlePauseRef.current = () => {
+          isUserPausedRef.current = true;
+          if (activePlayerType.current === "audio" && audioRef.current) {
+            audioRef.current.pause();
+          } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+            try { ytPlayerRef.current.pauseVideo(); } catch {}
+            if (audioRef.current) audioRef.current.pause();
+          }
+          setIsPlaying(false);
+        };
+        handlePrevRef.current = handlePrev;
+        handleNextRef.current = handleNext;
+        handleSeekBackwardRef.current = handleSeekBackward;
+        handleSeekForwardRef.current = handleSeekForward;
+        seekToTimeRef.current = seekToTime;
+        handleStopRef.current = handleStop;
+      });
+
+      // 1. MediaSession API: Register All 8 Action Handlers ONCE on Mount (Ensures Back/Next/Seek appear on Android/iOS Lock Screen)
       useEffect(() => {
         if (!("mediaSession" in navigator)) return;
 
-        if (currentTrack) {
-          const artUrl =
-            currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
-              ? currentTrack.thumbnail.includes("hqdefault.jpg")
-                ? currentTrack.thumbnail.replace("hqdefault.jpg", "mqdefault.jpg")
-                : currentTrack.thumbnail
-              : currentTrack.id
-                ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`
-                : DEFAULT_TRACK_ART;
+        const actionList: [MediaSessionAction, MediaSessionActionHandler][] = [
+          ["play", () => handlePlayRef.current()],
+          ["pause", () => handlePauseRef.current()],
+          ["previoustrack", () => handlePrevRef.current()],
+          ["nexttrack", () => handleNextRef.current()],
+          ["seekbackward", (details) => {
+            const offset = details.seekOffset || 10;
+            handleSeekBackwardRef.current(offset);
+          }],
+          ["seekforward", (details) => {
+            const offset = details.seekOffset || 10;
+            handleSeekForwardRef.current(offset);
+          }],
+          ["seekto", (details) => {
+            if (details.seekTime !== undefined) {
+              seekToTimeRef.current(details.seekTime);
+            }
+          }],
+          ["stop", () => handleStopRef.current()],
+        ];
 
+        for (const [action, handler] of actionList) {
           try {
-            navigator.mediaSession.metadata = new MediaMetadata({
-              title: currentTrack.title || "Kahoii Music",
-              artist: formatTrackArtist(currentTrack.title, currentTrack.author) || "Kahoii Music",
-              album: "Kahoii Music",
-              artwork: [
-                { src: artUrl, sizes: "96x96", type: "image/jpeg" },
-                { src: artUrl, sizes: "128x128", type: "image/jpeg" },
-                { src: artUrl, sizes: "192x192", type: "image/jpeg" },
-                { src: artUrl, sizes: "256x256", type: "image/jpeg" },
-                { src: artUrl, sizes: "512x512", type: "image/jpeg" },
-              ],
-            });
-          } catch (err) {
-            console.warn("MediaSession metadata error:", err);
+            navigator.mediaSession.setActionHandler(action, handler);
+          } catch (e) {
+            console.warn(`[MediaSession] Action "${action}" registration:`, e);
           }
         }
+      }, []);
+
+      // 2. MediaSession API: Synchronize Track Metadata when Current Track Changes
+      useEffect(() => {
+        if (!("mediaSession" in navigator)) return;
+
+        if (!currentTrack) {
+          try {
+            navigator.mediaSession.metadata = null;
+          } catch {}
+          return;
+        }
+
+        const artUrl =
+          currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
+            ? currentTrack.thumbnail.includes("hqdefault.jpg")
+              ? currentTrack.thumbnail.replace("hqdefault.jpg", "mqdefault.jpg")
+              : currentTrack.thumbnail
+            : currentTrack.id
+              ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`
+              : DEFAULT_TRACK_ART;
 
         try {
-          const effectivePlaying = isPlaying || (!isUserPausedRef.current && !!currentTrack);
-          navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused";
-
-          try {
-            navigator.mediaSession.setActionHandler("play", () => {
-              isUserPausedRef.current = false;
-              if (activePlayerType.current === "audio" && audioRef.current) {
-                audioRef.current.play().catch(() => { });
-              } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
-                if (audioRef.current) {
-                  try {
-                    audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-                    audioRef.current.loop = true;
-                    audioRef.current.play().catch(() => {});
-                  } catch {}
-                }
-                try { ytPlayerRef.current.playVideo(); } catch { }
-              }
-              setIsPlaying(true);
-            });
-          } catch {}
-
-          try {
-            navigator.mediaSession.setActionHandler("pause", () => {
-              isUserPausedRef.current = true;
-              if (activePlayerType.current === "audio" && audioRef.current) {
-                audioRef.current.pause();
-              } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
-                try { ytPlayerRef.current.pauseVideo(); } catch { }
-                if (audioRef.current) audioRef.current.pause();
-              }
-              setIsPlaying(false);
-            });
-          } catch {}
-
-          // Always register previous/next buttons individually so lockscreen & notification media controls show both
-          try {
-            navigator.mediaSession.setActionHandler("previoustrack", () => {
-              handlePrev();
-            });
-          } catch (e) {
-            console.warn("MediaSession previoustrack error:", e);
-          }
-
-          try {
-            navigator.mediaSession.setActionHandler("nexttrack", () => {
-              handleNext();
-            });
-          } catch (e) {
-            console.warn("MediaSession nexttrack error:", e);
-          }
-
-          try {
-            navigator.mediaSession.setActionHandler("seekto", (details) => {
-              if (details.seekTime !== undefined) {
-                seekToTime(details.seekTime);
-              }
-            });
-          } catch {}
-        } catch (e) {
-          console.warn("MediaSession action handler error:", e);
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: currentTrack.title || "Kahoii Music",
+            artist: formatTrackArtist(currentTrack.title, currentTrack.author) || "Kahoii Music",
+            album: "Kahoii Music",
+            artwork: [
+              { src: artUrl, sizes: "96x96", type: "image/jpeg" },
+              { src: artUrl, sizes: "128x128", type: "image/jpeg" },
+              { src: artUrl, sizes: "192x192", type: "image/jpeg" },
+              { src: artUrl, sizes: "256x256", type: "image/jpeg" },
+              { src: artUrl, sizes: "512x512", type: "image/jpeg" },
+            ],
+          });
+        } catch (err) {
+          console.warn("[MediaSession] Metadata update error:", err);
         }
-      }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, isPlaying, duration, currentTime]);
+      }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, currentTrack?.thumbnail]);
+
+      // 3. MediaSession API: Synchronize Playback State & Position on State/Track/Duration Changes
+      useEffect(() => {
+        if (!("mediaSession" in navigator)) return;
+
+        const effectivePlaying = isPlaying || (!isUserPausedRef.current && !!currentTrack);
+        try {
+          navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused";
+        } catch {}
+
+        if ("setPositionState" in navigator.mediaSession && duration > 0) {
+          try {
+            const cur = activePlayerType.current === "audio" && audioRef.current
+              ? audioRef.current.currentTime
+              : currentTime;
+            navigator.mediaSession.setPositionState({
+              duration: duration,
+              playbackRate: effectivePlaying ? 1 : 0,
+              position: Math.min(Math.max(0, cur), duration),
+            });
+          } catch {}
+        }
+      }, [isPlaying, currentTrack?.id, duration]);
 
       // Top Search Submit
       const handleTopSearchSubmit = async (e?: React.FormEvent) => {
