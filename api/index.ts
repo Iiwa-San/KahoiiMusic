@@ -545,13 +545,13 @@ app.get(["/api/home", "/home"], async (_req, res) => {
 
     // 1. Trending tracks: pure official YouTube Music Vietnam Charts (zero bolero)
     const cleanTrending = (officialTrending.tracks || []).filter(
-      (t) => !isUnwantedTrack(t.title, t.author)
+      (t: any) => !isUnwantedTrack(t.title, t.author)
     );
     const trendingTracks = shuffleArray(cleanTrending).slice(0, 30);
 
     // 2. New releases: filter strictly to remove any bolero / unwanted tracks
     const cleanNewReleases = (newReleasesRes.tracks || []).filter(
-      (t) => !isUnwantedTrack(t.title, t.author)
+      (t: any) => !isUnwantedTrack(t.title, t.author)
     );
     let newReleaseTracks = shuffleArray(cleanNewReleases);
     if (newReleaseTracks.length < 12) {
@@ -560,7 +560,7 @@ app.get(["/api/home", "/home"], async (_req, res) => {
     }
 
     // 3. Dynamic artists from both official charts and new release queries
-    const rawArtists = [
+    const rawArtists: any[] = [
       ...(officialTrending.artists || []),
       ...(newReleasesRes.artists || []),
     ];

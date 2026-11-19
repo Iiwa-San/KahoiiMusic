@@ -54,8 +54,10 @@ html, body, #root {
 .safe-header {
   padding-top: max(10px, env(safe-area-inset-top, 0px));
   height: calc(54px + max(10px, env(safe-area-inset-top, 0px)));
-  padding-left: max(12px, env(safe-area-inset-left, 0px));
-  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-left: max(10px, env(safe-area-inset-left, 0px));
+  padding-right: max(10px, env(safe-area-inset-right, 0px));
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 @media (min-width: 1024px) {
@@ -68,8 +70,13 @@ html, body, #root {
 }
 
 .safe-bottom-nav {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+  height: calc(56px + max(6px, env(safe-area-inset-bottom, 0px)));
+  box-sizing: border-box;
+}
+
+.safe-mini-player {
+  bottom: calc(56px + max(8px, env(safe-area-inset-bottom, 0px)) + 8px);
 }
 
 /* Exact Figma Panel Glass Card with dynamic tone & adaptive border */

@@ -560,7 +560,8 @@ export default function App() {
 
   // Dual-Engine Playback (Audio Element + Zero-Fail YouTube Iframe Player Fallback)
   const ytPlayerRef = useRef<any>(null);
-  const activePlayerType = useRef<"audio" | "youtube">("audio");
+  const activePlayerType = useRef<"audio" | "youtube">("youtube");
+  const lastPlayPositionRef = useRef<number>(0);
   const lastLocalPersistRef = useRef<number>(0);
   const [_lyrics, setLyrics] = useState<any>(null);
 
@@ -1944,6 +1945,18 @@ export default function App() {
       const handleVisibilityChange = () => {
         if (document.visibilityState === "visible") {
           fetchLibraryData(true);
+          // Restore playback position seamlessly if mobile browser reset video in background/multitasking
+          if (activePlayerType.current === "youtube" && ytPlayerRef.current && isPlaying) {
+            try {
+              const cur = ytPlayerRef.current.getCurrentTime?.() || 0;
+              if (lastPlayPositionRef.current > 3 && cur < 1) {
+                ytPlayerRef.current.seekTo(lastPlayPositionRef.current, true);
+                ytPlayerRef.current.playVideo();
+              } else if (typeof ytPlayerRef.current.getPlayerState === "function" && ytPlayerRef.current.getPlayerState() === 2) {
+                ytPlayerRef.current.playVideo();
+              }
+            } catch { }
+          }
         }
       };
       const handleFocus = () => {
@@ -2037,23 +2050,38 @@ export default function App() {
                     setIsPlaying(true);
                     setIsLoading(false);
                     setErrorMessage(null);
+                    // Clear transition lock once track is actively playing
+                    setTimeout(() => {
+                      isTransitioningRef.current = false;
+                    }, 500);
                   } else if (event.data === 2) {
                     setIsPlaying(false);
                     setIsLoading(false);
                   } else if (event.data === 0) {
-                    handleTrackEndedRef.current();
+                    // Only advance track if NOT in manual transition AND track actually played to the end
+                    if (!isTransitioningRef.current) {
+                      const ct = ytPlayerRef.current?.getCurrentTime?.() || 0;
+                      const dur = ytPlayerRef.current?.getDuration?.() || 0;
+                      if (dur > 8 && ct >= dur - 3) {
+                        handleTrackEndedRef.current();
+                      }
+                    }
                   } else if (event.data === 3) {
-                    // Buffer event: clear loading spinner after 2.5s max to prevent freeze on iOS
-                    setTimeout(() => setIsLoading(false), 2500);
+                    // Buffer event: clear loading spinner after 2s max to prevent freeze on iOS
+                    setTimeout(() => setIsLoading(false), 2000);
                   } else if (event.data === -1) {
                     setIsLoading(false);
                   }
                 },
                 onError: () => {
                   setIsLoading(false);
-                  setTimeout(() => {
-                    handleTrackEndedRef.current();
-                  }, 1000);
+                  if (!isTransitioningRef.current) {
+                    setTimeout(() => {
+                      if (!isTransitioningRef.current) {
+                        handleTrackEndedRef.current();
+                      }
+                    }, 1200);
+                  }
                 },
               },
             });
@@ -2083,7 +2111,10 @@ export default function App() {
             const ct = ytPlayerRef.current.getCurrentTime() || 0;
             const rawDur = ytPlayerRef.current.getDuration() || 0;
             const dur = Math.round(rawDur);
-            if (ct > 0) setCurrentTime(ct);
+            if (ct > 0) {
+              setCurrentTime(ct);
+              lastPlayPositionRef.current = ct;
+            }
             if (dur > 0 && Math.abs(dur - duration) > 1) {
               setDuration(dur);
               setCurrentTrack((prev) => (prev && (!prev.duration || prev.duration <= 0) ? { ...prev, duration: dur } : prev));
@@ -2291,285 +2322,165 @@ export default function App() {
     const loadAndPlayTrack = async (track: Track, autoPlay = true, _immediate = true) => {
       if (!track) return;
 
-        // Synchronously prime / unlock native HTML5 Audio element in direct user gesture for iOS Safari
-        if (autoPlay && audioRef.current) {
-          audioRef.current.play().catch(() => { });
+      // Lock transitioning to prevent spurious ENDED events from old track
+      isTransitioningRef.current = true;
+      setTimeout(() => {
+        isTransitioningRef.current = false;
+      }, 3000);
+
+      // Immediately silence and reset HTML5 Audio so old track never replays
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = "";
+        } catch { }
+      }
+
+      // Instant UI update: title, artwork, active queue beam update immediately with zero lag
+      setCurrentTrack(track);
+      currentTrackRef.current = track;
+      setIsLoading(true);
+      setErrorMessage(null);
+      setCurrentTime(0);
+      lastPlayPositionRef.current = 0;
+      setLyrics(null);
+
+      // Cancel existing pending debounce timer
+      if (playDebounceTimerRef.current) {
+        clearTimeout(playDebounceTimerRef.current);
+        playDebounceTimerRef.current = null;
+      }
+
+      // Cancel in-flight audio stream fetch
+      if (playAbortControllerRef.current) {
+        playAbortControllerRef.current.abort();
+        playAbortControllerRef.current = null;
+      }
+
+      const executePlayback = async () => {
+        // Record to history if user is logged in
+        if (userSession?.isLoggedIn) {
+          setLibraryData((prev) => {
+            const filtered = prev.history.filter((h) => h.id !== track.id);
+            const updated = [track, ...filtered].slice(0, 100);
+            persistLibraryData({ history: updated });
+            return { ...prev, history: updated };
+          });
         }
 
-        // Instant UI update: title, artwork, active queue beam update immediately with zero lag
-        setCurrentTrack(track);
-        currentTrackRef.current = track;
-        setIsLoading(true);
-        setErrorMessage(null);
-        setCurrentTime(0);
-        setLyrics(null);
-
-        // Cancel existing pending debounce timer
-        if (playDebounceTimerRef.current) {
-          clearTimeout(playDebounceTimerRef.current);
-          playDebounceTimerRef.current = null;
-        }
-
-        // Cancel in-flight audio stream fetch
-        if (playAbortControllerRef.current) {
-          playAbortControllerRef.current.abort();
-          playAbortControllerRef.current = null;
-        }
-
-        const executePlayback = async () => {
-          // Record to history if user is logged in (only when actually played)
-          if (userSession?.isLoggedIn) {
-            setLibraryData((prev) => {
-              const filtered = prev.history.filter((h) => h.id !== track.id);
-              const updated = [track, ...filtered].slice(0, 100);
-              persistLibraryData({ history: updated });
-              return { ...prev, history: updated };
-            });
-          }
-
-          // Strategy 0: Offline IndexedDB Playback (Zero network bytes, 100% offline)
-          try {
-            const offlineItem = await getOfflineTrack(track.id);
-            if (offlineItem && offlineItem.audioBlob && audioRef.current) {
-              if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
-                try {
-                  ytPlayerRef.current.stopVideo();
-                } catch { }
-              }
-              const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
-              audioRef.current.src = blobUrl;
-              audioRef.current.load();
-              activePlayerType.current = "audio";
-              if (autoPlay) {
-                const playPromise = audioRef.current.play();
-                if (playPromise !== undefined) {
-                  playPromise
-                    .then(() => {
-                      setIsPlaying(true);
-                      setIsLoading(false);
-                    })
-                    .catch(() => {
-                      setIsPlaying(false);
-                      setIsLoading(false);
-                    });
-                }
-              } else {
-                setIsPlaying(false);
-                setIsLoading(false);
-              }
-              if (offlineItem.lyrics) {
-                setLyrics(offlineItem.lyrics);
-              }
-              // If offline lyrics don't have .lines, fetch enriched lyrics in background and update IndexedDB
-              if ((!(offlineItem.lyrics as any)?.lines || (offlineItem.lyrics as any).lines.length === 0) && typeof navigator !== "undefined" && navigator.onLine) {
-                fetch(
-                  `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
-                )
-                  .then((res) => (res.ok ? res.json() : null))
-                  .then((lyricsData) => {
-                    if (lyricsData?.lines && lyricsData.lines.length > 0) {
-                      setLyrics(lyricsData);
-                      saveTrackOffline(track, offlineItem.audioBlob, lyricsData);
-                    }
-                  })
-                  .catch(() => { });
-              }
-              setErrorMessage(null);
-              return;
+        // Strategy 0: Offline IndexedDB Playback (Zero network bytes, 100% offline)
+        try {
+          const offlineItem = await getOfflineTrack(track.id);
+          if (offlineItem && offlineItem.audioBlob && audioRef.current) {
+            if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+              try {
+                ytPlayerRef.current.stopVideo();
+              } catch { }
             }
-          } catch (offlineErr) {
-            console.warn("[Offline Playback Error]", offlineErr);
-          }
-
-          // Check if user is offline without internet and the track is not downloaded
-          if (typeof navigator !== "undefined" && !navigator.onLine) {
-            setIsLoading(false);
-            setErrorMessage("Bạn đang ngoại tuyến. Hãy mở tab 'Đã tải' để nghe các bài đã lưu.");
-            showToast("Bạn đang ngoại tuyến! Hãy chọn bài hát trong mục 'Đã tải'", "info");
-            setActiveLeftTab("offline");
+            const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
+            audioRef.current.src = blobUrl;
+            audioRef.current.load();
+            activePlayerType.current = "audio";
+            if (autoPlay) {
+              const playPromise = audioRef.current.play();
+              if (playPromise !== undefined) {
+                playPromise
+                  .then(() => {
+                    setIsPlaying(true);
+                    setIsLoading(false);
+                  })
+                  .catch(() => {
+                    setIsPlaying(false);
+                    setIsLoading(false);
+                  });
+              }
+            } else {
+              setIsPlaying(false);
+              setIsLoading(false);
+            }
+            if (offlineItem.lyrics) {
+              setLyrics(offlineItem.lyrics);
+            }
+            setErrorMessage(null);
             return;
           }
+        } catch (offlineErr) {
+          console.warn("[Offline Playback Error]", offlineErr);
+        }
 
-          // If active player is already YouTube, transition track smoothly
-          if (
-            activePlayerType.current === "youtube" &&
-            ytPlayerRef.current &&
-            typeof ytPlayerRef.current.loadVideoById === "function"
-          ) {
-            try {
-              ytPlayerRef.current.loadVideoById({
-                videoId: track.id,
-                startSeconds: 0,
-              });
-              if (autoPlay) {
-                ytPlayerRef.current.playVideo();
-                setIsPlaying(true);
-              } else {
-                ytPlayerRef.current.pauseVideo();
-                setIsPlaying(false);
-              }
-              setErrorMessage(null);
-              setIsLoading(false);
+        // Check if user is offline without internet and the track is not downloaded
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          setIsLoading(false);
+          setErrorMessage("Bạn đang ngoại tuyến. Hãy mở tab 'Đã tải' để nghe các bài đã lưu.");
+          showToast("Bạn đang ngoại tuyến! Hãy chọn bài hát trong mục 'Đã tải'", "info");
+          setActiveLeftTab("offline");
+          return;
+        }
 
-              const updateAuthorAcrossApp = (newAuthor: string) => {
-                if (!newAuthor || newAuthor === "Nghệ sĩ" || newAuthor === "Kahoii Music") return;
-                track.author = newAuthor;
-                setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: newAuthor } : prev));
-                setLibraryData((prev) => {
-                  const repl = (list: Track[]) =>
-                    list.map((it) => (it.id === track.id ? { ...it, author: newAuthor } : it));
-                  const updated = {
-                    ...prev,
-                    favorites: repl(prev.favorites),
-                    savedTracks: repl(prev.savedTracks),
-                    history: repl(prev.history),
-                  };
-                  persistLibraryData(updated);
-                  return updated;
-                });
-              };
-
-              // Fetch Lyrics in background without delaying playback
-              fetch(
-                `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
-              )
-                .then((res) => (res.ok ? res.json() : null))
-                .then((lyricsData) => {
-                  if (lyricsData) {
-                    setLyrics(lyricsData);
-                    if (lyricsData.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
-                      updateAuthorAcrossApp(lyricsData.artist);
-                    }
-                  }
-                })
-                .catch(() => { });
-
-              return;
-            } catch (ytErr) {
-              console.warn("YouTube instant transition warning:", ytErr);
-            }
-          }
-
-          // Synchronously prime/unlock HTML5 Audio on user gesture for iOS Safari background playback
-          if (audioRef.current) {
-            audioRef.current.play().catch(() => { });
-          }
-
-          // Stop current audio and YouTube player
-          if (audioRef.current) {
-            try {
-              audioRef.current.pause();
-            } catch { }
-          }
-          if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
-            try {
-              ytPlayerRef.current.stopVideo();
-            } catch { }
-          }
-
-          // Strategy 1: Attempt to resolve direct audio stream from server (real HTML5 audio for background playback)
-          let streamPlayed = false;
+        // Strategy 1: Instant zero-delay YouTube Player Execution in DIRECT User Gesture (iOS Safari / Android)
+        activePlayerType.current = "youtube";
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
           try {
-            const controller = new AbortController();
-            playAbortControllerRef.current = controller;
-            const timeoutId = setTimeout(() => controller.abort(), 7000); // 7s realistic stream resolve timeout
-
-            const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
-              signal: controller.signal,
+            ytPlayerRef.current.loadVideoById({
+              videoId: track.id,
+              startSeconds: 0,
             });
-            clearTimeout(timeoutId);
-
-            if (res.ok) {
-              const data = await res.json();
-              if (data.author && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
-                track.author = data.author;
-                setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: data.author } : prev));
-              }
-              if (data.streamUrl && audioRef.current) {
-                const playableUrl = data.streamUrl.includes("googlevideo.com")
-                  ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
-                  : data.streamUrl;
-
-                audioRef.current.src = playableUrl;
-                audioRef.current.load();
-                activePlayerType.current = "audio";
-                streamPlayed = true;
-
-                if (autoPlay) {
-                  const playPromise = audioRef.current.play();
-                  if (playPromise !== undefined) {
-                    playPromise
-                      .then(() => {
-                        setIsPlaying(true);
-                        setIsLoading(false);
-                      })
-                      .catch(() => {
-                        setIsPlaying(false);
-                        setIsLoading(false);
-                      });
-                  }
-                } else {
-                  setIsPlaying(false);
-                  setIsLoading(false);
-                }
-              }
+            if (autoPlay) {
+              ytPlayerRef.current.playVideo();
+              setIsPlaying(true);
+            } else {
+              ytPlayerRef.current.pauseVideo();
+              setIsPlaying(false);
             }
-          } catch {
-            // Backend stream unavailable or blocked
+            setErrorMessage(null);
+            setTimeout(() => setIsLoading(false), 1200);
+          } catch (ytErr) {
+            console.warn("YouTube player instant launch warning:", ytErr);
+            setIsLoading(false);
           }
-
-          // Strategy 2: Zero-failure YouTube Web Player fallback (plays 100% on Vercel)
-          if (!streamPlayed) {
-            activePlayerType.current = "youtube";
+        } else {
+          // If YouTube Iframe is still initializing, retry as soon as ready
+          setTimeout(() => {
             if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
               try {
-                ytPlayerRef.current.loadVideoById({
-                  videoId: track.id,
-                  startSeconds: 0,
-                });
+                ytPlayerRef.current.loadVideoById({ videoId: track.id, startSeconds: 0 });
                 if (autoPlay) {
                   ytPlayerRef.current.playVideo();
                   setIsPlaying(true);
-                } else {
-                  ytPlayerRef.current.pauseVideo();
-                  setIsPlaying(false);
                 }
-                setErrorMessage(null);
-                // Clear loading after short delay so iPhone never freezes in loading state
-                setTimeout(() => setIsLoading(false), 1500);
-              } catch (ytErr) {
-                console.warn("YouTube player fallback warning:", ytErr);
                 setIsLoading(false);
-              }
-            } else {
-              setIsLoading(false);
+              } catch { }
+            }
+          }, 400);
+        }
+
+        // Safety watchdog: ensure loading spinner is cleared after 4s max if stalled
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 4000);
+
+        // Fetch Lyrics in background without delaying playback
+        try {
+          const lyricsRes = await fetch(
+            `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
+          );
+          if (lyricsRes.ok) {
+            const lyricsData = await lyricsRes.json();
+            if (lyricsData?.lines && lyricsData.lines.length > 0) {
+              setLyrics(lyricsData);
+            }
+            if (lyricsData?.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
+              track.author = lyricsData.artist;
+              setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: lyricsData.artist } : prev));
             }
           }
-
-          // Safety watchdog: ensure loading spinner is cleared after 6s max if stalled
-          setTimeout(() => {
-            setIsLoading(false);
-          }, 6000);
-
-          // Fetch Lyrics in background
-          try {
-            const lyricsRes = await fetch(
-              `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(track.id)}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.author || "")}&duration=${track.duration || ""}`
-            );
-            if (lyricsRes.ok) {
-              const lyricsData = await lyricsRes.json();
-              setLyrics(lyricsData);
-              if (lyricsData?.artist && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
-                track.author = lyricsData.artist;
-                setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: lyricsData.artist } : prev));
-              }
-            }
-          } catch { }
-        };
-
-        // Execute playback immediately to keep iOS Safari user-gesture context valid
-        executePlayback();
+        } catch { }
       };
+
+      // Execute playback immediately to keep iOS Safari user-gesture context valid
+      executePlayback();
+    };
 
       const handleTimeUpdate = () => {
         if (activePlayerType.current === "audio" && audioRef.current) {
@@ -3166,7 +3077,7 @@ export default function App() {
       const recommendedTracksToDisplay = libraryData.favorites.slice(0, 12);
 
       return (
-        <div className="w-screen h-screen h-[100dvh] flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
+        <div className="w-full max-w-full h-screen h-[100dvh] flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
           <audio
             ref={audioRef}
             preload="auto"
@@ -3190,17 +3101,18 @@ export default function App() {
             onError={() => setIsLoading(false)}
           />
 
-      {/* Hidden YouTube Iframe Container for 100% Reliable Playback */}
+      {/* Hidden YouTube Iframe Container for 100% Reliable Playback (Inside viewport to prevent mobile background discarding) */}
       <div
         id="kahoii-yt-iframe"
         style={{
           position: "fixed",
-          top: "-9999px",
-          left: "-9999px",
-          width: "200px",
-          height: "200px",
-          opacity: 1,
+          bottom: "0px",
+          right: "0px",
+          width: "1px",
+          height: "1px",
+          opacity: 0.01,
           pointerEvents: "none",
+          zIndex: -10,
         }}
       />
 
@@ -3208,9 +3120,9 @@ export default function App() {
       {/* 1. TOP BAR (Seamless & Centered matching Figma mockup, Safe-Area aware)     */}
       {/* ========================================================================= */}
       <header className="w-full flex flex-col justify-end flex-shrink-0 z-30 safe-header">
-        <div className="w-full h-[54px] flex items-center justify-between">
+        <div className="w-full h-[54px] flex items-center justify-between min-w-0 gap-1.5 sm:gap-3">
           {/* Left: App Logo & Brand Identity */}
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                   <img
                     src="./logo_icon.png"
                     alt="Kahoii Music"
@@ -3222,10 +3134,10 @@ export default function App() {
                 </div>
 
                 {/* Center: Search Pill with Search History Suggestions Dropdown */}
-                <div ref={searchDropdownRef} className="relative flex-1 max-w-[580px] mx-2 sm:mx-4">
+                <div ref={searchDropdownRef} className="relative flex-1 min-w-0 max-w-[580px] mx-1 sm:mx-4">
                   <form
                     onSubmit={handleTopSearchSubmit}
-                    className="w-full h-[36px] px-3 sm:px-4 rounded-full theme-input-pill flex items-center gap-2 sm:gap-2.5 shadow-inner transition-all"
+                    className="w-full h-[36px] px-2.5 sm:px-4 rounded-full theme-input-pill flex items-center gap-1.5 sm:gap-2.5 shadow-inner transition-all overflow-hidden"
                   >
                     <Search className="w-4 h-4 theme-accent-text flex-shrink-0" />
                     <input
@@ -3234,7 +3146,7 @@ export default function App() {
                       value={topSearchText}
                       onFocus={() => setIsSearchFocused(true)}
                       onChange={(e) => setTopSearchText(e.target.value)}
-                      className="flex-1 bg-transparent text-base sm:text-sm text-white placeholder-white/40 focus:outline-none min-w-0"
+                      className="w-full flex-1 bg-transparent text-sm text-white placeholder-white/40 focus:outline-none min-w-0"
                     />
                     {(topSearchText || isSearchOpen) && (
                       <button
@@ -3305,7 +3217,7 @@ export default function App() {
                 </div>
 
                 {/* Right: Offline Indicator, Download Apps & User Avatar Pill Buttons */}
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                   {!isOnline && (
                     <div
                       title="Bạn đang ngoại tuyến. Các bài hát đã lưu trong mục 'Đã tải' vẫn nghe được bình thường!"
@@ -6440,7 +6352,7 @@ export default function App() {
               {currentTrack && mobileTab !== "player" && (
                 <div
                   onClick={() => setMobileTab("player")}
-                  className="lg:hidden fixed bottom-[62px] left-2.5 right-2.5 z-40 bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border theme-accent-border rounded-2xl p-2 flex items-center gap-2.5 shadow-2xl cursor-pointer animate-fade-in"
+                  className="lg:hidden fixed safe-mini-player left-2.5 right-2.5 z-40 bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border theme-accent-border rounded-2xl p-2 flex items-center gap-2.5 shadow-2xl cursor-pointer animate-fade-in"
                 >
                   <img
                     src={
