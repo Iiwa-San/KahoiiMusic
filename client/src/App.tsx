@@ -1956,6 +1956,10 @@ export default function App() {
               ytPlayerRef.current.playVideo();
               setIsPlaying(true);
             } catch { }
+          } else if (activePlayerType.current === "audio" && audioRef.current && !isUserPausedRef.current && currentTrackRef.current) {
+            if (audioRef.current.paused && isPlaying) {
+              audioRef.current.play().catch(() => {});
+            }
           }
         }
       };
@@ -2147,8 +2151,12 @@ export default function App() {
       return () => clearInterval(timer);
     }, [duration]);
 
-    // Sync volume with YouTube Player
+    // Sync volume with Audio element and YouTube Player
     useEffect(() => {
+      if (audioRef.current) {
+        audioRef.current.volume = volume;
+        audioRef.current.muted = isMuted;
+      }
       if (
         activePlayerType.current === "youtube" &&
         ytPlayerRef.current &&
@@ -2335,6 +2343,15 @@ export default function App() {
         isTransitioningRef.current = false;
       }, 3000);
 
+      // Pre-warm and unlock native HTML5 Audio element synchronously within direct user tap gesture (Critical for iOS Safari background privileges)
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => {});
+        } catch { }
+      }
+
       // Instant UI update: title, artwork, active queue beam update immediately with zero lag
       setCurrentTrack(track);
       currentTrackRef.current = track;
@@ -2419,52 +2436,98 @@ export default function App() {
           return;
         }
 
-        // Strategy 1: Instant zero-delay YouTube Player Execution in DIRECT User Gesture (iOS Safari / Android)
-        activePlayerType.current = "youtube";
-        if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
-          try {
-            ytPlayerRef.current.loadVideoById({
-              videoId: track.id,
-              startSeconds: 0,
-            });
-            // Unlock Mobile Background Audio Privilege via silent HTML5 audio loop in direct user gesture
-            if (audioRef.current) {
-              try {
-                audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-                audioRef.current.loop = true;
-                audioRef.current.play().catch(() => {});
-              } catch {}
+        // Strategy 1: Direct Real Audio Stream from Backend (InnerTube VR / VisionOS, 100% Background Playback on Mobile)
+        let streamLoaded = false;
+        try {
+          const controller = new AbortController();
+          playAbortControllerRef.current = controller;
+          const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+          const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.author && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
+              track.author = data.author;
+              setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: data.author } : prev));
             }
-            if (autoPlay) {
-              try { ytPlayerRef.current.playVideo(); } catch { }
-            } else {
-              try { ytPlayerRef.current.pauseVideo(); } catch { }
-              setIsPlaying(false);
+
+            if (data.streamUrl && audioRef.current) {
+              const playableUrl = data.streamUrl.includes("googlevideo.com")
+                ? `${API_BASE}/api/proxy-audio?url=${encodeURIComponent(data.streamUrl)}`
+                : data.streamUrl;
+
+              // Silence YouTube iframe
+              if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+                try { ytPlayerRef.current.stopVideo(); } catch { }
+              }
+
+              audioRef.current.src = playableUrl;
+              audioRef.current.loop = false;
+              audioRef.current.load();
+              activePlayerType.current = "audio";
+              streamLoaded = true;
+
+              if (autoPlay) {
+                const playPromise = audioRef.current.play();
+                if (playPromise !== undefined) {
+                  playPromise
+                    .then(() => {
+                      setIsPlaying(true);
+                      setIsLoading(false);
+                      isUserPausedRef.current = false;
+                    })
+                    .catch(() => {
+                      setIsPlaying(false);
+                      setIsLoading(false);
+                    });
+                }
+              } else {
+                setIsPlaying(false);
+                setIsLoading(false);
+              }
+              setErrorMessage(null);
             }
-            setErrorMessage(null);
-          } catch (ytErr) {
-            console.warn("YouTube player instant launch warning:", ytErr);
-            setIsLoading(false);
           }
-        } else {
-          // If YouTube Iframe is still initializing, retry as soon as ready
-          setTimeout(() => {
-            if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
-              try {
-                ytPlayerRef.current.loadVideoById({ videoId: track.id, startSeconds: 0 });
-                if (audioRef.current) {
-                  try {
-                    audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-                    audioRef.current.loop = true;
-                    audioRef.current.play().catch(() => {});
-                  } catch {}
-                }
-                if (autoPlay) {
-                  try { ytPlayerRef.current.playVideo(); } catch { }
-                }
-              } catch { }
+        } catch (streamErr) {
+          console.warn("[Stream Fetch Warning]:", streamErr);
+        }
+
+        // Strategy 2: Zero-failure YouTube Web Player Fallback (if backend stream unavailable)
+        if (!streamLoaded) {
+          activePlayerType.current = "youtube";
+          if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+            try {
+              ytPlayerRef.current.loadVideoById({
+                videoId: track.id,
+                startSeconds: 0,
+              });
+              if (autoPlay) {
+                try { ytPlayerRef.current.playVideo(); } catch { }
+              } else {
+                try { ytPlayerRef.current.pauseVideo(); } catch { }
+                setIsPlaying(false);
+              }
+              setErrorMessage(null);
+            } catch (ytErr) {
+              console.warn("YouTube player instant launch warning:", ytErr);
+              setIsLoading(false);
             }
-          }, 400);
+          } else {
+            setTimeout(() => {
+              if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+                try {
+                  ytPlayerRef.current.loadVideoById({ videoId: track.id, startSeconds: 0 });
+                  if (autoPlay) {
+                    try { ytPlayerRef.current.playVideo(); } catch { }
+                  }
+                } catch { }
+              }
+            }, 400);
+          }
         }
 
         // Safety watchdog: ensure loading spinner is cleared after 4s max if stalled
@@ -2497,6 +2560,7 @@ export default function App() {
       const handleTimeUpdate = () => {
         if (activePlayerType.current === "audio" && audioRef.current) {
           setCurrentTime(audioRef.current.currentTime);
+          lastPlayPositionRef.current = audioRef.current.currentTime;
         }
       };
 
