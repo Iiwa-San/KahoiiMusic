@@ -563,6 +563,7 @@ export default function App() {
   const activePlayerType = useRef<"audio" | "youtube">("youtube");
   const lastPlayPositionRef = useRef<number>(0);
   const lastLocalPersistRef = useRef<number>(0);
+  const isUserPausedRef = useRef<boolean>(false);
   const [_lyrics, setLyrics] = useState<any>(null);
 
   // Left Sidebar
@@ -1945,16 +1946,15 @@ export default function App() {
       const handleVisibilityChange = () => {
         if (document.visibilityState === "visible") {
           fetchLibraryData(true);
-          // Restore playback position seamlessly if mobile browser reset video in background/multitasking
-          if (activePlayerType.current === "youtube" && ytPlayerRef.current && isPlaying) {
+          // Restore playback position seamlessly if mobile browser paused or reset video in background/multitasking
+          if (activePlayerType.current === "youtube" && ytPlayerRef.current && !isUserPausedRef.current && currentTrackRef.current) {
             try {
               const cur = ytPlayerRef.current.getCurrentTime?.() || 0;
               if (lastPlayPositionRef.current > 3 && cur < 1) {
                 ytPlayerRef.current.seekTo(lastPlayPositionRef.current, true);
-                ytPlayerRef.current.playVideo();
-              } else if (typeof ytPlayerRef.current.getPlayerState === "function" && ytPlayerRef.current.getPlayerState() === 2) {
-                ytPlayerRef.current.playVideo();
               }
+              ytPlayerRef.current.playVideo();
+              setIsPlaying(true);
             } catch { }
           }
         }
@@ -2049,13 +2049,17 @@ export default function App() {
                   if (event.data === 1) {
                     setIsPlaying(true);
                     setIsLoading(false);
+                    isUserPausedRef.current = false;
                     setErrorMessage(null);
                     // Clear transition lock once track is actively playing
                     setTimeout(() => {
                       isTransitioningRef.current = false;
                     }, 500);
                   } else if (event.data === 2) {
-                    setIsPlaying(false);
+                    // Only reflect paused if user explicitly pressed pause or app is visible in foreground
+                    if (isUserPausedRef.current || document.visibilityState === "visible") {
+                      setIsPlaying(false);
+                    }
                     setIsLoading(false);
                   } else if (event.data === 0) {
                     // Only advance track if NOT in manual transition AND track actually played to the end
@@ -2068,9 +2072,10 @@ export default function App() {
                     }
                   } else if (event.data === 3) {
                     // Buffer event: clear loading spinner after 2s max to prevent freeze on iOS
+                    setIsLoading(true);
                     setTimeout(() => setIsLoading(false), 2000);
                   } else if (event.data === -1) {
-                    setIsLoading(false);
+                    // Unstarted
                   }
                 },
                 onError: () => {
@@ -2322,25 +2327,19 @@ export default function App() {
     const loadAndPlayTrack = async (track: Track, autoPlay = true, _immediate = true) => {
       if (!track) return;
 
+      isUserPausedRef.current = !autoPlay;
+
       // Lock transitioning to prevent spurious ENDED events from old track
       isTransitioningRef.current = true;
       setTimeout(() => {
         isTransitioningRef.current = false;
       }, 3000);
 
-      // Immediately silence and reset HTML5 Audio so old track never replays
-      if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          audioRef.current.src = "";
-        } catch { }
-      }
-
       // Instant UI update: title, artwork, active queue beam update immediately with zero lag
       setCurrentTrack(track);
       currentTrackRef.current = track;
       setIsLoading(true);
+      setIsPlaying(false);
       setErrorMessage(null);
       setCurrentTime(0);
       lastPlayPositionRef.current = 0;
@@ -2380,6 +2379,7 @@ export default function App() {
             }
             const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
             audioRef.current.src = blobUrl;
+            audioRef.current.loop = false;
             audioRef.current.load();
             activePlayerType.current = "audio";
             if (autoPlay) {
@@ -2389,6 +2389,7 @@ export default function App() {
                   .then(() => {
                     setIsPlaying(true);
                     setIsLoading(false);
+                    isUserPausedRef.current = false;
                   })
                   .catch(() => {
                     setIsPlaying(false);
@@ -2426,15 +2427,21 @@ export default function App() {
               videoId: track.id,
               startSeconds: 0,
             });
+            // Unlock Mobile Background Audio Privilege via silent HTML5 audio loop in direct user gesture
+            if (audioRef.current) {
+              try {
+                audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                audioRef.current.loop = true;
+                audioRef.current.play().catch(() => {});
+              } catch {}
+            }
             if (autoPlay) {
-              ytPlayerRef.current.playVideo();
-              setIsPlaying(true);
+              try { ytPlayerRef.current.playVideo(); } catch { }
             } else {
-              ytPlayerRef.current.pauseVideo();
+              try { ytPlayerRef.current.pauseVideo(); } catch { }
               setIsPlaying(false);
             }
             setErrorMessage(null);
-            setTimeout(() => setIsLoading(false), 1200);
           } catch (ytErr) {
             console.warn("YouTube player instant launch warning:", ytErr);
             setIsLoading(false);
@@ -2445,11 +2452,16 @@ export default function App() {
             if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
               try {
                 ytPlayerRef.current.loadVideoById({ videoId: track.id, startSeconds: 0 });
-                if (autoPlay) {
-                  ytPlayerRef.current.playVideo();
-                  setIsPlaying(true);
+                if (audioRef.current) {
+                  try {
+                    audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                    audioRef.current.loop = true;
+                    audioRef.current.play().catch(() => {});
+                  } catch {}
                 }
-                setIsLoading(false);
+                if (autoPlay) {
+                  try { ytPlayerRef.current.playVideo(); } catch { }
+                }
               } catch { }
             }
           }, 400);
@@ -2492,9 +2504,19 @@ export default function App() {
         if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
           try {
             if (isPlaying) {
+              isUserPausedRef.current = true;
               ytPlayerRef.current.pauseVideo();
               setIsPlaying(false);
+              if (audioRef.current) audioRef.current.pause();
             } else {
+              isUserPausedRef.current = false;
+              if (audioRef.current) {
+                try {
+                  audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                  audioRef.current.loop = true;
+                  audioRef.current.play().catch(() => {});
+                } catch {}
+              }
               ytPlayerRef.current.playVideo();
               setIsPlaying(true);
             }
@@ -2516,9 +2538,11 @@ export default function App() {
 
         if (!audioRef.current) return;
         if (isPlaying) {
+          isUserPausedRef.current = true;
           audioRef.current.pause();
           setIsPlaying(false);
         } else {
+          isUserPausedRef.current = false;
           if (!audioRef.current.src) {
             loadAndPlayTrack(currentTrack, true);
             return;
@@ -2752,22 +2776,33 @@ export default function App() {
         }
 
         try {
-          navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+          const effectivePlaying = isPlaying || (!isUserPausedRef.current && !!currentTrack);
+          navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused";
 
           navigator.mediaSession.setActionHandler("play", () => {
+            isUserPausedRef.current = false;
             if (activePlayerType.current === "audio" && audioRef.current) {
               audioRef.current.play().catch(() => { });
             } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
+              if (audioRef.current) {
+                try {
+                  audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                  audioRef.current.loop = true;
+                  audioRef.current.play().catch(() => {});
+                } catch {}
+              }
               try { ytPlayerRef.current.playVideo(); } catch { }
             }
             setIsPlaying(true);
           });
 
           navigator.mediaSession.setActionHandler("pause", () => {
+            isUserPausedRef.current = true;
             if (activePlayerType.current === "audio" && audioRef.current) {
               audioRef.current.pause();
             } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
               try { ytPlayerRef.current.pauseVideo(); } catch { }
+              if (audioRef.current) audioRef.current.pause();
             }
             setIsPlaying(false);
           });
@@ -3084,35 +3119,57 @@ export default function App() {
             playsInline
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={() => {
-              setDuration(audioRef.current?.duration || currentTrack?.duration || 207);
-              setIsLoading(false);
+              if (activePlayerType.current === "audio") {
+                setDuration(audioRef.current?.duration || currentTrack?.duration || 207);
+                setIsLoading(false);
+              }
             }}
-            onCanPlay={() => setIsLoading(false)}
+            onCanPlay={() => {
+              if (activePlayerType.current === "audio") {
+                setIsLoading(false);
+              }
+            }}
             onPlaying={() => {
-              setIsPlaying(true);
-              setIsLoading(false);
+              if (activePlayerType.current === "audio") {
+                setIsPlaying(true);
+                setIsLoading(false);
+              }
             }}
-            onEnded={() => handleTrackEndedRef.current()}
+            onEnded={() => {
+              if (activePlayerType.current === "audio") {
+                handleTrackEndedRef.current();
+              }
+            }}
             onPlay={() => {
-              setIsPlaying(true);
-              setIsLoading(false);
+              if (activePlayerType.current === "audio") {
+                setIsPlaying(true);
+                setIsLoading(false);
+              }
             }}
-            onPause={() => setIsPlaying(false)}
-            onError={() => setIsLoading(false)}
+            onPause={() => {
+              if (activePlayerType.current === "audio") {
+                setIsPlaying(false);
+              }
+            }}
+            onError={() => {
+              if (activePlayerType.current === "audio") {
+                setIsLoading(false);
+              }
+            }}
           />
 
-      {/* Hidden YouTube Iframe Container for 100% Reliable Playback (Inside viewport to prevent mobile background discarding) */}
+      {/* Hidden YouTube Iframe Container for 100% Reliable Playback (Satisfies iOS WebKit & Android visibility checks) */}
       <div
         id="kahoii-yt-iframe"
         style={{
           position: "fixed",
-          bottom: "0px",
-          right: "0px",
-          width: "1px",
-          height: "1px",
-          opacity: 0.01,
+          bottom: "10px",
+          right: "10px",
+          width: "240px",
+          height: "140px",
+          opacity: 0.02,
           pointerEvents: "none",
-          zIndex: -10,
+          zIndex: 0,
         }}
       />
 
@@ -3951,6 +4008,7 @@ export default function App() {
                                             <UnifiedPlayOverlay
                                               isCurrent={isCurrentPlaying}
                                               isPlaying={isCurrentPlaying && isPlaying}
+                                              isLoading={isCurrentPlaying && isLoading}
                                               onToggle={() => {
                                                 if (isCurrentPlaying) {
                                                   togglePlayPause();
@@ -4434,6 +4492,7 @@ export default function App() {
                                               <UnifiedPlayOverlay
                                                 isCurrent={isCurrentPlaying}
                                                 isPlaying={isCurrentPlaying && isPlaying}
+                                                isLoading={isCurrentPlaying && isLoading}
                                                 onToggle={() => {
                                                   if (isCurrentPlaying) {
                                                     togglePlayPause();
@@ -4516,6 +4575,7 @@ export default function App() {
                                           <UnifiedPlayOverlay
                                             isCurrent={isCurrentPlaying}
                                             isPlaying={isCurrentPlaying && isPlaying}
+                                            isLoading={isCurrentPlaying && isLoading}
                                             onToggle={() => {
                                               if (isCurrentPlaying) {
                                                 togglePlayPause();
@@ -4751,6 +4811,7 @@ export default function App() {
                                     <UnifiedPlayOverlay
                                       isCurrent={isCurrent}
                                       isPlaying={isThisPlaying}
+                                      isLoading={isCurrent && isLoading}
                                       onToggle={() => handlePlaySongItem(item, trendingTracks, idx)}
                                     />
                                     {(item.duration > 0 || !!item.durationText) && (
@@ -4850,6 +4911,7 @@ export default function App() {
                                     <UnifiedPlayOverlay
                                       isCurrent={isCurrent}
                                       isPlaying={isThisPlaying}
+                                      isLoading={isCurrent && isLoading}
                                       onToggle={() => handlePlaySongItem(item, newReleaseTracks, idx)}
                                     />
                                     {(item.duration > 0 || !!item.durationText) && (
@@ -5002,6 +5064,7 @@ export default function App() {
                                         <UnifiedPlayOverlay
                                           isCurrent={isCurrent}
                                           isPlaying={isThisPlaying}
+                                          isLoading={isCurrent && isLoading}
                                           onToggle={() => handlePlaySongItem(item, recentTracksToDisplay, idx)}
                                         />
                                         {(item.duration > 0 || !!item.durationText) && (
@@ -5086,6 +5149,7 @@ export default function App() {
                                         <UnifiedPlayOverlay
                                           isCurrent={isCurrent}
                                           isPlaying={isThisPlaying}
+                                          isLoading={isCurrent && isLoading}
                                           onToggle={() => handlePlaySongItem(item, recommendedTracksToDisplay, idx)}
                                         />
                                         {(item.duration > 0 || !!item.durationText) && (
