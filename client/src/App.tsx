@@ -4316,7 +4316,7 @@ export default function App() {
             /* NOW PLAYING EXPANDED PLAYER VIEW (Wireframe layout)                  */
             /* ===================================================================== */
             <div className="relative w-full h-full flex flex-col justify-between overflow-hidden select-none animate-fade-in">
-              {/* Background cover artwork + dark vignette overlay */}
+              {/* Background cover artwork + dynamic color/vignette overlay */}
               <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
                 <img
                   src={getTrackThumbnail(currentTrack, "hd")}
@@ -4329,14 +4329,44 @@ export default function App() {
                       target.src = DEFAULT_TRACK_ART;
                     }
                   }}
-                  className="w-full h-full object-cover scale-105 transition-all duration-700 brightness-[0.7] contrast-[1.05]"
+                  className={`w-full h-full object-cover scale-105 transition-all duration-700 ease-in-out ${
+                    showCenterLyrics
+                      ? "brightness-[0.65] contrast-[1.05]"
+                      : "brightness-100 contrast-100"
+                  }`}
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-black/45 to-black/90" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.12)_0%,transparent_70%)]" />
+
+                {/* 1. Full dark backdrop for lyrics legibility (Fades out when lyrics are OFF to show original colors) */}
+                <div
+                  className={`absolute inset-0 bg-gradient-to-b from-black/85 via-black/60 to-black/90 transition-opacity duration-700 ease-in-out ${
+                    showCenterLyrics ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+
+                {/* 2. Ambient neon glow accent (Only when lyrics are enabled) */}
+                <div
+                  className={`absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.14)_0%,transparent_70%)] transition-opacity duration-700 ease-in-out ${
+                    showCenterLyrics ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+
+                {/* 3. Subtle edge vignette for UI clarity when lyrics are OFF (Original artwork color in center) */}
+                <div
+                  className={`absolute inset-0 transition-opacity duration-700 ease-in-out pointer-events-none ${
+                    !showCenterLyrics ? "opacity-100" : "opacity-0"
+                  }`}
+                >
+                  <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-black/75 via-black/25 to-transparent" />
+                  <div className="absolute bottom-0 inset-x-0 h-40 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                </div>
               </div>
 
               {/* 1. TOP HEADER CLUSTER (z-30) */}
-              <div className="relative z-30 flex items-center justify-between px-5 sm:px-8 pt-5 pb-2 flex-shrink-0 border-b border-white/5">
+              <div
+                className={`relative z-30 flex items-center justify-between px-5 sm:px-8 pt-5 pb-2 flex-shrink-0 transition-all duration-700 ${
+                  showCenterLyrics ? "border-b border-white/5 bg-black/20" : "border-b border-transparent bg-transparent"
+                }`}
+              >
                 {/* Back button */}
                 <button
                   type="button"
@@ -4473,7 +4503,13 @@ export default function App() {
               </div>
 
               {/* 3. BOTTOM FOOTER CONTROLS & SEEKBAR (z-20 - Lớp phía trên lyrics) */}
-              <div className="relative z-20 w-full px-5 sm:px-8 pb-6 pt-3 flex flex-col gap-2.5 bg-gradient-to-t from-black/95 via-black/75 to-transparent">
+              <div
+                className={`relative z-20 w-full px-5 sm:px-8 pb-6 pt-3 flex flex-col gap-2.5 transition-all duration-700 ${
+                  showCenterLyrics
+                    ? "bg-gradient-to-t from-black/95 via-black/75 to-transparent"
+                    : "bg-gradient-to-t from-black/85 via-black/40 to-transparent"
+                }`}
+              >
                 {/* Row 1: 2 Function Buttons Above Progress Bar */}
                 <div className="flex items-center justify-between w-full px-1">
                   {/* Left: Menu */}
