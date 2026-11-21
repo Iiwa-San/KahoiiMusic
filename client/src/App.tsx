@@ -1881,32 +1881,39 @@ export default function App() {
 
         const rawTracks: Track[] = data.tracks || [];
         const lower = artist.name.toLowerCase().trim();
+        const escaped = lower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const artistInTitleRegex = new RegExp(`(\\b|\\()(?:cùng với|ft\\.?|feat\\.?|x|vs\\.?)\\s*.*${escaped}`, "i");
+        const artistFirstRegex = new RegExp(`^${escaped}\\s*[-–|:]`, "i");
 
-        // If loaded directly from channel endpoint, rawTracks are already authentic channel uploads!
-        if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb")) && rawTracks.length > 0) {
-          setArtistTracks(rawTracks);
-        } else {
-          // Refine tracks: singles/tracks specifically by this artist
-          const matched = rawTracks.filter((t) => {
-            const a = (t.author || "").toLowerCase();
-            const tit = (t.title || "").toLowerCase();
-            return a.includes(lower) || tit.includes(lower);
-          });
-          setArtistTracks(matched.length >= 4 ? matched : rawTracks);
-        }
+        // Strictly verify that tracks belong to this artist (official release, feat or artist's own cover)
+        const authenticTracks = rawTracks.filter((t) => {
+          const a = (t.author || "").toLowerCase();
+          const tit = (t.title || "").toLowerCase();
+          if (a.includes(lower) || lower.includes(a)) {
+            if (/\b(cover by|covered by)\b/i.test(tit) && !tit.includes(lower)) {
+              return false;
+            }
+            return true;
+          }
+          return artistInTitleRegex.test(tit) || artistFirstRegex.test(tit);
+        });
 
-        // Playlists / albums
-        const rawPlaylists = data.playlists || [];
-        if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb")) && rawPlaylists.length > 0) {
-          setArtistPlaylists(rawPlaylists);
-        } else {
-          const matchedPl = rawPlaylists.filter((p) => {
-            const a = (p.author || "").toLowerCase();
-            const tit = (p.title || "").toLowerCase();
-            return a.includes(lower) || tit.includes(lower);
-          });
-          setArtistPlaylists(matchedPl.length > 0 ? matchedPl : rawPlaylists);
-        }
+        setArtistTracks(authenticTracks.length > 0 ? authenticTracks : rawTracks);
+
+        // Playlists / albums (Strictly filter out channels, singles, or non-playlist IDs)
+        const authenticPlaylists = (data.playlists || []).filter((p) => {
+          if (!p.id || p.id.startsWith("UC")) return false;
+          const countText = (p.trackCountText || "").toLowerCase();
+          if (countText.includes("đĩa đơn") || countText.includes("single")) return false;
+          return (
+            p.id.startsWith("VL") ||
+            p.id.startsWith("PL") ||
+            p.id.startsWith("MPREb") ||
+            p.id.startsWith("OLAK5uy_") ||
+            p.id.startsWith("RD")
+          );
+        });
+        setArtistPlaylists(authenticPlaylists);
 
         // Enrich artist info if available
         if (data.artists && data.artists.length > 0) {

@@ -342,6 +342,7 @@ function parseSongItem(renderer: any, fallbackAuthor = ""): SearchTrackResult | 
   let author = "";
   let artistBrowseId: string | undefined = undefined;
 
+  const artistNames: string[] = [];
   for (const r of descRuns) {
     if (!r?.text) continue;
     const pageType =
@@ -353,10 +354,15 @@ function parseSongItem(renderer: any, fallbackAuthor = ""): SearchTrackResult | 
       pageType === "MUSIC_PAGE_TYPE_USER_CHANNEL" ||
       (browseId && browseId.startsWith("UC"));
     if (isArtist) {
-      author = r.text.trim();
-      artistBrowseId = browseId;
-      break;
+      const aName = r.text.trim();
+      if (aName && !artistNames.includes(aName)) {
+        artistNames.push(aName);
+      }
+      if (!artistBrowseId) artistBrowseId = browseId;
     }
+  }
+  if (artistNames.length > 0) {
+    author = artistNames.join(", ");
   }
 
   if (!author) {
@@ -1047,33 +1053,88 @@ export async function searchYouTubeMusicStructured(query: string): Promise<Struc
  * Fetch tracks belonging to a playlist
  */
 export async function getPlaylistTracks(browseOrPlaylistId: string): Promise<SearchTrackResult[]> {
+  if (!browseOrPlaylistId) return [];
+
+  const rawId = browseOrPlaylistId.replace(/^VL/, "");
   const browseId =
     browseOrPlaylistId.startsWith("VL") || browseOrPlaylistId.startsWith("MPREb")
       ? browseOrPlaylistId
       : `VL${browseOrPlaylistId}`;
 
-  const data = await postYTM("browse", { browseId });
-  const items =
-    data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer
-      ?.contents?.[0]?.musicPlaylistShelfRenderer?.contents ||
-    data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer
-      ?.contents?.[0]?.musicShelfRenderer?.contents ||
-    [];
-
-  const header =
-    data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicResponsiveHeaderRenderer ||
-    data?.header?.musicDetailHeaderRenderer ||
-    data?.header?.musicResponsiveHeaderRenderer;
-  const headerAuthor =
-    header?.straplineTextOne?.runs?.[0]?.text ||
-    header?.subtitle?.runs?.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("UC"))?.text ||
-    "";
-
   const results: SearchTrackResult[] = [];
-  for (const item of items) {
-    const parsed = parseSongItem(item.musicResponsiveListItemRenderer, headerAuthor);
-    if (parsed) results.push(parsed);
+  const seenTrackIds = new Set<string>();
+
+  try {
+    const data = await postYTM("browse", { browseId }, 8000);
+
+    const header =
+      data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.musicResponsiveHeaderRenderer ||
+      data?.header?.musicDetailHeaderRenderer ||
+      data?.header?.musicResponsiveHeaderRenderer;
+    const headerAuthor =
+      header?.straplineTextOne?.runs?.[0]?.text ||
+      header?.subtitle?.runs?.find((r: any) => r?.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("UC"))?.text ||
+      "";
+
+    // Recursively check all possible sections
+    const secList: any[] =
+      data?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents ||
+      data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents ||
+      data?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents ||
+      data?.contents?.sectionListRenderer?.contents ||
+      [];
+
+    for (const sec of secList) {
+      const shelf = sec?.musicPlaylistShelfRenderer || sec?.musicShelfRenderer;
+      if (shelf?.contents && Array.isArray(shelf.contents)) {
+        for (const item of shelf.contents) {
+          const parsed = parseSongItem(item.musicResponsiveListItemRenderer, headerAuthor);
+          if (parsed && !seenTrackIds.has(parsed.id)) {
+            seenTrackIds.add(parsed.id);
+            results.push(parsed);
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("[getPlaylistTracks] Browse error:", err?.message);
   }
+
+  // Fallback: If browse returned 0 items and we have a valid playlist ID, call YouTube Music 'next' endpoint!
+  if (results.length === 0 && rawId && !rawId.startsWith("UC")) {
+    try {
+      const nextData = await postYTM("next", { playlistId: rawId }, 8000);
+      const queueItems =
+        nextData?.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer
+          ?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content
+          ?.musicQueueRenderer?.content?.playlistPanelRenderer?.contents || [];
+
+      for (const item of queueItems) {
+        const r = item.playlistPanelVideoRenderer;
+        if (!r?.videoId) continue;
+        if (!seenTrackIds.has(r.videoId)) {
+          seenTrackIds.add(r.videoId);
+          const title = r.title?.runs?.[0]?.text || "Track";
+          const author = r.shortBylineText?.runs?.map((x: any) => x.text).join("") || "";
+          const durText = r.lengthText?.runs?.[0]?.text || "";
+          const thumbs = r.thumbnail?.thumbnails || [];
+          const thumb = thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${r.videoId}/mqdefault.jpg`;
+          results.push({
+            id: r.videoId,
+            title,
+            author,
+            duration: parseDuration(durText),
+            durationText: durText,
+            thumbnail: thumb,
+            isMusic: true,
+          });
+        }
+      }
+    } catch (nextErr: any) {
+      console.warn("[getPlaylistTracks] Next fallback error:", nextErr?.message);
+    }
+  }
+
   return results;
 }
 
@@ -1193,40 +1254,104 @@ export async function getArtistDetails(
   }
 
   try {
-    const [channelUploads, data] = await Promise.all([
-      fetchUploadsPlaylist(browseId, fallbackName),
-      postYTM("browse", { browseId }, 6000),
-    ]);
+    const data = await postYTM("browse", { browseId }, 8000);
 
     const header =
       data?.header?.musicImmersiveHeaderRenderer ||
       data?.header?.musicVisualHeaderRenderer;
-    const artistName = header?.title?.runs?.[0]?.text || fallbackName || "";
-    if (artistName && artistName !== "Nghệ sĩ") {
-      channelUploads.forEach((t) => {
-        if (!t.author || t.author === "Nghệ sĩ") {
-          t.author = artistName;
-        }
-      });
-    }
+    const artistName = cleanArtistName(header?.title?.runs?.[0]?.text || fallbackName || "");
     const subText =
       header?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.runs?.[0]?.text;
     const thumbs = header?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
     const avatar = thumbs[thumbs.length - 1]?.url || thumbs[0]?.url || "";
 
     const tabs = data?.contents?.singleColumnBrowseResultsRenderer?.tabs || [];
-    const secList = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+    const secList: any[] = tabs[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
 
-    const ytmTracks: SearchTrackResult[] = [];
+    const tracks: SearchTrackResult[] = [];
     const playlists: SearchPlaylistItem[] = [];
     const seenTrackIds = new Set<string>();
     const seenPlaylistIds = new Set<string>();
 
-    for (const s of secList) {
+    const lowerArtist = artistName.toLowerCase().trim();
+    const escapedArtist = lowerArtist.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const artistInTitleRegex = new RegExp(`(\\b|\\()(?:cùng với|ft\\.?|feat\\.?|x|vs\\.?)\\s*.*${escapedArtist}`, "i");
+    const artistFirstRegex = new RegExp(`^${escapedArtist}\\s*[-–|:]`, "i");
+
+    const isAuthenticArtistTrack = (t: SearchTrackResult) => {
+      const a = (t.author || "").toLowerCase();
+      const tit = (t.title || "").toLowerCase();
+      // 1. Author contains artist name or matches
+      if (a.includes(lowerArtist) || lowerArtist.includes(a)) {
+        // Exclude if someone else covered it ("cover by [someone else]")
+        if (/\b(cover by|covered by)\b/i.test(tit) && !tit.includes(lowerArtist)) {
+          return false;
+        }
+        return true;
+      }
+      // 2. Title explicitly states artist is singer/collaborator/performer
+      if (artistInTitleRegex.test(tit) || artistFirstRegex.test(tit)) {
+        return true;
+      }
+      return false;
+    };
+
+    // 1. Fetch ALL top songs via Section 0's bottomEndpoint ("Xem tất cả" / View All)
+    const s0 = secList[0]?.musicShelfRenderer;
+    const be = s0?.bottomEndpoint?.browseEndpoint;
+    if (be?.browseId) {
+      try {
+        const allSongsData = await postYTM("browse", { browseId: be.browseId, params: be.params }, 8000);
+        const sc = allSongsData?.contents?.singleColumnBrowseResultsRenderer;
+        const songSecs: any[] =
+          sc?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents ||
+          allSongsData?.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents ||
+          allSongsData?.contents?.sectionListRenderer?.contents ||
+          [];
+        const songShelf = songSecs[0]?.musicShelfRenderer || songSecs[0]?.musicPlaylistShelfRenderer;
+        const items = songShelf?.contents || [];
+        for (const it of items) {
+          const parsed = parseSongItem(it.musicResponsiveListItemRenderer, artistName);
+          if (parsed && !seenTrackIds.has(parsed.id)) {
+            if (!parsed.author || parsed.author === "Nghệ sĩ") {
+              parsed.author = artistName;
+            }
+            parsed.artistBrowseId = browseId;
+            if (isAuthenticArtistTrack(parsed)) {
+              seenTrackIds.add(parsed.id);
+              tracks.push(parsed);
+            }
+          }
+        }
+      } catch (err: any) {
+        console.warn("[getArtistDetails] All songs fetch error:", err?.message);
+      }
+    }
+
+    // 2. Extract songs and playlists from artist page shelves
+    for (let i = 0; i < secList.length; i++) {
+      const s = secList[i];
       const shelf = s.musicShelfRenderer || s.musicCarouselShelfRenderer;
       if (!shelf) continue;
-      const items = shelf.contents || [];
 
+      const shelfTitle = (
+        shelf.header?.musicHeaderRenderer?.title?.runs?.[0]?.text ||
+        shelf.header?.musicCarouselShelfBasicHeaderRenderer?.title?.runs?.[0]?.text ||
+        ""
+      ).toLowerCase();
+
+      // STRICT EXCLUSION: Skip Similar Artists ("Người hâm mộ có thể cũng thích" / "Fans also like")
+      if (
+        shelfTitle.includes("người hâm mộ") ||
+        shelfTitle.includes("fans also like") ||
+        shelfTitle.includes("tương tự") ||
+        shelfTitle.includes("similar") ||
+        shelfTitle.includes("nghệ sĩ liên quan")
+      ) {
+        continue;
+      }
+
+      const items = shelf.contents || [];
       for (const it of items) {
         const rend = it.musicResponsiveListItemRenderer || it.musicTwoRowItemRenderer;
         if (!rend) continue;
@@ -1253,24 +1378,60 @@ export async function getArtistDetails(
 
         const itemThumbs =
           rend.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ||
-          rend.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+          rend.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ||
+          rend.thumbnail?.thumbnails ||
+          [];
         const thumbnail =
           itemThumbs[itemThumbs.length - 1]?.url ||
           (videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : "");
 
+        // A. Video / Song item (belongs to tracks)
         if (videoId && title && !seenTrackIds.has(videoId)) {
-          seenTrackIds.add(videoId);
-          ytmTracks.push({
-            id: videoId,
-            title,
-            author: sub ? sub.split("•")[0].trim() : artistName,
-            duration: 0,
-            durationText: "",
-            thumbnail,
-            artistBrowseId: browseId,
-            isMusic: true,
-          });
-        } else if (playlistId && title && !videoId && !seenPlaylistIds.has(playlistId)) {
+          const parsed = parseSongItem(rend, artistName);
+          if (parsed && !seenTrackIds.has(parsed.id)) {
+            if (!parsed.author || parsed.author === "Nghệ sĩ") {
+              parsed.author = artistName;
+            }
+            parsed.artistBrowseId = browseId;
+            if (isAuthenticArtistTrack(parsed)) {
+              seenTrackIds.add(parsed.id);
+              tracks.push(parsed);
+            }
+          } else if (!parsed) {
+            const rawItem: SearchTrackResult = {
+              id: videoId,
+              title,
+              author: sub ? sub.split("•")[0].trim() : artistName,
+              duration: 0,
+              durationText: "",
+              thumbnail,
+              artistBrowseId: browseId,
+              isMusic: true,
+            };
+            if (isAuthenticArtistTrack(rawItem)) {
+              seenTrackIds.add(videoId);
+              tracks.push(rawItem);
+            }
+          }
+        }
+        // B. Playlist or Album item (MUST NOT be a channel/artist UC...)
+        else if (
+          playlistId &&
+          title &&
+          !videoId &&
+          !playlistId.startsWith("UC") &&
+          (playlistId.startsWith("VL") ||
+            playlistId.startsWith("PL") ||
+            playlistId.startsWith("MPREb") ||
+            playlistId.startsWith("OLAK5uy_") ||
+            playlistId.startsWith("RD")) &&
+          !seenPlaylistIds.has(playlistId)
+        ) {
+          // EXCLUDE single tracks ("Đĩa đơn" / "Single") - they belong to songs/tracks, not playlists!
+          const subLower = (sub || "").toLowerCase();
+          if (subLower.includes("đĩa đơn") || subLower.includes("single")) {
+            continue;
+          }
           seenPlaylistIds.add(playlistId);
           playlists.push({
             id: playlistId,
@@ -1283,20 +1444,31 @@ export async function getArtistDetails(
       }
     }
 
-    let tracks: SearchTrackResult[] = [];
-    if (channelUploads && channelUploads.length > 0) {
-      channelUploads.forEach((t) => (t.author = artistName));
-      tracks = channelUploads;
-    } else if (ytmTracks.length > 0) {
-      // For official artists, if duration is missing in browse shelf, enrich from search
-      const searchRes = await searchYouTubeMusicStructured(artistName);
-      if (searchRes.tracks && searchRes.tracks.length > 0) {
-        tracks = searchRes.tracks;
-      } else {
-        tracks = ytmTracks;
+    // 3. Fallback only if tracks is STILL empty: try channel uploads playlist
+    if (tracks.length === 0) {
+      const channelUploads = await fetchUploadsPlaylist(browseId, artistName);
+      if (channelUploads && channelUploads.length > 0) {
+        channelUploads.forEach((t) => {
+          if (!t.author || t.author === "Nghệ sĩ") t.author = artistName;
+          t.artistBrowseId = browseId;
+          if (isAuthenticArtistTrack(t) && !seenTrackIds.has(t.id)) {
+            seenTrackIds.add(t.id);
+            tracks.push(t);
+          }
+        });
       }
-    } else {
-      return searchYouTubeMusicStructured(artistName);
+    }
+
+    // 4. Last resort: search, but STRICTLY filter by artist name to prevent other artists leaking in
+    if (tracks.length === 0) {
+      const searchRes = await searchYouTubeMusicStructured(artistName);
+      const filtered = (searchRes.tracks || []).filter((t) => isAuthenticArtistTrack(t));
+      filtered.forEach((t) => {
+        if (!seenTrackIds.has(t.id)) {
+          seenTrackIds.add(t.id);
+          tracks.push(t);
+        }
+      });
     }
 
     const artistItem: SearchArtistItem = {
@@ -1308,17 +1480,19 @@ export async function getArtistDetails(
 
     return {
       query: artistName,
-      topResult: {
-        id: tracks[0].id,
-        title: tracks[0].title,
-        subtitle: `${artistName}${tracks[0].durationText ? " • " + tracks[0].durationText : ""}`,
-        author: artistName,
-        duration: tracks[0].duration,
-        durationText: tracks[0].durationText,
-        thumbnail: tracks[0].thumbnail,
-        type: "song",
-        isMusic: tracks[0].isMusic,
-      },
+      topResult: tracks[0]
+        ? {
+            id: tracks[0].id,
+            title: tracks[0].title,
+            subtitle: `${artistName}${tracks[0].durationText ? " • " + tracks[0].durationText : ""}`,
+            author: artistName,
+            duration: tracks[0].duration,
+            durationText: tracks[0].durationText,
+            thumbnail: tracks[0].thumbnail,
+            type: "song",
+            isMusic: tracks[0].isMusic,
+          }
+        : null,
       tracks,
       artists: [artistItem],
       playlists,
