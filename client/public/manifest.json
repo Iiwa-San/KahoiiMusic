@@ -1,7 +1,7 @@
 {
-  "name": "Kahoii Music - Trình phát nhạc không quảng cáo",
+  "name": "Kahoii Music",
   "short_name": "Kahoii Music",
-  "description": "Nghe nhạc không quảng cáo, hỗ trợ lưu nhạc ngoại tuyến như YouTube Music",
+  "description": "Nghe nhạc chất lượng cao, đồng bộ đa nền tảng và lưu ngoại tuyến",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

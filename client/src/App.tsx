@@ -3239,6 +3239,18 @@ export default function App() {
     }
   }, [currentTrack?.id, currentTrack?.title, currentTrack?.author, currentTrack?.thumbnail]);
 
+  // Synchronize Browser Tab Title (YouTube & YouTube Music style: song title first)
+  useEffect(() => {
+    if (currentTrack?.title) {
+      const artist = formatTrackArtist(currentTrack.title, currentTrack.author);
+      document.title = artist
+        ? `${currentTrack.title} • ${artist} - Kahoii Music`
+        : `${currentTrack.title} - Kahoii Music`;
+    } else {
+      document.title = "Kahoii Music";
+    }
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.author]);
+
   // 3. MediaSession API: Synchronize Playback State & Position on State/Track/Duration Changes
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
@@ -4172,78 +4184,78 @@ export default function App() {
                           }`}
                         style={{ marginBottom: "2px" }}
                       >
-                      <div className="relative w-11 h-11 flex-shrink-0">
-                        <img
-                          src={item.thumb}
-                          alt=""
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_TRACK_ART;
-                          }}
-                          className="w-full h-full rounded-[14px] object-cover border border-white/10 shadow-sm"
-                        />
-                        {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                          ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
-                            <div className="absolute inset-0 bg-black/55 rounded-[14px] flex items-center justify-center">
-                              {isPlaying ? (
-                                <Volume2 className="w-5 h-5 theme-accent-text animate-pulse" />
-                              ) : (
-                                <Play className="w-4 h-4 fill-current text-white/90" />
-                              )}
-                            </div>
-                          )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-[13.5px] font-semibold text-white group-hover:theme-accent-text truncate transition-colors">
-                            {item.title}
-                          </p>
+                        <div className="relative w-11 h-11 flex-shrink-0">
+                          <img
+                            src={item.thumb}
+                            alt=""
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full rounded-[14px] object-cover border border-white/10 shadow-sm"
+                          />
                           {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
                             ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
-                              <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider flex-shrink-0">
-                                {isPlaying ? "Đang phát" : "Tạm dừng"}
-                              </span>
+                              <div className="absolute inset-0 bg-black/55 rounded-[14px] flex items-center justify-center">
+                                {isPlaying ? (
+                                  <Volume2 className="w-5 h-5 theme-accent-text animate-pulse" />
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current text-white/90" />
+                                )}
+                              </div>
                             )}
                         </div>
-                        <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
-                          {item.subtitle}
-                        </p>
-                      </div>
-                      {activeLeftTab === "offline" && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {!item.isLocalCached ? (
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="text-[13.5px] font-semibold text-white group-hover:theme-accent-text truncate transition-colors">
+                              {item.title}
+                            </p>
+                            {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                              ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
+                                <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider flex-shrink-0">
+                                  {isPlaying ? "Đang phát" : "Tạm dừng"}
+                                </span>
+                              )}
+                          </div>
+                          <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
+                            {item.subtitle}
+                          </p>
+                        </div>
+                        {activeLeftTab === "offline" && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {!item.isLocalCached ? (
+                              <button
+                                type="button"
+                                title="Tải về bộ nhớ máy này (để nghe offline không cần mạng)"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (item.rawTrack) handleSaveOfflineTrack(item.rawTrack);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:theme-accent-text transition-colors cursor-pointer"
+                              >
+                                <HardDriveDownload className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <span title="Đã lưu offline trên máy này" className="p-1 text-emerald-400">
+                                <Check className="w-3.5 h-3.5" />
+                              </span>
+                            )}
                             <button
                               type="button"
-                              title="Tải về bộ nhớ máy này (để nghe offline không cần mạng)"
+                              title="Xóa khỏi danh sách đã tải"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (item.rawTrack) handleSaveOfflineTrack(item.rawTrack);
+                                handleDeleteOfflineTrack(item.id, item.title);
                               }}
-                              className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:theme-accent-text transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-rose-400 transition-colors cursor-pointer"
                             >
-                              <HardDriveDownload className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          ) : (
-                            <span title="Đã lưu offline trên máy này" className="p-1 text-emerald-400">
-                              <Check className="w-3.5 h-3.5" />
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            title="Xóa khỏi danh sách đã tải"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteOfflineTrack(item.id, item.title);
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-rose-400 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center text-white/40 text-xs px-2">
                     <p>
                       {activeLeftTab === "library"
@@ -5307,11 +5319,10 @@ export default function App() {
                                 setSelectedTasteTagKey(tag.key);
                                 fetchRecommendations(tag.key, true);
                               }}
-                              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                                isSelected
-                                  ? "theme-badge-active scale-[1.02] shadow-md shadow-purple-500/20 font-semibold"
-                                  : "theme-badge hover:theme-accent-border text-white/70 hover:text-white"
-                              }`}
+                              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
+                                ? "theme-badge-active scale-[1.02] shadow-md shadow-purple-500/20 font-semibold"
+                                : "theme-badge hover:theme-accent-border text-white/70 hover:text-white"
+                                }`}
                             >
                               <span>{tag.label}</span>
                             </button>
