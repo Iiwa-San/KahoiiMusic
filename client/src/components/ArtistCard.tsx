@@ -15,21 +15,32 @@ export interface ArtistItemData {
 export interface ArtistCardProps {
   artist: ArtistItemData;
   onClick: () => void;
+  index?: number;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export const ArtistCard: React.FC<ArtistCardProps> = ({
   artist,
   onClick,
+  index,
   className = "",
+  style,
 }) => {
   const artistAvatar = artist.avatar || artist.thumbnail || DEFAULT_TRACK_ART;
   const artistLabel = artist.genre || artist.subscribers || "Nghệ sĩ";
 
+  const staggerDelay = typeof index === "number" ? Math.min(index * 40, 360) : 0;
+  const cardStyle: React.CSSProperties = {
+    ...(staggerDelay > 0 ? { animationDelay: `${staggerDelay}ms` } : {}),
+    ...style,
+  };
+
   return (
     <div
       onClick={onClick}
-      className={`w-full flex flex-col items-center cursor-pointer group ${className}`}
+      style={cardStyle}
+      className={`w-full flex flex-col items-center cursor-pointer group item-slide-up ${className}`}
     >
       <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:theme-accent-border group-hover:scale-[1.04] transition-all duration-200 relative">
         <img

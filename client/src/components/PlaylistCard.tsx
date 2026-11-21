@@ -8,19 +8,30 @@ export interface PlaylistCardProps {
   playlist: SearchPlaylistItem;
   onClick: () => void;
   isLoading?: boolean;
+  index?: number;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export const PlaylistCard: React.FC<PlaylistCardProps> = ({
   playlist,
   onClick,
   isLoading = false,
+  index,
   className = "",
+  style,
 }) => {
+  const staggerDelay = typeof index === "number" ? Math.min(index * 45, 400) : 0;
+  const cardStyle: React.CSSProperties = {
+    ...(staggerDelay > 0 ? { animationDelay: `${staggerDelay}ms` } : {}),
+    ...style,
+  };
+
   return (
     <div
       onClick={onClick}
-      className={`w-full flex flex-col cursor-pointer group ${className}`}
+      style={cardStyle}
+      className={`w-full flex flex-col cursor-pointer group item-slide-up ${className}`}
     >
       <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5 bg-purple-900/30">
         <img

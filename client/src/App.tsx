@@ -4113,12 +4113,12 @@ export default function App() {
                           playTrackDirectly(playlist[idx % playlist.length]);
                         }
                       }}
-                      className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group ${(activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                      className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group item-slide-up ${(activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
                         ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)
                         ? "active-queue-beam shadow-md scale-[1.01]"
                         : "hover:bg-white/10 hover:translate-x-1"
                         }`}
-                      style={{ marginBottom: "2px" }}
+                      style={{ marginBottom: "2px", animationDelay: `${Math.min(idx * 28, 280)}ms` }}
                     >
                       <div className="relative w-11 h-11 flex-shrink-0">
                         <img
@@ -4379,6 +4379,7 @@ export default function App() {
                             {artistTracks.map((item, idx) => (
                               <TrackCard
                                 key={item.id + idx}
+                                index={idx}
                                 track={item}
                                 isCurrent={currentTrack?.id === item.id}
                                 isPlaying={isPlaying}
@@ -4421,6 +4422,7 @@ export default function App() {
                             {artistPlaylists.map((pl, idx) => (
                               <PlaylistCard
                                 key={pl.id || idx}
+                                index={idx}
                                 playlist={pl}
                                 isLoading={loadingPlaylistId === pl.id}
                                 onClick={() => playPlaylistItem(pl)}
@@ -4561,7 +4563,7 @@ export default function App() {
                             });
                           }
                         }}
-                        className="w-full rounded-2xl sm:rounded-[20px] p-2.5 sm:p-4 theme-card-bg shadow-lg sm:shadow-xl transition-all flex items-center justify-between gap-3 sm:gap-4 group cursor-pointer"
+                        className="w-full rounded-2xl sm:rounded-[20px] p-2.5 sm:p-4 theme-card-bg shadow-lg sm:shadow-xl transition-all flex items-center justify-between gap-3 sm:gap-4 group cursor-pointer item-slide-up"
                       >
                         <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
                           {/* Artwork */}
@@ -4677,12 +4679,13 @@ export default function App() {
                               </button>
                             </div>
                             <div className="flex items-start gap-3 sm:gap-7 overflow-x-auto pb-2 custom-scrollbar">
-                              {searchStructured.artists.map((artist) => (
+                              {searchStructured.artists.map((artist, idx) => (
                                 <div
                                   key={artist.id || artist.name}
                                   className="flex-shrink-0 w-[110px] sm:w-[140px] lg:w-[150px]"
                                 >
                                   <ArtistCard
+                                    index={idx}
                                     artist={{
                                       id: artist.id,
                                       name: artist.name,
@@ -4723,9 +4726,10 @@ export default function App() {
                               </button>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4">
-                              {searchStructured.playlists.slice(0, 6).map((pl) => (
+                              {searchStructured.playlists.slice(0, 6).map((pl, idx) => (
                                 <PlaylistCard
                                   key={pl.id || pl.title}
+                                  index={idx}
                                   playlist={pl}
                                   isLoading={loadingPlaylistId === pl.id}
                                   onClick={() => playPlaylistItem(pl)}
@@ -4754,9 +4758,10 @@ export default function App() {
                               </button>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                              {searchResults.slice(0, 12).map((item) => (
+                              {searchResults.slice(0, 12).map((item, idx) => (
                                 <TrackCard
                                   key={item.id}
+                                  index={idx}
                                   track={item}
                                   isCurrent={currentTrack?.id === item.id}
                                   isPlaying={isPlaying}
@@ -4781,9 +4786,10 @@ export default function App() {
                           </h3>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
-                          {searchResults.map((item) => (
+                          {searchResults.map((item, idx) => (
                             <TrackCard
                               key={item.id}
+                              index={idx}
                               track={item}
                               isCurrent={currentTrack?.id === item.id}
                               isPlaying={isPlaying}
@@ -4807,9 +4813,10 @@ export default function App() {
                         </div>
                         {searchStructured?.artists && searchStructured.artists.length > 0 ? (
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
-                            {searchStructured.artists.map((artist) => (
+                            {searchStructured.artists.map((artist, idx) => (
                               <ArtistCard
                                 key={artist.id || artist.name}
+                                index={idx}
                                 artist={{
                                   id: artist.id,
                                   name: artist.name,
@@ -4847,9 +4854,10 @@ export default function App() {
                         </div>
                         {searchStructured?.playlists && searchStructured.playlists.length > 0 ? (
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4">
-                            {searchStructured.playlists.map((pl) => (
+                            {searchStructured.playlists.map((pl, idx) => (
                               <PlaylistCard
                                 key={pl.id || pl.title}
+                                index={idx}
                                 playlist={pl}
                                 isLoading={loadingPlaylistId === pl.id}
                                 onClick={() => playPlaylistItem(pl)}
@@ -4951,6 +4959,7 @@ export default function App() {
                     {trendingTracks.slice(0, 12).map((item, idx) => (
                       <TrackCard
                         key={item.id + "-" + idx}
+                        index={idx}
                         track={item}
                         isCurrent={currentTrack?.id === item.id}
                         isPlaying={isPlaying}
@@ -5025,6 +5034,7 @@ export default function App() {
                     {newReleaseTracks.slice(0, 12).map((item, idx) => (
                       <TrackCard
                         key={item.id + "-" + idx}
+                        index={idx}
                         track={item}
                         isCurrent={currentTrack?.id === item.id}
                         isPlaying={isPlaying}
@@ -5068,6 +5078,7 @@ export default function App() {
                     {homeArtists.slice(0, 6).map((artist, idx) => (
                       <ArtistCard
                         key={artist.id || artist.name || idx}
+                        index={idx}
                         artist={{
                           id: artist.id,
                           name: artist.name,
@@ -5125,6 +5136,7 @@ export default function App() {
                         {recentTracksToDisplay.map((item, idx) => (
                           <TrackCard
                             key={item.id + "-" + idx}
+                            index={idx}
                             track={item}
                             isCurrent={currentTrack?.id === item.id}
                             isPlaying={isPlaying}
@@ -5273,6 +5285,7 @@ export default function App() {
                         {recommendedTracksToDisplay.map((item, idx) => (
                           <TrackCard
                             key={item.id + "-" + idx}
+                            index={idx}
                             track={item}
                             isCurrent={currentTrack?.id === item.id}
                             isPlaying={isPlaying}
@@ -5782,12 +5795,13 @@ export default function App() {
                       <div
                         key={track.id + i}
                         ref={isCurrent ? mobileActiveQueueRef : undefined}
+                        style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
                         onClick={() => {
                           setCurrentIndex(i);
                           currentIndexRef.current = i;
                           loadAndPlayTrack(track, true);
                         }}
-                        className={`flex items-center gap-2.5 px-2 py-1.5 transition-all cursor-pointer rounded-xl group ${isCurrent ? "theme-badge-active shadow-md" : "hover:bg-white/5"
+                        className={`flex items-center gap-2.5 px-2 py-1.5 transition-all cursor-pointer rounded-xl group item-slide-up ${isCurrent ? "theme-badge-active shadow-md" : "hover:bg-white/5"
                           }`}
                       >
                         {isCurrent && (
@@ -6366,12 +6380,13 @@ export default function App() {
                       return (
                         <div
                           key={track.id + i}
+                          style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
                           onClick={() => {
                             setCurrentIndex(i);
                             currentIndexRef.current = i;
                             loadAndPlayTrack(track, true);
                           }}
-                          className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group ${isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
+                          className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group item-slide-up ${isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
                             }`}
                         >
                           <img

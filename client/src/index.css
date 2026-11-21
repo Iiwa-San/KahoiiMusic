@@ -154,6 +154,33 @@ html, body, #root {
   animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Fluid Item Slide-Up Animation (Smooth load-in transition) */
+@keyframes itemSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.item-slide-up {
+  animation: itemSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* Fallback stagger utility delays */
+.delay-1 { animation-delay: 35ms; }
+.delay-2 { animation-delay: 70ms; }
+.delay-3 { animation-delay: 105ms; }
+.delay-4 { animation-delay: 140ms; }
+.delay-5 { animation-delay: 175ms; }
+.delay-6 { animation-delay: 210ms; }
+.delay-7 { animation-delay: 245ms; }
+.delay-8 { animation-delay: 280ms; }
+
 /* Dynamic Theme Utilities (Synced 100% with extracted song palette) */
 .theme-btn-primary {
   background: var(--theme-btn-gradient);

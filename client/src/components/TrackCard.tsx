@@ -12,7 +12,9 @@ export interface TrackCardProps {
   isPlaying: boolean;
   isLoading: boolean;
   onPlay: () => void;
+  index?: number;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export const TrackCard: React.FC<TrackCardProps> = ({
@@ -21,15 +23,24 @@ export const TrackCard: React.FC<TrackCardProps> = ({
   isPlaying,
   isLoading,
   onPlay,
+  index,
   className = "",
+  style,
 }) => {
   const isThisPlaying = isCurrent && isPlaying;
   const isThisLoading = isCurrent && isLoading;
 
+  const staggerDelay = typeof index === "number" ? Math.min(index * 40, 360) : 0;
+  const cardStyle: React.CSSProperties = {
+    ...(staggerDelay > 0 ? { animationDelay: `${staggerDelay}ms` } : {}),
+    ...style,
+  };
+
   return (
     <div
       onClick={onPlay}
-      className={`w-full flex flex-col cursor-pointer group ${className}`}
+      style={cardStyle}
+      className={`w-full flex flex-col cursor-pointer group item-slide-up ${className}`}
     >
       <div
         className={`relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden shadow-md group-hover:scale-[1.03] transition-transform duration-200 border ${
