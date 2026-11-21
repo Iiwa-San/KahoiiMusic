@@ -571,6 +571,8 @@ export default function App() {
   const currentIndexRef = useRef<number>(0);
   const shuffleHistoryRef = useRef<number[]>([]);
   const isTransitioningRef = useRef<boolean>(false);
+  const lastEndedTrackIdRef = useRef<string | null>(null);
+  const trackPlayStartTimeRef = useRef<number>(0);
   const handleTrackEndedRef = useRef<() => void>(() => { });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -2136,11 +2138,11 @@ export default function App() {
                     }
                     setIsLoading(false);
                   } else if (event.data === 0) {
-                    // Only advance track if NOT in manual transition AND track actually played to the end
-                    if (!isTransitioningRef.current) {
+                    // Only advance track if in YouTube engine, NOT in transition, and track actually played to near end
+                    if (!isTransitioningRef.current && activePlayerType.current === "youtube") {
                       const ct = ytPlayerRef.current?.getCurrentTime?.() || 0;
                       const dur = ytPlayerRef.current?.getDuration?.() || 0;
-                      if (dur > 8 && ct >= dur - 3) {
+                      if (dur > 5 && ct >= dur - 3) {
                         handleTrackEndedRef.current();
                       }
                     }
@@ -2152,14 +2154,18 @@ export default function App() {
                     // Unstarted
                   }
                 },
-                onError: () => {
+                onError: (err: any) => {
+                  console.warn("[YouTube Player Error Event]:", err);
                   setIsLoading(false);
-                  if (!isTransitioningRef.current) {
-                    setTimeout(() => {
-                      if (!isTransitioningRef.current) {
-                        handleTrackEndedRef.current();
-                      }
-                    }, 1200);
+                  if (!isTransitioningRef.current && activePlayerType.current === "youtube") {
+                    const currentId = currentTrackRef.current?.id;
+                    if (currentId && lastEndedTrackIdRef.current !== currentId && Date.now() - trackPlayStartTimeRef.current > 3000) {
+                      setTimeout(() => {
+                        if (!isTransitioningRef.current) {
+                          handleTrackEndedRef.current();
+                        }
+                      }, 1500);
+                    }
                   }
                 },
               },
@@ -2226,10 +2232,20 @@ export default function App() {
               });
             }
 
-            // Fallback: If video reaches within 0.5s of the end and stops or pauses, advance to next track
-            if (dur > 5 && ct >= dur - 0.5 && !isTransitioningRef.current) {
+            // Fallback: If video reaches within 0.5s of the end and actually ended, advance to next track
+            // NOTE: Never advance if player is paused by user, or if this track was already marked ended
+            const currentId = currentTrackRef.current?.id;
+            if (
+              dur > 5 &&
+              ct >= dur - 0.5 &&
+              !isTransitioningRef.current &&
+              !isUserPausedRef.current &&
+              currentId &&
+              lastEndedTrackIdRef.current !== currentId &&
+              Date.now() - trackPlayStartTimeRef.current > 4000
+            ) {
               const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
-              if (playerState === 0 || playerState === 2) {
+              if (playerState === 0) {
                 handleTrackEndedRef.current();
               }
             }
@@ -2424,6 +2440,8 @@ export default function App() {
       if (!track) return;
 
       isUserPausedRef.current = !autoPlay;
+      lastEndedTrackIdRef.current = null;
+      trackPlayStartTimeRef.current = Date.now();
 
       // Lock transitioning to prevent spurious ENDED events from old track
       isTransitioningRef.current = true;
@@ -2431,13 +2449,12 @@ export default function App() {
         isTransitioningRef.current = false;
       }, 3000);
 
-      // Pre-warm and unlock native HTML5 Audio element synchronously within direct user tap gesture (Critical for iOS Safari background privileges)
-      // Prime with silent 1-sample WAV so audio context is unlocked without leaking previous track audio
+      // Clean audio element source and pause previous playback
       if (audioRef.current) {
         try {
           audioRef.current.pause();
-          audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-          audioRef.current.play().catch(() => {});
+          audioRef.current.removeAttribute("src");
+          audioRef.current.load();
         } catch { }
       }
 
@@ -2735,11 +2752,20 @@ export default function App() {
       };
 
       const handleTrackEnded = () => {
-        if (isTransitioningRef.current) return;
+        const currentId = currentTrackRef.current?.id;
+        if (isTransitioningRef.current || !currentId) return;
+
+        // Prevent double trigger on the same track (stops the 1s skip bug)
+        if (lastEndedTrackIdRef.current === currentId) return;
+
+        // Disallow ending a track that just started playing less than 3 seconds ago
+        if (Date.now() - trackPlayStartTimeRef.current < 3000) return;
+
+        lastEndedTrackIdRef.current = currentId;
         isTransitioningRef.current = true;
         setTimeout(() => {
           isTransitioningRef.current = false;
-        }, 1200);
+        }, 3000);
 
         const mode = repeatModeRef.current;
         const activeQueue = queueTracksRef.current.length > 0 ? queueTracksRef.current : playlistRef.current;
@@ -3399,7 +3425,10 @@ export default function App() {
             }}
             onEnded={() => {
               if (activePlayerType.current === "audio") {
-                handleTrackEndedRef.current();
+                const a = audioRef.current;
+                if (a && a.src && !a.src.startsWith("data:") && a.currentTime > 3) {
+                  handleTrackEndedRef.current();
+                }
               }
             }}
             onPlay={() => {
