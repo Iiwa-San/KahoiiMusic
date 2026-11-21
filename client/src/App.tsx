@@ -1401,23 +1401,31 @@ export default function App() {
   }) => {
     lastLocalPersistRef.current = Date.now();
     const payload = {
-      favorites: updated.favorites || libraryData.favorites,
-      savedTracks: updated.savedTracks || libraryData.savedTracks,
-      history: updated.history || libraryData.history,
-      playlists: updated.playlists || libraryData.playlists,
+      favorites: updated.favorites !== undefined ? updated.favorites : libraryData.favorites,
+      savedTracks: updated.savedTracks !== undefined ? updated.savedTracks : libraryData.savedTracks,
+      history: updated.history !== undefined ? updated.history : libraryData.history,
+      playlists: updated.playlists !== undefined ? updated.playlists : libraryData.playlists,
     };
+
+    console.log(`[Library Persist] 💾 Saving library to local cache & Firestore... (favorites: ${payload.favorites?.length || 0}, saved: ${payload.savedTracks?.length || 0}, history: ${payload.history?.length || 0}, playlists: ${payload.playlists?.length || 0})`);
+
     try {
       localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(payload));
     } catch { }
 
     try {
-      await authenticatedFetch(`${API_BASE}/api/user/library`, {
+      const res = await authenticatedFetch(`${API_BASE}/api/user/library`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      if (res.ok) {
+        console.log("[Library Persist] ✅ Successfully saved library to cloud Firestore!");
+      } else {
+        console.warn("[Library Persist] ⚠️ Server save returned status:", res.status);
+      }
     } catch (err) {
-      console.warn("Library persist failed:", err);
+      console.error("[Library Persist Error]:", err);
     }
   };
 
@@ -1425,6 +1433,7 @@ export default function App() {
   const toggleCurrentFavorite = async () => {
     if (!currentTrack) return;
     if (!userSession?.isLoggedIn) {
+      console.warn("[Favorites] ⚠️ User not logged in, cannot toggle favorites.");
       showToast("Vui lòng đăng nhập để lưu bài hát vào danh sách yêu thích!", "warning");
       setIsAccountOpen(true);
       return;
@@ -1433,11 +1442,16 @@ export default function App() {
     const isFav = libraryData.favorites.some((t) => t.id === currentTrack.id);
     let updatedFavs: Track[];
 
+    // Immediately lock silent sync to avoid race conditions with background polling
+    lastLocalPersistRef.current = Date.now();
+
     if (isFav) {
       updatedFavs = libraryData.favorites.filter((t) => t.id !== currentTrack.id);
+      console.log(`[Favorites] 💔 Removed "${currentTrack.title}" (${currentTrack.id}) from favorites. Remaining: ${updatedFavs.length}`);
       showToast(`Đã xóa "${currentTrack.title}" khỏi bài hát yêu thích`, "info");
     } else {
-      updatedFavs = [currentTrack, ...libraryData.favorites];
+      updatedFavs = [currentTrack, ...libraryData.favorites.filter((t) => t.id !== currentTrack.id)];
+      console.log(`[Favorites] ❤️ Added "${currentTrack.title}" (${currentTrack.id}) to favorites. Total: ${updatedFavs.length}`);
       showToast(`Đã thêm "${currentTrack.title}" vào bài hát yêu thích`, "success");
     }
 
@@ -1626,6 +1640,7 @@ export default function App() {
   // Fetch User Session & Library Data (Token-authenticated & Multi-User Isolated with auto-refresh)
   const fetchUserSession = async () => {
     try {
+      console.log("[Auth Session] 👤 Checking user authentication session...");
       const res = await authenticatedFetch(`${API_BASE}/api/user/session`);
       if (res.ok) {
         const data = await res.json();
@@ -1642,6 +1657,7 @@ export default function App() {
               expiryTimestamp: freshExpiry,
             },
           };
+          console.log(`[Auth Session] ✅ Logged in as: ${data.user.email || data.user.username || data.user.id} (${data.user.displayName || "User"})`);
           setUserSession(updatedSession);
           saveAuthSession({
             idToken: freshIdToken,
@@ -1652,18 +1668,21 @@ export default function App() {
           // If response says not logged in, but we have a refreshToken, proactively refresh and retry!
           const rf = getRefreshToken();
           if (rf) {
+            console.log("[Auth Session] Attempting token refresh via refreshToken...");
             const refreshedId = await doRefreshToken(rf);
             if (refreshedId) {
               const retryRes = await authenticatedFetch(`${API_BASE}/api/user/session`);
               if (retryRes.ok) {
                 const retryData = await retryRes.json();
                 if (retryData.isLoggedIn && retryData.user) {
+                  console.log(`[Auth Session] ✅ Session recovered via token refresh: ${retryData.user.email}`);
                   setUserSession(retryData);
                   return;
                 }
               }
             }
           }
+          console.log("[Auth Session] ℹ️ Guest mode / Not logged in.");
           try {
             localStorage.removeItem(STORAGE_USER_SESSION_KEY);
           } catch { }
@@ -1672,34 +1691,40 @@ export default function App() {
       } else if (res.status === 401) {
         const rf = getRefreshToken();
         if (rf) {
+          console.log("[Auth Session] 401 received. Attempting token refresh...");
           const refreshedId = await doRefreshToken(rf);
           if (refreshedId) {
             const retryRes = await authenticatedFetch(`${API_BASE}/api/user/session`);
             if (retryRes.ok) {
               const retryData = await retryRes.json();
               if (retryData.isLoggedIn && retryData.user) {
+                console.log(`[Auth Session] ✅ Session restored after 401: ${retryData.user.email}`);
                 setUserSession(retryData);
                 return;
               }
             }
           }
         }
+        console.log("[Auth Session] Session expired or invalid.");
         try {
           localStorage.removeItem(STORAGE_USER_SESSION_KEY);
         } catch { }
         setUserSession({ isLoggedIn: false, user: null });
       }
     } catch (err) {
-      console.warn("Session fetch failed:", err);
+      console.warn("[Auth Session Error]:", err);
     }
   };
 
   const fetchLibraryData = async (silent = false) => {
     // Avoid overwriting freshly triggered local user actions before cloud write finishes
-    if (silent && Date.now() - lastLocalPersistRef.current < 4000) {
+    const elapsedSinceLocal = Date.now() - lastLocalPersistRef.current;
+    if (silent && elapsedSinceLocal < 15000) {
+      console.log(`[Library Sync] ⏳ Skipped silent sync: local change was ${elapsedSinceLocal}ms ago (cooldown: 15s).`);
       return;
     }
     if (!silent) setIsLibraryLoading(true);
+    console.log(`[Library Sync] 🔄 Fetching user library from server (silent: ${silent})...`);
     try {
       const res = await authenticatedFetch(`${API_BASE}/api/user/library`);
       if (res.ok) {
@@ -1753,33 +1778,51 @@ export default function App() {
           playlists: rawPlaylists,
         };
 
+        console.log(`[Library Sync] 📥 Server returned: ${mappedFavs.length} favorites, ${mappedSaved.length} saved, ${mappedHist.length} history, ${rawPlaylists.length} playlists.`);
+
         // Don't overwrite existing local cached library with empty data if unauthenticated response
         if (mappedFavs.length > 0 || mappedSaved.length > 0 || mappedHist.length > 0 || rawPlaylists.length > 0) {
-          setLibraryData(nextLibrary);
-          try {
-            localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
-          } catch { }
           setLibraryData((prev) => {
-            // Check if there is actual difference to prevent unnecessary re-renders
-            if (
-              prev.favorites.length === nextLibrary.favorites.length &&
-              prev.savedTracks.length === nextLibrary.savedTracks.length &&
-              prev.history.length === nextLibrary.history.length &&
-              prev.playlists.length === nextLibrary.playlists.length &&
-              prev.favorites[0]?.id === nextLibrary.favorites[0]?.id &&
-              prev.history[0]?.id === nextLibrary.history[0]?.id &&
-              prev.playlists[0]?.id === nextLibrary.playlists[0]?.id
-            ) {
+            // If local changes were made within 30s, protect any locally favorited track that hasn't synced to cloud yet
+            let finalFavs = nextLibrary.favorites;
+            if (Date.now() - lastLocalPersistRef.current < 30000) {
+              const cloudIds = new Set(nextLibrary.favorites.map((f: Track) => f.id));
+              const pendingLocalFavs = prev.favorites.filter((f) => !cloudIds.has(f.id));
+              if (pendingLocalFavs.length > 0) {
+                console.log(`[Library Sync] 🛡️ Preserving ${pendingLocalFavs.length} recently added local favorites pending cloud commit:`, pendingLocalFavs.map(t => t.title));
+                finalFavs = [...pendingLocalFavs, ...nextLibrary.favorites];
+              }
+            }
+
+            // Accurate deep check to prevent unnecessary re-renders
+            const isSameFavs = prev.favorites.length === finalFavs.length &&
+              prev.favorites.every((t, i) => t.id === finalFavs[i].id);
+            const isSameSaved = prev.savedTracks.length === nextLibrary.savedTracks.length &&
+              prev.savedTracks.every((t, i) => t.id === nextLibrary.savedTracks[i].id);
+            const isSameHist = prev.history.length === nextLibrary.history.length &&
+              prev.history.every((t, i) => t.id === nextLibrary.history[i].id);
+            const isSamePl = prev.playlists.length === nextLibrary.playlists.length &&
+              prev.playlists.every((p, i) => p.id === nextLibrary.playlists[i].id && (p.items?.length || 0) === (nextLibrary.playlists[i].items?.length || 0));
+
+            if (isSameFavs && isSameSaved && isSameHist && isSamePl) {
+              console.log("[Library Sync] ✨ Cloud library identical to current local state. Skipping state update.");
               return prev;
             }
+
+            console.log(`[Library Sync] 🔄 Updating state with synced library (favorites: ${finalFavs.length})...`);
+            const mergedLibrary = {
+              ...nextLibrary,
+              favorites: finalFavs,
+            };
             try {
-              localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
+              localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(mergedLibrary));
             } catch { }
-            return nextLibrary;
+            return mergedLibrary;
           });
         } else {
           const sess = getAuthSession();
           if (!sess.idToken && !sess.refreshToken) {
+            console.log("[Library Sync] Cleared library for logged out user.");
             setLibraryData(nextLibrary);
             try {
               localStorage.setItem(STORAGE_LIBRARY_KEY, JSON.stringify(nextLibrary));
@@ -1788,10 +1831,8 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error("Library fetch failed:", err);
-      if (!silent) console.error("Library fetch failed:", err);
+      console.error("[Library Sync Error]:", err);
     } finally {
-      setIsLibraryLoading(false);
       if (!silent) setIsLibraryLoading(false);
     }
   };
@@ -1993,14 +2034,16 @@ export default function App() {
   useEffect(() => {
     if (!userSession?.isLoggedIn) return;
 
-    // 1. Periodic background sync polling every 5 seconds
+    // 1. Periodic background sync polling every 60 seconds (prevents UI flicker, quota burn & race conditions)
     const syncInterval = setInterval(() => {
+      console.log("[Auto-Sync] ⏰ Periodic 60s background sync checking for cloud updates...");
       fetchLibraryData(true);
-    }, 5000);
+    }, 60000);
 
     // 2. Instant sync when returning to the tab / window focus
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        console.log("[Auto-Sync] 👁️ Tab became active/visible, syncing library...");
         fetchLibraryData(true);
         // Sync current playback position immediately from player
         if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
@@ -2034,6 +2077,7 @@ export default function App() {
       }
     };
     const handleFocus = () => {
+      console.log("[Auto-Sync] 🔍 Window focused, checking for library updates...");
       fetchLibraryData(true);
     };
 
@@ -2576,6 +2620,8 @@ export default function App() {
     }
 
     const executePlayback = async () => {
+      console.log(`[Player] ▶️ Loading & playing track: "${track.title}" (${track.id}) by "${track.author || "Unknown"}"`);
+
       // Record to history if user is logged in
       if (userSession?.isLoggedIn) {
         setLibraryData((prev) => {
@@ -2590,6 +2636,7 @@ export default function App() {
       try {
         const offlineItem = await getOfflineTrack(track.id);
         if (offlineItem && offlineItem.audioBlob && audioRef.current) {
+          console.log(`[Player] 📦 Playing "${track.title}" from local IndexedDB offline storage.`);
           if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
             try {
               ytPlayerRef.current.stopVideo();
@@ -2644,6 +2691,7 @@ export default function App() {
         playAbortControllerRef.current = controller;
         const timeoutId = setTimeout(() => controller.abort(), 4500);
 
+        console.log(`[Stream] 🎵 Requesting direct stream from backend for ${track.id}...`);
         const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
           signal: controller.signal,
         });
@@ -2652,7 +2700,7 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data.fallback || !data.streamUrl) {
-            // Server requested client player fallback
+            console.log(`[Stream] Backend suggested client player fallback for ${track.id}`);
             streamLoaded = false;
           } else {
             if (data.author && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
@@ -2661,7 +2709,7 @@ export default function App() {
             }
 
             if (data.streamUrl && audioRef.current) {
-              // Direct stream from Google Video CDN: high-speed, zero-timeout native HTML5 audio for smooth background playback
+              console.log(`[Stream] ✅ Direct stream resolved for "${track.title}"! Playing via HTML5 audio.`);
               const playableUrl = data.streamUrl;
 
               // Silence YouTube iframe
@@ -2705,6 +2753,7 @@ export default function App() {
 
       // Strategy 2: Zero-failure YouTube Web Player Fallback (if backend stream unavailable)
       if (!streamLoaded) {
+        console.log(`[Player] 📺 Playing "${track.title}" (${track.id}) via YouTube Player fallback.`);
         activePlayerType.current = "youtube";
         if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
           try {
@@ -3503,8 +3552,8 @@ export default function App() {
     recommendedTracks.length > 0
       ? recommendedTracks
       : libraryData.favorites.length > 0
-      ? libraryData.favorites.slice(0, 12)
-      : trendingTracks.slice(0, 12);
+        ? libraryData.favorites.slice(0, 12)
+        : trendingTracks.slice(0, 12);
 
   return (
     <div className="w-full max-w-full h-screen h-[100dvh] flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
@@ -4073,53 +4122,56 @@ export default function App() {
 
               {/* Vertical List of Playlist Items (Matching Figma) */}
               <div
-                className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
+                key={activeLeftTab}
+                className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1 item-slide-up"
                 style={{ gap: "12px" }}
               >
                 {getSidebarItems().length > 0 ? (
-                  getSidebarItems().map((item, idx) => (
-                    <div
-                      key={item.id + idx}
-                      onClick={() => {
-                        if (item.rawTrack) {
-                          if (activeLeftTab === "favorites") {
-                            const favList = libraryData.favorites;
-                            handlePlaySongItem(item.rawTrack, favList);
-                          } else if (activeLeftTab === "offline") {
-                            const offlineList = getSidebarItems().map((it) => it.rawTrack).filter(Boolean);
-                            handlePlaySongItem(item.rawTrack, offlineList);
-                          } else if (activeLeftTab === "history") {
-                            const histList = libraryData.history;
-                            handlePlaySongItem(item.rawTrack, histList);
-                          } else {
-                            playTrackDirectly(item.rawTrack);
+                  getSidebarItems().map((item, idx) => {
+                    const itemId = item.id || (item.rawPlaylist?.id || item.rawPlaylist?.name) || `sidebar-item-${idx}`;
+                    return (
+                      <div
+                        key={itemId}
+                        onClick={() => {
+                          if (item.rawTrack) {
+                            if (activeLeftTab === "favorites") {
+                              const favList = libraryData.favorites;
+                              handlePlaySongItem(item.rawTrack, favList);
+                            } else if (activeLeftTab === "offline") {
+                              const offlineList = getSidebarItems().map((it) => it.rawTrack).filter(Boolean);
+                              handlePlaySongItem(item.rawTrack, offlineList);
+                            } else if (activeLeftTab === "history") {
+                              const histList = libraryData.history;
+                              handlePlaySongItem(item.rawTrack, histList);
+                            } else {
+                              playTrackDirectly(item.rawTrack);
+                            }
+                          } else if (item.rawPlaylist?.items?.length) {
+                            const plTracks: Track[] = item.rawPlaylist.items.map((it: any) => ({
+                              id: it.id || it.Id,
+                              title: it.title || it.Title,
+                              author: it.author || it.Author || it.Artist || "",
+                              duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
+                              thumbnail: `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
+                            }));
+                            setActiveLibraryPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
+                            setActivePlayingPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
+                            setPlaylist(plTracks);
+                            setCurrentIndex(0);
+                            currentIndexRef.current = 0;
+                            loadAndPlayTrack(plTracks[0], true);
+                            setQueueTracks(plTracks);
+                          } else if (playlist[idx % playlist.length]) {
+                            playTrackDirectly(playlist[idx % playlist.length]);
                           }
-                        } else if (item.rawPlaylist?.items?.length) {
-                          const plTracks: Track[] = item.rawPlaylist.items.map((it: any) => ({
-                            id: it.id || it.Id,
-                            title: it.title || it.Title,
-                            author: it.author || it.Author || it.Artist || "",
-                            duration: Number(it.DurationSeconds ?? it.duration ?? it.durationSeconds ?? it.Duration ?? 0),
-                            thumbnail: `https://i.ytimg.com/vi/${it.id || it.Id}/mqdefault.jpg`,
-                          }));
-                          setActiveLibraryPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
-                          setActivePlayingPlaylistId(item.rawPlaylist.id || item.rawPlaylist.name);
-                          setPlaylist(plTracks);
-                          setCurrentIndex(0);
-                          currentIndexRef.current = 0;
-                          loadAndPlayTrack(plTracks[0], true);
-                          setQueueTracks(plTracks);
-                        } else if (playlist[idx % playlist.length]) {
-                          playTrackDirectly(playlist[idx % playlist.length]);
-                        }
-                      }}
-                      className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group item-slide-up ${(activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                        ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)
-                        ? "active-queue-beam shadow-md scale-[1.01]"
-                        : "hover:bg-white/10 hover:translate-x-1"
-                        }`}
-                      style={{ marginBottom: "2px", animationDelay: `${Math.min(idx * 28, 280)}ms` }}
-                    >
+                        }}
+                        className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group ${(activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                          ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)
+                          ? "active-queue-beam shadow-md scale-[1.01]"
+                          : "hover:bg-white/10 hover:translate-x-1"
+                          }`}
+                        style={{ marginBottom: "2px" }}
+                      >
                       <div className="relative w-11 h-11 flex-shrink-0">
                         <img
                           src={item.thumb}
@@ -4189,8 +4241,9 @@ export default function App() {
                         </div>
                       )}
                     </div>
-                  ))
-                ) : (
+                  );
+                })
+              ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center text-white/40 text-xs px-2">
                     <p>
                       {activeLeftTab === "library"
