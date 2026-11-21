@@ -1279,20 +1279,57 @@ export async function getArtistDetails(
     const artistFirstRegex = new RegExp(`^${escapedArtist}\\s*[-–|:]`, "i");
 
     const isAuthenticArtistTrack = (t: SearchTrackResult) => {
-      const a = (t.author || "").toLowerCase();
-      const tit = (t.title || "").toLowerCase();
-      // 1. Author contains artist name or matches
-      if (a.includes(lowerArtist) || lowerArtist.includes(a)) {
-        // Exclude if someone else covered it ("cover by [someone else]")
-        if (/\b(cover by|covered by)\b/i.test(tit) && !tit.includes(lowerArtist)) {
+      const a = (t.author || "").toLowerCase().trim();
+      const tit = (t.title || "").toLowerCase().trim();
+
+      // 1. Exclude if someone ELSE covered it ("cover by [someone else]", "covered by [someone else]", etc.)
+      const coverByMatch = tit.match(/(?:cover(?:ed)?\s+by|vocal\s*:?|ca\s*sĩ\s*:?|thể\s*hiện\s*:?)\s*([^\s\(\)\[\]【】\/|,]+)/i);
+      if (coverByMatch && coverByMatch[1]) {
+        const coverSinger = coverByMatch[1].toLowerCase().trim();
+        if (!coverSinger.includes(lowerArtist) && !lowerArtist.includes(coverSinger)) {
           return false;
         }
-        return true;
       }
-      // 2. Title explicitly states artist is singer/collaborator/performer
+
+      // Check bracketed cover e.g. "(Hương Ly Cover)" or "[Linh Cover]"
+      const bracketCoverMatch = tit.match(/[\(\[\{【]([^\(\[\{【\)\]\}】]+)\s+cover[\)\]\}】]/i);
+      if (bracketCoverMatch && bracketCoverMatch[1]) {
+        const coverSinger = bracketCoverMatch[1].toLowerCase().trim();
+        if (!coverSinger.includes(lowerArtist) && !lowerArtist.includes(coverSinger)) {
+          return false;
+        }
+      }
+
+      // Check "Cover [Song] - [Name]" at end of title
+      const endCoverMatch = tit.match(/cover\s*[-–|:]\s*([^\(\[\{【\)\]\}】]+)$/i);
+      if (endCoverMatch && endCoverMatch[1]) {
+        const coverSinger = endCoverMatch[1].toLowerCase().trim();
+        if (!coverSinger.includes(lowerArtist) && !lowerArtist.includes(coverSinger)) {
+          return false;
+        }
+      }
+
+      // 2. Author check
+      if (a && a !== "nghệ sĩ" && a !== "kahoii music") {
+        const authorTokens = a
+          .split(/[,&+/]|(?:\s+(?:và|feat\.?|ft\.?|x|vs\.?)\s+)/i)
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const matchesAuthor = authorTokens.some(
+          (token) => token === lowerArtist || token.includes(lowerArtist) || (token.length >= 3 && lowerArtist.includes(token))
+        );
+
+        if (matchesAuthor) {
+          return true;
+        }
+      }
+
+      // 3. Title check: Title explicitly states artist is singer/collaborator/performer
       if (artistInTitleRegex.test(tit) || artistFirstRegex.test(tit)) {
         return true;
       }
+
       return false;
     };
 
@@ -1340,13 +1377,16 @@ export async function getArtistDetails(
         ""
       ).toLowerCase();
 
-      // STRICT EXCLUSION: Skip Similar Artists ("Người hâm mộ có thể cũng thích" / "Fans also like")
+      // STRICT EXCLUSION: Skip Similar Artists ("Người hâm mộ có thể cũng thích" / "Fans also like"), Featured on ("Xuất hiện trên"), etc.
       if (
         shelfTitle.includes("người hâm mộ") ||
         shelfTitle.includes("fans also like") ||
         shelfTitle.includes("tương tự") ||
         shelfTitle.includes("similar") ||
-        shelfTitle.includes("nghệ sĩ liên quan")
+        shelfTitle.includes("nghệ sĩ liên quan") ||
+        shelfTitle.includes("related artists") ||
+        shelfTitle.includes("xuất hiện trên") ||
+        shelfTitle.includes("featured on")
       ) {
         continue;
       }
@@ -1414,17 +1454,17 @@ export async function getArtistDetails(
             }
           }
         }
-        // B. Playlist or Album item (MUST NOT be a channel/artist UC...)
+        // B. Playlist or Album item (MUST NOT be a channel/artist UC... or radio mix RD...)
         else if (
           playlistId &&
           title &&
           !videoId &&
           !playlistId.startsWith("UC") &&
+          !playlistId.startsWith("RD") &&
           (playlistId.startsWith("VL") ||
             playlistId.startsWith("PL") ||
             playlistId.startsWith("MPREb") ||
-            playlistId.startsWith("OLAK5uy_") ||
-            playlistId.startsWith("RD")) &&
+            playlistId.startsWith("OLAK5uy_")) &&
           !seenPlaylistIds.has(playlistId)
         ) {
           // EXCLUDE single tracks ("Đĩa đơn" / "Single") - they belong to songs/tracks, not playlists!
