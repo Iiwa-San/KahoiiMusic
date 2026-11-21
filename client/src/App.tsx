@@ -2031,16 +2031,13 @@ export default function App() {
       };
     }, [userSession?.isLoggedIn]);
 
-    // Preload initial track metadata, user data, home feed & YouTube Player API on mount
-    useEffect(() => {
-      fetchUserSession();
-      fetchLibraryData();
-
-      // Fetch Live Home Feed (Trending & New Releases)
+    // Refresh Discovery / Home Feed (Fetches randomized new trending & new release tracks)
+    const refreshHomeFeed = useCallback(async (showNotice = false) => {
       setIsHomeLoading(true);
-      fetch(`${API_BASE}/api/home?_t=${Date.now()}`, { cache: "no-store" })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
+      try {
+        const res = await fetch(`${API_BASE}/api/home?_t=${Date.now()}`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
           if (data) {
             if (Array.isArray(data.trending) && data.trending.length > 0) {
               const filtered = data.trending.filter(isCleanModernTrack);
@@ -2057,18 +2054,30 @@ export default function App() {
             if (Array.isArray(data.artists) && data.artists.length > 0) {
               setHomeArtists(data.artists);
             }
-          } else {
-            setTrendingTracks(INITIAL_TRENDING_TRACKS);
-            setNewReleaseTracks(INITIAL_NEW_RELEASES);
+            if (showNotice) {
+              showToast("Đã làm mới danh sách bài hát khám phá!", "success");
+            }
+            return;
           }
-        })
-        .catch(() => {
-          setTrendingTracks(INITIAL_TRENDING_TRACKS);
-          setNewReleaseTracks(INITIAL_NEW_RELEASES);
-        })
-        .finally(() => {
-          setIsHomeLoading(false);
-        });
+        }
+        setTrendingTracks(INITIAL_TRENDING_TRACKS);
+        setNewReleaseTracks(INITIAL_NEW_RELEASES);
+      } catch {
+        setTrendingTracks(INITIAL_TRENDING_TRACKS);
+        setNewReleaseTracks(INITIAL_NEW_RELEASES);
+        if (showNotice) {
+          showToast("Không thể làm mới khám phá, vui lòng thử lại.", "warning");
+        }
+      } finally {
+        setIsHomeLoading(false);
+      }
+    }, [showToast]);
+
+    // Preload initial track metadata, user data, home feed & YouTube Player API on mount
+    useEffect(() => {
+      fetchUserSession();
+      fetchLibraryData();
+      refreshHomeFeed(false);
 
       // Initialize YouTube Iframe Player
       const loadYtScript = () => {
@@ -5007,23 +5016,35 @@ export default function App() {
                               </div>
                             )}
                           </div>
-                          {!isHomeLoading && trendingTracks.length > 0 && (
+                          <div className="flex items-center gap-1.5 sm:gap-2">
                             <button
                               type="button"
-                              onClick={() => {
-                                if (trendingTracks.length > 0) {
-                                  setPlaylist(trendingTracks);
-                                  setQueueTracks(trendingTracks);
-                                  setCurrentIndex(0);
-                                  loadAndPlayTrack(trendingTracks[0], true);
-                                }
-                              }}
-                              className="text-xs font-semibold px-3 py-1.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
+                              onClick={() => refreshHomeFeed(true)}
+                              disabled={isHomeLoading}
+                              title="Làm mới khám phá (đổi bài hát ngẫu nhiên)"
+                              className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                             >
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              <span>Phát tất cả</span>
+                              <RefreshCw className={`w-3.5 h-3.5 ${isHomeLoading ? "animate-spin theme-accent-text" : ""}`} />
+                              <span className="hidden sm:inline">Làm mới</span>
                             </button>
-                          )}
+                            {!isHomeLoading && trendingTracks.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (trendingTracks.length > 0) {
+                                    setPlaylist(trendingTracks);
+                                    setQueueTracks(trendingTracks);
+                                    setCurrentIndex(0);
+                                    loadAndPlayTrack(trendingTracks[0], true);
+                                  }
+                                }}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-full theme-badge hover:theme-btn-primary hover:text-white transition-all cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span>Phát tất cả</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         {isHomeLoading ? (
@@ -5107,23 +5128,35 @@ export default function App() {
                               </div>
                             )}
                           </div>
-                          {!isHomeLoading && newReleaseTracks.length > 0 && (
+                          <div className="flex items-center gap-1.5 sm:gap-2">
                             <button
                               type="button"
-                              onClick={() => {
-                                if (newReleaseTracks.length > 0) {
-                                  setPlaylist(newReleaseTracks);
-                                  setQueueTracks(newReleaseTracks);
-                                  setCurrentIndex(0);
-                                  loadAndPlayTrack(newReleaseTracks[0], true);
-                                }
-                              }}
-                              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                              onClick={() => refreshHomeFeed(true)}
+                              disabled={isHomeLoading}
+                              title="Làm mới bài hát mới ngẫu nhiên"
+                              className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                             >
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              <span>Phát tất cả</span>
+                              <RefreshCw className={`w-3.5 h-3.5 ${isHomeLoading ? "animate-spin text-orange-400" : ""}`} />
+                              <span className="hidden sm:inline">Làm mới</span>
                             </button>
-                          )}
+                            {!isHomeLoading && newReleaseTracks.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (newReleaseTracks.length > 0) {
+                                    setPlaylist(newReleaseTracks);
+                                    setQueueTracks(newReleaseTracks);
+                                    setCurrentIndex(0);
+                                    loadAndPlayTrack(newReleaseTracks[0], true);
+                                  }
+                                }}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span>Phát tất cả</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         {isHomeLoading ? (
@@ -6759,7 +6792,15 @@ export default function App() {
               <nav className="lg:hidden fixed bottom-0 left-0 right-0 safe-bottom-nav bg-[var(--theme-panel-bg)]/95 backdrop-blur-2xl border-t border-white/10 z-40 flex items-center justify-around px-2 shadow-2xl">
                   <button
                     type="button"
-                    onClick={() => setMobileTab("explore")}
+                    onClick={() => {
+                      if (mobileTab === "explore" && !isSearchOpen && !selectedArtist) {
+                        refreshHomeFeed(true);
+                      } else {
+                        setMobileTab("explore");
+                        setIsSearchOpen(false);
+                        setSelectedArtist(null);
+                      }
+                    }}
                     className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${mobileTab === "explore" ? "theme-accent-text font-bold" : "text-white/50 hover:text-white"
                       }`}
                   >
