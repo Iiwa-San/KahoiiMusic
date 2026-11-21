@@ -46,6 +46,9 @@ import {
   HardDriveDownload,
   WifiOff,
   Trash2,
+  FileText,
+  Maximize2,
+  ChevronRight,
 } from "lucide-react";
 import type {
   Track,
@@ -869,8 +872,14 @@ export default function App() {
   const [isLeftSorted, setIsLeftSorted] = useState<boolean>(false);
   const [isQueueSorted, setIsQueueSorted] = useState<boolean>(false);
 
-  // Right Sidebar (Sidebar 2) Tabs: Queue (Hàng đợi) vs Lyrics (Lời bài hát)
-  const [sidebar2Tab, setSidebar2Tab] = useState<"queue" | "lyrics">("queue");
+  // Center Now Playing Player View (Expanded view triggered by clicking Thumbnail)
+  const [isNowPlayingViewOpen, setIsNowPlayingViewOpen] = useState<boolean>(false);
+  const [showCenterLyrics, setShowCenterLyrics] = useState<boolean>(true);
+  const [centerLyricFontSize, setCenterLyricFontSize] = useState<number>(1);
+  const centerActiveLyricRef = useRef<HTMLDivElement | null>(null);
+  const centerLyricsContainerRef = useRef<HTMLDivElement | null>(null);
+  const centerPlayerMenuRef = useRef<HTMLDivElement | null>(null);
+
   const activeLyricRef = useRef<HTMLDivElement | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
   const miniActiveLyricRef = useRef<HTMLDivElement | null>(null);
@@ -990,7 +999,21 @@ export default function App() {
   };
 
   const scrollToActiveLyric = useCallback((smooth = true) => {
-    // 1. Desktop full lyrics container
+    // 1. Center Now Playing View lyrics container
+    if (centerLyricsContainerRef.current && centerActiveLyricRef.current) {
+      const container = centerLyricsContainerRef.current;
+      const activeEl = centerActiveLyricRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      const relativeTop = activeRect.top - containerRect.top;
+      const targetScroll = container.scrollTop + relativeTop - (container.clientHeight / 2) + (activeRect.height / 2);
+      container.scrollTo({
+        top: Math.max(0, targetScroll),
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
+
+    // 2. Desktop full lyrics container
     if (lyricsContainerRef.current && activeLyricRef.current) {
       const container = lyricsContainerRef.current;
       const activeEl = activeLyricRef.current;
@@ -1004,7 +1027,7 @@ export default function App() {
       });
     }
 
-    // 2. Mini lyrics container (PC Mini App mode)
+    // 3. Mini lyrics container (PC Mini App mode)
     if (miniLyricsContainerRef.current && miniActiveLyricRef.current) {
       const container = miniLyricsContainerRef.current;
       const activeEl = miniActiveLyricRef.current;
@@ -1025,10 +1048,13 @@ export default function App() {
       scrollToActiveLyric(true);
     });
     return () => cancelAnimationFrame(animId);
-  }, [activeLyricIndex, sidebar2Tab, mobileTab, lyricDisplayMode, _lyrics, scrollToActiveLyric]);
+  }, [activeLyricIndex, isNowPlayingViewOpen, showCenterLyrics, centerLyricFontSize, mobileTab, lyricDisplayMode, _lyrics, scrollToActiveLyric]);
 
   // Reset lyrics scroll to 0 whenever lyrics are cleared or empty
   useEffect(() => {
+    if (centerLyricsContainerRef.current && (parsedLyrics.length === 0 || !_lyrics)) {
+      centerLyricsContainerRef.current.scrollTop = 0;
+    }
     if (lyricsContainerRef.current && (parsedLyrics.length === 0 || !_lyrics)) {
       lyricsContainerRef.current.scrollTop = 0;
     }
@@ -1102,13 +1128,16 @@ export default function App() {
   // Close player popup menu on click outside
   useEffect(() => {
     const handleClickOutsideMenu = (e: MouseEvent) => {
-      if (playerMenuRef.current && !playerMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insidePlayerMenu = playerMenuRef.current?.contains(target);
+      const insideCenterMenu = centerPlayerMenuRef.current?.contains(target);
+      if (!insidePlayerMenu && !insideCenterMenu) {
         setShowPlayerMenu(false);
         setShowLibrarySubmenu(false);
         setIsCreatingPlaylist(false);
         setNewPlaylistName("");
       }
-      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(target)) {
         setShowDownloadMenu(false);
       }
     };
@@ -4278,9 +4307,523 @@ export default function App() {
         {/* ----------------------------------------------------------------------- */}
         <section
           className={`${mobileTab === "explore" ? "flex w-full" : "hidden"
-            } lg:flex flex-1 h-full figma-panel flex-col min-h-0 overflow-hidden p-2.5 sm:p-4 lg:p-7`}
+            } lg:flex flex-1 h-full figma-panel flex-col min-h-0 overflow-hidden ${
+              isNowPlayingViewOpen && currentTrack ? "p-0 relative" : "p-2.5 sm:p-4 lg:p-7"
+            }`}
         >
-          {selectedArtist ? (
+          {isNowPlayingViewOpen && currentTrack ? (
+            /* ===================================================================== */
+            /* NOW PLAYING EXPANDED PLAYER VIEW (Wireframe layout)                  */
+            /* ===================================================================== */
+            <div className="relative w-full h-full flex flex-col justify-between overflow-hidden select-none animate-fade-in">
+              {/* Background cover artwork + dark vignette overlay */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-0">
+                <img
+                  src={getTrackThumbnail(currentTrack, "hd")}
+                  alt={currentTrack.title || ""}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src.includes("hq720.jpg") && currentTrack?.id) {
+                      target.src = `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`;
+                    } else if (!target.src.includes(DEFAULT_TRACK_ART)) {
+                      target.src = DEFAULT_TRACK_ART;
+                    }
+                  }}
+                  className="w-full h-full object-cover scale-105 transition-all duration-700 brightness-[0.7] contrast-[1.05]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-black/45 to-black/90" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(236,72,153,0.12)_0%,transparent_70%)]" />
+              </div>
+
+              {/* 1. TOP HEADER CLUSTER (z-30) */}
+              <div className="relative z-30 flex items-center justify-between px-5 sm:px-8 pt-5 pb-2 flex-shrink-0 border-b border-white/5">
+                {/* Back button */}
+                <button
+                  type="button"
+                  onClick={() => setIsNowPlayingViewOpen(false)}
+                  className="px-4 py-1.5 rounded-full bg-purple-700/80 hover:bg-purple-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-lg hover:scale-105 cursor-pointer active:scale-95 border border-purple-400/30 flex-shrink-0"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>back</span>
+                </button>
+
+                {/* Song Name & Author */}
+                <div className="flex-1 min-w-0 flex flex-col items-center justify-center px-4 text-center">
+                  <h2
+                    className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white truncate max-w-full drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)] tracking-tight"
+                    title={currentTrack.title}
+                  >
+                    {currentTrack.title}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-white/80 font-medium truncate max-w-full drop-shadow-md mt-0.5">
+                    {formatTrackArtist(currentTrack.title, currentTrack.author)}
+                  </p>
+                </div>
+
+                {/* Right controls: Synced badge, Aa size, Romanji */}
+                <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  {isLyricsSynced ? (
+                    <span className="px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider bg-pink-500 text-white shadow-[0_0_12px_rgba(236,72,153,0.85)] flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-white" />
+                      Synced
+                    </span>
+                  ) : parsedLyrics.length > 0 || _lyrics?.plainLyrics ? (
+                    <span className="px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium bg-purple-900/80 text-purple-200 border border-purple-500/30">
+                      Non synced
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] text-white/40 bg-black/40">
+                      Non synced
+                    </span>
+                  )}
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCenterLyricFontSize((prev) => (prev % 3) + 1)}
+                      title="Đổi cỡ chữ lời bài hát"
+                      className="px-2.5 py-1 rounded-full bg-purple-950/80 hover:bg-purple-800/80 text-purple-200 hover:text-white border border-purple-500/40 text-[11px] font-semibold transition-all cursor-pointer shadow-md flex items-center gap-1 active:scale-95"
+                    >
+                      <span>Aa {centerLyricFontSize}</span>
+                    </button>
+
+                    {hasRomanizationSupport && (
+                      <button
+                        type="button"
+                        onClick={toggleLyricDisplayMode}
+                        title="Đổi phiên âm Romaji / Pinyin"
+                        className="px-3 py-1 rounded-full bg-purple-700/80 hover:bg-purple-600 text-white border border-purple-400/40 text-[11px] font-semibold transition-all cursor-pointer shadow-md flex items-center gap-1 active:scale-95"
+                      >
+                        <Languages className="w-3 h-3" />
+                        <span>{romaziPillLabel}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. MIDDLE LYRICS AREA (z-10) */}
+              <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center z-10 select-none">
+                {showCenterLyrics ? (
+                  <div
+                    ref={centerLyricsContainerRef}
+                    className="w-full h-full overflow-y-auto custom-scrollbar px-6 flex flex-col items-center text-center"
+                    style={{
+                      paddingTop: "60px",
+                      paddingBottom: "80px",
+                      maskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
+                      WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
+                      gap: centerLyricFontSize === 1 ? "14px" : centerLyricFontSize === 2 ? "20px" : "28px",
+                    }}
+                  >
+                    {parsedLyrics.length > 0 ? (
+                      parsedLyrics.map((line, idx) => {
+                        const isActive = isLyricsSynced && idx === activeLyricIndex;
+                        let primaryText = line.text || "♪";
+                        let secondaryText: string | null = null;
+                        if (lyricDisplayMode === "romanized" && line.romanized) {
+                          primaryText = line.romanized;
+                        } else if (lyricDisplayMode === "dual" && line.romanized) {
+                          primaryText = line.text;
+                          secondaryText = line.romanized;
+                        }
+
+                        return (
+                          <div
+                            key={idx}
+                            ref={isActive ? centerActiveLyricRef : undefined}
+                            onClick={() => {
+                              if (line.time > 0) seekToTime(line.time);
+                            }}
+                            className={`transition-all duration-300 select-none cursor-pointer text-center rounded-2xl px-5 py-2 max-w-3xl ${
+                              isActive
+                                ? "scale-105 font-extrabold text-white drop-shadow-[0_0_16px_rgba(236,72,153,0.95)] bg-white/10 backdrop-blur-sm border border-pink-500/30 shadow-xl"
+                                : "text-white/60 hover:text-white/90 hover:scale-[1.02] font-medium"
+                            } ${
+                              centerLyricFontSize === 1
+                                ? "text-base sm:text-lg"
+                                : centerLyricFontSize === 2
+                                  ? "text-lg sm:text-xl"
+                                  : "text-xl sm:text-2xl"
+                            }`}
+                          >
+                            <p className="leading-relaxed drop-shadow-md">{primaryText}</p>
+                            {secondaryText && (
+                              <p className={`mt-0.5 text-white/50 font-normal ${
+                                centerLyricFontSize === 1 ? "text-xs sm:text-sm" : "text-sm sm:text-base"
+                              }`}>
+                                {secondaryText}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : _lyrics?.plainLyrics ? (
+                      <div className="max-w-2xl text-center text-white/80 whitespace-pre-line leading-loose text-base font-medium py-10">
+                        {_lyrics.plainLyrics}
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center text-white/40 gap-2">
+                        <Mic2 className="w-10 h-10 opacity-30" />
+                        <p className="text-sm font-medium">Chưa có lời bài hát cho ca khúc này</p>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* 3. BOTTOM FOOTER CONTROLS & SEEKBAR (z-20 - Lớp phía trên lyrics) */}
+              <div className="relative z-20 w-full px-5 sm:px-8 pb-6 pt-3 flex flex-col gap-2.5 bg-gradient-to-t from-black/95 via-black/75 to-transparent">
+                {/* Row 1: 2 Function Buttons Above Progress Bar */}
+                <div className="flex items-center justify-between w-full px-1">
+                  {/* Left: Menu */}
+                  <div className="relative" ref={centerPlayerMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPlayerMenu(!showPlayerMenu);
+                        if (showPlayerMenu) {
+                          setShowLibrarySubmenu(false);
+                          setIsCreatingPlaylist(false);
+                        }
+                      }}
+                      className={`w-9 h-9 rounded-xl backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${
+                        showPlayerMenu
+                          ? "theme-badge-active shadow-md"
+                          : "bg-black/50 text-white/80 hover:text-white hover:bg-black/70 border border-white/10"
+                      }`}
+                      title="Tùy chọn bài hát"
+                    >
+                      <Menu className="w-4 h-4" />
+                    </button>
+
+                    {showPlayerMenu && currentTrack && (
+                      <div className="absolute bottom-11 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[210px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
+                        <button
+                          type="button"
+                          onClick={() => setShowLibrarySubmenu(!showLibrarySubmenu)}
+                          className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${
+                            showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <FolderPlus className="w-4 h-4 theme-accent-text" />
+                            <span>Lưu vào playlist</span>
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            )}
+                            <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={savingOfflineTrackId === currentTrack.id}
+                          onClick={() => handleSaveOfflineTrack(currentTrack)}
+                          className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                        >
+                          <span className="flex items-center gap-2">
+                            {savingOfflineTrackId === currentTrack.id ? (
+                              <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
+                            ) : (
+                              <HardDriveDownload className="w-4 h-4 theme-accent-text" />
+                            )}
+                            <span>
+                              {savingOfflineTrackId === currentTrack.id
+                                ? "Đang lưu..."
+                                : offlineTrackIds.has(currentTrack.id)
+                                  ? "Đã lưu offline (Xóa)"
+                                  : "Lưu nghe offline"}
+                            </span>
+                          </span>
+                          {offlineTrackIds.has(currentTrack.id) && (
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadTrack(currentTrack)}
+                          className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Download className="w-4 h-4 theme-accent-text" />
+                            <span>Tải file MP3 về máy</span>
+                          </span>
+                          {downloadedTrackIds.has(currentTrack.id) && (
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {showPlayerMenu && showLibrarySubmenu && currentTrack && (
+                      <div className="absolute bottom-11 left-0 sm:left-[calc(100%+8px)] z-50 theme-menu-glass rounded-xl shadow-2xl p-2 min-w-[210px] max-w-[240px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
+                        <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
+                          <span>Thêm vào playlist</span>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto flex flex-col gap-1 pr-0.5 custom-scrollbar">
+                          {libraryData.playlists.length > 0 ? (
+                            libraryData.playlists.map((pl) => {
+                              const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
+                              return (
+                                <button
+                                  key={pl.id}
+                                  type="button"
+                                  onClick={() => handleToggleTrackInPlaylist(pl.id)}
+                                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-left ${
+                                    isInPl ? "bg-white/10 text-white font-medium" : "hover:bg-white/5 text-white/80"
+                                  }`}
+                                >
+                                  <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
+                                  {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <span className="text-[11px] text-white/40 italic px-2 py-1">Chưa có playlist nào</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Nút Lyrics (Phía trên bên phải thanh tiến trình) */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCenterLyrics(!showCenterLyrics)}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                      showCenterLyrics
+                        ? "text-white shadow-[0_0_16px_rgba(236,72,153,0.85)] border border-pink-400/50"
+                        : "bg-black/50 text-white/50 border border-white/20 hover:text-white hover:bg-black/70"
+                    }`}
+                    style={showCenterLyrics ? { background: "var(--theme-btn-gradient)" } : undefined}
+                    title={showCenterLyrics ? "Ẩn lời bài hát" : "Hiện lời bài hát"}
+                  >
+                    <FileText className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Row 2: Thanh tiến trình (Seekbar) */}
+                <div className="flex flex-col gap-1 w-full">
+                  <div className="relative w-full h-4 flex items-center group/seek touch-none">
+                    <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/20" />
+                    <div
+                      className="absolute left-0 h-1.5 rounded-full"
+                      style={{
+                        width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                        background: "var(--theme-btn-gradient)",
+                        boxShadow: "0 0 10px rgba(236,72,153,0.6)",
+                      }}
+                    />
+                    <input
+                      type="range"
+                      min={0}
+                      max={duration || 100}
+                      step={0.5}
+                      value={currentTime}
+                      onChange={handleSeek}
+                      className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
+                    />
+                    <div
+                      className="absolute w-4 h-4 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
+                      style={{
+                        left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 8px)`,
+                        boxShadow: "0 0 12px var(--theme-accent)",
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-white/70 font-mono px-0.5">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+                </div>
+
+                {/* Row 3: Hàng 7 nút điều khiển dưới cùng */}
+                <div className="flex items-center justify-between px-2 w-full pt-1">
+                  {/* 1. Volume */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowVolumeSlider(!showVolumeSlider)}
+                      className="p-2 rounded-xl bg-black/40 hover:bg-black/60 text-white/80 hover:text-white transition-all cursor-pointer"
+                      title="Âm lượng"
+                    >
+                      {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                    </button>
+                    {showVolumeSlider && (
+                      <div className="absolute bottom-11 left-0 p-2.5 rounded-xl theme-menu-glass shadow-2xl flex items-center gap-2 z-30 border theme-accent-border/40">
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={isMuted ? 0 : volume}
+                          onChange={(e) => {
+                            setIsMuted(false);
+                            setVolume(parseFloat(e.target.value));
+                          }}
+                          className="w-24 h-1 bg-white/30 rounded appearance-none cursor-pointer theme-slider"
+                        />
+                        <span className="text-[10px] theme-accent-text font-mono font-bold">
+                          {Math.round((isMuted ? 0 : volume) * 100)}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Repeat / Shuffle */}
+                  <button
+                    type="button"
+                    onClick={cycleRepeatMode}
+                    title={
+                      repeatMode === "all"
+                        ? "Lặp danh sách"
+                        : repeatMode === "one"
+                          ? "Lặp 1 bài"
+                          : repeatMode === "shuffle"
+                            ? "Phát ngẫu nhiên"
+                            : "Tắt lặp lại"
+                    }
+                    className={`p-2 transition-all cursor-pointer hover:scale-115 active:scale-90 ${
+                      repeatMode === "all" || repeatMode === "one"
+                        ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)]"
+                        : repeatMode === "shuffle"
+                          ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)]"
+                          : "text-white/60 hover:text-white"
+                    }`}
+                  >
+                    {repeatMode === "one" ? (
+                      <Repeat1 className="w-5 h-5" />
+                    ) : repeatMode === "shuffle" ? (
+                      <Shuffle className="w-5 h-5" />
+                    ) : (
+                      <Repeat className="w-5 h-5" />
+                    )}
+                  </button>
+
+                  {/* 3. Prev */}
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    title="Bài trước"
+                    className="p-2 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                  >
+                    <SkipBack className="w-6 h-6 fill-current" />
+                  </button>
+
+                  {/* 4. Large Play/Pause in center */}
+                  <button
+                    type="button"
+                    onClick={togglePlayPause}
+                    disabled={isLoading}
+                    title={isPlaying ? "Tạm dừng" : "Phát"}
+                    className="w-13 h-13 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-white shadow-2xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                    style={{
+                      background: "var(--theme-btn-gradient)",
+                      boxShadow: "0 4px 24px rgba(236,72,153,0.6)",
+                    }}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-7 h-7 animate-spin text-white" />
+                    ) : isPlaying ? (
+                      <Pause className="w-7 h-7 fill-current" />
+                    ) : (
+                      <Play className="w-7 h-7 fill-current translate-x-0.5" />
+                    )}
+                  </button>
+
+                  {/* 5. Next */}
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    title="Bài kế tiếp"
+                    className="p-2 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                  >
+                    <SkipForward className="w-6 h-6 fill-current" />
+                  </button>
+
+                  {/* 6. Sleep Timer */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
+                      title={
+                        sleepTimerSecondsLeft
+                          ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
+                          : "Hẹn giờ tắt nhạc"
+                      }
+                      className={`p-2 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${
+                        sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
+                      }`}
+                    >
+                      <Clock className="w-5 h-5" />
+                      {sleepTimerMinutes && (
+                        <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[8px] text-white font-mono font-bold animate-pulse">
+                          {sleepTimerMinutes}m
+                        </span>
+                      )}
+                    </button>
+                    {showSleepTimerMenu && (
+                      <div className="absolute bottom-11 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in border theme-accent-border/40">
+                        <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
+                          Hẹn giờ tắt
+                        </span>
+                        {[15, 30, 45, 60].map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => startSleepTimer(m)}
+                            className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                              sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
+                            }`}
+                          >
+                            {m} phút
+                          </button>
+                        ))}
+                        {sleepTimerMinutes && (
+                          <button
+                            type="button"
+                            onClick={() => startSleepTimer(null)}
+                            className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
+                          >
+                            Tắt hẹn giờ
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 7. Heart */}
+                  <button
+                    type="button"
+                    disabled={!currentTrack}
+                    onClick={toggleCurrentFavorite}
+                    title={
+                      !currentTrack
+                        ? "Chưa phát bài hát nào"
+                        : !userSession?.isLoggedIn
+                          ? "Đăng nhập để yêu thích"
+                          : libraryData.favorites.some((t) => t.id === currentTrack.id)
+                            ? "Bỏ yêu thích"
+                            : "Thêm vào yêu thích"
+                    }
+                    className="p-2 transition-all cursor-pointer hover:scale-115 active:scale-90"
+                  >
+                    <Heart
+                      className={`w-6 h-6 transition-transform ${
+                        userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                          ? "fill-red-500 text-red-500 drop-shadow-[0_0_12px_rgba(239,68,68,0.9)]"
+                          : "text-white/60 hover:text-red-400"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : selectedArtist ? (
             /* ===================================================================== */
             /* ARTIST DETAIL VIEW (Session giữa lấy data của đúng artist đó)         */
             /* ===================================================================== */
@@ -5900,11 +6443,16 @@ export default function App() {
           {/* 2. DESKTOP RIGHT SIDEBAR (EXACT FIGMA 3-COLUMN RIGHT PANEL, hidden lg:flex) */}
           {/* ========================================================================= */}
           <div className="hidden lg:flex flex-col flex-1 min-h-0">
-            {/* Top Part: Now Playing Artwork Card with Dynamic Artwork & Glow */}
-            <div
-              className="w-full aspect-square rounded-[22px] relative shadow-2xl bg-[#1b0833] flex-shrink-0 group max-w-[340px] mx-auto lg:max-w-none"
-              style={{ marginBottom: "18px" }}
-            >
+            {/* Top Part: Now Playing Artwork Card (Click to expand Center Now Playing View) */}
+            {!isNowPlayingViewOpen && (
+              <div
+                onClick={() => {
+                  if (currentTrack) setIsNowPlayingViewOpen(true);
+                }}
+                className="w-full aspect-square rounded-[22px] relative shadow-2xl bg-[#1b0833] flex-shrink-0 group max-w-[340px] mx-auto lg:max-w-none cursor-pointer"
+                style={{ marginBottom: "18px" }}
+                title={currentTrack ? "Bấm vào ảnh bìa để mở trình phát toàn màn hình" : undefined}
+              >
               {/* Clamped container for artwork & gradient so popups can overflow cleanly */}
               <div className="absolute inset-0 rounded-[22px] overflow-hidden pointer-events-none">
                 {/* Real Dynamic Artwork or Idle Standby Display */}
@@ -5937,6 +6485,14 @@ export default function App() {
                 <div className="absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
               </div>
 
+              {/* Hover expand hint */}
+              {currentTrack && (
+                <div className="absolute top-2.5 right-12 z-20 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] text-white/90 flex items-center gap-1 pointer-events-none border border-white/10 shadow-md">
+                  <Maximize2 className="w-3 h-3 text-pink-400" />
+                  <span>Mở rộng</span>
+                </div>
+              )}
+
               {/* Structured Body: Top Header Session, Middle Space, and Bottom Player Session (Flexbox, zero overlapping) */}
               <div className="absolute inset-0 p-3 sm:p-3.5 flex flex-col justify-between z-20">
                 {/* 1. TOP HEADER SESSION: Menu, Volume, and Favorite Heart */}
@@ -5946,7 +6502,8 @@ export default function App() {
                     <div className="relative" ref={playerMenuRef}>
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (!currentTrack) {
                             showToast("Vui lòng phát một bài hát trước khi lưu hoặc tải xuống!", "warning");
                             return;
@@ -6142,14 +6699,20 @@ export default function App() {
                     <div className="relative">
                       <button
                         type="button"
-                        onClick={() => setShowVolumeSlider(!showVolumeSlider)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowVolumeSlider(!showVolumeSlider);
+                        }}
                         className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:theme-accent-text hover:bg-black/60 transition-all cursor-pointer"
                         title="Âm lượng"
                       >
                         {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                       </button>
                       {showVolumeSlider && (
-                        <div className="absolute top-9 left-0 p-2.5 rounded-xl theme-menu-glass shadow-2xl flex items-center gap-2 z-30 border theme-accent-border/40">
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-9 left-0 p-2.5 rounded-xl theme-menu-glass shadow-2xl flex items-center gap-2 z-30 border theme-accent-border/40"
+                        >
                           <input
                             type="range"
                             min={0}
@@ -6174,7 +6737,10 @@ export default function App() {
                   <button
                     type="button"
                     disabled={!currentTrack}
-                    onClick={toggleCurrentFavorite}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleCurrentFavorite();
+                    }}
                     title={
                       !currentTrack
                         ? "Chưa phát bài hát nào"
@@ -6235,6 +6801,7 @@ export default function App() {
                         step={0.5}
                         value={currentTime}
                         onChange={handleSeek}
+                        onClick={(e) => e.stopPropagation()}
                         className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
                       />
                       <div
@@ -6256,7 +6823,10 @@ export default function App() {
                     {/* Loop / Shuffle Button */}
                     <button
                       type="button"
-                      onClick={cycleRepeatMode}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cycleRepeatMode();
+                      }}
                       title={
                         repeatMode === "all"
                           ? "Lặp danh sách"
@@ -6281,7 +6851,10 @@ export default function App() {
                     {/* Prev */}
                     <button
                       type="button"
-                      onClick={handlePrev}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrev();
+                      }}
                       title="Bài trước"
                       className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
                     >
@@ -6291,7 +6864,10 @@ export default function App() {
                     {/* Large Dynamic Play / Pause Circle (w-12 h-12) */}
                     <button
                       type="button"
-                      onClick={togglePlayPause}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePlayPause();
+                      }}
                       disabled={isLoading}
                       title={isPlaying ? "Tạm dừng" : "Phát"}
                       className="w-11 h-11 min-[340px]:w-12 min-[340px]:h-12 rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
@@ -6312,7 +6888,10 @@ export default function App() {
                     {/* Next */}
                     <button
                       type="button"
-                      onClick={handleNext}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNext();
+                      }}
                       title="Bài kế tiếp"
                       className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
                     >
@@ -6323,7 +6902,10 @@ export default function App() {
                     <div className="relative">
                       <button
                         type="button"
-                        onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSleepTimerMenu(!showSleepTimerMenu);
+                        }}
                         title={
                           sleepTimerSecondsLeft
                             ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
@@ -6340,7 +6922,10 @@ export default function App() {
                         )}
                       </button>
                       {showSleepTimerMenu && (
-                        <div className="absolute bottom-9 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in border theme-accent-border/40">
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute bottom-9 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in border theme-accent-border/40"
+                        >
                           <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
                             Hẹn giờ tắt
                           </span>
@@ -6371,249 +6956,90 @@ export default function App() {
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Sidebar 2 Tab Switcher: Hàng đợi (Queue) & Lời bài hát (Lyrics) */}
-            <div className="relative mb-3 flex-shrink-0">
-              {/* Inactive Background Capsules matching app theme but darker */}
-              <div className="absolute inset-0 grid grid-cols-2 gap-1.5 pointer-events-none">
-                <div className="rounded-xl theme-tab-inactive" />
-                <div className="rounded-xl theme-tab-inactive" />
-              </div>
-
-              {/* Active Sliding Glowing Pill */}
-              <div
-                className="absolute top-0 bottom-0 rounded-xl pointer-events-none z-10"
-                style={{
-                  width: "calc((100% - 6px) / 2)",
-                  left: 0,
-                  transform: `translateX(${sidebar2Tab === "queue" ? "0%" : "calc(100% + 6px)"})`,
-                  transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.8s ease, box-shadow 0.8s ease",
-                  background: "var(--theme-btn-gradient)",
-                  boxShadow: "0 4px 18px var(--theme-panel-border)",
+          {/* Hàng đợi phát (Queue List) - Sidebar 2 chuyên dụng 100% cho Hàng đợi */}
+          <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0">
+            <span className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
+              <ListMusic className="w-4 h-4 theme-accent-text" />
+              <span>Hàng đợi {queueTracks.length > 0 && `(${queueTracks.length})`}</span>
+            </span>
+            {queueTracks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const nextSorted = !isQueueSorted;
+                  setIsQueueSorted(nextSorted);
+                  if (nextSorted) {
+                    setQueueTracks((prev) => [...prev].sort(compareSortItems));
+                  } else {
+                    setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
+                  }
                 }}
-              />
+                title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${
+                  isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
+                }`}
+              >
+                <ArrowDownAZ className="w-3.5 h-3.5" />
+                <span>Sort</span>
+              </button>
+            )}
+          </div>
 
-              {/* Clickable Buttons */}
-              <div className="relative z-20 grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSidebar2Tab("queue")}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${sidebar2Tab === "queue" ? "text-white" : "text-white/70 hover:text-white"
+          <div
+            className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1 custom-scrollbar"
+            style={{ gap: "8px" }}
+          >
+            {queueTracks.length > 0 ? (
+              queueTracks.map((track, i) => {
+                const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
+                const artistLabel = formatTrackArtist(track.title, track.author);
+                return (
+                  <div
+                    key={track.id + i}
+                    style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
+                    onClick={() => {
+                      setCurrentIndex(i);
+                      currentIndexRef.current = i;
+                      loadAndPlayTrack(track, true);
+                    }}
+                    className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group item-slide-up ${
+                      isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
                     }`}
-                >
-                  <ListMusic className="w-3.5 h-3.5" />
-                  <span>Hàng đợi {queueTracks.length > 0 && `(${queueTracks.length})`}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSidebar2Tab("lyrics")}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${sidebar2Tab === "lyrics" ? "text-white" : "text-white/70 hover:text-white"
-                    }`}
-                >
-                  <Mic2 className="w-3.5 h-3.5" />
-                  <span>Lời bài hát</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Tab 1: Hàng đợi phát (Queue List) */}
-            {sidebar2Tab === "queue" && (
-              <>
-                <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0">
-                  <span className="text-xs font-semibold text-white/70">
-                    Danh sách phát {queueTracks.length > 0 && `(${queueTracks.length})`}
-                  </span>
-                  {queueTracks.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextSorted = !isQueueSorted;
-                        setIsQueueSorted(nextSorted);
-                        if (nextSorted) {
-                          setQueueTracks((prev) => [...prev].sort(compareSortItems));
-                        } else {
-                          setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
-                        }
+                  >
+                    <img
+                      src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
+                      alt=""
+                      onError={(e) => {
+                        e.currentTarget.src = DEFAULT_TRACK_ART;
                       }}
-                      title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
-                        }`}
-                    >
-                      <ArrowDownAZ className="w-3.5 h-3.5" />
-                      <span>Sort</span>
-                    </button>
-                  )}
-                </div>
-
-                <div
-                  className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
-                  style={{ gap: "8px" }}
-                >
-                  {queueTracks.length > 0 ? (
-                    queueTracks.map((track, i) => {
-                      const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
-                      const artistLabel = formatTrackArtist(track.title, track.author);
-                      return (
-                        <div
-                          key={track.id + i}
-                          style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
-                          onClick={() => {
-                            setCurrentIndex(i);
-                            currentIndexRef.current = i;
-                            loadAndPlayTrack(track, true);
-                          }}
-                          className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group item-slide-up ${isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
-                            }`}
-                        >
-                          <img
-                            src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
-                            alt=""
-                            onError={(e) => {
-                              e.currentTarget.src = DEFAULT_TRACK_ART;
-                            }}
-                            className="w-8 h-8 rounded-md object-cover flex-shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
-                              {track.title}
-                            </p>
-                            {artistLabel && (
-                              <p className="text-[10px] text-white/50 truncate">
-                                {artistLabel}
-                              </p>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
-                            {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
-                          </span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2">
-                      <ListMusic className="w-8 h-8 opacity-30" />
-                      <p className="font-medium">Hàng đợi đang trống</p>
-                      <p className="text-[11px] text-white/30">Chọn bài hát bất kỳ từ trang chủ để bắt đầu nghe nhạc</p>
+                      className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-white truncate group-hover:theme-accent-text transition-colors">
+                        {track.title}
+                      </p>
+                      {artistLabel && (
+                        <p className="text-[10px] text-white/50 truncate">
+                          {artistLabel}
+                        </p>
+                      )}
                     </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Tab 2: Lời bài hát (Lyrics) */}
-            {sidebar2Tab === "lyrics" && (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {/* Lyrics Sub-header: Sync Status Badge & Dual/Romaji/Pinyin/Song ngữ Toggle Pill Button */}
-                <div className="flex items-center justify-between px-1 pb-2 flex-shrink-0 border-b border-white/10 mb-1">
-                  <div className="flex items-center gap-1.5">
-                    {isLyricsSynced ? (
-                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider theme-badge-active shadow-sm">
-                        <Sparkles className="w-3 h-3 theme-accent-text" />
-                        Audio synced
-                      </span>
-                    ) : parsedLyrics.length > 0 || _lyrics?.plainLyrics ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/60">
-                        Non synced
-                      </span>
-                    ) : (
-                      <span className="text-[11px] text-white/40 font-medium">
-                        Lời bài hát
-                      </span>
-                    )}
+                    <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
+                      {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
+                    </span>
                   </div>
-
-                  {hasRomanizationSupport && (
-                    <button
-                      type="button"
-                      onClick={toggleLyricDisplayMode}
-                      title="Nhấn để đổi: Romaji • 2 dòng → Romaji thuần → Aa Romaji"
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer shadow-md border ${lyricDisplayMode === "dual"
-                        ? "theme-btn-primary text-white border-transparent scale-[1.02]"
-                        : lyricDisplayMode === "romanized"
-                          ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30"
-                          : "theme-badge hover:theme-accent-border text-white/70"
-                        }`}
-                    >
-                      <Languages className="w-3.5 h-3.5" />
-                      <span>{romaziPillLabel}</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Scrollable lyrics area */}
-                <div
-                  ref={lyricsContainerRef}
-                  className={`relative flex-1 flex flex-col min-h-0 pr-1 text-center ${parsedLyrics.length > 0 ? "overflow-y-auto custom-scrollbar" : "overflow-hidden"
-                    }`}
-                  style={{
-                    paddingTop: parsedLyrics.length > 0 ? "110px" : "0px",
-                    paddingBottom: parsedLyrics.length > 0 ? "150px" : "0px",
-                    gap: parsedLyrics.length > 0 ? "8px" : "0px",
-                  }}
-                >
-                  {parsedLyrics.length > 0 ? (
-                    parsedLyrics.map((line, idx) => {
-                      const isActive = isLyricsSynced && idx === activeLyricIndex;
-
-                      let primaryText = line.text || "♪";
-                      let secondaryText: string | null = null;
-
-                      if (lyricDisplayMode === "romanized" && line.romanized) {
-                        primaryText = line.romanized;
-                      } else if (lyricDisplayMode === "dual" && line.romanized) {
-                        primaryText = line.text;
-                        secondaryText = line.romanized;
-                      }
-
-                      return (
-                        <div
-                          key={idx}
-                          ref={isActive ? activeLyricRef : undefined}
-                          onClick={() => {
-                            if (line.time > 0) seekToTime(line.time);
-                          }}
-                          className={`transition-all select-none cursor-pointer text-center rounded-2xl px-4 py-2.5 ${isActive
-                            ? "scale-[1.04] theme-accent-text font-bold drop-shadow-md bg-white/10 border border-white/10 shadow-lg"
-                            : "scale-100 font-medium opacity-35 hover:opacity-80 hover:bg-white/5 border border-transparent"
-                            }`}
-                          style={{
-                            transition: "transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s ease, background-color 0.3s ease, color 0.3s ease",
-                          }}
-                        >
-                          <p className={`leading-snug tracking-wide ${isActive ? "text-[15px]" : "text-[13px] text-white"}`}>
-                            {primaryText}
-                          </p>
-                          {secondaryText && (
-                            <p
-                              className={`mt-1 font-normal leading-normal transition-opacity ${isActive ? "text-xs text-white/80 opacity-95" : "text-[11px] text-white/50 opacity-70"
-                                }`}
-                            >
-                              {secondaryText}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : _lyrics?.plainLyrics ? (
-                    <div className="py-4 text-xs leading-relaxed text-white/80 whitespace-pre-line text-center font-medium my-auto">
-                      {_lyrics.plainLyrics}
-                    </div>
-                  ) : (
-                    <div className="h-full w-full flex-1 flex flex-col items-center justify-center p-6 text-center text-white/40 text-xs gap-3 my-auto">
-                      <Mic2 className="w-10 h-10 opacity-35 theme-accent-text" />
-                      <p className="font-semibold text-white/70 text-sm">
-                        {currentTrack ? "Chưa có lời bài hát" : "Chưa phát bài hát nào"}
-                      </p>
-                      <p className="text-[11px] text-white/40 max-w-[210px] leading-relaxed">
-                        {currentTrack
-                          ? "Không tìm thấy lời đồng bộ cho bài hát này trên hệ thống"
-                          : "Chọn một bài hát để bắt đầu theo dõi lời bài hát"}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                );
+              })
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs gap-2">
+                <ListMusic className="w-8 h-8 opacity-30" />
+                <p className="font-medium">Hàng đợi đang trống</p>
+                <p className="text-[11px] text-white/30">Chọn bài hát bất kỳ từ trang chủ để bắt đầu nghe nhạc</p>
               </div>
             )}
+          </div>
           </div>
         </aside>
       </main>
