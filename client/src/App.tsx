@@ -5934,428 +5934,440 @@ export default function App() {
                 )}
 
                 {/* Dark gradient fade over lower half to mask controls & provide high contrast */}
-                <div className="absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
+                <div className="absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
               </div>
 
-              {/* Track Title and Artist floating gently over the gradient (only rendered when track is active) */}
-              {currentTrack && (
-                <div className="absolute bottom-[92px] left-4 right-4 z-20 pointer-events-none">
-                  <p className="text-[13px] font-bold text-white truncate drop-shadow-md">
-                    {currentTrack.title}
-                  </p>
-                  <p className="text-[11px] text-white/70 truncate drop-shadow">
-                    {formatTrackArtist(currentTrack.title, currentTrack.author)}
-                  </p>
-                </div>
-              )}
-
-              {/* Top-left Menu & Volume Controls */}
-              <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
-                <div className="relative" ref={playerMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!currentTrack) {
-                        showToast("Vui lòng phát một bài hát trước khi lưu hoặc tải xuống!", "warning");
-                        return;
-                      }
-                      setShowPlayerMenu(!showPlayerMenu);
-                      if (showPlayerMenu) {
-                        setShowLibrarySubmenu(false);
-                        setIsCreatingPlaylist(false);
-                      }
-                    }}
-                    className={`w-7 h-7 rounded-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${showPlayerMenu
-                      ? "theme-badge-active shadow-md"
-                      : "bg-black/40 text-white/80 hover:text-white hover:bg-black/60"
-                      }`}
-                    title="Tùy chọn bài hát"
-                  >
-                    <Menu className="w-4 h-4" />
-                  </button>
-
-                  {/* Popup 1 (Menu chính: Combobox) */}
-                  {showPlayerMenu && currentTrack && (
-                    <div className="absolute top-9 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[205px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
-                      {/* Option 1: Lưu vào playlist */}
+              {/* Structured Body: Top Header Session, Middle Space, and Bottom Player Session (Flexbox, zero overlapping) */}
+              <div className="absolute inset-0 p-3 sm:p-3.5 flex flex-col justify-between z-20">
+                {/* 1. TOP HEADER SESSION: Menu, Volume, and Favorite Heart */}
+                <div className="flex items-center justify-between w-full">
+                  {/* Left: Menu & Volume Controls */}
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative" ref={playerMenuRef}>
                       <button
                         type="button"
                         onClick={() => {
-                          setShowLibrarySubmenu(!showLibrarySubmenu);
+                          if (!currentTrack) {
+                            showToast("Vui lòng phát một bài hát trước khi lưu hoặc tải xuống!", "warning");
+                            return;
+                          }
+                          setShowPlayerMenu(!showPlayerMenu);
+                          if (showPlayerMenu) {
+                            setShowLibrarySubmenu(false);
+                            setIsCreatingPlaylist(false);
+                          }
                         }}
-                        className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
+                        className={`w-7 h-7 rounded-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${showPlayerMenu
+                          ? "theme-badge-active shadow-md"
+                          : "bg-black/40 text-white/80 hover:text-white hover:bg-black/60"
                           }`}
+                        title="Tùy chọn bài hát"
                       >
-                        <span className="flex items-center gap-2">
-                          <FolderPlus className="w-4 h-4 theme-accent-text" />
-                          <span>Lưu vào playlist</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          )}
-                          <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
-                        </div>
+                        <Menu className="w-4 h-4" />
                       </button>
 
-                      {/* Option 2: Lưu ngoại tuyến (nghe trong app như YouTube) */}
-                      <button
-                        type="button"
-                        disabled={savingOfflineTrackId === currentTrack.id}
-                        onClick={() => handleSaveOfflineTrack(currentTrack)}
-                        className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                      >
-                        <span className="flex items-center gap-2">
-                          {savingOfflineTrackId === currentTrack.id ? (
-                            <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
-                          ) : (
-                            <HardDriveDownload className="w-4 h-4 theme-accent-text" />
-                          )}
-                          <span>
-                            {savingOfflineTrackId === currentTrack.id
-                              ? "Đang lưu ngoại tuyến..."
-                              : offlineTrackIds.has(currentTrack.id)
-                                ? "Đã lưu offline (Bấm để xóa)"
-                                : "Lưu nghe offline (như YouTube)"}
-                          </span>
-                        </span>
-                        {offlineTrackIds.has(currentTrack.id) && (
-                          <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        )}
-                      </button>
-
-                      {/* Option 3: Tải file MP3 về máy */}
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadTrack(currentTrack)}
-                        className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Download className="w-4 h-4 theme-accent-text" />
-                          <span>Tải file MP3 về máy</span>
-                        </span>
-                        {downloadedTrackIds.has(currentTrack.id) && (
-                          <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Popup 2 (Submenu mở sang bên trái trên Desktop, và responsive trên Mobile) */}
-                  {showPlayerMenu && showLibrarySubmenu && currentTrack && (
-                    <div className="absolute top-9 left-0 lg:left-auto lg:right-[calc(100%+8px)] z-50 theme-menu-glass rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
-                      <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
-                        <button
-                          type="button"
-                          onClick={() => setShowLibrarySubmenu(false)}
-                          className="lg:hidden flex items-center gap-1 text-[10px] text-white/60 hover:text-white cursor-pointer mr-1"
-                        >
-                          <ChevronLeft className="w-3 h-3" />
-                          <span>Quay lại</span>
-                        </button>
-                        <span>Thêm vào playlist</span>
-                      </div>
-
-                      {!userSession?.isLoggedIn ? (
-                        <div className="p-2 text-center flex flex-col gap-2">
-                          <p className="text-[11px] text-white/60">Đăng nhập để quản lý danh sách phát của bạn</p>
+                      {/* Popup 1 (Menu chính: Combobox) */}
+                      {showPlayerMenu && currentTrack && (
+                        <div className="absolute top-9 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[205px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
+                          {/* Option 1: Lưu vào playlist */}
                           <button
                             type="button"
                             onClick={() => {
-                              setShowPlayerMenu(false);
-                              setShowLibrarySubmenu(false);
-                              setIsAccountOpen(true);
+                              setShowLibrarySubmenu(!showLibrarySubmenu);
                             }}
-                            className="px-3 py-1.5 rounded-lg theme-btn-primary text-white text-xs font-semibold cursor-pointer transition-colors"
+                            className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
+                              }`}
                           >
-                            Đăng nhập ngay
+                            <span className="flex items-center gap-2">
+                              <FolderPlus className="w-4 h-4 theme-accent-text" />
+                              <span>Lưu vào playlist</span>
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              )}
+                              <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
+                            </div>
+                          </button>
+
+                          {/* Option 2: Lưu ngoại tuyến (nghe trong app như YouTube) */}
+                          <button
+                            type="button"
+                            disabled={savingOfflineTrackId === currentTrack.id}
+                            onClick={() => handleSaveOfflineTrack(currentTrack)}
+                            className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                          >
+                            <span className="flex items-center gap-2">
+                              {savingOfflineTrackId === currentTrack.id ? (
+                                <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
+                              ) : (
+                                <HardDriveDownload className="w-4 h-4 theme-accent-text" />
+                              )}
+                              <span>
+                                {savingOfflineTrackId === currentTrack.id
+                                  ? "Đang lưu ngoại tuyến..."
+                                  : offlineTrackIds.has(currentTrack.id)
+                                    ? "Đã lưu offline (Bấm để xóa)"
+                                    : "Lưu nghe offline (như YouTube)"}
+                              </span>
+                            </span>
+                            {offlineTrackIds.has(currentTrack.id) && (
+                              <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            )}
+                          </button>
+
+                          {/* Option 3: Tải file MP3 về máy */}
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadTrack(currentTrack)}
+                            className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Download className="w-4 h-4 theme-accent-text" />
+                              <span>Tải file MP3 về máy</span>
+                            </span>
+                            {downloadedTrackIds.has(currentTrack.id) && (
+                              <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            )}
                           </button>
                         </div>
-                      ) : (
-                        <>
-                          {/* Option Tạo playlist mới */}
-                          {!isCreatingPlaylist ? (
+                      )}
+
+                      {/* Popup 2 (Submenu mở sang bên trái trên Desktop, và responsive trên Mobile) */}
+                      {showPlayerMenu && showLibrarySubmenu && currentTrack && (
+                        <div className="absolute top-9 left-0 lg:left-auto lg:right-[calc(100%+8px)] z-50 theme-menu-glass rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
+                          <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
                             <button
                               type="button"
-                              onClick={() => setIsCreatingPlaylist(true)}
-                              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 theme-accent-text font-medium transition-colors cursor-pointer text-left"
+                              onClick={() => setShowLibrarySubmenu(false)}
+                              className="lg:hidden flex items-center gap-1 text-[10px] text-white/60 hover:text-white cursor-pointer mr-1"
                             >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Tạo playlist mới</span>
+                              <ChevronLeft className="w-3 h-3" />
+                              <span>Quay lại</span>
                             </button>
-                          ) : (
-                            <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg theme-accent-border">
-                              <input
-                                type="text"
-                                placeholder="Tên playlist..."
-                                value={newPlaylistName}
-                                onChange={(e) => setNewPlaylistName(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") handleCreatePlaylistAndAddTrack();
-                                }}
-                                className="flex-1 bg-transparent text-[11px] text-white focus:outline-none px-1"
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                onClick={handleCreatePlaylistAndAddTrack}
-                                className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
-                                title="Tạo"
-                              >
-                                <Check className="w-3.5 h-3.5" />
-                              </button>
+                            <span>Thêm vào playlist</span>
+                          </div>
+
+                          {!userSession?.isLoggedIn ? (
+                            <div className="p-2 text-center flex flex-col gap-2">
+                              <p className="text-[11px] text-white/60">Đăng nhập để quản lý danh sách phát của bạn</p>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setIsCreatingPlaylist(false);
-                                  setNewPlaylistName("");
+                                  setShowPlayerMenu(false);
+                                  setShowLibrarySubmenu(false);
+                                  setIsAccountOpen(true);
                                 }}
-                                className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
-                                title="Hủy"
+                                className="px-3 py-1.5 rounded-lg theme-btn-primary text-white text-xs font-semibold cursor-pointer transition-colors"
                               >
-                                <X className="w-3.5 h-3.5" />
+                                Đăng nhập ngay
                               </button>
                             </div>
-                          )}
-
-                          <div className="h-[1px] bg-white/10 my-0.5" />
-
-                          {/* List of existing playlists */}
-                          <div className="max-h-40 overflow-y-auto flex flex-col gap-1 pr-0.5">
-                            {libraryData.playlists.length > 0 ? (
-                              libraryData.playlists.map((pl) => {
-                                const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
-                                return (
+                          ) : (
+                            <>
+                              {/* Option Tạo playlist mới */}
+                              {!isCreatingPlaylist ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsCreatingPlaylist(true)}
+                                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 theme-accent-text font-medium transition-colors cursor-pointer text-left"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Tạo playlist mới</span>
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg theme-accent-border">
+                                  <input
+                                    type="text"
+                                    placeholder="Tên playlist..."
+                                    value={newPlaylistName}
+                                    onChange={(e) => setNewPlaylistName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleCreatePlaylistAndAddTrack();
+                                    }}
+                                    className="flex-1 bg-transparent text-[11px] text-white focus:outline-none px-1"
+                                    autoFocus
+                                  />
                                   <button
-                                    key={pl.id}
                                     type="button"
-                                    onClick={() => handleToggleTrackInPlaylist(pl.id)}
-                                    className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors text-left group cursor-pointer"
+                                    onClick={handleCreatePlaylistAndAddTrack}
+                                    className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                    title="Tạo"
                                   >
-                                    <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
-                                    {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                    <Check className="w-3.5 h-3.5" />
                                   </button>
-                                );
-                              })
-                            ) : (
-                              <span className="text-[11px] text-white/40 italic px-2 py-1">Chưa có playlist nào</span>
-                            )}
-                          </div>
-                        </>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCreatingPlaylist(false);
+                                      setNewPlaylistName("");
+                                    }}
+                                    className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
+                                    title="Hủy"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+
+                              <div className="h-[1px] bg-white/10 my-0.5" />
+
+                              {/* List of existing playlists */}
+                              <div className="max-h-40 overflow-y-auto flex flex-col gap-1 pr-0.5">
+                                {libraryData.playlists.length > 0 ? (
+                                  libraryData.playlists.map((pl) => {
+                                    const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
+                                    return (
+                                      <button
+                                        key={pl.id}
+                                        type="button"
+                                        onClick={() => handleToggleTrackInPlaylist(pl.id)}
+                                        className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors text-left group cursor-pointer"
+                                      >
+                                        <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
+                                        {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                      </button>
+                                    );
+                                  })
+                                ) : (
+                                  <span className="text-[11px] text-white/40 italic px-2 py-1">Chưa có playlist nào</span>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                <div className="relative">
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowVolumeSlider(!showVolumeSlider)}
+                        className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:theme-accent-text hover:bg-black/60 transition-all cursor-pointer"
+                        title="Âm lượng"
+                      >
+                        {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                      </button>
+                      {showVolumeSlider && (
+                        <div className="absolute top-9 left-0 p-2.5 rounded-xl theme-menu-glass shadow-2xl flex items-center gap-2 z-30 border theme-accent-border/40">
+                          <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={isMuted ? 0 : volume}
+                            onChange={(e) => {
+                              setIsMuted(false);
+                              setVolume(parseFloat(e.target.value));
+                            }}
+                            className="w-20 h-1 bg-white/30 rounded appearance-none cursor-pointer theme-slider"
+                          />
+                          <span className="text-[10px] theme-accent-text font-mono font-bold">
+                            {Math.round((isMuted ? 0 : volume) * 100)}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Bright Red Heart Icon (Matching Figma) */}
                   <button
                     type="button"
-                    onClick={() => setShowVolumeSlider(!showVolumeSlider)}
-                    className="w-7 h-7 rounded-lg bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:theme-accent-text hover:bg-black/60 transition-all cursor-pointer"
-                    title="Âm lượng"
+                    disabled={!currentTrack}
+                    onClick={toggleCurrentFavorite}
+                    title={
+                      !currentTrack
+                        ? "Chưa phát bài hát nào"
+                        : !userSession?.isLoggedIn
+                          ? "Đăng nhập để yêu thích"
+                          : libraryData.favorites.some((t) => t.id === currentTrack.id)
+                            ? "Bỏ yêu thích"
+                            : "Thêm vào yêu thích"
+                    }
+                    className={`w-8 h-8 rounded-lg backdrop-blur-md flex items-center justify-center transition-all ${!currentTrack
+                      ? "opacity-30 cursor-not-allowed bg-black/20"
+                      : "bg-black/40 hover:bg-black/60 cursor-pointer group"
+                      }`}
                   >
-                    {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                    <Heart
+                      className={`w-5 h-5 transition-transform ${!currentTrack
+                        ? "text-white/40"
+                        : userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
+                          ? "fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)] group-hover:scale-115"
+                          : "text-white/60 hover:text-red-400 group-hover:scale-115"
+                        }`}
+                    />
                   </button>
-                  {showVolumeSlider && (
-                    <div className="absolute top-9 left-0 p-2.5 rounded-xl theme-menu-glass shadow-2xl flex items-center gap-2 z-30 border theme-accent-border/40">
+                </div>
+
+                {/* 2. MIDDLE SESSION: Space for artwork visibility */}
+                <div className="flex-1 min-h-0 pointer-events-none" />
+
+                {/* 3. BOTTOM FOOTER SESSION: Title/Artist, Seekbar, and Controls in vertical Flex flow */}
+                <div className="w-full flex flex-col gap-2">
+                  {/* Row 1: Track Title and Artist */}
+                  {currentTrack && (
+                    <div className="min-w-0 px-0.5">
+                      <p className="text-[13px] font-bold text-white truncate drop-shadow-md leading-tight" title={currentTrack.title}>
+                        {currentTrack.title}
+                      </p>
+                      <p className="text-[11px] text-white/70 truncate drop-shadow mt-0.5">
+                        {formatTrackArtist(currentTrack.title, currentTrack.author)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Row 2: Seekbar Progress Line with Scrubber Handle & Time */}
+                  <div className="flex flex-col gap-0.5 w-full">
+                    <div className="relative w-full h-4 flex items-center group/seek touch-none">
+                      <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/20" />
+                      <div
+                        className="absolute left-0 h-1.5 rounded-full"
+                        style={{
+                          width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
+                          background: "var(--theme-btn-gradient)",
+                        }}
+                      />
                       <input
                         type="range"
                         min={0}
-                        max={1}
-                        step={0.01}
-                        value={isMuted ? 0 : volume}
-                        onChange={(e) => {
-                          setIsMuted(false);
-                          setVolume(parseFloat(e.target.value));
-                        }}
-                        className="w-20 h-1 bg-white/30 rounded appearance-none cursor-pointer theme-slider"
+                        max={duration || 100}
+                        step={0.5}
+                        value={currentTime}
+                        onChange={handleSeek}
+                        className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
                       />
-                      <span className="text-[10px] theme-accent-text font-mono font-bold">
-                        {Math.round((isMuted ? 0 : volume) * 100)}%
-                      </span>
+                      <div
+                        className="absolute w-3.5 h-3.5 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
+                        style={{
+                          left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 7px)`,
+                          boxShadow: "0 0 10px var(--theme-accent)",
+                        }}
+                      />
                     </div>
-                  )}
-                </div>
-              </div>
+                    <div className="flex justify-between text-[10px] text-white/60 font-mono px-0.5">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(duration)}</span>
+                    </div>
+                  </div>
 
-              {/* Top-right Bright Red Heart Icon (Matching Figma) */}
-              <button
-                type="button"
-                disabled={!currentTrack}
-                onClick={toggleCurrentFavorite}
-                title={
-                  !currentTrack
-                    ? "Chưa phát bài hát nào"
-                    : !userSession?.isLoggedIn
-                      ? "Đăng nhập để yêu thích"
-                      : libraryData.favorites.some((t) => t.id === currentTrack.id)
-                        ? "Bỏ yêu thích"
-                        : "Thêm vào yêu thích"
-                }
-                className={`absolute top-3 right-3 w-8 h-8 rounded-lg backdrop-blur-md flex items-center justify-center z-20 transition-all ${!currentTrack
-                  ? "opacity-30 cursor-not-allowed bg-black/20"
-                  : "bg-black/40 hover:bg-black/60 cursor-pointer group"
-                  }`}
-              >
-                <Heart
-                  className={`w-5 h-5 transition-transform ${!currentTrack
-                    ? "text-white/40"
-                    : userSession?.isLoggedIn && libraryData.favorites.some((t) => t.id === currentTrack.id)
-                      ? "fill-red-500 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.9)] group-hover:scale-115"
-                      : "text-white/60 hover:text-red-400 group-hover:scale-115"
-                    }`}
-                />
-              </button>
+                  {/* Row 3: 5 Playback Control Buttons Row - Enlarged & Beautifully Spaced */}
+                  <div className="flex items-center justify-between px-0.5 w-full">
+                    {/* Loop / Shuffle Button */}
+                    <button
+                      type="button"
+                      onClick={cycleRepeatMode}
+                      title={
+                        repeatMode === "all"
+                          ? "Lặp danh sách"
+                          : repeatMode === "one"
+                            ? "Lặp 1 bài"
+                            : repeatMode === "shuffle"
+                              ? "Phát ngẫu nhiên"
+                              : "Tắt lặp lại"
+                      }
+                      className={`p-1.5 transition-all cursor-pointer hover:scale-115 active:scale-90 ${repeatMode === "all" || repeatMode === "one" ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)]" : repeatMode === "shuffle" ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)]" : "text-white/40 hover:text-white"
+                        }`}
+                    >
+                      {repeatMode === "one" ? (
+                        <Repeat1 className="w-5 h-5" />
+                      ) : repeatMode === "shuffle" ? (
+                        <Shuffle className="w-5 h-5" />
+                      ) : (
+                        <Repeat className="w-5 h-5" />
+                      )}
+                    </button>
 
-              {/* Elevated Seekbar Progress Line with Scrubber Handle & Time (at bottom-[66px]) */}
-              <div className="absolute bottom-[66px] left-4 right-4 flex flex-col gap-1 z-20">
-                <div className="relative w-full h-6 flex items-center group/seek touch-none">
-                  <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/20" />
-                  <div
-                    className="absolute left-0 h-1.5 rounded-full"
-                    style={{
-                      width: `${duration ? Math.min(100, (currentTime / duration) * 100) : 0}%`,
-                      background: "var(--theme-btn-gradient)",
-                    }}
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || 100}
-                    step={0.5}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
-                  />
-                  <div
-                    className="absolute w-3.5 h-3.5 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
-                    style={{
-                      left: `calc(${duration ? Math.min(100, (currentTime / duration) * 100) : 0}% - 7px)`,
-                      boxShadow: "0 0 10px var(--theme-accent)",
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-white/60 font-mono px-0.5">
-                  <span>{formatTime(currentTime)}</span>
-                  <span>{formatTime(duration)}</span>
-                </div>
-              </div>
+                    {/* Prev */}
+                    <button
+                      type="button"
+                      onClick={handlePrev}
+                      title="Bài trước"
+                      className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    >
+                      <SkipBack className="w-6 h-6 fill-current" />
+                    </button>
 
-              {/* 5 Playback Control Buttons Row - Enlarged & Beautifully Spaced */}
-              <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between px-1 z-20">
-                {/* Loop / Shuffle Button */}
-                <button
-                  type="button"
-                  onClick={cycleRepeatMode}
-                  title={
-                    repeatMode === "all"
-                      ? "Lặp danh sách"
-                      : repeatMode === "one"
-                        ? "Lặp 1 bài"
-                        : repeatMode === "shuffle"
-                          ? "Phát ngẫu nhiên"
-                          : "Tắt lặp lại"
-                  }
-                  className={`p-1.5 transition-all cursor-pointer hover:scale-115 active:scale-90 ${repeatMode === "all" || repeatMode === "one" ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)]" : repeatMode === "shuffle" ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)]" : "text-white/40 hover:text-white"
-                    }`}
-                >
-                  {repeatMode === "one" ? (
-                    <Repeat1 className="w-5 h-5" />
-                  ) : repeatMode === "shuffle" ? (
-                    <Shuffle className="w-5 h-5" />
-                  ) : (
-                    <Repeat className="w-5 h-5" />
-                  )}
-                </button>
+                    {/* Large Dynamic Play / Pause Circle (w-12 h-12) */}
+                    <button
+                      type="button"
+                      onClick={togglePlayPause}
+                      disabled={isLoading}
+                      title={isPlaying ? "Tạm dừng" : "Phát"}
+                      className="w-11 h-11 min-[340px]:w-12 min-[340px]:h-12 rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                      style={{
+                        background: "var(--theme-btn-gradient)",
+                        boxShadow: "0 4px 18px var(--theme-panel-border)",
+                      }}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-6 h-6 animate-spin text-white" />
+                      ) : isPlaying ? (
+                        <Pause className="w-6 h-6 fill-current" />
+                      ) : (
+                        <Play className="w-6 h-6 fill-current translate-x-0.5" />
+                      )}
+                    </button>
 
-                {/* Prev */}
-                <button
-                  type="button"
-                  onClick={handlePrev}
-                  title="Bài trước"
-                  className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
-                >
-                  <SkipBack className="w-6 h-6 fill-current" />
-                </button>
+                    {/* Next */}
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      title="Bài kế tiếp"
+                      className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    >
+                      <SkipForward className="w-6 h-6 fill-current" />
+                    </button>
 
-                {/* Large Dynamic Play / Pause Circle (w-12 h-12) */}
-                <button
-                  type="button"
-                  onClick={togglePlayPause}
-                  disabled={isLoading}
-                  title={isPlaying ? "Tạm dừng" : "Phát"}
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
-                  style={{
-                    background: "var(--theme-btn-gradient)",
-                    boxShadow: "0 4px 18px var(--theme-panel-border)",
-                  }}
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-6 h-6 animate-spin text-white" />
-                  ) : isPlaying ? (
-                    <Pause className="w-6 h-6 fill-current" />
-                  ) : (
-                    <Play className="w-6 h-6 fill-current translate-x-0.5" />
-                  )}
-                </button>
-
-                {/* Next */}
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  title="Bài kế tiếp"
-                  className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
-                >
-                  <SkipForward className="w-6 h-6 fill-current" />
-                </button>
-
-                {/* Timer */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
-                    title={
-                      sleepTimerSecondsLeft
-                        ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
-                        : "Hẹn giờ tắt nhạc"
-                    }
-                    className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
-                      }`}
-                  >
-                    <Clock className="w-5 h-5" />
-                    {sleepTimerMinutes && (
-                      <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[8px] text-white font-mono font-bold animate-pulse">
-                        {sleepTimerMinutes}m
-                      </span>
-                    )}
-                  </button>
-                  {showSleepTimerMenu && (
-                    <div className="absolute bottom-9 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in border theme-accent-border/40">
-                      <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
-                        Hẹn giờ tắt
-                      </span>
-                      {[15, 30, 45, 60].map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => startSleepTimer(m)}
-                          className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
-                            }`}
-                        >
-                          {m} phút
-                        </button>
-                      ))}
-                      {sleepTimerMinutes && (
-                        <button
-                          type="button"
-                          onClick={() => startSleepTimer(null)}
-                          className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
-                        >
-                          Tắt hẹn giờ
-                        </button>
+                    {/* Timer */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
+                        title={
+                          sleepTimerSecondsLeft
+                            ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
+                            : "Hẹn giờ tắt nhạc"
+                        }
+                        className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
+                          }`}
+                      >
+                        <Clock className="w-5 h-5" />
+                        {sleepTimerMinutes && (
+                          <span className="absolute -top-1 -right-1 px-1 rounded-full theme-accent-bg text-[8px] text-white font-mono font-bold animate-pulse">
+                            {sleepTimerMinutes}m
+                          </span>
+                        )}
+                      </button>
+                      {showSleepTimerMenu && (
+                        <div className="absolute bottom-9 right-0 p-2 rounded-xl theme-menu-glass shadow-2xl flex flex-col gap-1 z-30 min-w-[130px] animate-fade-in border theme-accent-border/40">
+                          <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider px-2 py-0.5">
+                            Hẹn giờ tắt
+                          </span>
+                          {[15, 30, 45, 60].map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => startSleepTimer(m)}
+                              className={`text-left text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${sleepTimerMinutes === m ? "theme-badge-active" : "hover:bg-white/10 text-white/80"
+                                }`}
+                            >
+                              {m} phút
+                            </button>
+                          ))}
+                          {sleepTimerMinutes && (
+                            <button
+                              type="button"
+                              onClick={() => startSleepTimer(null)}
+                              className="text-left text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-500/20 text-red-400 font-semibold transition-colors cursor-pointer border-t border-white/10 mt-1"
+                            >
+                              Tắt hẹn giờ
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
