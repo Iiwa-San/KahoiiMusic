@@ -65,7 +65,7 @@ async function getVisitorDataAndSts(videoId: string): Promise<{ visitorData: str
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      signal: AbortSignal.timeout(3500),
+      signal: AbortSignal.timeout(4000),
     });
     if (pageRes.ok) {
       const html = await pageRes.text();
@@ -80,12 +80,12 @@ async function getVisitorDataAndSts(videoId: string): Promise<{ visitorData: str
       }
     }
   } catch (err) {
-    console.warn("[StreamResolver] Failed to refresh visitor data from watch page:", err);
+    console.warn("[StreamResolver] Failed to refresh visitor data:", err);
   }
 
   return {
-    visitorData: cachedVisitorData || "CgtIbGdqZzRGNlJwYyjjiYTYBjIKCgJWThIEGgAg",
-    sts: cachedSts || currentSts,
+    visitorData: cachedVisitorData || "CgtOOTF5Rk5IZllJYyiw_vnXBjIKCgJWThIEGgAg",
+    sts: cachedSts || 20775,
   };
 }
 

@@ -41,8 +41,8 @@ app.get(["/api/stream", "/stream"], async (req, res) => {
     }
     return res.json(streamInfo);
   } catch (err: any) {
-    console.error("[API Stream Error]", err.message);
-    return res.status(500).json({ error: err.message || "Failed to resolve stream" });
+    console.warn("[API Stream Fallback]", err.message);
+    return res.json({ fallback: true, message: err.message || "Failed to resolve direct stream" });
   }
 });
 
