@@ -8,13 +8,27 @@ export interface StreamInfo {
   author?: string;
   duration?: number;
   thumbnail?: string;
-  provider: "innertube" | "visionos" | "yt-dlp" | "piped" | "invidious";
+  provider: "visionos" | "innertube" | "yt-dlp";
 }
 
 let cachedVisitorData: string | null = null;
 let cachedSts = Math.floor(Date.now() / 86400000);
 let lastVisitorFetchTime = 0;
 
+/**
+ * Extracts the highest quality AAC / M4A direct stream URL from YouTube streaming data
+ */
+function extractBestAudioFormat(streamingData: any): string | null {
+  const adaptiveFormats: any[] = streamingData?.adaptiveFormats || [];
+  const audioFormats = adaptiveFormats.filter((f) => f.mimeType && f.mimeType.startsWith("audio/"));
+  const m4aFormat = audioFormats.find((f) => f.mimeType && f.mimeType.includes("mp4") && f.url);
+  const bestAudio = m4aFormat || audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)).find((f) => f.url);
+  return bestAudio?.url || null;
+}
+
+/**
+ * Fetches or returns cached YouTube Visitor Data & Signature Timestamp (STS)
+ */
 async function getVisitorDataAndSts(videoId: string): Promise<{ visitorData: string; sts: number }> {
   const now = Date.now();
   const currentSts = Math.floor(now / 86400000);
@@ -23,7 +37,7 @@ async function getVisitorDataAndSts(videoId: string): Promise<{ visitorData: str
     return { visitorData: cachedVisitorData, sts: currentSts };
   }
 
-  // Strategy A: InnerTube /visitor_id official API (Zero scraping, 100% works on serverless/Vercel)
+  // Strategy A: InnerTube /visitor_id official API
   try {
     const res = await fetch("https://www.youtube.com/youtubei/v1/visitor_id", {
       method: "POST",
@@ -89,7 +103,9 @@ async function getVisitorDataAndSts(videoId: string): Promise<{ visitorData: str
   };
 }
 
-// 1. Resolve via InnerTube VisionOS client with valid Visitor Data & STS (Zero bot block, 100% direct 128kbps AAC)
+/**
+ * Method 1: Resolve via InnerTube VisionOS client (Direct 128kbps AAC audio stream, zero bot check)
+ */
 async function resolveViaVisionOS(videoId: string): Promise<StreamInfo | null> {
   try {
     const { visitorData, sts } = await getVisitorDataAndSts(videoId);
@@ -109,7 +125,7 @@ async function resolveViaVisionOS(videoId: string): Promise<StreamInfo | null> {
           utcOffsetMinutes: 0,
         },
       },
-      videoId: videoId,
+      videoId,
       playbackContext: {
         contentPlaybackContext: {
           html5Preference: "HTML5_PREF_WANTS",
@@ -145,15 +161,11 @@ async function resolveViaVisionOS(videoId: string): Promise<StreamInfo | null> {
     const title = videoDetails?.title || "Kahoii Music";
     const author = videoDetails?.author || "";
     const duration = parseInt(videoDetails?.lengthSeconds || "0", 10) || 0;
+    const streamUrl = extractBestAudioFormat(json.streamingData);
 
-    const adaptiveFormats: any[] = json.streamingData?.adaptiveFormats || [];
-    const audioFormats = adaptiveFormats.filter((f) => f.mimeType && f.mimeType.startsWith("audio/"));
-    const m4aFormat = audioFormats.find((f) => f.mimeType && f.mimeType.includes("mp4") && f.url);
-    const bestAudio = m4aFormat || audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)).find((f) => f.url);
-
-    if (bestAudio?.url) {
+    if (streamUrl) {
       return {
-        streamUrl: bestAudio.url,
+        streamUrl,
         title,
         author,
         duration,
@@ -162,16 +174,18 @@ async function resolveViaVisionOS(videoId: string): Promise<StreamInfo | null> {
       };
     }
   } catch (err: any) {
-    console.warn("[VisionOS Stream Warning]:", err.message);
+    console.warn("[VisionOS Stream Warning]:", err?.message || err);
   }
   return null;
 }
 
-// 2. Resolve via InnerTube Android VR client
+/**
+ * Method 2: Resolve via InnerTube Android VR client (Oculus Quest 3)
+ */
 async function resolveViaInnerTubeVR(videoId: string): Promise<StreamInfo | null> {
   try {
     const payload = {
-      videoId: videoId,
+      videoId,
       context: {
         client: {
           clientName: "ANDROID_VR",
@@ -204,15 +218,11 @@ async function resolveViaInnerTubeVR(videoId: string): Promise<StreamInfo | null
     const title = videoDetails?.title || "Kahoii Music";
     const author = videoDetails?.author || "";
     const duration = parseInt(videoDetails?.lengthSeconds || "0", 10) || 0;
+    const streamUrl = extractBestAudioFormat(json.streamingData);
 
-    const adaptiveFormats: any[] = json.streamingData?.adaptiveFormats || [];
-    const audioFormats = adaptiveFormats.filter((f) => f.mimeType && f.mimeType.startsWith("audio/"));
-    const m4aFormat = audioFormats.find((f) => f.mimeType && f.mimeType.includes("mp4") && f.url);
-    const bestAudio = m4aFormat || audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)).find((f) => f.url);
-
-    if (bestAudio?.url) {
+    if (streamUrl) {
       return {
-        streamUrl: bestAudio.url,
+        streamUrl,
         title,
         author,
         duration,
@@ -221,12 +231,14 @@ async function resolveViaInnerTubeVR(videoId: string): Promise<StreamInfo | null
       };
     }
   } catch (err: any) {
-    console.warn("[InnerTube VR Stream Warning]:", err.message);
+    console.warn("[InnerTube VR Stream Warning]:", err?.message || err);
   }
   return null;
 }
 
-// 3. Locate local yt-dlp if running locally
+/**
+ * Locate local yt-dlp binary if running in local environment
+ */
 function getLocalYtDlpPath(): string | null {
   const possiblePaths = [
     path.resolve(process.cwd(), "../../KahoiiMusic/yt-dlp.exe"),
@@ -240,6 +252,9 @@ function getLocalYtDlpPath(): string | null {
   return null;
 }
 
+/**
+ * Method 3: Resolve using local yt-dlp CLI tool
+ */
 async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
   const ytDlpPath = getLocalYtDlpPath();
   if (!ytDlpPath) return null;
@@ -268,9 +283,11 @@ async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
   });
 }
 
-// 4. Master Stream Resolver
+/**
+ * Master Stream Resolver: tries VisionOS -> InnerTube VR -> yt-dlp sequentially
+ */
 export async function resolveAudioStream(videoId: string): Promise<StreamInfo> {
-  // Method 1: VisionOS client with valid visitor & sts (100% direct 128kbps AAC, zero bot block)
+  // Method 1: VisionOS client with valid visitor & sts
   const visionResult = await resolveViaVisionOS(videoId);
   if (visionResult) {
     return visionResult;
@@ -282,14 +299,14 @@ export async function resolveAudioStream(videoId: string): Promise<StreamInfo> {
     return vrResult;
   }
 
-  // Method 3: Local yt-dlp (if available on local dev machine)
+  // Method 3: Local yt-dlp
   try {
     const ytDlpResult = await resolveViaYtDlp(videoId);
     if (ytDlpResult) {
       return ytDlpResult;
     }
   } catch (err) {
-    console.warn("[StreamResolver] yt-dlp fallback:", err);
+    console.warn("[StreamResolver] yt-dlp fallback error:", err);
   }
 
   throw new Error("Không thể trích xuất luồng âm thanh từ video YouTube này. Vui lòng thử lại!");

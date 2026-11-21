@@ -2813,13 +2813,6 @@ export default function App() {
           if (audioRef.current) audioRef.current.pause();
         } else {
           isUserPausedRef.current = false;
-          if (audioRef.current) {
-            try {
-              audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-              audioRef.current.loop = true;
-              audioRef.current.play().catch(() => { });
-            } catch { }
-          }
           ytPlayerRef.current.playVideo();
           setIsPlaying(true);
         }
@@ -3128,13 +3121,6 @@ export default function App() {
       if (activePlayerType.current === "audio" && audioRef.current) {
         audioRef.current.play().catch(() => { });
       } else if (activePlayerType.current === "youtube" && ytPlayerRef.current) {
-        if (audioRef.current) {
-          try {
-            audioRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-            audioRef.current.loop = true;
-            audioRef.current.play().catch(() => { });
-          } catch { }
-        }
         try { ytPlayerRef.current.playVideo(); } catch { }
       }
       setIsPlaying(true);
@@ -3260,7 +3246,7 @@ export default function App() {
     if (!topSearchText.trim()) return;
 
     const ytMatch = topSearchText.match(
-      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
+      /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i
     );
     if (ytMatch && ytMatch[1]) {
       const videoId = ytMatch[1];
@@ -3287,7 +3273,7 @@ export default function App() {
         setTopSearchText(text);
         if (text.includes("youtube.com") || text.includes("youtu.be")) {
           const ytMatch = text.match(
-            /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i
+            /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i
           );
           if (ytMatch && ytMatch[1]) {
             const videoId = ytMatch[1];
