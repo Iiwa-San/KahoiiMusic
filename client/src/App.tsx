@@ -876,6 +876,7 @@ export default function App() {
   const [isNowPlayingViewOpen, setIsNowPlayingViewOpen] = useState<boolean>(false);
   const [showCenterLyrics, setShowCenterLyrics] = useState<boolean>(true);
   const [centerLyricFontSize, setCenterLyricFontSize] = useState<number>(1);
+  const [isLoadingLyrics, setIsLoadingLyrics] = useState<boolean>(false);
   const centerActiveLyricRef = useRef<HTMLDivElement | null>(null);
   const centerLyricsContainerRef = useRef<HTMLDivElement | null>(null);
   const centerPlayerMenuRef = useRef<HTMLDivElement | null>(null);
@@ -981,6 +982,7 @@ export default function App() {
   const handleReloadLyrics = () => {
     if (!currentTrack) return;
     showToast("Đang đồng bộ lại lời bài hát...", "info");
+    setIsLoadingLyrics(true);
     fetch(
       `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(currentTrack.id)}&title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.author || "")}&duration=${currentTrack.duration || ""}&refresh=true`
     )
@@ -995,6 +997,9 @@ export default function App() {
       })
       .catch(() => {
         showToast("Lỗi khi tải lại lời bài hát", "warning");
+      })
+      .finally(() => {
+        setIsLoadingLyrics(false);
       });
   };
 
@@ -1073,9 +1078,13 @@ export default function App() {
   // Automatically fetch full enriched lyrics whenever currentTrack changes
   useEffect(() => {
     const trackId = currentTrack?.id;
-    if (!trackId) return;
+    if (!trackId) {
+      setIsLoadingLyrics(false);
+      return;
+    }
 
     let isCancelled = false;
+    setIsLoadingLyrics(true);
 
     fetch(
       `${API_BASE}/api/lyrics?videoId=${encodeURIComponent(trackId)}&title=${encodeURIComponent(currentTrack.title)}&artist=${encodeURIComponent(currentTrack.author || "")}&duration=${currentTrack.duration || ""}`
@@ -1089,7 +1098,12 @@ export default function App() {
           }
         }
       })
-      .catch(() => { });
+      .catch(() => { })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoadingLyrics(false);
+        }
+      });
 
     return () => {
       isCancelled = true;
@@ -2635,6 +2649,7 @@ export default function App() {
     setCurrentTime(0);
     lastPlayPositionRef.current = 0;
     setLyrics(null);
+    setIsLoadingLyrics(true);
 
     // Cancel existing pending debounce timer
     if (playDebounceTimerRef.current) {
@@ -2696,6 +2711,7 @@ export default function App() {
           }
           if (offlineItem.lyrics) {
             setLyrics(offlineItem.lyrics);
+            setIsLoadingLyrics(false);
           }
           setErrorMessage(null);
           return;
@@ -2835,7 +2851,9 @@ export default function App() {
             setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: lyricsData.artist } : prev));
           }
         }
-      } catch { }
+      } catch { } finally {
+        setIsLoadingLyrics(false);
+      }
     };
 
     // Execute playback immediately to keep iOS Safari user-gesture context valid
@@ -4392,7 +4410,12 @@ export default function App() {
 
                 {/* Right controls: Synced badge, Aa size, Romanji */}
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                  {isLyricsSynced ? (
+                  {isLoadingLyrics ? (
+                    <span className="px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-purple-900/60 text-purple-200 border border-purple-500/30 flex items-center gap-1.5 animate-pulse shadow-sm">
+                      <Loader2 className="w-3 h-3 animate-spin text-pink-400" />
+                      <span>Đang tải lời...</span>
+                    </span>
+                  ) : isLyricsSynced ? (
                     <span className="px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider bg-pink-500 text-white shadow-[0_0_12px_rgba(236,72,153,0.85)] flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-white" />
                       Synced
@@ -4403,7 +4426,7 @@ export default function App() {
                     </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] text-white/40 bg-black/40">
-                      Non synced
+                      Không có lời
                     </span>
                   )}
 
@@ -4435,19 +4458,29 @@ export default function App() {
               {/* 2. MIDDLE LYRICS AREA (z-10) */}
               <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center z-10 select-none">
                 {showCenterLyrics ? (
-                  <div
-                    ref={centerLyricsContainerRef}
-                    className="w-full h-full overflow-y-auto custom-scrollbar px-6 flex flex-col items-center text-center"
-                    style={{
-                      paddingTop: "60px",
-                      paddingBottom: "80px",
-                      maskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
-                      WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
-                      gap: centerLyricFontSize === 1 ? "14px" : centerLyricFontSize === 2 ? "20px" : "28px",
-                    }}
-                  >
-                    {parsedLyrics.length > 0 ? (
-                      parsedLyrics.map((line, idx) => {
+                  isLoadingLyrics ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center text-white/70 gap-3 my-auto animate-fade-in select-none">
+                      <div className="w-12 h-12 rounded-full bg-pink-500/20 border border-pink-500/40 flex items-center justify-center shadow-lg animate-pulse">
+                        <Loader2 className="w-6 h-6 animate-spin text-pink-400" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-bold text-white tracking-wide">Đang tải lời bài hát...</p>
+                        <p className="text-xs text-white/40">Đang tìm kiếm và đồng bộ lời bài hát</p>
+                      </div>
+                    </div>
+                  ) : parsedLyrics.length > 0 ? (
+                    <div
+                      ref={centerLyricsContainerRef}
+                      className="w-full h-full overflow-y-auto scroll-smooth custom-scrollbar px-6 flex flex-col items-center text-center"
+                      style={{
+                        paddingTop: "calc(45vh - 70px)",
+                        paddingBottom: "calc(45vh - 70px)",
+                        maskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
+                        WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
+                        gap: centerLyricFontSize === 1 ? "16px" : centerLyricFontSize === 2 ? "22px" : "30px",
+                      }}
+                    >
+                      {parsedLyrics.map((line, idx) => {
                         const isActive = isLyricsSynced && idx === activeLyricIndex;
                         let primaryText = line.text || "♪";
                         let secondaryText: string | null = null;
@@ -4465,10 +4498,10 @@ export default function App() {
                             onClick={() => {
                               if (line.time > 0) seekToTime(line.time);
                             }}
-                            className={`transition-all duration-300 select-none cursor-pointer text-center rounded-2xl px-5 py-2 max-w-3xl ${
+                            className={`select-none cursor-pointer text-center rounded-2xl px-5 py-2 max-w-3xl transform-gpu font-bold border ${
                               isActive
-                                ? "scale-105 font-extrabold text-white drop-shadow-[0_0_16px_rgba(236,72,153,0.95)] bg-white/10 backdrop-blur-sm border border-pink-500/30 shadow-xl"
-                                : "text-white/60 hover:text-white/90 hover:scale-[1.02] font-medium"
+                                ? "opacity-100 scale-[1.03] text-white drop-shadow-[0_0_20px_rgba(236,72,153,0.95)] bg-white/10 backdrop-blur-sm border-pink-500/35 shadow-xl"
+                                : "opacity-40 text-white hover:opacity-85 hover:scale-[1.01] border-transparent"
                             } ${
                               centerLyricFontSize === 1
                                 ? "text-base sm:text-lg"
@@ -4476,6 +4509,10 @@ export default function App() {
                                   ? "text-lg sm:text-xl"
                                   : "text-xl sm:text-2xl"
                             }`}
+                            style={{
+                              transition: "transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.35s ease, border-color 0.35s ease",
+                              willChange: "transform, opacity",
+                            }}
                           >
                             <p className="leading-relaxed drop-shadow-md">{primaryText}</p>
                             {secondaryText && (
@@ -4487,18 +4524,18 @@ export default function App() {
                             )}
                           </div>
                         );
-                      })
-                    ) : _lyrics?.plainLyrics ? (
-                      <div className="max-w-2xl text-center text-white/80 whitespace-pre-line leading-loose text-base font-medium py-10">
-                        {_lyrics.plainLyrics}
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center text-white/40 gap-2">
-                        <Mic2 className="w-10 h-10 opacity-30" />
-                        <p className="text-sm font-medium">Chưa có lời bài hát cho ca khúc này</p>
-                      </div>
-                    )}
-                  </div>
+                      })}
+                    </div>
+                  ) : _lyrics?.plainLyrics ? (
+                    <div className="max-w-2xl text-center text-white/80 whitespace-pre-line leading-loose text-base font-medium py-10">
+                      {_lyrics.plainLyrics}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center text-white/40 gap-2 select-none">
+                      <Mic2 className="w-10 h-10 opacity-30" />
+                      <p className="text-sm font-medium">Chưa có lời bài hát cho ca khúc này</p>
+                    </div>
+                  )
                 ) : null}
               </div>
 
@@ -4534,94 +4571,176 @@ export default function App() {
                     </button>
 
                     {showPlayerMenu && currentTrack && (
-                      <div className="absolute bottom-11 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[210px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
-                        <button
-                          type="button"
-                          onClick={() => setShowLibrarySubmenu(!showLibrarySubmenu)}
-                          className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${
-                            showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            <FolderPlus className="w-4 h-4 theme-accent-text" />
-                            <span>Lưu vào playlist</span>
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            )}
-                            <ChevronRight className="w-3.5 h-3.5 text-white/40" />
-                          </div>
-                        </button>
+                      <div className="absolute bottom-11 left-0 z-40 bg-[#150428]/98 backdrop-blur-2xl rounded-2xl shadow-[0_12px_45px_rgba(0,0,0,0.85)] p-2 min-w-[220px] max-w-[260px] flex flex-col gap-1 text-xs animate-fade-in border border-purple-500/40">
+                        {showLibrarySubmenu ? (
+                          /* Submenu View: Drill-down in-place (No separate popup, 0% overlap) */
+                          <div className="flex flex-col gap-1.5 animate-fade-in">
+                            <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowLibrarySubmenu(false);
+                                  setIsCreatingPlaylist(false);
+                                }}
+                                className="flex items-center gap-1 text-white/70 hover:text-white transition-colors cursor-pointer text-[10.5px] font-semibold group/back"
+                              >
+                                <ChevronLeft className="w-3.5 h-3.5 group-hover/back:-translate-x-0.5 transition-transform" />
+                                <span>Quay lại</span>
+                              </button>
+                              <span>Thêm vào playlist</span>
+                            </div>
 
-                        <button
-                          type="button"
-                          disabled={savingOfflineTrackId === currentTrack.id}
-                          onClick={() => handleSaveOfflineTrack(currentTrack)}
-                          className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                        >
-                          <span className="flex items-center gap-2">
-                            {savingOfflineTrackId === currentTrack.id ? (
-                              <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
-                            ) : (
-                              <HardDriveDownload className="w-4 h-4 theme-accent-text" />
-                            )}
-                            <span>
-                              {savingOfflineTrackId === currentTrack.id
-                                ? "Đang lưu..."
-                                : offlineTrackIds.has(currentTrack.id)
-                                  ? "Đã lưu offline (Xóa)"
-                                  : "Lưu nghe offline"}
-                            </span>
-                          </span>
-                          {offlineTrackIds.has(currentTrack.id) && (
-                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadTrack(currentTrack)}
-                          className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                        >
-                          <span className="flex items-center gap-2">
-                            <Download className="w-4 h-4 theme-accent-text" />
-                            <span>Tải file MP3 về máy</span>
-                          </span>
-                          {downloadedTrackIds.has(currentTrack.id) && (
-                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                          )}
-                        </button>
-                      </div>
-                    )}
-
-                    {showPlayerMenu && showLibrarySubmenu && currentTrack && (
-                      <div className="absolute bottom-11 left-0 sm:left-[calc(100%+8px)] z-50 theme-menu-glass rounded-xl shadow-2xl p-2 min-w-[210px] max-w-[240px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
-                        <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
-                          <span>Thêm vào playlist</span>
-                        </div>
-                        <div className="max-h-48 overflow-y-auto flex flex-col gap-1 pr-0.5 custom-scrollbar">
-                          {libraryData.playlists.length > 0 ? (
-                            libraryData.playlists.map((pl) => {
-                              const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
-                              return (
+                            {!userSession?.isLoggedIn ? (
+                              <div className="p-2.5 text-center flex flex-col gap-2">
+                                <p className="text-[11px] text-white/60">Đăng nhập để quản lý danh sách phát của bạn</p>
                                 <button
-                                  key={pl.id}
                                   type="button"
-                                  onClick={() => handleToggleTrackInPlaylist(pl.id)}
-                                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-left ${
-                                    isInPl ? "bg-white/10 text-white font-medium" : "hover:bg-white/5 text-white/80"
-                                  }`}
+                                  onClick={() => {
+                                    setShowPlayerMenu(false);
+                                    setShowLibrarySubmenu(false);
+                                    setIsAccountOpen(true);
+                                  }}
+                                  className="w-full py-1.5 rounded-lg theme-btn-primary text-white font-bold text-xs cursor-pointer"
                                 >
-                                  <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
-                                  {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                  Đăng nhập ngay
                                 </button>
-                              );
-                            })
-                          ) : (
-                            <span className="text-[11px] text-white/40 italic px-2 py-1">Chưa có playlist nào</span>
-                          )}
-                        </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="max-h-48 overflow-y-auto flex flex-col gap-1 pr-0.5 custom-scrollbar">
+                                  {libraryData.playlists.length > 0 ? (
+                                    libraryData.playlists.map((pl) => {
+                                      const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
+                                      return (
+                                        <button
+                                          key={pl.id}
+                                          type="button"
+                                          onClick={() => handleToggleTrackInPlaylist(pl.id)}
+                                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-left ${
+                                            isInPl ? "bg-white/15 text-white font-medium shadow-sm" : "hover:bg-white/5 text-white/80"
+                                          }`}
+                                        >
+                                          <span className="truncate max-w-[150px] text-[11.5px]">{pl.name}</span>
+                                          {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                        </button>
+                                      );
+                                    })
+                                  ) : (
+                                    <span className="text-[11px] text-white/40 italic px-2 py-1 text-center">Chưa có playlist nào</span>
+                                  )}
+                                </div>
+
+                                <div className="pt-1.5 border-t border-white/10">
+                                  {!isCreatingPlaylist ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsCreatingPlaylist(true)}
+                                      className="w-full py-1 text-center text-[11px] font-semibold text-white/70 hover:theme-accent-text hover:bg-white/5 rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Tạo playlist mới</span>
+                                    </button>
+                                  ) : (
+                                    <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg theme-accent-border">
+                                      <input
+                                        type="text"
+                                        placeholder="Tên playlist..."
+                                        value={newPlaylistName}
+                                        onChange={(e) => setNewPlaylistName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") handleCreatePlaylistAndAddTrack();
+                                        }}
+                                        className="flex-1 bg-transparent text-[11px] text-white focus:outline-none px-1"
+                                        autoFocus
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleCreatePlaylistAndAddTrack}
+                                        className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                        title="Tạo"
+                                      >
+                                        <Check className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setIsCreatingPlaylist(false);
+                                          setNewPlaylistName("");
+                                        }}
+                                        className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
+                                        title="Hủy"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          /* Main Menu View: 3 Options */
+                          <div className="flex flex-col gap-1">
+                            {/* Option 1: Lưu vào playlist */}
+                            <button
+                              type="button"
+                              onClick={() => setShowLibrarySubmenu(true)}
+                              className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                            >
+                              <span className="flex items-center gap-2">
+                                <FolderPlus className="w-4 h-4 theme-accent-text" />
+                                <span>Lưu vào playlist</span>
+                              </span>
+                              <div className="flex items-center gap-1">
+                                {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                )}
+                                <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+                              </div>
+                            </button>
+
+                            {/* Option 2: Lưu ngoại tuyến */}
+                            <button
+                              type="button"
+                              disabled={savingOfflineTrackId === currentTrack.id}
+                              onClick={() => handleSaveOfflineTrack(currentTrack)}
+                              className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                            >
+                              <span className="flex items-center gap-2">
+                                {savingOfflineTrackId === currentTrack.id ? (
+                                  <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
+                                ) : (
+                                  <HardDriveDownload className="w-4 h-4 theme-accent-text" />
+                                )}
+                                <span>
+                                  {savingOfflineTrackId === currentTrack.id
+                                    ? "Đang lưu..."
+                                    : offlineTrackIds.has(currentTrack.id)
+                                      ? "Đã lưu offline (Xóa)"
+                                      : "Lưu nghe offline"}
+                                </span>
+                              </span>
+                              {offlineTrackIds.has(currentTrack.id) && (
+                                <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                              )}
+                            </button>
+
+                            {/* Option 3: Tải file MP3 về máy */}
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadTrack(currentTrack)}
+                              className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                            >
+                              <span className="flex items-center gap-2">
+                                <Download className="w-4 h-4 theme-accent-text" />
+                                <span>Tải file MP3 về máy</span>
+                              </span>
+                              {downloadedTrackIds.has(currentTrack.id) && (
+                                <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -6559,174 +6678,178 @@ export default function App() {
                         <Menu className="w-4 h-4" />
                       </button>
 
-                      {/* Popup 1 (Menu chính: Combobox) */}
+                      {/* Menu Combobox: Drill-down in-place (Zero overlapping popups) */}
                       {showPlayerMenu && currentTrack && (
-                        <div className="absolute top-9 left-0 z-40 theme-menu-glass rounded-xl shadow-2xl p-1.5 min-w-[205px] flex flex-col gap-1 text-xs animate-fade-in border theme-accent-border/40">
-                          {/* Option 1: Lưu vào playlist */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowLibrarySubmenu(!showLibrarySubmenu);
-                            }}
-                            className={`flex items-center justify-between w-full px-2.5 py-2 rounded-lg transition-colors cursor-pointer text-left ${showLibrarySubmenu ? "bg-white/15 theme-accent-text font-bold" : "hover:bg-white/10 text-white/90"
-                              }`}
-                          >
-                            <span className="flex items-center gap-2">
-                              <FolderPlus className="w-4 h-4 theme-accent-text" />
-                              <span>Lưu vào playlist</span>
-                            </span>
-                            <div className="flex items-center gap-1">
-                              {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                              )}
-                              <ChevronLeft className="w-3.5 h-3.5 text-white/40" />
-                            </div>
-                          </button>
-
-                          {/* Option 2: Lưu ngoại tuyến (nghe trong app như YouTube) */}
-                          <button
-                            type="button"
-                            disabled={savingOfflineTrackId === currentTrack.id}
-                            onClick={() => handleSaveOfflineTrack(currentTrack)}
-                            className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                          >
-                            <span className="flex items-center gap-2">
-                              {savingOfflineTrackId === currentTrack.id ? (
-                                <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
-                              ) : (
-                                <HardDriveDownload className="w-4 h-4 theme-accent-text" />
-                              )}
-                              <span>
-                                {savingOfflineTrackId === currentTrack.id
-                                  ? "Đang lưu ngoại tuyến..."
-                                  : offlineTrackIds.has(currentTrack.id)
-                                    ? "Đã lưu offline (Bấm để xóa)"
-                                    : "Lưu nghe offline (như YouTube)"}
-                              </span>
-                            </span>
-                            {offlineTrackIds.has(currentTrack.id) && (
-                              <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                            )}
-                          </button>
-
-                          {/* Option 3: Tải file MP3 về máy */}
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadTrack(currentTrack)}
-                            className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
-                          >
-                            <span className="flex items-center gap-2">
-                              <Download className="w-4 h-4 theme-accent-text" />
-                              <span>Tải file MP3 về máy</span>
-                            </span>
-                            {downloadedTrackIds.has(currentTrack.id) && (
-                              <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                            )}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Popup 2 (Submenu mở sang bên trái trên Desktop, và responsive trên Mobile) */}
-                      {showPlayerMenu && showLibrarySubmenu && currentTrack && (
-                        <div className="absolute top-9 left-0 lg:left-auto lg:right-[calc(100%+8px)] z-50 theme-menu-glass rounded-xl shadow-2xl p-2 min-w-[200px] max-w-[230px] flex flex-col gap-1.5 text-xs animate-fade-in border theme-accent-border">
-                          <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
-                            <button
-                              type="button"
-                              onClick={() => setShowLibrarySubmenu(false)}
-                              className="lg:hidden flex items-center gap-1 text-[10px] text-white/60 hover:text-white cursor-pointer mr-1"
-                            >
-                              <ChevronLeft className="w-3 h-3" />
-                              <span>Quay lại</span>
-                            </button>
-                            <span>Thêm vào playlist</span>
-                          </div>
-
-                          {!userSession?.isLoggedIn ? (
-                            <div className="p-2 text-center flex flex-col gap-2">
-                              <p className="text-[11px] text-white/60">Đăng nhập để quản lý danh sách phát của bạn</p>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setShowPlayerMenu(false);
-                                  setShowLibrarySubmenu(false);
-                                  setIsAccountOpen(true);
-                                }}
-                                className="px-3 py-1.5 rounded-lg theme-btn-primary text-white text-xs font-semibold cursor-pointer transition-colors"
-                              >
-                                Đăng nhập ngay
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              {/* Option Tạo playlist mới */}
-                              {!isCreatingPlaylist ? (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-9 left-0 z-40 bg-[#16042a]/98 backdrop-blur-2xl rounded-xl shadow-2xl p-1.5 min-w-[210px] max-w-[250px] flex flex-col gap-1 text-xs animate-fade-in border border-purple-500/40"
+                        >
+                          {showLibrarySubmenu ? (
+                            /* Submenu View */
+                            <div className="flex flex-col gap-1.5 animate-fade-in">
+                              <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10 text-[10px] font-bold uppercase tracking-wider theme-accent-text">
                                 <button
                                   type="button"
-                                  onClick={() => setIsCreatingPlaylist(true)}
-                                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/10 theme-accent-text font-medium transition-colors cursor-pointer text-left"
+                                  onClick={() => {
+                                    setShowLibrarySubmenu(false);
+                                    setIsCreatingPlaylist(false);
+                                  }}
+                                  className="flex items-center gap-1 text-white/70 hover:text-white transition-colors cursor-pointer text-[10.5px] font-semibold group/back"
                                 >
-                                  <Plus className="w-3.5 h-3.5" />
-                                  <span>Tạo playlist mới</span>
+                                  <ChevronLeft className="w-3.5 h-3.5 group-hover/back:-translate-x-0.5 transition-transform" />
+                                  <span>Quay lại</span>
                                 </button>
-                              ) : (
-                                <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg theme-accent-border">
-                                  <input
-                                    type="text"
-                                    placeholder="Tên playlist..."
-                                    value={newPlaylistName}
-                                    onChange={(e) => setNewPlaylistName(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") handleCreatePlaylistAndAddTrack();
-                                    }}
-                                    className="flex-1 bg-transparent text-[11px] text-white focus:outline-none px-1"
-                                    autoFocus
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={handleCreatePlaylistAndAddTrack}
-                                    className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
-                                    title="Tạo"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                  </button>
+                                <span>Thêm vào playlist</span>
+                              </div>
+
+                              {!userSession?.isLoggedIn ? (
+                                <div className="p-2 text-center flex flex-col gap-2">
+                                  <p className="text-[11px] text-white/60">Đăng nhập để quản lý danh sách phát của bạn</p>
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setIsCreatingPlaylist(false);
-                                      setNewPlaylistName("");
+                                      setShowPlayerMenu(false);
+                                      setShowLibrarySubmenu(false);
+                                      setIsAccountOpen(true);
                                     }}
-                                    className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
-                                    title="Hủy"
+                                    className="px-3 py-1.5 rounded-lg theme-btn-primary text-white text-xs font-semibold cursor-pointer transition-colors"
                                   >
-                                    <X className="w-3.5 h-3.5" />
+                                    Đăng nhập ngay
                                   </button>
                                 </div>
-                              )}
+                              ) : (
+                                <>
+                                  <div className="max-h-40 overflow-y-auto flex flex-col gap-1 pr-0.5 custom-scrollbar">
+                                    {libraryData.playlists.length > 0 ? (
+                                      libraryData.playlists.map((pl) => {
+                                        const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
+                                        return (
+                                          <button
+                                            key={pl.id}
+                                            type="button"
+                                            onClick={() => handleToggleTrackInPlaylist(pl.id)}
+                                            className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors text-left group cursor-pointer"
+                                          >
+                                            <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
+                                            {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                          </button>
+                                        );
+                                      })
+                                    ) : (
+                                      <span className="text-[11px] text-white/40 italic px-2 py-1 text-center">Chưa có playlist nào</span>
+                                    )}
+                                  </div>
 
-                              <div className="h-[1px] bg-white/10 my-0.5" />
-
-                              {/* List of existing playlists */}
-                              <div className="max-h-40 overflow-y-auto flex flex-col gap-1 pr-0.5">
-                                {libraryData.playlists.length > 0 ? (
-                                  libraryData.playlists.map((pl) => {
-                                    const isInPl = pl.items?.some((it: any) => it.id === currentTrack.id);
-                                    return (
+                                  <div className="pt-1 border-t border-white/10">
+                                    {!isCreatingPlaylist ? (
                                       <button
-                                        key={pl.id}
                                         type="button"
-                                        onClick={() => handleToggleTrackInPlaylist(pl.id)}
-                                        className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-white/10 text-white/90 transition-colors text-left group cursor-pointer"
+                                        onClick={() => setIsCreatingPlaylist(true)}
+                                        className="w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded-lg hover:bg-white/10 theme-accent-text font-medium transition-colors cursor-pointer text-left text-[11px]"
                                       >
-                                        <span className="truncate max-w-[140px] text-[11.5px]">{pl.name}</span>
-                                        {isInPl && <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 ml-1" />}
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Tạo playlist mới</span>
                                       </button>
-                                    );
-                                  })
-                                ) : (
-                                  <span className="text-[11px] text-white/40 italic px-2 py-1">Chưa có playlist nào</span>
+                                    ) : (
+                                      <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg theme-accent-border">
+                                        <input
+                                          type="text"
+                                          placeholder="Tên playlist..."
+                                          value={newPlaylistName}
+                                          onChange={(e) => setNewPlaylistName(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleCreatePlaylistAndAddTrack();
+                                          }}
+                                          className="flex-1 bg-transparent text-[11px] text-white focus:outline-none px-1"
+                                          autoFocus
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={handleCreatePlaylistAndAddTrack}
+                                          className="p-1 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                          title="Tạo"
+                                        >
+                                          <Check className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setIsCreatingPlaylist(false);
+                                            setNewPlaylistName("");
+                                          }}
+                                          className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
+                                          title="Hủy"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            /* Main Menu View: 3 Options */
+                            <div className="flex flex-col gap-1">
+                              {/* Option 1: Lưu vào playlist */}
+                              <button
+                                type="button"
+                                onClick={() => setShowLibrarySubmenu(true)}
+                                className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <FolderPlus className="w-4 h-4 theme-accent-text" />
+                                  <span>Lưu vào playlist</span>
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  {libraryData.playlists.some((pl) => pl.items?.some((it: any) => it.id === currentTrack.id)) && (
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  )}
+                                  <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+                                </div>
+                              </button>
+
+                              {/* Option 2: Lưu ngoại tuyến */}
+                              <button
+                                type="button"
+                                disabled={savingOfflineTrackId === currentTrack.id}
+                                onClick={() => handleSaveOfflineTrack(currentTrack)}
+                                className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                              >
+                                <span className="flex items-center gap-2">
+                                  {savingOfflineTrackId === currentTrack.id ? (
+                                    <Loader2 className="w-4 h-4 theme-accent-text animate-spin" />
+                                  ) : (
+                                    <HardDriveDownload className="w-4 h-4 theme-accent-text" />
+                                  )}
+                                  <span>
+                                    {savingOfflineTrackId === currentTrack.id
+                                      ? "Đang lưu..."
+                                      : offlineTrackIds.has(currentTrack.id)
+                                        ? "Đã lưu offline (Bấm để xóa)"
+                                        : "Lưu nghe offline"}
+                                  </span>
+                                </span>
+                                {offlineTrackIds.has(currentTrack.id) && (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                                 )}
-                              </div>
-                            </>
+                              </button>
+
+                              {/* Option 3: Tải file MP3 về máy */}
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadTrack(currentTrack)}
+                                className="flex items-center justify-between w-full px-2.5 py-2 rounded-lg hover:bg-white/10 text-white/90 transition-colors cursor-pointer text-left"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <Download className="w-4 h-4 theme-accent-text" />
+                                  <span>Tải file MP3 về máy</span>
+                                </span>
+                                {downloadedTrackIds.has(currentTrack.id) && (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                )}
+                              </button>
+                            </div>
                           )}
                         </div>
                       )}
