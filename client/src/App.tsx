@@ -2072,10 +2072,10 @@ export default function App() {
                     setIsLoading(false);
                     isUserPausedRef.current = false;
                     setErrorMessage(null);
-                    // Clear transition lock once track is actively playing
+                    trackPlayStartTimeRef.current = Date.now();
                     setTimeout(() => {
                       isTransitioningRef.current = false;
-                    }, 500);
+                    }, 2000);
                   } else if (event.data === 2) {
                     // Only reflect paused if user explicitly pressed pause or app is visible in foreground
                     if (isUserPausedRef.current || document.visibilityState === "visible") {
@@ -2085,9 +2085,12 @@ export default function App() {
                   } else if (event.data === 0) {
                     // Only advance track if in YouTube engine, NOT in transition, and track actually played to near end
                     if (!isTransitioningRef.current && activePlayerType.current === "youtube") {
+                      const ytVid = ytPlayerRef.current?.getVideoData?.()?.video_id;
+                      const currentId = currentTrackRef.current?.id;
+                      if (ytVid && currentId && ytVid !== currentId) return; // Still old video!
                       const ct = ytPlayerRef.current?.getCurrentTime?.() || 0;
                       const dur = ytPlayerRef.current?.getDuration?.() || 0;
-                      if (dur > 5 && ct >= dur - 3) {
+                      if (dur > 5 && ct >= dur - 3 && Date.now() - trackPlayStartTimeRef.current > 4000) {
                         handleTrackEndedRef.current();
                       }
                     }
@@ -2102,13 +2105,13 @@ export default function App() {
                 onError: (err: any) => {
                   console.warn("[YouTube Player Error Event]:", err);
                   setIsLoading(false);
-                  if (!isTransitioningRef.current && activePlayerType.current === "youtube") {
+                  const errCode = err?.data;
+                  if ((errCode === 100 || errCode === 101 || errCode === 150) && !isTransitioningRef.current && activePlayerType.current === "youtube") {
                     const currentId = currentTrackRef.current?.id;
-                    if (currentId && lastEndedTrackIdRef.current !== currentId && Date.now() - trackPlayStartTimeRef.current > 3000) {
+                    if (currentId && lastEndedTrackIdRef.current !== currentId && Date.now() - trackPlayStartTimeRef.current > 4000) {
+                      isTransitioningRef.current = true;
                       setTimeout(() => {
-                        if (!isTransitioningRef.current) {
-                          handleTrackEndedRef.current();
-                        }
+                        handleTrackEndedRef.current();
                       }, 1500);
                     }
                   }
@@ -2180,12 +2183,14 @@ export default function App() {
             // Fallback: If video reaches within 0.5s of the end and actually ended, advance to next track
             // NOTE: Never advance if player is paused by user, or if this track was already marked ended
             const currentId = currentTrackRef.current?.id;
+            const ytVid = ytPlayerRef.current?.getVideoData ? ytPlayerRef.current.getVideoData()?.video_id : null;
             if (
               dur > 5 &&
               ct >= dur - 0.5 &&
               !isTransitioningRef.current &&
               !isUserPausedRef.current &&
               currentId &&
+              (!ytVid || ytVid === currentId) &&
               lastEndedTrackIdRef.current !== currentId &&
               Date.now() - trackPlayStartTimeRef.current > 4000
             ) {
@@ -2388,11 +2393,11 @@ export default function App() {
       lastEndedTrackIdRef.current = null;
       trackPlayStartTimeRef.current = Date.now();
 
-      // Lock transitioning to prevent spurious ENDED events from old track
+      // Lock transitioning to prevent spurious ENDED events from old track while fetching stream
       isTransitioningRef.current = true;
       setTimeout(() => {
         isTransitioningRef.current = false;
-      }, 3000);
+      }, 10000);
 
       // Clean audio element source and pause previous playback
       if (audioRef.current) {
@@ -2703,8 +2708,8 @@ export default function App() {
         // Prevent double trigger on the same track (stops the 1s skip bug)
         if (lastEndedTrackIdRef.current === currentId) return;
 
-        // Disallow ending a track that just started playing less than 3 seconds ago
-        if (Date.now() - trackPlayStartTimeRef.current < 3000) return;
+        // Disallow ending a track that has not been playing for at least 4 seconds
+        if (Date.now() - trackPlayStartTimeRef.current < 4000) return;
 
         lastEndedTrackIdRef.current = currentId;
         isTransitioningRef.current = true;
@@ -3366,12 +3371,16 @@ export default function App() {
               if (activePlayerType.current === "audio") {
                 setIsPlaying(true);
                 setIsLoading(false);
+                trackPlayStartTimeRef.current = Date.now();
+                setTimeout(() => {
+                  isTransitioningRef.current = false;
+                }, 2000);
               }
             }}
             onEnded={() => {
-              if (activePlayerType.current === "audio") {
+              if (activePlayerType.current === "audio" && !isTransitioningRef.current) {
                 const a = audioRef.current;
-                if (a && a.src && !a.src.startsWith("data:") && a.currentTime > 3) {
+                if (a && a.src && !a.src.startsWith("data:") && a.currentTime > 5 && Date.now() - trackPlayStartTimeRef.current > 4000) {
                   handleTrackEndedRef.current();
                 }
               }

@@ -12,22 +12,60 @@ export interface StreamInfo {
 }
 
 let cachedVisitorData: string | null = null;
-let cachedSts = 20775;
+let cachedSts = Math.floor(Date.now() / 86400000);
 let lastVisitorFetchTime = 0;
 
 async function getVisitorDataAndSts(videoId: string): Promise<{ visitorData: string; sts: number }> {
   const now = Date.now();
-  if (cachedVisitorData && (now - lastVisitorFetchTime < 3600000)) {
-    return { visitorData: cachedVisitorData, sts: cachedSts };
+  const currentSts = Math.floor(now / 86400000);
+
+  if (cachedVisitorData && now - lastVisitorFetchTime < 3600000) {
+    return { visitorData: cachedVisitorData, sts: currentSts };
   }
 
+  // Strategy A: InnerTube /visitor_id official API (Zero scraping, 100% works on serverless/Vercel)
+  try {
+    const res = await fetch("https://www.youtube.com/youtubei/v1/visitor_id", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: "WEB",
+            clientVersion: "2.20240101.01.00",
+            hl: "en",
+            gl: "US",
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(3500),
+    });
+
+    if (res.ok) {
+      const data = (await res.json()) as any;
+      const v = data?.responseContext?.visitorData;
+      if (v) {
+        cachedVisitorData = decodeURIComponent(v);
+        cachedSts = currentSts;
+        lastVisitorFetchTime = now;
+        return { visitorData: cachedVisitorData, sts: currentSts };
+      }
+    }
+  } catch (err: any) {
+    console.warn("[StreamResolver] Failed to fetch visitor_id from API:", err?.message);
+  }
+
+  // Strategy B: Fallback watch page scraping (if visitor_id fails)
   try {
     const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(3500),
     });
     if (pageRes.ok) {
       const html = await pageRes.text();
@@ -42,12 +80,12 @@ async function getVisitorDataAndSts(videoId: string): Promise<{ visitorData: str
       }
     }
   } catch (err) {
-    console.warn("[StreamResolver] Failed to refresh visitor data:", err);
+    console.warn("[StreamResolver] Failed to refresh visitor data from watch page:", err);
   }
 
   return {
-    visitorData: cachedVisitorData || "CgtOOTF5Rk5IZllJYyiw_vnXBjIKCgJWThIEGgAg",
-    sts: cachedSts || 20775,
+    visitorData: cachedVisitorData || "CgtIbGdqZzRGNlJwYyjjiYTYBjIKCgJWThIEGgAg",
+    sts: cachedSts || currentSts,
   };
 }
 
