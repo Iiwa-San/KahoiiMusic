@@ -654,5 +654,64 @@ app.get(["/api/home", "/home"], async (_req, res) => {
   }
 });
 
+// 10. Smart Taste-Based Recommendations
+app.all(["/api/recommendations", "/recommendations"], async (req, res) => {
+  try {
+    const querySeed = (req.body?.querySeed || req.query.q || "") as string;
+    const artists = (req.body?.artists || (req.query.artists ? String(req.query.artists).split(",") : [])) as string[];
+    const genres = (req.body?.genres || (req.query.genres ? String(req.query.genres).split(",") : [])) as string[];
+    const excludeIds = (req.body?.excludeIds || (req.query.exclude ? String(req.query.exclude).split(",") : [])) as string[];
+    const excludeSet = new Set<string>(Array.isArray(excludeIds) ? excludeIds : []);
+
+    let searchQueries: string[] = [];
+    if (querySeed && typeof querySeed === "string" && querySeed.trim()) {
+      searchQueries.push(querySeed.trim());
+    }
+
+    if (Array.isArray(artists) && artists.length > 0) {
+      artists.slice(0, 2).forEach((a) => {
+        if (a && a.trim()) searchQueries.push(`${a.trim()} bài hát hay nhất`);
+      });
+    }
+
+    if (Array.isArray(genres) && genres.length > 0) {
+      genres.slice(0, 2).forEach((g) => {
+        if (g && g.trim()) searchQueries.push(`${g.trim()} tuyển chọn hay nhất`);
+      });
+    }
+
+    if (searchQueries.length === 0) {
+      searchQueries = ["Nhạc thịnh hành Việt Nam mới nhất", "V-Pop chill hay nhất"];
+    }
+
+    const results = await Promise.all(
+      searchQueries.slice(0, 3).map((q) =>
+        searchYouTubeMusicStructured(q).catch(() => ({ tracks: [] } as any))
+      )
+    );
+
+    const seenTrackIds = new Set<string>();
+    const recommendedTracks: any[] = [];
+
+    for (const r of results) {
+      for (const t of r.tracks || []) {
+        if (!seenTrackIds.has(t.id) && !excludeSet.has(t.id) && !isUnwantedTrack(t.title, t.author)) {
+          seenTrackIds.add(t.id);
+          recommendedTracks.push(t);
+        }
+      }
+    }
+
+    const shuffled = shuffleArray(recommendedTracks).slice(0, 24);
+    return res.json({
+      tracks: shuffled,
+      total: shuffled.length,
+    });
+  } catch (err: any) {
+    console.error("[API Recommendations Error]", err.message);
+    return res.status(500).json({ error: "Failed to generate recommendations", tracks: [] });
+  }
+});
+
 export default app;
 

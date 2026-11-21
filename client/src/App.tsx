@@ -65,6 +65,7 @@ import { loadAndExtractTheme, type ThemePalette, DEFAULT_THEME } from "./utils/c
 import { TrackCard } from "./components/TrackCard";
 import { ArtistCard } from "./components/ArtistCard";
 import { PlaylistCard } from "./components/PlaylistCard";
+import { analyzeTasteProfile, type TasteProfile } from "./utils/tasteAnalyzer";
 
 // Official App Logo & Favicon placeholder
 const DEFAULT_TRACK_ART = "./logo_icon.png";
@@ -615,6 +616,16 @@ export default function App() {
       playlists: [],
     };
   });
+
+  // Personalized Taste-Based Recommendations
+  const [selectedTasteTagKey, setSelectedTasteTagKey] = useState<string>("all");
+  const [recommendedTracks, setRecommendedTracks] = useState<Track[]>([]);
+  const [isRecommendationsLoading, setIsRecommendationsLoading] = useState<boolean>(false);
+
+  // Computed Taste Profile from user's Favorites
+  const tasteProfile = useMemo<TasteProfile>(() => {
+    return analyzeTasteProfile(libraryData.favorites);
+  }, [libraryData.favorites]);
 
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
@@ -1806,59 +1817,116 @@ export default function App() {
 
     try {
       let data: StructuredSearchResult;
+      let effectiveBrowseId = artist.id;
+      const lower = artist.name.toLowerCase().trim();
 
-      // If we have a browseId (starts with UC or valid channel ID), query authentic channel uploads
-      if (artist.id && (artist.id.startsWith("UC") || artist.id.startsWith("MPREb"))) {
+      // If we don't have a browseId or it's not a channel UC.../MPREb..., search first to discover official channel ID
+      if (!effectiveBrowseId || (!effectiveBrowseId.startsWith("UC") && !effectiveBrowseId.startsWith("MPREb"))) {
+        try {
+          const sRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
+          if (sRes.ok) {
+            const sData: StructuredSearchResult = await sRes.json();
+            const matchedArtist = (sData.artists || []).find(
+              (a) => a.name.toLowerCase() === lower || lower.includes(a.name.toLowerCase()) || a.name.toLowerCase().includes(lower)
+            ) || sData.artists?.[0];
+            if (matchedArtist?.id && (matchedArtist.id.startsWith("UC") || matchedArtist.id.startsWith("MPREb"))) {
+              effectiveBrowseId = matchedArtist.id;
+            } else {
+              data = sData;
+            }
+          }
+        } catch { }
+      }
+
+      // If we have a valid browseId, query official channel uploads and releases
+      if (effectiveBrowseId && (effectiveBrowseId.startsWith("UC") || effectiveBrowseId.startsWith("MPREb"))) {
         const res = await fetch(
-          `${API_BASE}/api/artist?id=${encodeURIComponent(artist.id)}&name=${encodeURIComponent(artist.name)}`
+          `${API_BASE}/api/artist?id=${encodeURIComponent(effectiveBrowseId)}&name=${encodeURIComponent(artist.name)}`
         );
         if (res.ok) {
           data = await res.json();
         } else {
-          // Fallback to text search if /api/artist failed
           const sRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
           if (!sRes.ok) throw new Error("Artist search failed");
           data = await sRes.json();
         }
-      } else {
+      } else if (!data!) {
         const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artist.name)}`);
         if (!res.ok) throw new Error("Artist search failed");
         data = await res.json();
       }
 
       const rawTracks: Track[] = data.tracks || [];
-      const lower = artist.name.toLowerCase().trim();
       const escaped = lower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const artistInTitleRegex = new RegExp(`(\\b|\\()(?:cùng với|ft\\.?|feat\\.?|x|vs\\.?)\\s*.*${escaped}`, "i");
       const artistFirstRegex = new RegExp(`^${escaped}\\s*[-–|:]`, "i");
 
       // Strictly verify that tracks belong to this artist (official release, feat or artist's own cover)
       const authenticTracks = rawTracks.filter((t) => {
-        const a = (t.author || "").toLowerCase();
-        const tit = (t.title || "").toLowerCase();
-        if (a.includes(lower) || lower.includes(a)) {
-          if (/\b(cover by|covered by)\b/i.test(tit) && !tit.includes(lower)) {
+        const a = (t.author || "").toLowerCase().trim();
+        const tit = (t.title || "").toLowerCase().trim();
+
+        // 1. Exclude unwanted/bolero/karaoke content
+        if (/\b(bolero|karaoke|liên khúc bolero|hát nhép)\b/i.test(tit)) {
+          return false;
+        }
+
+        // 2. Exclude if someone ELSE covered it
+        const coverByMatch = tit.match(/(?:cover(?:ed)?\s+by|vocal\s*:?|ca\s*sĩ\s*:?|thể\s*hiện\s*:?)\s*([^\s\(\)\[\]【】\/|,]+)/i);
+        if (coverByMatch && coverByMatch[1]) {
+          const coverSinger = coverByMatch[1].toLowerCase().trim();
+          if (!coverSinger.includes(lower) && !lower.includes(coverSinger)) {
             return false;
           }
-          return true;
         }
+
+        // 3. Author match
+        if (a && a !== "nghệ sĩ" && a !== "kahoii music") {
+          const authorTokens = a
+            .split(/[,&+/]|(?:\s+(?:và|feat\.?|ft\.?|x|vs\.?)\s+)/i)
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+          const matchesAuthor = authorTokens.some(
+            (token) => token === lower || token.includes(lower) || (token.length >= 3 && lower.includes(token))
+          );
+          if (matchesAuthor) {
+            return true;
+          }
+        }
+
+        // 4. Title match
         return artistInTitleRegex.test(tit) || artistFirstRegex.test(tit);
       });
 
-      setArtistTracks(authenticTracks.length > 0 ? authenticTracks : rawTracks);
+      // Filtered fallback: only retain items having artist name in title, NEVER dump unfiltered junk
+      const safeTracks = authenticTracks.length > 0
+        ? authenticTracks
+        : rawTracks.filter((t) => t.title.toLowerCase().includes(lower) && !/\b(bolero|karaoke)\b/i.test(t.title));
 
-      // Playlists / albums (Strictly filter out channels, singles, or non-playlist IDs)
+      setArtistTracks(safeTracks);
+
+      // Playlists / albums: strictly require playlist to belong to this artist
       const authenticPlaylists = (data.playlists || []).filter((p) => {
-        if (!p.id || p.id.startsWith("UC")) return false;
+        if (!p.id || p.id.startsWith("UC") || p.id.startsWith("RD")) return false;
         const countText = (p.trackCountText || "").toLowerCase();
         if (countText.includes("đĩa đơn") || countText.includes("single")) return false;
-        return (
+
+        const titleLower = (p.title || "").toLowerCase();
+        const authorLower = (p.author || "").toLowerCase();
+
+        // Must either match valid playlist ID format AND relate to the artist
+        const isIdValid =
           p.id.startsWith("VL") ||
           p.id.startsWith("PL") ||
           p.id.startsWith("MPREb") ||
-          p.id.startsWith("OLAK5uy_") ||
-          p.id.startsWith("RD")
-        );
+          p.id.startsWith("OLAK5uy_");
+
+        if (!isIdValid) return false;
+
+        // Ensure playlist belongs to or features this artist, not completely unrelated artists
+        const isRelated = titleLower.includes(lower) || authorLower.includes(lower) || authorLower === "kahoii music" || authorLower === "youtube music";
+        return isRelated;
       });
       setArtistPlaylists(authenticPlaylists);
 
@@ -1866,7 +1934,7 @@ export default function App() {
       if (data.artists && data.artists.length > 0) {
         const matchedArtist =
           data.artists.find(
-            (a) => (a.id && a.id === artist.id) || a.name.toLowerCase() === lower || lower.includes(a.name.toLowerCase())
+            (a) => (a.id && (a.id === artist.id || a.id === effectiveBrowseId)) || a.name.toLowerCase() === lower || lower.includes(a.name.toLowerCase())
           ) || data.artists[0];
 
         if (matchedArtist) {
@@ -1874,6 +1942,7 @@ export default function App() {
             prev
               ? {
                 ...prev,
+                id: matchedArtist.id || prev.id,
                 avatar:
                   prev.avatar && !prev.avatar.includes("logo_icon")
                     ? prev.avatar
@@ -2020,11 +2089,87 @@ export default function App() {
     }
   }, [showToast]);
 
+  // Fetch Personalized Recommendations based on Taste Profile & Selected Tag
+  const fetchRecommendations = useCallback(
+    async (tagKey?: string, isUserAction = false) => {
+      const activeKey = tagKey || selectedTasteTagKey;
+      const currentTag = tasteProfile.tags.find((t) => t.key === activeKey) || tasteProfile.tags[0];
+
+      setIsRecommendationsLoading(true);
+      try {
+        const excludeIds = libraryData.favorites.map((t) => t.id);
+        const res = await fetch(`${API_BASE}/api/recommendations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            querySeed: currentTag?.querySeed,
+            artists:
+              currentTag?.type === "artist"
+                ? [currentTag.label.replace("🎙️", "").trim()]
+                : tasteProfile.topArtists,
+            genres:
+              currentTag?.type === "genre"
+                ? [currentTag.label.replace("🎵", "").trim()]
+                : tasteProfile.genres,
+            excludeIds,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.tracks) && data.tracks.length > 0) {
+            setRecommendedTracks(data.tracks);
+            if (isUserAction) {
+              showToast(`Đã làm mới gợi ý theo ${currentTag?.label || "gu của bạn"}!`, "success");
+            }
+            return;
+          }
+        }
+
+        // Fallback: search via YouTube Music search
+        const fallbackQuery =
+          currentTag?.querySeed ||
+          (tasteProfile.topArtists[0]
+            ? `${tasteProfile.topArtists[0]} bài hát hay nhất`
+            : "Nhạc thịnh hành Việt Nam mới nhất");
+        const sRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(fallbackQuery)}`);
+        if (sRes.ok) {
+          const sData = await sRes.json();
+          const candidateTracks = (sData.tracks || []).filter((t: any) => !excludeIds.includes(t.id));
+          if (candidateTracks.length > 0) {
+            setRecommendedTracks(candidateTracks.slice(0, 24));
+            if (isUserAction) {
+              showToast(`Đã làm mới gợi ý theo ${currentTag?.label || "gu của bạn"}!`, "success");
+            }
+            return;
+          }
+        }
+
+        // Fallback to trending tracks
+        const fallbackTrending = trendingTracks.filter((t) => !excludeIds.includes(t.id));
+        setRecommendedTracks(fallbackTrending.slice(0, 18));
+      } catch (err: any) {
+        console.warn("[Recommendations Fetch Error]:", err?.message);
+      } finally {
+        setIsRecommendationsLoading(false);
+      }
+    },
+    [selectedTasteTagKey, tasteProfile, libraryData.favorites, trendingTracks, showToast]
+  );
+
+  // Auto-refresh recommendations when taste profile updates
+  useEffect(() => {
+    if (tasteProfile.topArtists.length > 0) {
+      fetchRecommendations(selectedTasteTagKey);
+    }
+  }, [tasteProfile.topArtists.join(","), tasteProfile.genres.join(",")]);
+
   // Preload initial track metadata, user data, home feed & YouTube Player API on mount
   useEffect(() => {
     fetchUserSession();
     fetchLibraryData();
     refreshHomeFeed(false);
+    fetchRecommendations("all");
 
     // Initialize YouTube Iframe Player
     const loadYtScript = () => {
@@ -3354,7 +3499,12 @@ export default function App() {
 
   // Real tracks to display in Discovery Feed (Center Canvas)
   const recentTracksToDisplay = libraryData.history.slice(0, 12);
-  const recommendedTracksToDisplay = libraryData.favorites.slice(0, 12);
+  const recommendedTracksToDisplay =
+    recommendedTracks.length > 0
+      ? recommendedTracks
+      : libraryData.favorites.length > 0
+      ? libraryData.favorites.slice(0, 12)
+      : trendingTracks.slice(0, 12);
 
   return (
     <div className="w-full max-w-full h-screen h-[100dvh] flex flex-col justify-between overflow-hidden text-white select-none relative font-sans">
@@ -4990,27 +5140,128 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Section 5: Có thể bạn sẽ thích */}
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-3.5">
-                      <Heart className="w-5 h-5 text-rose-400 fill-rose-500/20" />
-                      <h2 className="text-[20px] font-bold text-white tracking-wide">
-                        Có thể bạn sẽ thích
-                      </h2>
-                      {isLibraryLoading && (
-                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-300 animate-pulse font-medium">
-                          <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
-                          <span>Đang tải...</span>
+                  {/* Section 5: Có thể bạn sẽ thích (Taste Profile Personalized AI Recommendations) */}
+                  <div className="flex flex-col gap-3.5">
+                    {/* Header Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-rose-500/20 border border-white/10 flex items-center justify-center">
+                          <Sparkles className="w-4 h-4 theme-accent-text" />
                         </div>
-                      )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-[19px] sm:text-[20px] font-bold text-white tracking-wide">
+                              Có thể bạn sẽ thích
+                            </h2>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                              AI Gợi ý
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-white/50">
+                            Cá nhân hoá từ gu nghệ sĩ, thể loại, ngôn ngữ & phong cách trong Yêu thích
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action buttons: Refresh + Play All */}
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => fetchRecommendations(selectedTasteTagKey, true)}
+                          disabled={isRecommendationsLoading}
+                          className="px-3 py-1.5 rounded-xl theme-badge hover:theme-accent-border text-xs font-semibold text-white/80 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          title="Làm mới danh sách gợi ý"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isRecommendationsLoading ? "animate-spin theme-accent-text" : ""}`} />
+                          <span className="hidden sm:inline">Làm mới</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={recommendedTracksToDisplay.length === 0}
+                          onClick={() => {
+                            if (recommendedTracksToDisplay.length > 0) {
+                              setPlaylist(recommendedTracksToDisplay);
+                              setQueueTracks(recommendedTracksToDisplay);
+                              setCurrentIndex(0);
+                              loadAndPlayTrack(recommendedTracksToDisplay[0], true);
+                            }
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl theme-btn-primary text-xs font-semibold text-white shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all hover:scale-[1.02] active:scale-95"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Phát tất cả</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {isLibraryLoading ? (
+                    {/* Taste Profile Summary Banner (if user has favorites analyzed) */}
+                    {libraryData.favorites.length > 0 && (
+                      <div className="w-full rounded-2xl p-3 sm:p-3.5 bg-gradient-to-r from-purple-950/40 via-purple-900/20 to-black/30 border border-purple-500/20 backdrop-blur-sm flex flex-col gap-2">
+                        <div className="flex items-center justify-between text-xs text-purple-200/90 font-medium">
+                          <span className="flex items-center gap-1.5">
+                            <Heart className="w-3.5 h-3.5 text-rose-400 fill-current" />
+                            <span>Hồ sơ gu nhạc của bạn ({libraryData.favorites.length} bài đã thích)</span>
+                          </span>
+                          {tasteProfile.summary.countriesText && (
+                            <span className="text-[11px] text-white/50 font-mono">
+                              🌏 {tasteProfile.summary.countriesText}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                          {tasteProfile.summary.artistsText && (
+                            <span className="px-2.5 py-0.5 rounded-lg bg-white/5 border border-white/10 text-white/80">
+                              🎙️ <strong className="text-white">{tasteProfile.summary.artistsText}</strong>
+                            </span>
+                          )}
+                          {tasteProfile.summary.genresText && (
+                            <span className="px-2.5 py-0.5 rounded-lg bg-white/5 border border-white/10 text-white/80">
+                              🎵 {tasteProfile.summary.genresText}
+                            </span>
+                          )}
+                          {tasteProfile.summary.stylesText && (
+                            <span className="px-2.5 py-0.5 rounded-lg bg-white/5 border border-white/10 text-white/80">
+                              ✨ {tasteProfile.summary.stylesText}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Taste Filter Pills Carousel */}
+                    {tasteProfile.tags && tasteProfile.tags.length > 0 && (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                        {tasteProfile.tags.map((tag) => {
+                          const isSelected = selectedTasteTagKey === tag.key;
+                          return (
+                            <button
+                              key={tag.key}
+                              type="button"
+                              onClick={() => {
+                                setSelectedTasteTagKey(tag.key);
+                                fetchRecommendations(tag.key, true);
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isSelected
+                                  ? "theme-badge-active scale-[1.02] shadow-md shadow-purple-500/20 font-semibold"
+                                  : "theme-badge hover:theme-accent-border text-white/70 hover:text-white"
+                              }`}
+                            >
+                              <span>{tag.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Tracks Grid */}
+                    {isRecommendationsLoading ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 lg:gap-4 w-full">
                         {Array.from({ length: 6 }).map((_, idx) => (
                           <div key={idx} className="w-full flex flex-col animate-pulse">
                             <div className="relative w-full aspect-square rounded-xl sm:rounded-[18px] xl:rounded-[22px] overflow-hidden bg-gradient-to-br from-purple-900/30 via-rose-950/20 to-black/40 border border-white/5 flex items-center justify-center">
-                              <Heart className="w-8 h-8 text-rose-400/20 animate-pulse" />
+                              <Sparkles className="w-8 h-8 text-purple-400/20 animate-pulse" />
                             </div>
                             <div className="h-3.5 w-4/5 rounded-md bg-white/10 mt-2.5 animate-pulse" />
                             <div className="h-2.5 w-1/2 rounded-md bg-white/5 mt-1.5 animate-pulse" />
@@ -5031,8 +5282,12 @@ export default function App() {
                         ))}
                       </div>
                     ) : (
-                      <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
-                        Chưa có bài hát yêu thích nào.
+                      <div className="py-8 px-4 text-center bg-white/5 rounded-2xl border border-white/5 flex flex-col items-center justify-center gap-2">
+                        <Heart className="w-8 h-8 text-rose-400/50 mb-1" />
+                        <p className="text-sm text-white/70 font-medium">Chưa có bài hát gợi ý phù hợp</p>
+                        <p className="text-xs text-white/40 max-w-sm">
+                          Hãy thả tim ❤️ vào các bài hát bạn yêu thích để hệ thống phân tích thể loại, ngôn ngữ và nghệ sĩ yêu thích của bạn nhé!
+                        </p>
                       </div>
                     )}
                   </div>
