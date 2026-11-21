@@ -1640,6 +1640,27 @@ export default function App() {
   const [showVolumeSlider, setShowVolumeSlider] = useState<boolean>(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const wakeLockRef = useRef<any>(null);
+
+  const requestWakeLock = useCallback(async () => {
+    if (typeof navigator !== "undefined" && "wakeLock" in navigator && !wakeLockRef.current) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+        wakeLockRef.current.addEventListener("release", () => {
+          wakeLockRef.current = null;
+        });
+      } catch { }
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLockRef.current) {
+      try {
+        wakeLockRef.current.release();
+      } catch { }
+      wakeLockRef.current = null;
+    }
+  }, []);
 
   // Apply theme CSS custom variables to document root for seamless 1.2s color transitions
   useEffect(() => {
@@ -2113,8 +2134,8 @@ export default function App() {
             setCurrentTime(cur);
             lastPlayPositionRef.current = cur;
           }
-          if (!isUserPausedRef.current && currentTrackRef.current && audioRef.current.paused && isPlaying) {
-            audioRef.current.play().catch(() => { });
+          if (!isUserPausedRef.current && currentTrackRef.current && audioRef.current.paused) {
+            audioRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
           }
         }
       }
@@ -2133,6 +2154,15 @@ export default function App() {
       window.removeEventListener("focus", handleFocus);
     };
   }, [userSession?.isLoggedIn]);
+
+  // Synchronize Screen Wake Lock with Playback State
+  useEffect(() => {
+    if (isPlaying) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+  }, [isPlaying, requestWakeLock, releaseWakeLock]);
 
   // Refresh Discovery / Home Feed (Fetches randomized new trending & new release tracks)
   const refreshHomeFeed = useCallback(async (showNotice = false) => {
@@ -2631,20 +2661,11 @@ export default function App() {
       isTransitioningRef.current = false;
     }, 10000);
 
-    // Clean audio element source and pause previous playback
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.removeAttribute("src");
-        audioRef.current.load();
-      } catch { }
-    }
-
     // Instant UI update: title, artwork, active queue beam update immediately with zero lag
     setCurrentTrack(track);
     currentTrackRef.current = track;
     setIsLoading(true);
-    setIsPlaying(false);
+    setIsPlaying(autoPlay);
     setErrorMessage(null);
     setCurrentTime(0);
     lastPlayPositionRef.current = 0;
@@ -2661,6 +2682,35 @@ export default function App() {
     if (playAbortControllerRef.current) {
       playAbortControllerRef.current.abort();
       playAbortControllerRef.current = null;
+    }
+
+    // 1. Direct Native Audio Stream Initiation (Immediate Synchronous Execution to keep iOS/Android User-Gesture valid)
+    const directStreamUrl = `${API_BASE}/api/stream-audio?id=${track.id}`;
+    if (audioRef.current) {
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
+        try { ytPlayerRef.current.stopVideo(); } catch { }
+      }
+      audioRef.current.src = directStreamUrl;
+      audioRef.current.loop = false;
+      audioRef.current.load();
+      activePlayerType.current = "audio";
+      if (autoPlay) {
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              setIsLoading(false);
+              isUserPausedRef.current = false;
+            })
+            .catch((err) => {
+              console.warn("[Player] Direct stream play promise catch:", err);
+            });
+        }
+      } else {
+        setIsPlaying(false);
+        setIsLoading(false);
+      }
     }
 
     const executePlayback = async () => {
@@ -2681,33 +2731,16 @@ export default function App() {
         const offlineItem = await getOfflineTrack(track.id);
         if (offlineItem && offlineItem.audioBlob && audioRef.current) {
           console.log(`[Player] 📦 Playing "${track.title}" from local IndexedDB offline storage.`);
-          if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
-            try {
-              ytPlayerRef.current.stopVideo();
-            } catch { }
-          }
           const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
           audioRef.current.src = blobUrl;
           audioRef.current.loop = false;
           audioRef.current.load();
-          activePlayerType.current = "audio";
           if (autoPlay) {
-            const playPromise = audioRef.current.play();
-            if (playPromise !== undefined) {
-              playPromise
-                .then(() => {
-                  setIsPlaying(true);
-                  setIsLoading(false);
-                  isUserPausedRef.current = false;
-                })
-                .catch(() => {
-                  setIsPlaying(false);
-                  setIsLoading(false);
-                });
-            }
-          } else {
-            setIsPlaying(false);
-            setIsLoading(false);
+            audioRef.current.play().then(() => {
+              setIsPlaying(true);
+              setIsLoading(false);
+              isUserPausedRef.current = false;
+            }).catch(() => {});
           }
           if (offlineItem.lyrics) {
             setLyrics(offlineItem.lyrics);
@@ -2727,108 +2760,6 @@ export default function App() {
         showToast("Bạn đang ngoại tuyến! Hãy chọn bài hát trong mục 'Đã tải'", "info");
         setActiveLeftTab("offline");
         return;
-      }
-
-      // Strategy 1: Direct Real Audio Stream from Backend (InnerTube VR / VisionOS, 100% Background Playback on Mobile)
-      let streamLoaded = false;
-      try {
-        const controller = new AbortController();
-        playAbortControllerRef.current = controller;
-        const timeoutId = setTimeout(() => controller.abort(), 4500);
-
-        console.log(`[Stream] 🎵 Requesting direct stream from backend for ${track.id}...`);
-        const res = await fetch(`${API_BASE}/api/stream?id=${track.id}`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.fallback || !data.streamUrl) {
-            console.log(`[Stream] Backend suggested client player fallback for ${track.id}`);
-            streamLoaded = false;
-          } else {
-            if (data.author && (!track.author || track.author === "Nghệ sĩ" || track.author === "Kahoii Music")) {
-              track.author = data.author;
-              setCurrentTrack((prev) => (prev && prev.id === track.id ? { ...prev, author: data.author } : prev));
-            }
-
-            if (data.streamUrl && audioRef.current) {
-              console.log(`[Stream] ✅ Direct stream resolved for "${track.title}"! Playing via HTML5 audio.`);
-              const playableUrl = data.streamUrl;
-
-              // Silence YouTube iframe
-              if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
-                try { ytPlayerRef.current.stopVideo(); } catch { }
-              }
-
-              audioRef.current.src = playableUrl;
-              audioRef.current.loop = false;
-              audioRef.current.load();
-              activePlayerType.current = "audio";
-              streamLoaded = true;
-
-              if (autoPlay) {
-                const playPromise = audioRef.current.play();
-                if (playPromise !== undefined) {
-                  playPromise
-                    .then(() => {
-                      setIsPlaying(true);
-                      setIsLoading(false);
-                      isUserPausedRef.current = false;
-                    })
-                    .catch(() => {
-                      setIsPlaying(false);
-                      setIsLoading(false);
-                    });
-                }
-              } else {
-                setIsPlaying(false);
-                setIsLoading(false);
-              }
-              setErrorMessage(null);
-            }
-          }
-        }
-      } catch (streamErr: any) {
-        if (streamErr?.name !== "AbortError") {
-          console.warn("[Stream Fetch Info]:", streamErr?.message || streamErr);
-        }
-      }
-
-      // Strategy 2: Zero-failure YouTube Web Player Fallback (if backend stream unavailable)
-      if (!streamLoaded) {
-        console.log(`[Player] 📺 Playing "${track.title}" (${track.id}) via YouTube Player fallback.`);
-        activePlayerType.current = "youtube";
-        if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
-          try {
-            ytPlayerRef.current.loadVideoById({
-              videoId: track.id,
-              startSeconds: 0,
-            });
-            if (autoPlay) {
-              try { ytPlayerRef.current.playVideo(); } catch { }
-            } else {
-              try { ytPlayerRef.current.pauseVideo(); } catch { }
-              setIsPlaying(false);
-            }
-            setErrorMessage(null);
-          } catch (ytErr) {
-            console.warn("YouTube player instant launch warning:", ytErr);
-            setIsLoading(false);
-          }
-        } else {
-          setTimeout(() => {
-            if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
-              try {
-                ytPlayerRef.current.loadVideoById({ videoId: track.id, startSeconds: 0 });
-                if (autoPlay) {
-                  try { ytPlayerRef.current.playVideo(); } catch { }
-                }
-              } catch { }
-            }
-          }, 400);
-        }
       }
 
       // Safety watchdog: ensure loading spinner is cleared after 4s max if stalled
@@ -2856,7 +2787,7 @@ export default function App() {
       }
     };
 
-    // Execute playback immediately to keep iOS Safari user-gesture context valid
+    // Execute background tasks immediately
     executePlayback();
   };
 
@@ -3658,11 +3589,25 @@ export default function App() {
         }}
         onPause={() => {
           if (activePlayerType.current === "audio") {
-            setIsPlaying(false);
+            if (isUserPausedRef.current) {
+              setIsPlaying(false);
+            }
           }
         }}
         onError={() => {
           if (activePlayerType.current === "audio") {
+            console.warn("[Stream Audio Error] Direct stream failed, falling back to YouTube Player engine...");
+            const currentId = currentTrackRef.current?.id;
+            if (currentId && ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+              activePlayerType.current = "youtube";
+              ytPlayerRef.current.loadVideoById({
+                videoId: currentId,
+                startSeconds: lastPlayPositionRef.current || 0,
+              });
+              if (!isUserPausedRef.current) {
+                try { ytPlayerRef.current.playVideo(); } catch { }
+              }
+            }
             setIsLoading(false);
           }
         }}

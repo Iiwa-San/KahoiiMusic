@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
+import { Readable } from "stream";
 import { resolveAudioStream } from "./services/streamResolver.js";
 import { searchYouTubeMusicStructured, searchYouTubeTracks, getPlaylistTracks, getArtistDetails, resolveTrackArtist, getOfficialTrendingTracks, isUnwantedTrack } from "./services/youtubeSearch.js";
 import { fetchLyrics } from "./services/lyricsService.js";
@@ -21,6 +22,9 @@ import {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// In-memory stream URL cache (YouTube URLs are valid for 4-6 hours)
+const streamUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
 app.use(cors({
   origin: true,
@@ -42,10 +46,95 @@ app.get("/api/stream", async (req, res) => {
       const resolved = await resolveTrackArtist(videoId, streamInfo.title);
       if (resolved) streamInfo.author = resolved;
     }
-    return res.json(streamInfo);
+    if (streamInfo.streamUrl) {
+      streamUrlCache.set(videoId, { url: streamInfo.streamUrl, expiresAt: Date.now() + 3 * 3600 * 1000 });
+    }
+    return res.json({
+      ...streamInfo,
+      proxyStreamUrl: `/api/stream-audio?id=${videoId}`,
+    });
   } catch (err: any) {
     console.warn("[API Stream Fallback]", err.message);
     return res.json({ fallback: true, message: err.message || "Failed to resolve direct stream" });
+  }
+});
+
+// 1b. Native Direct Audio Stream Proxy (Zero IP-lockout, 100% Mobile Background Playback & Range-request support)
+app.get("/api/stream-audio", async (req, res) => {
+  const videoId = req.query.id as string;
+  if (!videoId) {
+    return res.status(400).send("Missing video ID parameter ('id')");
+  }
+
+  try {
+    const now = Date.now();
+    let streamUrl: string | null = null;
+    const cached = streamUrlCache.get(videoId);
+
+    if (cached && cached.expiresAt > now) {
+      streamUrl = cached.url;
+    } else {
+      const streamInfo = await resolveAudioStream(videoId);
+      if (streamInfo?.streamUrl) {
+        streamUrl = streamInfo.streamUrl;
+        streamUrlCache.set(videoId, { url: streamUrl, expiresAt: now + 3 * 3600 * 1000 });
+      }
+    }
+
+    if (!streamUrl) {
+      return res.status(404).send("Could not resolve audio stream");
+    }
+
+    const range = req.headers.range;
+    const upstreamHeaders: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    };
+    if (range) {
+      upstreamHeaders["Range"] = range;
+    }
+
+    let response = await fetch(streamUrl, {
+      headers: upstreamHeaders,
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok && response.status !== 206) {
+      // Cached URL might have expired, evict and refresh
+      streamUrlCache.delete(videoId);
+      const freshInfo = await resolveAudioStream(videoId);
+      if (freshInfo?.streamUrl) {
+        streamUrl = freshInfo.streamUrl;
+        streamUrlCache.set(videoId, { url: streamUrl, expiresAt: Date.now() + 3 * 3600 * 1000 });
+        response = await fetch(streamUrl, {
+          headers: upstreamHeaders,
+          signal: AbortSignal.timeout(15000),
+        });
+      }
+    }
+
+    if (!response.ok && response.status !== 206) {
+      return res.status(response.status).send("Upstream stream error");
+    }
+
+    res.status(response.status);
+    response.headers.forEach((val, key) => {
+      if (["content-type", "content-length", "content-range", "accept-ranges"].includes(key.toLowerCase())) {
+        res.setHeader(key, val);
+      }
+    });
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+
+    if (!response.body) {
+      return res.end();
+    }
+
+    Readable.fromWeb(response.body as any).pipe(res);
+  } catch (err: any) {
+    console.error(`[Stream Audio Error for ${videoId}]:`, err?.message || err);
+    if (!res.headersSent) {
+      res.status(500).send("Stream audio error");
+    }
   }
 });
 
