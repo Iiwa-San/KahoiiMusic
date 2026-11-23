@@ -2791,6 +2791,81 @@ export default function App() {
     executePlayback();
   };
 
+  // Handle incoming track requests from URL params (e.g. ?v=...) and live messages from Extension
+  useEffect(() => {
+    // 1. Check URL parameters on mount
+    try {
+      const searchStr = window.location.search;
+      if (searchStr) {
+        const params = new URLSearchParams(searchStr);
+        const v = params.get("v") || params.get("videoId");
+        if (v) {
+          const title = params.get("title") || `YouTube (${v})`;
+          const author = params.get("author") || "YouTube";
+          const dur = parseFloat(params.get("dur") || "0") || 0;
+          const shouldPlay = params.get("play") !== "false";
+          const incomingTrack: Track = {
+            id: v,
+            title,
+            author,
+            duration: dur,
+            thumbnail: `https://i.ytimg.com/vi/${v}/mqdefault.jpg`,
+          };
+          loadAndPlayTrack(incomingTrack, shouldPlay);
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      }
+    } catch { }
+
+    // 2. Listen for live incoming tracks from KahoiiMusic Extension (instant play when tab is already open)
+    const handleExtensionMsg = (event: MessageEvent) => {
+      try {
+        if (event.data && event.data.type === "KAHOII_PLAY_TRACK" && event.data.track) {
+          const t = event.data.track;
+          const trackId = t.id || t.v;
+          if (trackId) {
+            const incomingTrack: Track = {
+              id: trackId,
+              title: t.title || `YouTube (${trackId})`,
+              author: t.author || "YouTube",
+              duration: t.duration || t.dur || 0,
+              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${trackId}/mqdefault.jpg`,
+            };
+            loadAndPlayTrack(incomingTrack, true);
+          }
+        }
+      } catch { }
+    };
+
+    const handleCustomEvent = (e: Event) => {
+      try {
+        const ce = e as CustomEvent;
+        if (ce.detail) {
+          const t = ce.detail;
+          const trackId = t.id || t.v;
+          if (trackId) {
+            const incomingTrack: Track = {
+              id: trackId,
+              title: t.title || `YouTube (${trackId})`,
+              author: t.author || "YouTube",
+              duration: t.duration || t.dur || 0,
+              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${trackId}/mqdefault.jpg`,
+            };
+            loadAndPlayTrack(incomingTrack, true);
+          }
+        }
+      } catch { }
+    };
+
+    window.addEventListener("message", handleExtensionMsg);
+    window.addEventListener("kahoii-play-track", handleCustomEvent);
+    return () => {
+      window.removeEventListener("message", handleExtensionMsg);
+      window.removeEventListener("kahoii-play-track", handleCustomEvent);
+    };
+  }, []);
+
   const handleTimeUpdate = () => {
     if (activePlayerType.current === "audio" && audioRef.current) {
       const cur = audioRef.current.currentTime;
