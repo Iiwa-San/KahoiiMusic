@@ -3143,19 +3143,19 @@ export default function App() {
     handleStopRef.current = handleStop;
   });
 
-  // 1. MediaSession API: Register Standard Actions ONCE on Mount (Ensures Back/Next & Seekbar appear on Android/iOS Lock Screen & Desktop GMC)
+  // 1. MediaSession API: Register Standard Actions ONCE on Mount (Ensures Back/Next, Seek 10s & Seekbar appear on Android/iOS Lock Screen & Desktop GMC)
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
 
     try { navigator.mediaSession.setActionHandler("stop", null); } catch { }
-    try { navigator.mediaSession.setActionHandler("seekbackward", null); } catch { }
-    try { navigator.mediaSession.setActionHandler("seekforward", null); } catch { }
 
     const actionList: [MediaSessionAction, MediaSessionActionHandler][] = [
       ["play", () => handlePlayRef.current()],
       ["pause", () => handlePauseRef.current()],
       ["previoustrack", () => handlePrevRef.current()],
       ["nexttrack", () => handleNextRef.current()],
+      ["seekbackward", (details) => handleSeekBackwardRef.current(details?.seekOffset || 10)],
+      ["seekforward", (details) => handleSeekForwardRef.current(details?.seekOffset || 10)],
       ["seekto", (details) => {
         if (details.seekTime !== undefined && details.seekTime !== null) {
           seekToTimeRef.current(details.seekTime);
