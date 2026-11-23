@@ -2792,48 +2792,135 @@ export default function App() {
   };
 
   // Handle incoming track requests from URL params (e.g. ?v=...) and live messages from Extension
+  // Handle incoming track/playlist requests from URL params (e.g. ?v=...&items=...) and live messages from Extension
   useEffect(() => {
+    const playIncomingTrackOrPlaylist = async (t: any, autoPlay = true) => {
+      if (!t) return;
+      const trackId = t.id || t.v;
+      if (!trackId && (!t.items || t.items.length === 0)) return;
+
+      const currentIncomingTrack: Track = {
+        id: trackId || (t.items && t.items[0] ? (t.items[0].Id || t.items[0].id) : ""),
+        title: t.title || (trackId ? `YouTube (${trackId})` : "YouTube Playlist"),
+        author: t.author || "YouTube",
+        duration: t.duration || t.dur || 0,
+        thumbnail: t.thumbnail || (trackId ? `https://i.ytimg.com/vi/${trackId}/mqdefault.jpg` : DEFAULT_TRACK_ART),
+      };
+
+      // Case 1: Danh sách bài hát được gửi kèm trực tiếp (items array từ Extension YouTube / Popup)
+      if (t.items && Array.isArray(t.items) && t.items.length > 0) {
+        const playlistTracks: Track[] = t.items.map((it: any, idx: number) => {
+          const itemId = it.Id || it.id || it.videoId || "";
+          const dur = it.DurationSeconds || it.duration || it.dur || 0;
+          return {
+            id: itemId,
+            title: it.Title || it.title || (itemId === trackId ? currentIncomingTrack.title : `Bài hát ${idx + 1}`),
+            author: it.Author || it.author || (itemId === trackId ? currentIncomingTrack.author : "YouTube"),
+            duration: dur,
+            thumbnail: it.Thumbnail || it.thumbnail || (itemId ? `https://i.ytimg.com/vi/${itemId}/mqdefault.jpg` : DEFAULT_TRACK_ART),
+          };
+        }).filter((tr: Track) => tr.id);
+
+        if (playlistTracks.length > 0) {
+          setPlaylist(playlistTracks);
+          playlistRef.current = playlistTracks;
+          setQueueTracks(playlistTracks);
+          queueTracksRef.current = playlistTracks;
+
+          const foundIdx = playlistTracks.findIndex((item) => item.id === trackId);
+          const playIdx = foundIdx !== -1 ? foundIdx : 0;
+          setCurrentIndex(playIdx);
+          currentIndexRef.current = playIdx;
+
+          loadAndPlayTrack(playlistTracks[playIdx], autoPlay);
+          showToast(`Đã nạp toàn bộ danh sách (${playlistTracks.length} bài) vào hàng đợi!`, "success");
+          return;
+        }
+      }
+
+      // Case 2: Có listId nhưng chưa có danh sách bài chi tiết -> fetch từ backend /api/playlist
+      if (t.listId && typeof t.listId === "string") {
+        if (currentIncomingTrack.id) {
+          loadAndPlayTrack(currentIncomingTrack, autoPlay);
+        }
+        try {
+          const res = await fetch(`${API_BASE}/api/playlist?id=${encodeURIComponent(t.listId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
+              setPlaylist(data.tracks);
+              playlistRef.current = data.tracks;
+              setQueueTracks(data.tracks);
+              queueTracksRef.current = data.tracks;
+              const foundIdx = data.tracks.findIndex((item: Track) => item.id === trackId);
+              const playIdx = foundIdx !== -1 ? foundIdx : 0;
+              setCurrentIndex(playIdx);
+              currentIndexRef.current = playIdx;
+              showToast(`Đã nạp toàn bộ playlist (${data.tracks.length} bài) vào hàng đợi!`, "success");
+              return;
+            }
+          }
+        } catch (plErr) {
+          console.warn("[App] Fetch playlist error:", plErr);
+        }
+        return;
+      }
+
+      // Case 3: Nạp 1 bài đơn lẻ
+      if (currentIncomingTrack.id) {
+        loadAndPlayTrack(currentIncomingTrack, autoPlay);
+      }
+    };
+
     // 1. Check URL parameters on mount
     try {
       const searchStr = window.location.search;
       if (searchStr) {
         const params = new URLSearchParams(searchStr);
         const v = params.get("v") || params.get("videoId");
-        if (v) {
-          const title = params.get("title") || `YouTube (${v})`;
-          const author = params.get("author") || "YouTube";
-          const dur = parseFloat(params.get("dur") || "0") || 0;
-          const shouldPlay = params.get("play") !== "false";
-          const incomingTrack: Track = {
+        const list = params.get("list") || params.get("listId");
+        const itemsParam = params.get("items");
+        const title = params.get("title") || (v ? `YouTube (${v})` : "YouTube Playlist");
+        const author = params.get("author") || "YouTube";
+        const dur = parseFloat(params.get("dur") || "0") || 0;
+        const shouldPlay = params.get("play") !== "false";
+
+        let parsedItems: any[] = [];
+        if (itemsParam) {
+          const rawItems = itemsParam.split(",").filter(Boolean);
+          parsedItems = rawItems.map((raw, idx) => {
+            const [itemId, durStr] = raw.split(":");
+            return {
+              Id: itemId,
+              Title: itemId === v ? title : `Bài hát ${idx + 1}`,
+              Author: itemId === v ? author : "YouTube",
+              DurationSeconds: parseFloat(durStr || "0") || 0,
+            };
+          });
+        }
+
+        if (v || parsedItems.length > 0 || list) {
+          playIncomingTrackOrPlaylist({
+            v,
             id: v,
             title,
             author,
-            duration: dur,
-            thumbnail: `https://i.ytimg.com/vi/${v}/mqdefault.jpg`,
-          };
-          loadAndPlayTrack(incomingTrack, shouldPlay);
+            dur,
+            listId: list,
+            items: parsedItems.length > 0 ? parsedItems : undefined,
+          }, shouldPlay);
+
           const cleanUrl = window.location.origin + window.location.pathname + (window.location.hash || "");
           window.history.replaceState({}, document.title, cleanUrl);
         }
       }
     } catch { }
 
-    // 2. Listen for live incoming tracks from KahoiiMusic Extension (instant play when tab is already open)
+    // 2. Listen for live incoming tracks/playlists from KahoiiMusic Extension (instant play when tab is already open)
     const handleExtensionMsg = (event: MessageEvent) => {
       try {
         if (event.data && typeof event.data === "object" && event.data.type === "KAHOII_PLAY_TRACK" && event.data.track) {
-          const t = event.data.track;
-          const trackId = t.id || t.v;
-          if (trackId) {
-            const incomingTrack: Track = {
-              id: trackId,
-              title: t.title || `YouTube (${trackId})`,
-              author: t.author || "YouTube",
-              duration: t.duration || t.dur || 0,
-              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${trackId}/mqdefault.jpg`,
-            };
-            loadAndPlayTrack(incomingTrack, true);
-          }
+          playIncomingTrackOrPlaylist(event.data.track, true);
         }
       } catch { }
     };
@@ -2842,18 +2929,7 @@ export default function App() {
       try {
         const ce = e as CustomEvent;
         if (ce.detail && typeof ce.detail === "object") {
-          const t = ce.detail;
-          const trackId = t.id || t.v;
-          if (trackId) {
-            const incomingTrack: Track = {
-              id: trackId,
-              title: t.title || `YouTube (${trackId})`,
-              author: t.author || "YouTube",
-              duration: t.duration || t.dur || 0,
-              thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${trackId}/mqdefault.jpg`,
-            };
-            loadAndPlayTrack(incomingTrack, true);
-          }
+          playIncomingTrackOrPlaylist(ce.detail, true);
         }
       } catch { }
     };
