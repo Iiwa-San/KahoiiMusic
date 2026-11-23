@@ -517,6 +517,7 @@ export default function App() {
   const repeatModeRef = useRef<"all" | "one" | "shuffle" | "off">("all");
   const playlistRef = useRef<Track[]>([]);
   const queueTracksRef = useRef<Track[]>([]);
+  const lastIncomingTrackTimeRef = useRef<{ id: string; mode?: string; time: number } | null>(null);
   const currentIndexRef = useRef<number>(0);
   const shuffleHistoryRef = useRef<number[]>([]);
   const isTransitioningRef = useRef<boolean>(false);
@@ -2848,11 +2849,38 @@ export default function App() {
         thumbnail: t.thumbnail || (trackId ? `https://i.ytimg.com/vi/${trackId}/mqdefault.jpg` : DEFAULT_TRACK_ART),
       };
 
+      // Chống clone / duplicate do đa luồng event (postMessage + CustomEvent) hoặc click liên tục
+      const now = Date.now();
+      const incId = currentIncomingTrack.id;
+      if (
+        incId &&
+        lastIncomingTrackTimeRef.current &&
+        lastIncomingTrackTimeRef.current.id === incId &&
+        lastIncomingTrackTimeRef.current.mode === t.mode &&
+        now - lastIncomingTrackTimeRef.current.time < 1200
+      ) {
+        console.log("[App] Ignored duplicate incoming track request (debounced):", incId);
+        return;
+      }
+      lastIncomingTrackTimeRef.current = { id: incId, mode: t.mode, time: now };
+
       // Case 0: Mode 'enqueue' - Thêm vào cuối hàng đợi (vị trí N+1) mà KHÔNG làm gián đoạn bài đang nghe
       if (t.mode === "enqueue") {
         if (!currentIncomingTrack.id) return;
         const currentQueue = queueTracksRef.current;
-        const updatedQueue = [...currentQueue, currentIncomingTrack];
+        // Kiểm tra an toàn: nếu bài cuối cùng trong hàng đợi vừa trùng ID trong vòng 2s thì bỏ qua (tránh double-add)
+        const lastInQueue = currentQueue[currentQueue.length - 1];
+        if (lastInQueue && lastInQueue.id === currentIncomingTrack.id && now - ((lastInQueue as any)._enqueuedAt || 0) < 2000) {
+          console.log("[App] Track already at end of queue, ignoring duplicate enqueue:", incId);
+          return;
+        }
+
+        const trackWithTimestamp = {
+          ...currentIncomingTrack,
+          _enqueuedAt: now,
+        };
+
+        const updatedQueue = [...currentQueue, trackWithTimestamp];
         setQueueTracks(updatedQueue);
         queueTracksRef.current = updatedQueue;
         setPlaylist(updatedQueue);
@@ -3027,20 +3055,9 @@ export default function App() {
       } catch { }
     };
 
-    const handleCustomEvent = (e: Event) => {
-      try {
-        const ce = e as CustomEvent;
-        if (ce.detail && typeof ce.detail === "object") {
-          playIncomingTrackOrPlaylist(ce.detail, true);
-        }
-      } catch { }
-    };
-
     window.addEventListener("message", handleExtensionMsg);
-    window.addEventListener("kahoii-play-track", handleCustomEvent);
     return () => {
       window.removeEventListener("message", handleExtensionMsg);
-      window.removeEventListener("kahoii-play-track", handleCustomEvent);
     };
   }, []);
 
