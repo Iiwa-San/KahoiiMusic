@@ -172,7 +172,16 @@
             </div>
           </button>
 
-          <!-- Button 2: Tải về (Offline) -->
+          <!-- Button 2: Thêm vào hàng đợi (vị trí N+1, không làm gián đoạn bài đang nghe) -->
+          <button id="btn-enqueue-track" class="enqueue-btn action-main-btn" disabled>
+            <span class="btn-icon">➕</span>
+            <div class="btn-double-text">
+              <span id="btn-enqueue-title" class="main-txt">Thêm vào hàng đợi</span>
+              <span id="btn-enqueue-sub" class="sub-txt">Thêm bài này vào cuối hàng đợi (N+1)</span>
+            </div>
+          </button>
+
+          <!-- Button 3: Tải về (Offline) -->
           <button id="btn-download-track" class="download-btn action-main-btn" disabled>
             <span class="btn-icon">📥</span>
             <div class="btn-double-text">
@@ -181,7 +190,7 @@
             </div>
           </button>
 
-          <!-- Button 3: Lưu playlist vào bộ sưu tập (chỉ hiện khi có playlist) -->
+          <!-- Button 4: Lưu playlist vào bộ sưu tập (chỉ hiện khi có playlist) -->
           <button id="btn-save-collection" class="secondary-btn action-main-btn hidden">
             <span class="btn-icon">💾</span>
             <div class="btn-double-text">

@@ -48,6 +48,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnPlayQueue = document.getElementById("btn-play-queue");
   const btnPlayTitle = document.getElementById("btn-play-title");
   const btnPlaySub = document.getElementById("btn-play-sub");
+  const btnEnqueueTrack = document.getElementById("btn-enqueue-track");
+  const btnEnqueueTitle = document.getElementById("btn-enqueue-title");
+  const btnEnqueueSub = document.getElementById("btn-enqueue-sub");
   const btnDownloadTrack = document.getElementById("btn-download-track");
   const btnSaveCollection = document.getElementById("btn-save-collection");
   const btnSaveColSub = document.getElementById("btn-save-col-sub");
@@ -621,9 +624,20 @@ document.addEventListener("DOMContentLoaded", () => {
               };
 
               const getTitleFromEl = (el, fallbackIdx) => {
+                if (!el) return "";
+                const dataObj = el.data || el.__data?.data || el.__data;
+                if (dataObj) {
+                  if (dataObj.title?.simpleText) return dataObj.title.simpleText.trim();
+                  if (Array.isArray(dataObj.title?.runs)) {
+                    const t = dataObj.title.runs.map(r => r.text).join('').trim();
+                    if (t) return t;
+                  }
+                }
                 const titleEl = el.querySelector("#video-title") || el.querySelector("span#video-title") || el.querySelector("yt-formatted-string#video-title") || el.querySelector(".title");
                 if (titleEl) {
-                  const t = (titleEl.textContent || titleEl.getAttribute("title") || titleEl.innerText || "").trim();
+                  const attrT = titleEl.getAttribute("title");
+                  if (attrT && attrT.trim()) return attrT.trim();
+                  const t = (titleEl.textContent || titleEl.innerText || "").trim();
                   if (t) return t;
                 }
                 const aria = el.getAttribute("aria-label") || (el.querySelector("a") ? el.querySelector("a").getAttribute("aria-label") : null);
@@ -635,9 +649,24 @@ document.addEventListener("DOMContentLoaded", () => {
               };
 
               const getAuthorFromEl = (el) => {
-                const authorEl = el.querySelector("#byline") || el.querySelector("#channel-name") || el.querySelector("#byline-container a");
-                if (authorEl && authorEl.textContent) {
-                  const a = authorEl.textContent.trim();
+                if (!el) return "YouTube";
+                const dataObj = el.data || el.__data?.data || el.__data;
+                if (dataObj) {
+                  if (dataObj.shortBylineText?.simpleText) return dataObj.shortBylineText.simpleText.trim();
+                  if (Array.isArray(dataObj.shortBylineText?.runs)) {
+                    const a = dataObj.shortBylineText.runs.map(r => r.text).join('').trim();
+                    if (a) return a;
+                  }
+                  if (Array.isArray(dataObj.longBylineText?.runs)) {
+                    const a = dataObj.longBylineText.runs.map(r => r.text).join('').trim();
+                    if (a) return a;
+                  }
+                }
+                const authorEl = el.querySelector("#byline") || el.querySelector("span#byline") || el.querySelector("#channel-name") || el.querySelector("#byline-container a");
+                if (authorEl) {
+                  const attrA = authorEl.getAttribute("title");
+                  if (attrA && attrA.trim()) return attrA.trim();
+                  const a = (authorEl.textContent || authorEl.innerText || "").trim();
                   if (a) return a;
                 }
                 return "YouTube";
@@ -807,6 +836,9 @@ document.addEventListener("DOMContentLoaded", () => {
       btnPlayTitle.textContent = "Nạp phát cả danh sách";
       btnPlaySub.textContent = "Phát toàn bộ danh sách trên KahoiiMusic";
 
+      btnEnqueueTitle.textContent = "Thêm bài này vào hàng đợi";
+      btnEnqueueSub.textContent = "Thêm bài hiện tại vào cuối danh sách (N+1)";
+
       btnSaveCollection.classList.remove("hidden");
       btnSaveColSub.textContent = `Lưu vào BST với tên: "${currentPlaylistTitle}"`;
     } else {
@@ -814,12 +846,16 @@ document.addEventListener("DOMContentLoaded", () => {
       btnPlayTitle.textContent = "Nạp phát trên Kahoii";
       btnPlaySub.textContent = "Phát bài hát trên KahoiiMusic";
 
+      btnEnqueueTitle.textContent = "Thêm vào hàng đợi";
+      btnEnqueueSub.textContent = "Thêm bài này vào cuối hàng đợi (N+1)";
+
       btnSaveCollection.classList.add("hidden");
     }
 
     currentVideoBox.classList.remove("hidden");
     noVideoBox.classList.add("hidden");
     btnPlayQueue.disabled = false;
+    btnEnqueueTrack.disabled = !videoId;
     btnDownloadTrack.disabled = !videoId;
 
     updateDuplicateBadges();
@@ -881,6 +917,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentVideoBox.classList.add("hidden");
     noVideoBox.classList.remove("hidden");
     btnPlayQueue.disabled = true;
+    btnEnqueueTrack.disabled = true;
     btnDownloadTrack.disabled = true;
     btnSaveCollection.classList.add("hidden");
   }
@@ -996,6 +1033,61 @@ document.addEventListener("DOMContentLoaded", () => {
           } else {
             showStatus("🚀 Đã gửi bài hát sang KahoiiMusic để phát!", "success");
           }
+        } else if (res.routedTo === "prompt_app_or_web") {
+          showPromptAppOrWebDialog(trackData, res.protocolUrl || protocolUrl);
+        }
+      }
+    );
+  });
+
+  // ================= ACTION: THÊM VÀO HÀNG ĐỢI (ENQUEUE N+1 KHÔNG NGẮT BÀI ĐANG PHÁT) ================= //
+  btnEnqueueTrack.addEventListener("click", () => {
+    if (!currentTargetUrl || !currentVideoId) return;
+
+    clearStatus();
+    const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+    const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+    const durParam = currentDurationSeconds > 0 ? `&dur=${currentDurationSeconds}` : "";
+    const metaParams = `&v=${encodeURIComponent(currentVideoId)}&title=${encodeURIComponent(currentTitle || '')}&author=${encodeURIComponent(currentAuthor || '')}${durParam}&mode=enqueue`;
+    const protocolUrl = `kahoiimusic://play?url=${encodeURIComponent(currentTargetUrl)}${metaParams}${userParam}${rtParam}`;
+
+    const trackData = {
+      v: currentVideoId,
+      id: currentVideoId,
+      title: currentTitle,
+      author: currentAuthor,
+      dur: currentDurationSeconds,
+      mode: "enqueue"
+    };
+
+    chrome.runtime.sendMessage(
+      {
+        action: "ROUTE_PLAY_TRACK",
+        trackData,
+        protocolUrl
+      },
+      async (res) => {
+        if (!res) {
+          try {
+            const s = await new Promise(r => chrome.storage.local.get(['preferredTarget'], r));
+            if (s && s.preferredTarget === "web") {
+              chrome.runtime.sendMessage({ action: "OPEN_NEW_WEB_APP_TAB", trackData, play: true });
+              showStatus(`🌐 Đã thêm "${currentTitle}" vào cuối hàng đợi Web!`, "success");
+              return;
+            }
+          } catch { }
+          triggerProtocol(protocolUrl);
+          showStatus(`➕ Đã thêm "${currentTitle}" vào cuối hàng đợi KahoiiMusic!`, "success");
+          return;
+        }
+
+        if (res.routedTo === "web") {
+          showStatus(`➕ Đã thêm "${currentTitle}" vào cuối hàng đợi Web (vị trí N+1, không ngắt bài)!`, "success");
+        } else if (res.routedTo === "web_new_tab") {
+          showStatus(`🌐 Đang mở Web App và thêm vào hàng đợi...`, "success");
+        } else if (res.routedTo === "app") {
+          triggerProtocol(res.protocolUrl || protocolUrl);
+          showStatus(`🎵 Đã thêm "${currentTitle}" vào hàng đợi KahoiiMusic!`, "success");
         } else if (res.routedTo === "prompt_app_or_web") {
           showPromptAppOrWebDialog(trackData, res.protocolUrl || protocolUrl);
         }

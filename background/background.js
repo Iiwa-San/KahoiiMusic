@@ -829,6 +829,7 @@ async function focusAndPlayInWebApp(tab, trackData) {
           const author = encodeURIComponent(trackData.author || "");
           const dur = trackData.dur || trackData.duration || 0;
           let extra = "";
+          if (trackData.mode) extra += `&mode=${encodeURIComponent(trackData.mode)}`;
           if (trackData.listId) extra += `&list=${encodeURIComponent(trackData.listId)}`;
           if (trackData.items && Array.isArray(trackData.items) && trackData.items.length > 0) {
             const itemStrings = trackData.items.map(x => {
@@ -867,6 +868,9 @@ async function openNewWebAppTab(trackData, play = true, windowId = null) {
       const author = encodeURIComponent(trackData.author || "");
       const dur = trackData.dur || trackData.duration || 0;
       let extra = "";
+      if (trackData.mode) {
+        extra += `&mode=${encodeURIComponent(trackData.mode)}`;
+      }
       if (trackData.listId) {
         extra += `&list=${encodeURIComponent(trackData.listId)}`;
       }

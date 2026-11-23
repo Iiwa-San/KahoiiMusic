@@ -53,6 +53,24 @@
   box-shadow: 0 4px 14px rgba(13, 148, 136, 0.55);
 }
 
+.kahoii-btn.enqueue {
+  background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
+
+.kahoii-btn.enqueue:hover {
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.55);
+}
+
+.kahoii-btn.save-col {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.35);
+}
+
+.kahoii-btn.save-col:hover {
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.55);
+}
+
 .kahoii-btn.download {
   background: linear-gradient(135deg, #ff2d75 0%, #ec4899 100%);
   box-shadow: 0 2px 8px rgba(255, 45, 117, 0.35);

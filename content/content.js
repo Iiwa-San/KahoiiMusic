@@ -1,6 +1,7 @@
 // KahoiiMusic Extension - YouTube Content Script
 (function () {
   let isProcessingPlay = false;
+  let isProcessingEnqueue = false;
   let isProcessingSave = false;
   let isProcessingDownload = false;
   let lastUrl = null;
@@ -313,23 +314,70 @@
     const items = [];
     const currentV = getVideoId();
 
+    // 0. Thử đọc cấu trúc ytInitialData từ các thẻ script nhúng trên trang
+    try {
+      const scripts = document.querySelectorAll("script");
+      for (const s of scripts) {
+        const text = s.textContent || "";
+        if (text.includes("ytInitialData") && text.includes("playlistPanelVideoRenderer")) {
+          const match = text.match(/ytInitialData\s*=\s*({.+?});(?:\s*var\s|\s*<\/script>|$)/s) || text.match(/ytInitialData\s*=\s*({.+?});/);
+          if (match && match[1]) {
+            const rawData = JSON.parse(match[1]);
+            const plContents = rawData?.contents?.twoColumnWatchNextResults?.playlist?.playlist?.contents;
+            if (Array.isArray(plContents) && plContents.length > 0) {
+              plContents.forEach((c) => {
+                const r = c.playlistPanelVideoRenderer;
+                if (r && r.videoId) {
+                  const vid = r.videoId;
+                  let title = r.title?.simpleText || (r.title?.runs && r.title.runs.map(x => x.text).join('')) || "";
+                  let author = r.shortBylineText?.simpleText || (r.shortBylineText?.runs && r.shortBylineText.runs.map(x => x.text).join('')) || "YouTube";
+                  let dur = 0;
+                  if (r.lengthText?.simpleText) dur = parseDurationText(r.lengthText.simpleText);
+                  else if (r.lengthText?.runs?.[0]?.text) dur = parseDurationText(r.lengthText.runs[0].text);
+                  if (vid && !items.some(x => x.Id === vid)) {
+                    items.push({ Id: vid, Title: title, Author: author, DurationSeconds: dur });
+                  }
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (items.length > 0 && items.some(x => x.Title && !x.Title.startsWith("Bài hát "))) {
+      return items;
+    }
+
     const getVideoIdFromEl = (el) => {
       if (!el) return null;
+      const dataObj = el.data || el.__data?.data || el.__data;
+      if (dataObj && dataObj.videoId) return dataObj.videoId;
+      if (dataObj?.navigationEndpoint?.watchEndpoint?.videoId) return dataObj.navigationEndpoint.watchEndpoint.videoId;
       const link = el.querySelector("a#wc-endpoint") || el.querySelector("a#video-title") || el.querySelector("a#thumbnail") || el.querySelector("a[href*='v=']");
       if (link) {
         const href = link.getAttribute("href") || "";
         const match = href.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
         if (match && match[1]) return match[1];
       }
-      if (el.data && el.data.videoId) return el.data.videoId;
-      if (el.__data && el.__data.data && el.__data.data.videoId) return el.__data.data.videoId;
       return null;
     };
 
     const getTitleFromEl = (el, fallbackIdx) => {
+      if (!el) return "";
+      const dataObj = el.data || el.__data?.data || el.__data;
+      if (dataObj) {
+        if (dataObj.title?.simpleText) return dataObj.title.simpleText.trim();
+        if (Array.isArray(dataObj.title?.runs)) {
+          const t = dataObj.title.runs.map(r => r.text).join('').trim();
+          if (t) return t;
+        }
+      }
       const titleEl = el.querySelector("#video-title") || el.querySelector("span#video-title") || el.querySelector("yt-formatted-string#video-title") || el.querySelector(".title");
       if (titleEl) {
-        const t = (titleEl.textContent || titleEl.getAttribute("title") || titleEl.innerText || "").trim();
+        const attrT = titleEl.getAttribute("title");
+        if (attrT && attrT.trim()) return attrT.trim();
+        const t = (titleEl.textContent || titleEl.innerText || "").trim();
         if (t) return t;
       }
       const aria = el.getAttribute("aria-label") || (el.querySelector("a") ? el.querySelector("a").getAttribute("aria-label") : null);
@@ -341,9 +389,24 @@
     };
 
     const getAuthorFromEl = (el) => {
-      const authorEl = el.querySelector("#byline") || el.querySelector("#channel-name") || el.querySelector("#byline-container a");
-      if (authorEl && authorEl.textContent) {
-        const a = authorEl.textContent.trim();
+      if (!el) return "YouTube";
+      const dataObj = el.data || el.__data?.data || el.__data;
+      if (dataObj) {
+        if (dataObj.shortBylineText?.simpleText) return dataObj.shortBylineText.simpleText.trim();
+        if (Array.isArray(dataObj.shortBylineText?.runs)) {
+          const a = dataObj.shortBylineText.runs.map(r => r.text).join('').trim();
+          if (a) return a;
+        }
+        if (Array.isArray(dataObj.longBylineText?.runs)) {
+          const a = dataObj.longBylineText.runs.map(r => r.text).join('').trim();
+          if (a) return a;
+        }
+      }
+      const authorEl = el.querySelector("#byline") || el.querySelector("span#byline") || el.querySelector("#channel-name") || el.querySelector("#byline-container a");
+      if (authorEl) {
+        const attrA = authorEl.getAttribute("title");
+        if (attrA && attrA.trim()) return attrA.trim();
+        const a = (authorEl.textContent || authorEl.innerText || "").trim();
         if (a) return a;
       }
       return "YouTube";
@@ -604,6 +667,15 @@
         }
       }
     }
+
+    // 3. Cập nhật nút Thêm vào hàng đợi
+    const btnEnqueue = document.getElementById("kahoii-enqueue-track-btn");
+    if (btnEnqueue && !isProcessingEnqueue) {
+      const enqText = btnEnqueue.querySelector(".kahoii-btn-text");
+      const enqIcon = btnEnqueue.querySelector(".kahoii-btn-icon");
+      if (enqIcon) enqIcon.textContent = "➕";
+      if (enqText) enqText.textContent = listId ? "Thêm bài này" : "Thêm hàng đợi";
+    }
   }
 
   function injectButtons() {
@@ -798,7 +870,114 @@
 
     group.appendChild(btnPlay);
 
-    // 2. NÚT TẢI BÀI HÁT NÀY VỀ MÁY (Nghe Offline - Dù đang phát trong list vẫn tải riêng bài này)
+    // 2. NÚT THÊM VÀO HÀNG ĐỢI (Enqueue single track at position N+1 without interrupting playback)
+    if (videoId) {
+      const btnEnqueue = document.createElement("button");
+      btnEnqueue.id = "kahoii-enqueue-track-btn";
+      btnEnqueue.className = "kahoii-btn enqueue";
+      btnEnqueue.title = isPlaylist 
+        ? "Thêm riêng bài hát này vào cuối hàng đợi KahoiiMusic (vị trí N+1, không làm ngắt bài đang nghe)" 
+        : "Thêm bài hát này vào cuối hàng đợi KahoiiMusic (không ngắt bài đang nghe)";
+      btnEnqueue.innerHTML = `
+        <span class="kahoii-btn-icon">➕</span>
+        <span class="kahoii-btn-text">${isPlaylist ? "Thêm bài này" : "Thêm hàng đợi"}</span>
+      `;
+
+      btnEnqueue.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        await ensureSession();
+
+        if (isProcessingEnqueue) return;
+        isProcessingEnqueue = true;
+
+        const enqText = btnEnqueue.querySelector(".kahoii-btn-text");
+        const enqIcon = btnEnqueue.querySelector(".kahoii-btn-icon");
+
+        btnEnqueue.className = "kahoii-btn enqueue loading";
+        if (enqIcon) enqIcon.textContent = "⏳";
+        if (enqText) enqText.textContent = "Đang thêm...";
+
+        const targetUrl = window.location.href;
+        const vId = getVideoId() || "";
+        const title = getVideoTitle() || "";
+        const author = getChannelName() || "";
+        const dur = getVideoDuration() || 0;
+        const userParam = currentSession && currentSession.email ? `&user=${encodeURIComponent(currentSession.email)}` : "";
+        const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
+
+        const metaParams = `&v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}&mode=enqueue`;
+        const protocolUrl = `kahoiimusic://play?url=${encodeURIComponent(targetUrl)}${metaParams}${userParam}${rtParam}`;
+        const trackData = {
+          v: vId,
+          id: vId,
+          title: title,
+          author: author,
+          dur: dur,
+          mode: "enqueue"
+        };
+
+        chrome.runtime.sendMessage(
+          {
+            action: "ROUTE_PLAY_TRACK",
+            trackData,
+            protocolUrl
+          },
+          async (res) => {
+            if (!res) {
+              try {
+                const s = await new Promise(r => chrome.storage.local.get(['preferredTarget'], r));
+                if (s && s.preferredTarget === "web") {
+                  chrome.runtime.sendMessage({ action: "OPEN_NEW_WEB_APP_TAB", trackData, play: true });
+                  showToast("Đã thêm vào hàng đợi!", `Đã thêm "${title}" vào cuối hàng đợi Web!`, "➕");
+                  return;
+                }
+              } catch { }
+              triggerProtocol(protocolUrl);
+              showToast("Đã thêm vào hàng đợi!", `Đã thêm "${title}" vào cuối hàng đợi KahoiiMusic!`, "➕");
+              return;
+            }
+
+            if (res.routedTo === "web") {
+              showToast("Đã thêm vào hàng đợi!", `Đã thêm "${title}" vào cuối hàng đợi Web (vị trí N+1)!`, "➕");
+            } else if (res.routedTo === "web_new_tab") {
+              showToast("Đang mở Web App!", `Đang mở và thêm "${title}" vào hàng đợi...`, "🌐");
+            } else if (res.routedTo === "app") {
+              triggerProtocol(res.protocolUrl || protocolUrl);
+              showToast("Đã gửi sang KahoiiMusic!", `Đã thêm "${title}" vào cuối hàng đợi app!`, "🎵");
+            } else if (res.routedTo === "prompt_app_or_web") {
+              chrome.runtime.sendMessage({ action: "OPEN_NEW_WEB_APP_TAB", trackData, play: true });
+              showToast("Đã thêm vào hàng đợi!", `Đang chuyển sang Web App...`, "🌐");
+            }
+          }
+        );
+
+        const resetEnqBtn = () => {
+          isProcessingEnqueue = false;
+          btnEnqueue.className = "kahoii-btn enqueue";
+          if (enqIcon) enqIcon.textContent = "➕";
+          if (enqText) enqText.textContent = isPlaylist ? "Thêm bài này" : "Thêm hàng đợi";
+        };
+
+        const safetyTimer = setTimeout(resetEnqBtn, 3000);
+
+        setTimeout(() => {
+          btnEnqueue.className = "kahoii-btn success";
+          if (enqIcon) enqIcon.textContent = "✅";
+          if (enqText) enqText.textContent = "Đã thêm";
+
+          setTimeout(() => {
+            clearTimeout(safetyTimer);
+            resetEnqBtn();
+          }, 1500);
+        }, 700);
+      });
+
+      group.appendChild(btnEnqueue);
+    }
+
+    // 3. NÚT TẢI BÀI HÁT NÀY VỀ MÁY (Nghe Offline - Dù đang phát trong list vẫn tải riêng bài này)
     if (videoId) {
       const btnDownload = document.createElement("button");
       btnDownload.id = "kahoii-download-track-btn";

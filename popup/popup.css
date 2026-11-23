@@ -638,6 +638,18 @@ body {
   transform: translateY(-1px);
 }
 
+.enqueue-btn {
+  background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+}
+
+.enqueue-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.45);
+  transform: translateY(-1px);
+}
+
 .download-btn {
   background: var(--blue-gradient);
   color: #fff;
