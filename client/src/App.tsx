@@ -524,6 +524,10 @@ export default function App() {
   const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
   const [dragOverQueueIndex, setDragOverQueueIndex] = useState<number | null>(null);
   const touchDragItemRef = useRef<{ index: number; startY: number } | null>(null);
+  // Drag and Drop Sidebar 1 Reordering State
+  const [draggedSidebarIndex, setDraggedSidebarIndex] = useState<number | null>(null);
+  const [dragOverSidebarIndex, setDragOverSidebarIndex] = useState<number | null>(null);
+  const touchSidebarDragItemRef = useRef<{ index: number; startY: number } | null>(null);
   const shuffleHistoryRef = useRef<number[]>([]);
   const isTransitioningRef = useRef<boolean>(false);
   const lastEndedTrackIdRef = useRef<string | null>(null);
@@ -1650,6 +1654,20 @@ export default function App() {
         setCurrentIndex(newCurrentIdx);
         currentIndexRef.current = newCurrentIdx;
       }
+    }
+
+    // If user is playing a custom playlist from library, sync reordered tracks into the playlist
+    if (activeLibraryPlaylistId) {
+      setLibraryData((prev) => {
+        const updated = prev.playlists.map((pl, idx) => {
+          if ((pl.id || `pl-${idx}`) === activeLibraryPlaylistId || pl.name === activeLibraryPlaylistId) {
+            return { ...pl, items: newQueue };
+          }
+          return pl;
+        });
+        persistLibraryData({ playlists: updated });
+        return { ...prev, playlists: updated };
+      });
     }
   };
 
@@ -3851,6 +3869,104 @@ export default function App() {
     return items;
   };
 
+  // Reorder Sidebar 1 items via Drag & Drop (Playlists, Favorites, Offline, History)
+  const reorderSidebarItems = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    const currentItems = getSidebarItems();
+    if (fromIndex >= currentItems.length || toIndex >= currentItems.length) return;
+
+    if (isLeftSorted) {
+      setIsLeftSorted(false);
+    }
+
+    const sourceItem = currentItems[fromIndex];
+    const targetItem = currentItems[toIndex];
+    if (!sourceItem || !targetItem) return;
+
+    if (activeLeftTab === "favorites") {
+      const updated = [...libraryData.favorites];
+      const realFrom = updated.findIndex((t) => t.id === sourceItem.id);
+      const realTo = updated.findIndex((t) => t.id === targetItem.id);
+      if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
+        const [moved] = updated.splice(realFrom, 1);
+        updated.splice(realTo, 0, moved);
+        setLibraryData((prev) => ({ ...prev, favorites: updated }));
+        persistLibraryData({ favorites: updated });
+      }
+    } else if (activeLeftTab === "library") {
+      const updated = [...libraryData.playlists];
+      const realFrom = updated.findIndex((p, idx) => (p.id || `pl-${idx}`) === sourceItem.id || p.name === sourceItem.title);
+      const realTo = updated.findIndex((p, idx) => (p.id || `pl-${idx}`) === targetItem.id || p.name === targetItem.title);
+      if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
+        const [moved] = updated.splice(realFrom, 1);
+        updated.splice(realTo, 0, moved);
+        setLibraryData((prev) => ({ ...prev, playlists: updated }));
+        persistLibraryData({ playlists: updated });
+      }
+    } else if (activeLeftTab === "offline") {
+      const updatedSaved = [...libraryData.savedTracks];
+      const realFrom = updatedSaved.findIndex((t) => t.id === sourceItem.id);
+      const realTo = updatedSaved.findIndex((t) => t.id === targetItem.id);
+      if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
+        const [moved] = updatedSaved.splice(realFrom, 1);
+        updatedSaved.splice(realTo, 0, moved);
+        setLibraryData((prev) => ({ ...prev, savedTracks: updatedSaved }));
+        persistLibraryData({ savedTracks: updatedSaved });
+      } else if (realFrom === -1 && sourceItem.rawTrack && realTo !== -1) {
+        updatedSaved.splice(realTo, 0, sourceItem.rawTrack);
+        setLibraryData((prev) => ({ ...prev, savedTracks: updatedSaved }));
+        persistLibraryData({ savedTracks: updatedSaved });
+      }
+
+      const realOffFrom = offlineTracks.findIndex((t) => t.id === sourceItem.id);
+      const realOffTo = offlineTracks.findIndex((t) => t.id === targetItem.id);
+      if (realOffFrom !== -1 && realOffTo !== -1 && realOffFrom !== realOffTo) {
+        const updatedOff = [...offlineTracks];
+        const [movedOff] = updatedOff.splice(realOffFrom, 1);
+        updatedOff.splice(realOffTo, 0, movedOff);
+        setOfflineTracks(updatedOff);
+      }
+    } else if (activeLeftTab === "history") {
+      const updated = [...libraryData.history];
+      const realFrom = updated.findIndex((t) => t.id === sourceItem.id);
+      const realTo = updated.findIndex((t) => t.id === targetItem.id);
+      if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
+        const [moved] = updated.splice(realFrom, 1);
+        updated.splice(realTo, 0, moved);
+        setLibraryData((prev) => ({ ...prev, history: updated }));
+        persistLibraryData({ history: updated });
+      }
+    }
+  };
+
+  const handleSidebarTouchStart = (index: number, e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchSidebarDragItemRef.current = { index, startY: touch.clientY };
+    setDraggedSidebarIndex(index);
+  };
+
+  const handleSidebarTouchMove = (e: React.TouchEvent) => {
+    if (!touchSidebarDragItemRef.current) return;
+    const touch = e.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    const sidebarItem = element?.closest("[data-sidebar-index]");
+    if (sidebarItem) {
+      const targetIdx = Number(sidebarItem.getAttribute("data-sidebar-index"));
+      if (!isNaN(targetIdx) && targetIdx !== dragOverSidebarIndex) {
+        setDragOverSidebarIndex(targetIdx);
+      }
+    }
+  };
+
+  const handleSidebarTouchEnd = () => {
+    if (touchSidebarDragItemRef.current !== null && dragOverSidebarIndex !== null) {
+      reorderSidebarItems(touchSidebarDragItemRef.current.index, dragOverSidebarIndex);
+    }
+    touchSidebarDragItemRef.current = null;
+    setDraggedSidebarIndex(null);
+    setDragOverSidebarIndex(null);
+  };
+
   // Real tracks to display in Discovery Feed (Center Canvas)
   const recentTracksToDisplay = libraryData.history.slice(0, 12);
   const recommendedTracksToDisplay =
@@ -4448,9 +4564,42 @@ export default function App() {
                 {getSidebarItems().length > 0 ? (
                   getSidebarItems().map((item, idx) => {
                     const itemId = item.id || (item.rawPlaylist?.id || item.rawPlaylist?.name) || `sidebar-item-${idx}`;
+                    const isDragging = draggedSidebarIndex === idx;
+                    const isDragOver = dragOverSidebarIndex === idx && draggedSidebarIndex !== idx;
+                    const isSelected =
+                      (activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
+                      ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id);
                     return (
                       <div
                         key={itemId}
+                        data-sidebar-index={idx}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedSidebarIndex(idx);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", idx.toString());
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (dragOverSidebarIndex !== idx) setDragOverSidebarIndex(idx);
+                        }}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          setDragOverSidebarIndex(idx);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedSidebarIndex !== null && draggedSidebarIndex !== idx) {
+                            reorderSidebarItems(draggedSidebarIndex, idx);
+                          }
+                          setDraggedSidebarIndex(null);
+                          setDragOverSidebarIndex(null);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedSidebarIndex(null);
+                          setDragOverSidebarIndex(null);
+                        }}
                         onClick={() => {
                           if (item.rawTrack) {
                             if (activeLeftTab === "favorites") {
@@ -4484,11 +4633,15 @@ export default function App() {
                             playTrackDirectly(playlist[idx % playlist.length]);
                           }
                         }}
-                        className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group ${(activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                          ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)
-                          ? "active-queue-beam shadow-md scale-[1.01]"
-                          : "hover:bg-white/10 hover:translate-x-1"
-                          }`}
+                        className={`flex items-center gap-3.5 p-2 rounded-2xl transition-all duration-200 cursor-pointer group ${
+                          isDragging ? "opacity-30 scale-[0.98]" : ""
+                        } ${
+                          isDragOver
+                            ? "ring-2 ring-[var(--theme-accent)] bg-white/10 rounded-2xl"
+                            : isSelected
+                            ? "active-queue-beam shadow-md scale-[1.01]"
+                            : "hover:bg-white/10 hover:translate-x-1"
+                        }`}
                         style={{ marginBottom: "2px" }}
                       >
                         <div className="relative w-11 h-11 flex-shrink-0">
@@ -4500,28 +4653,26 @@ export default function App() {
                             }}
                             className="w-full h-full rounded-[14px] object-cover border border-white/10 shadow-sm"
                           />
-                          {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                            ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
-                              <div className="absolute inset-0 bg-black/55 rounded-[14px] flex items-center justify-center">
-                                {isPlaying ? (
-                                  <Volume2 className="w-5 h-5 theme-accent-text animate-pulse" />
-                                ) : (
-                                  <Play className="w-4 h-4 fill-current text-white/90" />
-                                )}
-                              </div>
-                            )}
+                          {isSelected && (
+                            <div className="absolute inset-0 bg-black/55 rounded-[14px] flex items-center justify-center">
+                              {isPlaying ? (
+                                <Volume2 className="w-5 h-5 theme-accent-text animate-pulse" />
+                              ) : (
+                                <Play className="w-4 h-4 fill-current text-white/90" />
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-1">
                             <p className="text-[13.5px] font-semibold text-white group-hover:theme-accent-text truncate transition-colors">
                               {item.title}
                             </p>
-                            {((activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
-                              ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id)) && (
-                                <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider flex-shrink-0">
-                                  {isPlaying ? "Đang phát" : "Tạm dừng"}
-                                </span>
-                              )}
+                            {isSelected && (
+                              <span className="text-[10px] uppercase font-bold theme-accent-text tracking-wider flex-shrink-0">
+                                {isPlaying ? "Đang phát" : "Tạm dừng"}
+                              </span>
+                            )}
                           </div>
                           <p className="text-[11.5px] text-purple-200/60 truncate mt-1">
                             {item.subtitle}
@@ -4559,6 +4710,26 @@ export default function App() {
                             </button>
                           </div>
                         )}
+                        <div
+                          draggable
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            setDraggedSidebarIndex(idx);
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", idx.toString());
+                          }}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            handleSidebarTouchStart(idx, e);
+                          }}
+                          onTouchMove={handleSidebarTouchMove}
+                          onTouchEnd={handleSidebarTouchEnd}
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/80 active:text-[var(--theme-accent)] transition-colors flex-shrink-0 touch-none ml-auto"
+                          title="Nắm kéo để thay đổi thứ tự"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
                       </div>
                     );
                   })
