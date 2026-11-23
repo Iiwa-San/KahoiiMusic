@@ -1115,6 +1115,8 @@ export default function App() {
   const [showLibrarySubmenu, setShowLibrarySubmenu] = useState<boolean>(false);
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState<boolean>(false);
   const [newPlaylistName, setNewPlaylistName] = useState<string>("");
+  const [isSaveQueueModalOpen, setIsSaveQueueModalOpen] = useState<boolean>(false);
+  const [queuePlaylistName, setQueuePlaylistName] = useState<string>("");
   const playerMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Downloaded track IDs (persisted locally)
@@ -1575,6 +1577,45 @@ export default function App() {
     setIsCreatingPlaylist(false);
     setNewPlaylistName("");
     showToast(`Đã tạo playlist "${newPl.name}" và thêm bài hát!`, "success");
+    await persistLibraryData({ playlists: updatedPlaylists });
+  };
+
+  // Open modal to save current queue as a new playlist
+  const openSaveQueueModal = () => {
+    if (!queueTracks || queueTracks.length === 0) {
+      showToast("Hàng đợi đang trống!", "warning");
+      return;
+    }
+    const dateStr = new Date().toLocaleDateString("vi-VN");
+    setQueuePlaylistName(`Danh sách phát ${dateStr}`);
+    setIsSaveQueueModalOpen(true);
+  };
+
+  // Save current queue tracks as a new playlist in Library
+  const handleSaveQueueToPlaylist = async () => {
+    const name = queuePlaylistName.trim();
+    if (!name) {
+      showToast("Vui lòng nhập tên danh sách phát!", "warning");
+      return;
+    }
+    if (!queueTracks || queueTracks.length === 0) {
+      showToast("Hàng đợi đang trống!", "warning");
+      setIsSaveQueueModalOpen(false);
+      return;
+    }
+
+    const newPl = {
+      id: `pl_${Date.now()}`,
+      name: name,
+      created: new Date().toISOString(),
+      items: [...queueTracks],
+    };
+
+    const updatedPlaylists = [newPl, ...libraryData.playlists];
+    setLibraryData((prev) => ({ ...prev, playlists: updatedPlaylists }));
+    setIsSaveQueueModalOpen(false);
+    setQueuePlaylistName("");
+    showToast(`Đã lưu ${queueTracks.length} bài vào danh sách "${newPl.name}" trong Thư viện!`, "success");
     await persistLibraryData({ playlists: updatedPlaylists });
   };
 
@@ -2807,6 +2848,27 @@ export default function App() {
         thumbnail: t.thumbnail || (trackId ? `https://i.ytimg.com/vi/${trackId}/mqdefault.jpg` : DEFAULT_TRACK_ART),
       };
 
+      // Case 0: Mode 'enqueue' - Thêm vào cuối hàng đợi (vị trí N+1) mà KHÔNG làm gián đoạn bài đang nghe
+      if (t.mode === "enqueue") {
+        if (!currentIncomingTrack.id) return;
+        const currentQueue = queueTracksRef.current;
+        const updatedQueue = [...currentQueue, currentIncomingTrack];
+        setQueueTracks(updatedQueue);
+        queueTracksRef.current = updatedQueue;
+        setPlaylist(updatedQueue);
+        playlistRef.current = updatedQueue;
+
+        showToast(`Đã thêm "${currentIncomingTrack.title}" vào cuối hàng đợi (#${updatedQueue.length})!`, "success");
+
+        // Nếu hiện tại chưa có bài nào phát thì mới kích hoạt phát bài mới này
+        if (!currentTrackRef.current) {
+          setCurrentIndex(0);
+          currentIndexRef.current = 0;
+          loadAndPlayTrack(currentIncomingTrack, true);
+        }
+        return;
+      }
+
       // Case 1: Danh sách bài hát được gửi kèm trực tiếp (items array từ Extension YouTube / Popup)
       if (t.items && Array.isArray(t.items) && t.items.length > 0) {
         const playlistTracks: Track[] = t.items.map((it: any, idx: number) => {
@@ -2834,6 +2896,44 @@ export default function App() {
 
           loadAndPlayTrack(playlistTracks[playIdx], autoPlay);
           showToast(`Đã nạp toàn bộ danh sách (${playlistTracks.length} bài) vào hàng đợi!`, "success");
+
+          // Nếu có listId và các bài có placeholder (Bài hát X / YouTube), enrich toàn bộ metadata từ backend API
+          const hasPlaceholders = playlistTracks.some((tr) => tr.title.startsWith("Bài hát ") || tr.author === "YouTube");
+          if (t.listId && hasPlaceholders) {
+            fetch(`${API_BASE}/api/playlist?id=${encodeURIComponent(t.listId)}`)
+              .then((res) => (res.ok ? res.json() : null))
+              .then((data) => {
+                if (data && Array.isArray(data.tracks) && data.tracks.length > 0) {
+                  const enrichedMap = new Map<string, Track>(data.tracks.map((tr: Track): [string, Track] => [tr.id, tr]));
+                  const enrichedList = playlistRef.current.map((tr: Track) => {
+                    const match = enrichedMap.get(tr.id);
+                    if (match) {
+                      return {
+                        ...tr,
+                        title: match.title || tr.title,
+                        author: match.author || tr.author,
+                        thumbnail: match.thumbnail || tr.thumbnail,
+                        duration: match.duration || tr.duration,
+                      };
+                    }
+                    return tr;
+                  });
+                  setPlaylist(enrichedList);
+                  playlistRef.current = enrichedList;
+                  setQueueTracks(enrichedList);
+                  queueTracksRef.current = enrichedList;
+                  if (currentTrackRef.current) {
+                    const enrichedCurrent = enrichedMap.get(currentTrackRef.current.id);
+                    if (enrichedCurrent) {
+                      setCurrentTrack((prev) =>
+                        prev ? { ...prev, title: enrichedCurrent.title || prev.title, author: enrichedCurrent.author || prev.author } : prev
+                      );
+                    }
+                  }
+                }
+              })
+              .catch((err) => console.warn("[App] Enrich playlist error:", err));
+          }
           return;
         }
       }
@@ -2884,6 +2984,7 @@ export default function App() {
         const author = params.get("author") || "YouTube";
         const dur = parseFloat(params.get("dur") || "0") || 0;
         const shouldPlay = params.get("play") !== "false";
+        const mode = params.get("mode") || undefined;
 
         let parsedItems: any[] = [];
         if (itemsParam) {
@@ -2907,6 +3008,7 @@ export default function App() {
             author,
             dur,
             listId: list,
+            mode,
             items: parsedItems.length > 0 ? parsedItems : undefined,
           }, shouldPlay);
 
@@ -6641,13 +6743,26 @@ export default function App() {
                   {showFullQueueMobile ? `Hàng đợi (${queueTracks.length})` : "Bài tiếp theo"}
                 </span>
                 {queueTracks.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFullQueueMobile(!showFullQueueMobile)}
-                    className="text-xs theme-accent-text hover:brightness-125 font-semibold cursor-pointer transition-colors"
-                  >
-                    {showFullQueueMobile ? "Chỉ hiện bài kế" : `Xem tất cả (${queueTracks.length})`}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {showFullQueueMobile && (
+                      <button
+                        type="button"
+                        onClick={openSaveQueueModal}
+                        title="Lưu toàn bộ hàng đợi thành Danh sách phát trong Thư viện"
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-white/10 hover:border-white/30 text-white/70 hover:text-white font-medium text-xs cursor-pointer transition-colors"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5 theme-accent-text" />
+                        <span>Lưu list</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowFullQueueMobile(!showFullQueueMobile)}
+                      className="text-xs theme-accent-text hover:brightness-125 font-semibold cursor-pointer transition-colors"
+                    >
+                      {showFullQueueMobile ? "Chỉ hiện bài kế" : `Xem tất cả (${queueTracks.length})`}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -7297,25 +7412,36 @@ export default function App() {
               <span>Hàng đợi {queueTracks.length > 0 && `(${queueTracks.length})`}</span>
             </span>
             {queueTracks.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const nextSorted = !isQueueSorted;
-                  setIsQueueSorted(nextSorted);
-                  if (nextSorted) {
-                    setQueueTracks((prev) => [...prev].sort(compareSortItems));
-                  } else {
-                    setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
-                  }
-                }}
-                title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${
-                  isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
-                }`}
-              >
-                <ArrowDownAZ className="w-3.5 h-3.5" />
-                <span>Sort</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={openSaveQueueModal}
+                  title="Lưu toàn bộ hàng đợi thành Danh sách phát trong Thư viện"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-white/10 hover:border-white/30 text-white/60 hover:text-white transition-all text-[11px] cursor-pointer"
+                >
+                  <FolderPlus className="w-3.5 h-3.5 theme-accent-text" />
+                  <span>Lưu list</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextSorted = !isQueueSorted;
+                    setIsQueueSorted(nextSorted);
+                    if (nextSorted) {
+                      setQueueTracks((prev) => [...prev].sort(compareSortItems));
+                    } else {
+                      setQueueTracks(playlist.length > 0 ? [...playlist] : [...queueTracks]);
+                    }
+                  }}
+                  title={isQueueSorted ? "Tắt sắp xếp (Hiện theo thứ tự mặc định)" : "Sắp xếp (Ký tự khác lên đầu, Latin A-Z)"}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all text-[11px] cursor-pointer ${
+                    isQueueSorted ? "theme-badge-active" : "border-white/10 hover:border-white/30 text-white/60 hover:text-white"
+                  }`}
+                >
+                  <ArrowDownAZ className="w-3.5 h-3.5" />
+                  <span>Sort</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -7507,6 +7633,75 @@ export default function App() {
           <span className="text-[10px]">Đang phát</span>
         </button>
       </nav>
+
+      {/* ========================================================================= */}
+      {/* MODAL: LƯU HÀNG ĐỢI THÀNH PLAYLIST MỚI VÀO THƯ VIỆN                        */}
+      {/* ========================================================================= */}
+      {isSaveQueueModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="w-full max-w-[420px] flex flex-col p-6 rounded-[28px] relative shadow-2xl border theme-accent-border overflow-hidden backdrop-blur-2xl bg-[var(--theme-panel-bg)]/95 transition-all duration-300">
+            {/* Ambient dynamic glowing orbs */}
+            <div className="absolute -top-16 -right-16 w-52 h-52 rounded-full blur-3xl opacity-35 pointer-events-none theme-accent-bg" />
+            <div className="absolute -bottom-16 -left-16 w-52 h-52 rounded-full blur-3xl opacity-20 pointer-events-none theme-accent-bg" />
+
+            <div className="flex items-center justify-between pb-3.5 border-b border-white/10 relative z-20">
+              <span className="font-extrabold text-sm theme-accent-text flex items-center gap-2">
+                <FolderPlus className="w-4 h-4" />
+                Lưu hàng đợi thành Playlist
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsSaveQueueModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/60 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-4 flex flex-col gap-3 relative z-20">
+              <p className="text-xs text-white/70 leading-relaxed">
+                Lưu toàn bộ <strong className="text-white font-bold">{queueTracks.length} bài hát</strong> đang có trong hàng đợi thành một danh sách phát độc lập mới trong Thư viện.
+              </p>
+              <div>
+                <label className="text-[11px] font-semibold text-white/50 block mb-1.5 uppercase tracking-wider">
+                  Tên danh sách phát
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={queuePlaylistName}
+                  onChange={(e) => setQueuePlaylistName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveQueueToPlaylist();
+                    if (e.key === "Escape") setIsSaveQueueModalOpen(false);
+                  }}
+                  placeholder="Nhập tên playlist..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:border-[var(--theme-accent)] focus:outline-none text-sm text-white placeholder-white/30"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10 relative z-20">
+              <button
+                type="button"
+                onClick={() => setIsSaveQueueModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white/60 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQueueToPlaylist}
+                disabled={!queuePlaylistName.trim()}
+                className="px-4 py-2 rounded-xl text-xs font-bold theme-accent-btn shadow-lg cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+                <span>Lưu vào Thư viện</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3. USER PROFILE MODAL (Clicked from "avatar" button)                      */}
