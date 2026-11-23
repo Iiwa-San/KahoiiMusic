@@ -2821,14 +2821,6 @@ export default function App() {
     }
 
     if (!currentTrack) {
-      if (trendingTracks.length > 0) {
-        setPlaylist(trendingTracks);
-        setQueueTracks(trendingTracks);
-        setCurrentIndex(0);
-        loadAndPlayTrack(trendingTracks[0], true);
-      } else {
-        showToast("Đang tải dữ liệu, vui lòng đợi trong giây lát...", "info");
-      }
       return;
     }
 
@@ -2855,6 +2847,7 @@ export default function App() {
   };
 
   const cycleRepeatMode = () => {
+    if (!currentTrack) return;
     let nextMode: "all" | "one" | "shuffle" | "off";
     if (repeatMode === "all") nextMode = "one";
     else if (repeatMode === "one") nextMode = "shuffle";
@@ -2956,6 +2949,7 @@ export default function App() {
   };
 
   const handleNext = () => {
+    if (!currentTrack) return;
     const activeQueue =
       queueTracks.length > 0
         ? queueTracks
@@ -3007,6 +3001,7 @@ export default function App() {
   };
 
   const handlePrev = () => {
+    if (!currentTrack) return;
     const activeQueue =
       queueTracks.length > 0
         ? queueTracks
@@ -3075,10 +3070,12 @@ export default function App() {
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!currentTrack) return;
     seekToTime(parseFloat(e.target.value));
   };
 
   const handleSeekBackward = (offset = 10) => {
+    if (!currentTrack) return;
     const cur = activePlayerType.current === "audio" && audioRef.current
       ? audioRef.current.currentTime
       : currentTime;
@@ -3086,6 +3083,7 @@ export default function App() {
   };
 
   const handleSeekForward = (offset = 10) => {
+    if (!currentTrack) return;
     const cur = activePlayerType.current === "audio" && audioRef.current
       ? audioRef.current.currentTime
       : currentTime;
@@ -4711,7 +4709,8 @@ export default function App() {
                       step={0.5}
                       value={currentTime}
                       onChange={handleSeek}
-                      className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
+                      disabled={!currentTrack}
+                      className={`w-full h-full opacity-0 z-10 touch-none ${!currentTrack ? "cursor-not-allowed pointer-events-none" : "cursor-pointer"}`}
                     />
                     <div
                       className="absolute w-4 h-4 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
@@ -4763,22 +4762,27 @@ export default function App() {
                   {/* 2. Repeat / Shuffle */}
                   <button
                     type="button"
+                    disabled={!currentTrack}
                     onClick={cycleRepeatMode}
                     title={
-                      repeatMode === "all"
-                        ? "Lặp danh sách"
-                        : repeatMode === "one"
-                          ? "Lặp 1 bài"
-                          : repeatMode === "shuffle"
-                            ? "Phát ngẫu nhiên"
-                            : "Tắt lặp lại"
+                      !currentTrack
+                        ? "Chưa chọn bài hát"
+                        : repeatMode === "all"
+                          ? "Lặp danh sách"
+                          : repeatMode === "one"
+                            ? "Lặp 1 bài"
+                            : repeatMode === "shuffle"
+                              ? "Phát ngẫu nhiên"
+                              : "Tắt lặp lại"
                     }
-                    className={`p-2 transition-all cursor-pointer hover:scale-115 active:scale-90 ${
-                      repeatMode === "all" || repeatMode === "one"
-                        ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)]"
-                        : repeatMode === "shuffle"
-                          ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)]"
-                          : "text-white/60 hover:text-white"
+                    className={`p-2 transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                        : repeatMode === "all" || repeatMode === "one"
+                          ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)] cursor-pointer hover:scale-115 active:scale-90"
+                          : repeatMode === "shuffle"
+                            ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)] cursor-pointer hover:scale-115 active:scale-90"
+                            : "text-white/60 hover:text-white cursor-pointer hover:scale-115 active:scale-90"
                     }`}
                   >
                     {repeatMode === "one" ? (
@@ -4793,9 +4797,14 @@ export default function App() {
                   {/* 3. Prev */}
                   <button
                     type="button"
+                    disabled={!currentTrack}
                     onClick={handlePrev}
-                    title="Bài trước"
-                    className="p-2 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    title={!currentTrack ? "Chưa chọn bài hát" : "Bài trước"}
+                    className={`p-2 transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                        : "text-white/80 hover:text-white cursor-pointer hover:scale-115 active:scale-90"
+                    }`}
                   >
                     <SkipBack className="w-6 h-6 fill-current" />
                   </button>
@@ -4804,12 +4813,16 @@ export default function App() {
                   <button
                     type="button"
                     onClick={togglePlayPause}
-                    disabled={isLoading}
-                    title={isPlaying ? "Tạm dừng" : "Phát"}
-                    className="w-13 h-13 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-white shadow-2xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                    disabled={!currentTrack || isLoading}
+                    title={!currentTrack ? "Chưa chọn bài hát" : isPlaying ? "Tạm dừng" : "Phát"}
+                    className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-white transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none shadow-none"
+                        : "shadow-2xl hover:scale-110 active:scale-95 cursor-pointer"
+                    }`}
                     style={{
                       background: "var(--theme-btn-gradient)",
-                      boxShadow: "0 4px 24px rgba(236,72,153,0.6)",
+                      boxShadow: !currentTrack ? "none" : "0 4px 24px rgba(236,72,153,0.6)",
                     }}
                   >
                     {isLoading ? (
@@ -4824,9 +4837,14 @@ export default function App() {
                   {/* 5. Next */}
                   <button
                     type="button"
+                    disabled={!currentTrack}
                     onClick={handleNext}
-                    title="Bài kế tiếp"
-                    className="p-2 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    title={!currentTrack ? "Chưa chọn bài hát" : "Bài kế tiếp"}
+                    className={`p-2 transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                        : "text-white/80 hover:text-white cursor-pointer hover:scale-115 active:scale-90"
+                    }`}
                   >
                     <SkipForward className="w-6 h-6 fill-current" />
                   </button>
@@ -4835,14 +4853,21 @@ export default function App() {
                   <div className="relative">
                     <button
                       type="button"
+                      disabled={!currentTrack}
                       onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
                       title={
-                        sleepTimerSecondsLeft
-                          ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
-                          : "Hẹn giờ tắt nhạc"
+                        !currentTrack
+                          ? "Chưa chọn bài hát"
+                          : sleepTimerSecondsLeft
+                            ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
+                            : "Hẹn giờ tắt nhạc"
                       }
-                      className={`p-2 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${
-                        sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
+                      className={`p-2 transition-all relative ${
+                        !currentTrack
+                          ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                          : sleepTimerSecondsLeft
+                            ? "theme-accent-text font-bold cursor-pointer hover:scale-110 active:scale-90"
+                            : "text-white/60 hover:text-white cursor-pointer hover:scale-110 active:scale-90"
                       }`}
                     >
                       <Clock className="w-5 h-5" />
@@ -4896,7 +4921,11 @@ export default function App() {
                             ? "Bỏ yêu thích"
                             : "Thêm vào yêu thích"
                     }
-                    className="p-2 transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    className={`p-2 transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                        : "cursor-pointer hover:scale-115 active:scale-90"
+                    }`}
                   >
                     <Heart
                       className={`w-6 h-6 transition-transform ${
@@ -6155,8 +6184,12 @@ export default function App() {
                   type="button"
                   disabled={!currentTrack}
                   onClick={toggleCurrentFavorite}
-                  className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-black/50 hover:bg-black/75 backdrop-blur-md flex items-center justify-center z-30 cursor-pointer transition-all border border-white/15 shadow-sm"
-                  title="Yêu thích"
+                  className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-lg backdrop-blur-md flex items-center justify-center z-30 transition-all border border-white/15 shadow-sm ${
+                    !currentTrack
+                      ? "opacity-35 cursor-not-allowed pointer-events-none bg-black/20"
+                      : "bg-black/50 hover:bg-black/75 cursor-pointer"
+                  }`}
+                  title={!currentTrack ? "Chưa chọn bài hát" : "Yêu thích"}
                 >
                   <Heart
                     className={`w-4 h-4 transition-transform ${userSession?.isLoggedIn && currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id)
@@ -6191,7 +6224,8 @@ export default function App() {
                       step={0.5}
                       value={currentTime}
                       onChange={handleSeek}
-                      className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
+                      disabled={!currentTrack}
+                      className={`w-full h-full opacity-0 z-10 touch-none ${!currentTrack ? "cursor-not-allowed pointer-events-none" : "cursor-pointer"}`}
                     />
                   </div>
                   <div className="flex justify-between text-[8.5px] text-white/70 font-mono px-0.5 -mt-1 font-medium select-none drop-shadow">
@@ -6205,14 +6239,18 @@ export default function App() {
                   {/* Loop / Shuffle */}
                   <button
                     type="button"
+                    disabled={!currentTrack}
                     onClick={cycleRepeatMode}
-                    title="Chế độ lặp"
-                    className={`p-1 transition-all cursor-pointer hover:scale-115 active:scale-90 ${repeatMode === "all" || repeatMode === "one"
-                      ? "theme-accent-text"
-                      : repeatMode === "shuffle"
-                        ? "theme-sec-accent-text"
-                        : "text-white/60 hover:text-white"
-                      }`}
+                    title={!currentTrack ? "Chưa chọn bài hát" : "Chế độ lặp"}
+                    className={`p-1 transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                        : repeatMode === "all" || repeatMode === "one"
+                          ? "theme-accent-text cursor-pointer hover:scale-115 active:scale-90"
+                          : repeatMode === "shuffle"
+                            ? "theme-sec-accent-text cursor-pointer hover:scale-115 active:scale-90"
+                            : "text-white/60 hover:text-white cursor-pointer hover:scale-115 active:scale-90"
+                    }`}
                   >
                     {repeatMode === "one" ? (
                       <Repeat1 className="w-4 h-4" />
@@ -6226,9 +6264,14 @@ export default function App() {
                   {/* Prev */}
                   <button
                     type="button"
+                    disabled={!currentTrack}
                     onClick={handlePrev}
-                    title="Bài trước"
-                    className="p-1 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    title={!currentTrack ? "Chưa chọn bài hát" : "Bài trước"}
+                    className={`p-1 transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                        : "text-white/80 hover:text-white cursor-pointer hover:scale-115 active:scale-90"
+                    }`}
                   >
                     <SkipBack className="w-4.5 h-4.5 fill-current" />
                   </button>
@@ -6237,9 +6280,13 @@ export default function App() {
                   <button
                     type="button"
                     onClick={togglePlayPause}
-                    disabled={isLoading}
-                    title={isPlaying ? "Tạm dừng" : "Phát"}
-                    className="w-8 h-8 min-[420px]:w-9 min-[420px]:h-9 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    disabled={!currentTrack || isLoading}
+                    title={!currentTrack ? "Chưa chọn bài hát" : isPlaying ? "Tạm dừng" : "Phát"}
+                    className={`w-8 h-8 min-[420px]:w-9 min-[420px]:h-9 rounded-full flex items-center justify-center text-white transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none shadow-none"
+                        : "shadow-lg hover:scale-105 active:scale-95 cursor-pointer"
+                    }`}
                     style={{ background: "var(--theme-btn-gradient)" }}
                   >
                     {isLoading ? (
@@ -6254,9 +6301,14 @@ export default function App() {
                   {/* Next */}
                   <button
                     type="button"
+                    disabled={!currentTrack}
                     onClick={handleNext}
-                    title="Bài tiếp theo"
-                    className="p-1 text-white/80 hover:text-white transition-all cursor-pointer hover:scale-115 active:scale-90"
+                    title={!currentTrack ? "Chưa chọn bài hát" : "Bài tiếp theo"}
+                    className={`p-1 transition-all ${
+                      !currentTrack
+                        ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                        : "text-white/80 hover:text-white cursor-pointer hover:scale-115 active:scale-90"
+                    }`}
                   >
                     <SkipForward className="w-4.5 h-4.5 fill-current" />
                   </button>
@@ -6265,10 +6317,16 @@ export default function App() {
                   <div className="relative">
                     <button
                       type="button"
+                      disabled={!currentTrack}
                       onClick={() => setShowSleepTimerMenu(!showSleepTimerMenu)}
-                      title="Hẹn giờ tắt"
-                      className={`p-1 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
-                        }`}
+                      title={!currentTrack ? "Chưa chọn bài hát" : "Hẹn giờ tắt"}
+                      className={`p-1 transition-all relative ${
+                        !currentTrack
+                          ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                          : sleepTimerSecondsLeft
+                            ? "theme-accent-text font-bold cursor-pointer hover:scale-110 active:scale-90"
+                            : "text-white/60 hover:text-white cursor-pointer hover:scale-110 active:scale-90"
+                      }`}
                     >
                       <Clock className="w-4 h-4" />
                       {sleepTimerMinutes && (
@@ -6892,7 +6950,8 @@ export default function App() {
                         value={currentTime}
                         onChange={handleSeek}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full h-full opacity-0 cursor-pointer z-10 touch-none"
+                        disabled={!currentTrack}
+                        className={`w-full h-full opacity-0 z-10 touch-none ${!currentTrack ? "cursor-not-allowed pointer-events-none" : "cursor-pointer"}`}
                       />
                       <div
                         className="absolute w-3.5 h-3.5 rounded-full bg-white shadow-md pointer-events-none transition-transform group-hover/seek:scale-125"
@@ -6913,21 +6972,31 @@ export default function App() {
                     {/* Loop / Shuffle Button */}
                     <button
                       type="button"
+                      disabled={!currentTrack}
                       onClick={(e) => {
                         e.stopPropagation();
                         cycleRepeatMode();
                       }}
                       title={
-                        repeatMode === "all"
-                          ? "Lặp danh sách"
-                          : repeatMode === "one"
-                            ? "Lặp 1 bài"
-                            : repeatMode === "shuffle"
-                              ? "Phát ngẫu nhiên"
-                              : "Tắt lặp lại"
+                        !currentTrack
+                          ? "Chưa chọn bài hát"
+                          : repeatMode === "all"
+                            ? "Lặp danh sách"
+                            : repeatMode === "one"
+                              ? "Lặp 1 bài"
+                              : repeatMode === "shuffle"
+                                ? "Phát ngẫu nhiên"
+                                : "Tắt lặp lại"
                       }
-                      className={`p-1.5 transition-all cursor-pointer hover:scale-115 active:scale-90 ${repeatMode === "all" || repeatMode === "one" ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)]" : repeatMode === "shuffle" ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)]" : "text-white/40 hover:text-white"
-                        }`}
+                      className={`p-1.5 transition-all ${
+                        !currentTrack
+                          ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                          : repeatMode === "all" || repeatMode === "one"
+                            ? "theme-accent-text drop-shadow-[0_0_8px_var(--theme-accent)] cursor-pointer hover:scale-115 active:scale-90"
+                            : repeatMode === "shuffle"
+                              ? "theme-sec-accent-text drop-shadow-[0_0_8px_var(--theme-sec-accent)] cursor-pointer hover:scale-115 active:scale-90"
+                              : "text-white/40 hover:text-white cursor-pointer hover:scale-115 active:scale-90"
+                      }`}
                     >
                       {repeatMode === "one" ? (
                         <Repeat1 className="w-5 h-5" />
@@ -6941,12 +7010,17 @@ export default function App() {
                     {/* Prev */}
                     <button
                       type="button"
+                      disabled={!currentTrack}
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePrev();
                       }}
-                      title="Bài trước"
-                      className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
+                      title={!currentTrack ? "Chưa chọn bài hát" : "Bài trước"}
+                      className={`p-1.5 transition-all ${
+                        !currentTrack
+                          ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                          : "text-white/70 hover:theme-accent-text cursor-pointer hover:scale-115 active:scale-90"
+                      }`}
                     >
                       <SkipBack className="w-6 h-6 fill-current" />
                     </button>
@@ -6958,12 +7032,16 @@ export default function App() {
                         e.stopPropagation();
                         togglePlayPause();
                       }}
-                      disabled={isLoading}
-                      title={isPlaying ? "Tạm dừng" : "Phát"}
-                      className="w-11 h-11 min-[340px]:w-12 min-[340px]:h-12 rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                      disabled={!currentTrack || isLoading}
+                      title={!currentTrack ? "Chưa chọn bài hát" : isPlaying ? "Tạm dừng" : "Phát"}
+                      className={`w-11 h-11 min-[340px]:w-12 min-[340px]:h-12 rounded-full flex items-center justify-center text-white transition-all ${
+                        !currentTrack
+                          ? "opacity-35 cursor-not-allowed pointer-events-none shadow-none"
+                          : "shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
+                      }`}
                       style={{
                         background: "var(--theme-btn-gradient)",
-                        boxShadow: "0 4px 18px var(--theme-panel-border)",
+                        boxShadow: !currentTrack ? "none" : "0 4px 18px var(--theme-panel-border)",
                       }}
                     >
                       {isLoading ? (
@@ -6978,12 +7056,17 @@ export default function App() {
                     {/* Next */}
                     <button
                       type="button"
+                      disabled={!currentTrack}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleNext();
                       }}
-                      title="Bài kế tiếp"
-                      className="p-1.5 text-white/70 hover:theme-accent-text transition-all cursor-pointer hover:scale-115 active:scale-90"
+                      title={!currentTrack ? "Chưa chọn bài hát" : "Bài kế tiếp"}
+                      className={`p-1.5 transition-all ${
+                        !currentTrack
+                          ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                          : "text-white/70 hover:theme-accent-text cursor-pointer hover:scale-115 active:scale-90"
+                      }`}
                     >
                       <SkipForward className="w-6 h-6 fill-current" />
                     </button>
@@ -6992,17 +7075,25 @@ export default function App() {
                     <div className="relative">
                       <button
                         type="button"
+                        disabled={!currentTrack}
                         onClick={(e) => {
                           e.stopPropagation();
                           setShowSleepTimerMenu(!showSleepTimerMenu);
                         }}
                         title={
-                          sleepTimerSecondsLeft
-                            ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
-                            : "Hẹn giờ tắt nhạc"
+                          !currentTrack
+                            ? "Chưa chọn bài hát"
+                            : sleepTimerSecondsLeft
+                              ? `Hẹn giờ tắt nhạc: còn ${Math.floor(sleepTimerSecondsLeft / 60)}p ${sleepTimerSecondsLeft % 60}s`
+                              : "Hẹn giờ tắt nhạc"
                         }
-                        className={`p-1.5 transition-all cursor-pointer hover:scale-110 active:scale-90 relative ${sleepTimerSecondsLeft ? "theme-accent-text font-bold" : "text-white/60 hover:text-white"
-                          }`}
+                        className={`p-1.5 transition-all relative ${
+                          !currentTrack
+                            ? "opacity-35 cursor-not-allowed pointer-events-none text-white/40"
+                            : sleepTimerSecondsLeft
+                              ? "theme-accent-text font-bold cursor-pointer hover:scale-110 active:scale-90"
+                              : "text-white/60 hover:text-white cursor-pointer hover:scale-110 active:scale-90"
+                        }`}
                       >
                         <Clock className="w-5 h-5" />
                         {sleepTimerMinutes && (
