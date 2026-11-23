@@ -710,7 +710,7 @@ function isWebAppUrl(urlStr) {
       return false;
     }
 
-    // 1. Vercel deployment (Chính thức: kahoiimusic.vercel.app hoặc kahoimusic.vercel.app)
+    // 1. Vercel deployment (Chính thức: kahoiimusic.vercel.app hoặc kahoimusic.vercel.app hoặc bất kỳ subdomain Vercel kahoii nào)
     if (host === "kahoiimusic.vercel.app" || host === "kahoimusic.vercel.app" || (host.endsWith(".vercel.app") && host.includes("kahoi"))) {
       return true;
     }
@@ -736,12 +736,46 @@ function isWebAppUrl(urlStr) {
   return false;
 }
 
+function isWebAppTab(t) {
+  if (!t || !t.id) return false;
+
+  const urlStr = t.url || t.pendingUrl || "";
+  const title = (t.title || "").trim();
+
+  // 1. Kiểm tra trực tiếp qua URL nếu có
+  if (urlStr) {
+    if (isWebAppUrl(urlStr)) return true;
+
+    // Loại trừ trang thuộc domain cấm
+    try {
+      const u = new URL(urlStr);
+      const host = u.hostname.toLowerCase();
+      if (host === "github.com" || host.endsWith(".github.com") || host.includes("youtube.com") || host.includes("google.com")) {
+        return false;
+      }
+    } catch { }
+  }
+
+  // 2. Nhận diện qua Title chính thức của Web App: "Kahoii Music"
+  // (index.html WebApp đặt title là: <title>Kahoii Music</title>)
+  if (title === "Kahoii Music" || title === "KahoiiMusic" || title.startsWith("Kahoii Music -") || title.startsWith("Kahoii Music |") || title.startsWith("Kahoii Music ·")) {
+    if (urlStr) {
+      const lower = urlStr.toLowerCase();
+      if (lower.includes("github.com") || lower.includes("youtube.com") || lower.includes("google.com")) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
 async function findOpenWebAppTab() {
   try {
     const tabs = await chrome.tabs.query({});
     for (const t of tabs) {
-      // CHỈ kiểm tra URL hợp lệ của Web App, KHÔNG so sánh title lỏng lẻo để tránh dính tab GitHub repo hay YouTube video
-      if (t.id && t.url && isWebAppUrl(t.url)) {
+      if (isWebAppTab(t)) {
         return t;
       }
     }
@@ -755,15 +789,17 @@ async function focusAndPlayInWebApp(tab, trackData) {
   try {
     if (!tab || !tab.id) return false;
 
-    // Chuyển tab sang active và focus cửa sổ
+    // 1. Chuyển tab sang active và focus cửa sổ của tab đó
     await chrome.tabs.update(tab.id, { active: true });
     if (tab.windowId) {
-      chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+      try {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      } catch { }
     }
 
     if (trackData) {
       let scriptSent = false;
-      // 1. Thử gửi qua postMessage DOM thông qua executeScript với timeout giới hạn (tránh treo Service Worker)
+      // 2. Thử gửi qua postMessage DOM thông qua executeScript với timeout giới hạn (tránh treo Service Worker)
       try {
         const execPromise = chrome.scripting.executeScript({
           target: { tabId: tab.id },
@@ -781,16 +817,24 @@ async function focusAndPlayInWebApp(tab, trackData) {
         await Promise.race([execPromise, timeoutPromise]);
         scriptSent = true;
       } catch (scriptErr) {
-        console.warn("[Background] executeScript failed or timed out, trying tabs.sendMessage:", scriptErr);
+        console.warn("[Background] executeScript failed or timed out:", scriptErr);
       }
 
-      // 2. Fallback gửi qua message channel nếu executeScript thất bại
-      if (!scriptSent) {
+      // 3. Fallback: Nếu executeScript không chạy được (ví dụ do tab chưa cấp quyền scripting),
+      // cập nhật URL của tab đó kèm query params để WebApp tự nạp và phát ngay lập tức
+      if (!scriptSent && (trackData.v || trackData.id)) {
         try {
-          chrome.tabs.sendMessage(tab.id, { action: "PLAY_TRACK", track: trackData }, () => {
-            if (chrome.runtime.lastError) {}
-          });
-        } catch { }
+          const vId = trackData.v || trackData.id;
+          const title = encodeURIComponent(trackData.title || "");
+          const author = encodeURIComponent(trackData.author || "");
+          const dur = trackData.dur || trackData.duration || 0;
+          const currentUrl = tab.url || "https://kahoiimusic.vercel.app/";
+          const baseClean = currentUrl.split("?")[0].split("#")[0].replace(/\/$/, "");
+          const targetUrl = `${baseClean}/?v=${encodeURIComponent(vId)}&title=${title}&author=${author}&dur=${dur}&play=true`;
+          await chrome.tabs.update(tab.id, { url: targetUrl });
+        } catch (tabUpdateErr) {
+          console.warn("[Background] tab update url fallback error:", tabUpdateErr);
+        }
       }
     }
     return true;

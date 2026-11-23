@@ -705,8 +705,17 @@
           trackData,
           protocolUrl
         },
-        (res) => {
+        async (res) => {
           if (!res) {
+            // Kiểm tra tùy chọn người dùng: nếu đang ưu tiên web thì không kích hoạt app
+            try {
+              const s = await new Promise(r => chrome.storage.local.get(['preferredTarget'], r));
+              if (s && s.preferredTarget === "web") {
+                chrome.runtime.sendMessage({ action: "OPEN_NEW_WEB_APP_TAB", trackData, play: true });
+                showToast("Đang mở Web App!", `Đang mở "${title}" trên KahoiiMusic Web...`, "🌐");
+                return;
+              }
+            } catch { }
             triggerProtocol(protocolUrl);
             return;
           }

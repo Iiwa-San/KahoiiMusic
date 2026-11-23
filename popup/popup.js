@@ -963,8 +963,16 @@ document.addEventListener("DOMContentLoaded", () => {
         trackData,
         protocolUrl
       },
-      (res) => {
+      async (res) => {
         if (!res) {
+          try {
+            const s = await new Promise(r => chrome.storage.local.get(['preferredTarget'], r));
+            if (s && s.preferredTarget === "web") {
+              chrome.runtime.sendMessage({ action: "OPEN_NEW_WEB_APP_TAB", trackData, play: true });
+              showStatus("🌐 Đang mở bài hát trên KahoiiMusic Web...", "success");
+              return;
+            }
+          } catch { }
           triggerProtocol(protocolUrl);
           if (isCurrentPlaylist) {
             showStatus("🚀 Đã gửi toàn bộ danh sách sang KahoiiMusic để phát!", "success");
