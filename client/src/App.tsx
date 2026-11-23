@@ -32,6 +32,7 @@ import {
   FolderPlus,
   FolderHeart,
   ListMusic,
+  GripVertical,
   ChevronLeft,
   ChevronDown,
   Compass,
@@ -519,6 +520,10 @@ export default function App() {
   const queueTracksRef = useRef<Track[]>([]);
   const lastIncomingTrackTimeRef = useRef<{ id: string; mode?: string; time: number } | null>(null);
   const currentIndexRef = useRef<number>(0);
+  // Drag and Drop Queue Reordering State
+  const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
+  const [dragOverQueueIndex, setDragOverQueueIndex] = useState<number | null>(null);
+  const touchDragItemRef = useRef<{ index: number; startY: number } | null>(null);
   const shuffleHistoryRef = useRef<number[]>([]);
   const isTransitioningRef = useRef<boolean>(false);
   const lastEndedTrackIdRef = useRef<string | null>(null);
@@ -1618,6 +1623,62 @@ export default function App() {
     setQueuePlaylistName("");
     showToast(`Đã lưu ${queueTracks.length} bài vào danh sách "${newPl.name}" trong Thư viện!`, "success");
     await persistLibraryData({ playlists: updatedPlaylists });
+  };
+
+  // Reorder queue tracks via Drag & Drop (move track from fromIndex to toIndex)
+  const reorderQueueTracks = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= queueTracks.length || toIndex >= queueTracks.length) return;
+
+    if (isQueueSorted) {
+      setIsQueueSorted(false);
+    }
+
+    const newQueue = [...queueTracks];
+    const [movedTrack] = newQueue.splice(fromIndex, 1);
+    newQueue.splice(toIndex, 0, movedTrack);
+
+    setQueueTracks(newQueue);
+    queueTracksRef.current = newQueue;
+    setPlaylist(newQueue);
+    playlistRef.current = newQueue;
+
+    // Keep currently playing track aligned with its updated position
+    if (currentTrack) {
+      const newCurrentIdx = newQueue.findIndex((t) => t.id === currentTrack.id);
+      if (newCurrentIdx !== -1) {
+        setCurrentIndex(newCurrentIdx);
+        currentIndexRef.current = newCurrentIdx;
+      }
+    }
+  };
+
+  const handleTouchStart = (index: number, e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchDragItemRef.current = { index, startY: touch.clientY };
+    setDraggedQueueIndex(index);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchDragItemRef.current) return;
+    const touch = e.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    const queueItem = element?.closest("[data-queue-index]");
+    if (queueItem) {
+      const targetIdx = Number(queueItem.getAttribute("data-queue-index"));
+      if (!isNaN(targetIdx) && targetIdx !== dragOverQueueIndex) {
+        setDragOverQueueIndex(targetIdx);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchDragItemRef.current !== null && dragOverQueueIndex !== null) {
+      reorderQueueTracks(touchDragItemRef.current.index, dragOverQueueIndex);
+    }
+    touchDragItemRef.current = null;
+    setDraggedQueueIndex(null);
+    setDragOverQueueIndex(null);
   };
 
   // Toggle track inside a playlist
@@ -6825,18 +6886,55 @@ export default function App() {
                 <div className="flex-1 min-h-0 flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1">
                   {queueTracks.map((track, i) => {
                     const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
+                    const isDragging = draggedQueueIndex === i;
+                    const isDragOver = dragOverQueueIndex === i && draggedQueueIndex !== i;
                     return (
                       <div
                         key={track.id + i}
+                        data-queue-index={i}
                         ref={isCurrent ? mobileActiveQueueRef : undefined}
                         style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedQueueIndex(i);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", i.toString());
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (dragOverQueueIndex !== i) setDragOverQueueIndex(i);
+                        }}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          setDragOverQueueIndex(i);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedQueueIndex !== null && draggedQueueIndex !== i) {
+                            reorderQueueTracks(draggedQueueIndex, i);
+                          }
+                          setDraggedQueueIndex(null);
+                          setDragOverQueueIndex(null);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedQueueIndex(null);
+                          setDragOverQueueIndex(null);
+                        }}
                         onClick={() => {
                           setCurrentIndex(i);
                           currentIndexRef.current = i;
                           loadAndPlayTrack(track, true);
                         }}
-                        className={`flex items-center gap-2.5 px-2 py-1.5 transition-all cursor-pointer rounded-xl group item-slide-up ${isCurrent ? "theme-badge-active shadow-md" : "hover:bg-white/5"
-                          }`}
+                        className={`flex items-center gap-2.5 px-2 py-1.5 transition-all cursor-pointer rounded-xl group item-slide-up ${
+                          isDragging ? "opacity-30 scale-[0.98]" : ""
+                        } ${
+                          isDragOver
+                            ? "ring-2 ring-[var(--theme-accent)] bg-white/10"
+                            : isCurrent
+                            ? "theme-badge-active shadow-md"
+                            : "hover:bg-white/5"
+                        }`}
                       >
                         {isCurrent && (
                           <div className="w-1.5 h-8 rounded-full bg-[var(--theme-accent)] flex-shrink-0" />
@@ -6858,6 +6956,26 @@ export default function App() {
                         <span className="text-xs text-white/70 font-mono flex-shrink-0">
                           {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
                         </span>
+                        <div
+                          draggable
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            setDraggedQueueIndex(i);
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", i.toString());
+                          }}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            handleTouchStart(i, e);
+                          }}
+                          onTouchMove={handleTouchMove}
+                          onTouchEnd={handleTouchEnd}
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1 cursor-grab active:cursor-grabbing text-white/25 hover:text-white/80 active:text-[var(--theme-accent)] transition-colors flex-shrink-0 touch-none"
+                          title="Nắm kéo để thay đổi thứ tự phát"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
                       </div>
                     );
                   })}
@@ -7469,18 +7587,54 @@ export default function App() {
             {queueTracks.length > 0 ? (
               queueTracks.map((track, i) => {
                 const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
+                const isDragging = draggedQueueIndex === i;
+                const isDragOver = dragOverQueueIndex === i && draggedQueueIndex !== i;
                 const artistLabel = formatTrackArtist(track.title, track.author);
                 return (
                   <div
                     key={track.id + i}
+                    data-queue-index={i}
                     style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedQueueIndex(i);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", i.toString());
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragOverQueueIndex !== i) setDragOverQueueIndex(i);
+                    }}
+                    onDragEnter={(e) => {
+                      e.preventDefault();
+                      setDragOverQueueIndex(i);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggedQueueIndex !== null && draggedQueueIndex !== i) {
+                        reorderQueueTracks(draggedQueueIndex, i);
+                      }
+                      setDraggedQueueIndex(null);
+                      setDragOverQueueIndex(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedQueueIndex(null);
+                      setDragOverQueueIndex(null);
+                    }}
                     onClick={() => {
                       setCurrentIndex(i);
                       currentIndexRef.current = i;
                       loadAndPlayTrack(track, true);
                     }}
                     className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group item-slide-up ${
-                      isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
+                      isDragging ? "opacity-30 scale-[0.98]" : ""
+                    } ${
+                      isDragOver
+                        ? "ring-2 ring-[var(--theme-accent)] bg-white/10 rounded-xl"
+                        : isCurrent
+                        ? "active-queue-beam shadow-md"
+                        : "hover:bg-white/5 rounded-xl"
                     }`}
                   >
                     <img
@@ -7501,9 +7655,29 @@ export default function App() {
                         </p>
                       )}
                     </div>
-                    <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
+                    <span className="text-[10px] text-white/60 font-mono pr-0.5 flex-shrink-0">
                       {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
                     </span>
+                    <div
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        setDraggedQueueIndex(i);
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", i.toString());
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        handleTouchStart(i, e);
+                      }}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-1 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/80 active:text-[var(--theme-accent)] transition-colors flex-shrink-0 touch-none"
+                      title="Nắm kéo để thay đổi thứ tự phát"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </div>
                   </div>
                 );
               })
