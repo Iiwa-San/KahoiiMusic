@@ -460,6 +460,56 @@
     }, duration);
   }
 
+  function showPromptToast({ title, message, icon = "⚡", actions = [], duration = 12000 }) {
+    const existing = document.getElementById("kahoii-toast-container");
+    if (existing) existing.remove();
+
+    const toast = document.createElement("div");
+    toast.id = "kahoii-toast-container";
+    toast.className = "kahoii-toast";
+    toast.innerHTML = `
+      <div class="kahoii-toast-icon">${icon}</div>
+      <div class="kahoii-toast-body">
+        <div class="kahoii-toast-title">${title}</div>
+        <div class="kahoii-toast-msg">${message}</div>
+        <div class="kahoii-toast-actions" id="kahoii-toast-actions"></div>
+      </div>
+    `;
+
+    const actionsContainer = toast.querySelector("#kahoii-toast-actions");
+    if (actionsContainer && actions.length > 0) {
+      actions.forEach((act) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `kahoii-toast-btn ${act.type || 'app'}`;
+        btn.textContent = act.label;
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          if (act.onClick) act.onClick();
+          toast.remove();
+        };
+        actionsContainer.appendChild(btn);
+      });
+    }
+
+    toast.onclick = (e) => {
+      if (e.target && e.target.tagName === "BUTTON") return;
+      toast.style.animation = "kahoiiFadeOut 0.2s forwards";
+      setTimeout(() => toast.remove(), 200);
+    };
+
+    document.body.appendChild(toast);
+
+    if (duration > 0) {
+      setTimeout(() => {
+        if (toast.parentElement) {
+          toast.style.animation = "kahoiiFadeOut 0.25s forwards";
+          setTimeout(() => toast.remove(), 250);
+        }
+      }, duration);
+    }
+  }
+
   function updateButtonStatus() {
     const vId = getVideoId();
     const listId = getListId();
@@ -639,14 +689,77 @@
       }
 
       const metaParams = `&v=${encodeURIComponent(vId)}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&dur=${dur}${listId ? '&list=' + encodeURIComponent(listId) : ''}${itemsParam}`;
-      triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(targetUrl)}${metaParams}${userParam}${rtParam}`);
+      const protocolUrl = `kahoiimusic://play?url=${encodeURIComponent(targetUrl)}${metaParams}${userParam}${rtParam}`;
+      const trackData = {
+        v: vId,
+        id: vId,
+        title: title,
+        author: author,
+        dur: dur,
+        listId: listId
+      };
 
-      if (isPlaylist) {
-        showToast("Đang nạp danh sách!", "KahoiiMusic đang tải toàn bộ danh sách vào hàng đợi phát tạm...", "⚡", 4000);
-      } else {
-        const title = getVideoTitle();
-        showToast("Đã gửi sang KahoiiMusic!", `Đang nạp "${title}" vào hàng đợi phát...`, "🎵");
-      }
+      chrome.runtime.sendMessage(
+        {
+          action: "ROUTE_PLAY_TRACK",
+          trackData,
+          protocolUrl
+        },
+        (res) => {
+          if (!res) {
+            triggerProtocol(protocolUrl);
+            return;
+          }
+
+          if (res.routedTo === "web") {
+            showToast("Đã chuyển sang Web App!", isPlaylist ? "Đang phát danh sách trên tab KahoiiMusic Web" : `Đang phát "${title}" trên tab KahoiiMusic Web`, "🌐");
+          } else if (res.routedTo === "web_new_tab") {
+            showToast("Đang mở Web App!", `Đang mở "${title}" trên tab KahoiiMusic Web...`, "🌐");
+          } else if (res.routedTo === "app") {
+            triggerProtocol(res.protocolUrl || protocolUrl);
+            showToast("Đã gửi sang KahoiiMusic!", `Đang nạp "${title}" vào ứng dụng KahoiiMusic...`, "🎵");
+          } else if (res.routedTo === "prompt_app_or_web") {
+            showPromptToast({
+              title: "Chọn nơi phát nhạc",
+              message: `Bạn muốn mở "${title}" trên Web hay App?`,
+              icon: "⚡",
+              actions: [
+                {
+                  label: "🌐 Mở Web App",
+                  type: "web",
+                  onClick: () => {
+                    chrome.runtime.sendMessage({
+                      action: "OPEN_NEW_WEB_APP_TAB",
+                      trackData,
+                      play: true
+                    });
+                    showToast("Đang mở Web App", "Đang chuyển hướng sang KahoiiMusic Web...", "🌐");
+                  }
+                },
+                {
+                  label: "💻 Mở App Desktop",
+                  type: "app",
+                  onClick: () => {
+                    chrome.runtime.sendMessage({
+                      action: "SET_APP_STATUS",
+                      hasAppInstalled: true
+                    });
+                    triggerProtocol(res.protocolUrl || protocolUrl);
+                    showToast("Đang kích hoạt App!", "Đang mở ứng dụng KahoiiMusic Desktop...", "🚀");
+                  }
+                },
+                {
+                  label: "📥 Tải App",
+                  type: "download",
+                  onClick: () => {
+                    window.open("https://github.com/Iiwa-San/KahoiiMusic/releases", "_blank");
+                  }
+                }
+              ]
+            });
+          }
+        }
+      );
 
       const resetPlayBtn = () => {
         isProcessingPlay = false;

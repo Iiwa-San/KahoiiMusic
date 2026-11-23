@@ -659,6 +659,89 @@ try {
   });
 } catch { }
 
+// ================= WEB APP ROUTING HELPERS ================= //
+const DEFAULT_WEB_APP_URL = "https://iiwa-san.github.io/KahoiiMusic/";
+
+function isWebAppUrl(urlStr) {
+  if (!urlStr) return false;
+  try {
+    const u = new URL(urlStr);
+    // GitHub Pages deployment
+    if (u.hostname.includes("iiwa-san.github.io") && u.pathname.includes("KahoiiMusic")) return true;
+    // Local dev servers
+    if ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && (u.port === "3000" || u.port === "3001" || u.port === "5173")) return true;
+    // Custom domain
+    if (u.hostname.includes("kahoiimusic") || u.pathname.includes("kahoiimusic")) return true;
+  } catch { }
+  return false;
+}
+
+async function findOpenWebAppTab() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const t of tabs) {
+      if (t.id && (isWebAppUrl(t.url) || (t.title && (t.title.includes("KahoiiMusic") || t.title.includes("Kahoii Music"))))) {
+        return t;
+      }
+    }
+  } catch (err) {
+    console.warn("[Background] Error querying tabs for Web App:", err);
+  }
+  return null;
+}
+
+async function focusAndPlayInWebApp(tab, trackData) {
+  try {
+    if (tab.id) {
+      await chrome.tabs.update(tab.id, { active: true });
+      if (tab.windowId) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+
+      if (trackData) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (track) => {
+              window.postMessage({ type: "KAHOII_PLAY_TRACK", track }, "*");
+              window.dispatchEvent(new CustomEvent("kahoii-play-track", { detail: track }));
+            },
+            args: [trackData]
+          });
+        } catch (scriptErr) {
+          console.warn("[Background] Scripting error, falling back to tab messaging:", scriptErr);
+          chrome.tabs.sendMessage(tab.id, { action: "PLAY_TRACK", track: trackData }, () => {
+            if (chrome.runtime.lastError) {}
+          });
+        }
+      }
+      return true;
+    }
+  } catch (err) {
+    console.warn("[Background] Error focusing Web App tab:", err);
+  }
+  return false;
+}
+
+async function openNewWebAppTab(trackData, play = true) {
+  try {
+    const base = DEFAULT_WEB_APP_URL.replace(/\/$/, "");
+    let targetUrl = base + "/";
+    if (trackData && (trackData.v || trackData.id)) {
+      const vId = trackData.v || trackData.id;
+      const title = encodeURIComponent(trackData.title || "");
+      const author = encodeURIComponent(trackData.author || "");
+      const dur = trackData.dur || trackData.duration || 0;
+      targetUrl = `${base}/?v=${encodeURIComponent(vId)}&title=${title}&author=${author}&dur=${dur}&play=${play}`;
+    }
+    const createdTab = await chrome.tabs.create({ url: targetUrl, active: true });
+    return createdTab;
+  } catch (err) {
+    console.warn("[Background] Error creating new Web App tab:", err);
+    return null;
+  }
+}
+
 // ================= MESSAGE LISTENER ================= //
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   (async () => {
@@ -695,6 +778,56 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       } else if (request.action === 'FETCH_OEMBED') {
         const res = await fetchOEmbed(request.videoId);
         sendResponse(res);
+      } else if (request.action === 'CHECK_WEB_APP') {
+        const webTab = await findOpenWebAppTab();
+        sendResponse({ success: true, isOpen: !!webTab, tab: webTab });
+      } else if (request.action === 'OPEN_OR_FOCUS_WEB_APP') {
+        const webTab = await findOpenWebAppTab();
+        if (webTab) {
+          await focusAndPlayInWebApp(webTab, request.trackData);
+          sendResponse({ success: true, mode: "focused", tabId: webTab.id });
+        } else {
+          const newTab = await openNewWebAppTab(request.trackData, request.play !== false);
+          sendResponse({ success: true, mode: "opened", tabId: newTab?.id });
+        }
+      } else if (request.action === 'OPEN_NEW_WEB_APP_TAB') {
+        const newTab = await openNewWebAppTab(request.trackData, request.play !== false);
+        sendResponse({ success: true, tabId: newTab?.id });
+      } else if (request.action === 'SET_APP_STATUS') {
+        const dataToSave = {};
+        if (typeof request.hasAppInstalled === "boolean") dataToSave.hasAppInstalled = request.hasAppInstalled;
+        if (request.preferredTarget) dataToSave.preferredTarget = request.preferredTarget;
+        await chrome.storage.local.set(dataToSave);
+        sendResponse({ success: true, ...dataToSave });
+      } else if (request.action === 'ROUTE_PLAY_TRACK') {
+        // Step 1: If Web App is currently open, jump to Web App first!
+        const webTab = await findOpenWebAppTab();
+        if (webTab) {
+          await focusAndPlayInWebApp(webTab, request.trackData);
+          sendResponse({ success: true, routedTo: "web", tabId: webTab.id });
+          return;
+        }
+
+        // Step 2: Web App is not open. Check user preferences & app status
+        const localSettings = await chrome.storage.local.get(['hasAppInstalled', 'preferredTarget']);
+        if (localSettings.preferredTarget === "web") {
+          const newTab = await openNewWebAppTab(request.trackData, true);
+          sendResponse({ success: true, routedTo: "web_new_tab", tabId: newTab?.id });
+          return;
+        }
+
+        if (localSettings.hasAppInstalled === true) {
+          sendResponse({ success: true, routedTo: "app", protocolUrl: request.protocolUrl });
+          return;
+        }
+
+        // Step 3: Prompt user whether to open Web App or launch/download desktop app
+        sendResponse({
+          success: true,
+          routedTo: "prompt_app_or_web",
+          protocolUrl: request.protocolUrl,
+          trackData: request.trackData
+        });
       } else {
         sendResponse({ success: false, error: "Action không xác định: " + request.action });
       }

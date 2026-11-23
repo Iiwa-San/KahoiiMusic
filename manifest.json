@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "KahoiiMusic - Đồng Bộ YouTube",
   "short_name": "KahoiiMusic",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Đăng nhập và nhanh chóng nạp bài hát YouTube vào tài khoản KahoiiMusic của bạn.",
   "icons": {
     "16": "icons/icon16.png",
@@ -44,6 +44,9 @@
     "https://firestore.googleapis.com/*",
     "https://www.youtube.com/*",
     "https://noembed.com/*",
-    "https://raw.githubusercontent.com/*"
+    "https://raw.githubusercontent.com/*",
+    "*://iiwa-san.github.io/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ]
 }

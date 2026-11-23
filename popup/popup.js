@@ -53,11 +53,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnSaveColSub = document.getElementById("btn-save-col-sub");
   const actionStatusMsg = document.getElementById("action-status-msg");
   const btnOpenApp = document.getElementById("btn-open-app");
+  const btnOpenWeb = document.getElementById("btn-open-web");
+  const togglePreferWeb = document.getElementById("toggle-prefer-web");
   const btnHeaderDownload = document.getElementById("btn-header-download");
   const btnDownloadAppLogin = document.getElementById("btn-download-app-login");
   const btnDownloadAppFooter = document.getElementById("btn-download-app-footer");
   const modalDownload = document.getElementById("modal-download");
   const btnCloseModal = document.getElementById("btn-close-modal");
+  const linkOpenWebModal = document.getElementById("link-open-web-modal");
 
   let currentSession = null;
   let currentTargetUrl = null;
@@ -350,6 +353,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const cyberDialogSubtitle = document.getElementById("cyber-dialog-subtitle");
   const cyberDialogMessage = document.getElementById("cyber-dialog-message");
   const cyberDialogCancel = document.getElementById("cyber-dialog-cancel");
+  const cyberDialogWeb = document.getElementById("cyber-dialog-web");
   const cyberDialogConfirm = document.getElementById("cyber-dialog-confirm");
   const cyberDialogClose = document.getElementById("cyber-dialog-close");
 
@@ -357,10 +361,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function closeCyberDialog(result) {
     if (modalCyberDialog) modalCyberDialog.classList.add("hidden");
+    if (cyberDialogWeb) cyberDialogWeb.classList.add("hidden");
     if (cyberDialogResolver) {
       cyberDialogResolver(result);
       cyberDialogResolver = null;
     }
+  }
+
+  function showPromptAppOrWebDialog(trackData, protocolUrl) {
+    if (!modalCyberDialog) return;
+    if (cyberDialogTitle) cyberDialogTitle.textContent = "Chọn nơi phát nhạc";
+    if (cyberDialogSubtitle) cyberDialogSubtitle.textContent = "KahoiiMusic Sync";
+    if (cyberDialogIcon) cyberDialogIcon.textContent = "⚡";
+    if (cyberDialogMessage) cyberDialogMessage.textContent = `Chưa phát hiện ứng dụng KahoiiMusic Desktop. Bạn muốn phát "${trackData.title || 'bài hát'}" trên Web hay App?`;
+
+    if (cyberDialogCancel) {
+      cyberDialogCancel.style.display = "inline-flex";
+      cyberDialogCancel.textContent = "Hủy bỏ";
+    }
+    if (cyberDialogWeb) {
+      cyberDialogWeb.classList.remove("hidden");
+      cyberDialogWeb.onclick = () => {
+        chrome.runtime.sendMessage({ action: "OPEN_NEW_WEB_APP_TAB", trackData, play: true });
+        closeCyberDialog(false);
+        showStatus("🌐 Đang mở bài hát trên KahoiiMusic Web...", "success");
+      };
+    }
+    if (cyberDialogConfirm) {
+      cyberDialogConfirm.textContent = "💻 Mở Desktop App";
+      cyberDialogConfirm.className = "cyber-dialog-btn primary";
+      cyberDialogConfirm.onclick = () => {
+        chrome.storage.local.set({ hasAppInstalled: true });
+        triggerProtocol(protocolUrl);
+        closeCyberDialog(true);
+        showStatus("🚀 Đã gửi sang KahoiiMusic Desktop!", "success");
+      };
+    }
+    modalCyberDialog.classList.remove("hidden");
   }
 
   if (cyberDialogClose) cyberDialogClose.addEventListener("click", () => closeCyberDialog(false));
@@ -910,13 +947,49 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     const metaParams = `&v=${encodeURIComponent(currentVideoId || '')}&title=${encodeURIComponent(currentTitle || '')}&author=${encodeURIComponent(currentAuthor || '')}${durParam}${itemsParam}`;
-    triggerProtocol(`kahoiimusic://play?url=${encodeURIComponent(currentTargetUrl)}${metaParams}${userParam}${rtParam}`);
+    const protocolUrl = `kahoiimusic://play?url=${encodeURIComponent(currentTargetUrl)}${metaParams}${userParam}${rtParam}`;
+    const trackData = {
+      v: currentVideoId,
+      id: currentVideoId,
+      title: currentTitle,
+      author: currentAuthor,
+      dur: currentDurationSeconds,
+      items: currentPlaylistItems
+    };
 
-    if (isCurrentPlaylist) {
-      showStatus("🚀 Đã gửi toàn bộ danh sách sang KahoiiMusic để phát!", "success");
-    } else {
-      showStatus("🚀 Đã gửi bài hát sang KahoiiMusic để phát!", "success");
-    }
+    chrome.runtime.sendMessage(
+      {
+        action: "ROUTE_PLAY_TRACK",
+        trackData,
+        protocolUrl
+      },
+      (res) => {
+        if (!res) {
+          triggerProtocol(protocolUrl);
+          if (isCurrentPlaylist) {
+            showStatus("🚀 Đã gửi toàn bộ danh sách sang KahoiiMusic để phát!", "success");
+          } else {
+            showStatus("🚀 Đã gửi bài hát sang KahoiiMusic để phát!", "success");
+          }
+          return;
+        }
+
+        if (res.routedTo === "web") {
+          showStatus("🌐 Đã chuyển bài hát sang tab KahoiiMusic Web!", "success");
+        } else if (res.routedTo === "web_new_tab") {
+          showStatus("🌐 Đang mở bài hát trên tab KahoiiMusic Web...", "success");
+        } else if (res.routedTo === "app") {
+          triggerProtocol(res.protocolUrl || protocolUrl);
+          if (isCurrentPlaylist) {
+            showStatus("🚀 Đã gửi toàn bộ danh sách sang KahoiiMusic để phát!", "success");
+          } else {
+            showStatus("🚀 Đã gửi bài hát sang KahoiiMusic để phát!", "success");
+          }
+        } else if (res.routedTo === "prompt_app_or_web") {
+          showPromptAppOrWebDialog(trackData, res.protocolUrl || protocolUrl);
+        }
+      }
+    );
   });
 
   // ================= ACTION 2: TẢI BÀI HÁT NÀY VỀ MÁY (OFFLINE) ================= //
@@ -1075,6 +1148,42 @@ document.addEventListener("DOMContentLoaded", () => {
       const userParam = currentSession && currentSession.email ? `?user=${encodeURIComponent(currentSession.email)}` : "";
       const rtParam = currentSession && currentSession.refreshToken ? `${userParam ? '&' : '?'}auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
       triggerProtocol(`kahoiimusic://open${userParam}${rtParam}`);
+    });
+  }
+
+  // ================= ACTION: OPEN WEB APP ================= //
+  if (btnOpenWeb) {
+    btnOpenWeb.addEventListener("click", (e) => {
+      e.preventDefault();
+      chrome.runtime.sendMessage({ action: "OPEN_OR_FOCUS_WEB_APP" }, (res) => {
+        if (res && res.mode === "focused") {
+          showStatus("🌐 Đã chuyển sang tab KahoiiMusic Web!", "success");
+        } else {
+          showStatus("🌐 Đang mở KahoiiMusic Web...", "success");
+        }
+      });
+    });
+  }
+
+  if (linkOpenWebModal) {
+    linkOpenWebModal.addEventListener("click", (e) => {
+      e.preventDefault();
+      chrome.runtime.sendMessage({ action: "OPEN_OR_FOCUS_WEB_APP" });
+      closeDownloadModal();
+    });
+  }
+
+  if (togglePreferWeb) {
+    chrome.storage.local.get(["preferredTarget"], (res) => {
+      if (res && res.preferredTarget === "web") {
+        togglePreferWeb.checked = true;
+      }
+    });
+
+    togglePreferWeb.addEventListener("change", () => {
+      const pref = togglePreferWeb.checked ? "web" : "auto";
+      chrome.storage.local.set({ preferredTarget: pref });
+      showStatus(togglePreferWeb.checked ? "🌐 Đã bật: Luôn ưu tiên mở Web App" : "⚡ Đã bật: Tự động (Ưu tiên Web nếu đang mở)", "info");
     });
   }
 

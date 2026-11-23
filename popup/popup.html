@@ -191,19 +191,40 @@
           </button>
         </div>
 
+        <!-- Preference Switch: Ưu tiên mở Web App -->
+        <div class="routing-pref-row">
+          <div class="pref-label-group">
+            <span class="pref-title">Ưu tiên mở Web App</span>
+            <span class="pref-desc">Phát trên tab Web App thay vì mở Desktop</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-prefer-web">
+            <span class="slider round"></span>
+          </label>
+        </div>
+
         <div id="action-status-msg" class="action-status-msg hidden"></div>
       </div>
 
       <!-- App Status & Open App Footer -->
       <footer class="footer">
         <div class="footer-btn-group">
-          <button id="btn-open-app" class="app-link-btn" title="Kích hoạt KahoiiMusic">
+          <button id="btn-open-app" class="app-link-btn" title="Kích hoạt KahoiiMusic Desktop">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
               <polyline points="15 3 21 3 21 9"></polyline>
               <line x1="10" y1="14" x2="21" y2="3"></line>
             </svg>
-            <span>Mở ứng dụng</span>
+            <span>Mở App</span>
+          </button>
+          <span class="footer-separator">•</span>
+          <button id="btn-open-web" class="app-link-btn web-link-btn" title="Mở KahoiiMusic Web App trên trình duyệt">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            <span>Mở Web</span>
           </button>
           <span class="footer-separator">•</span>
           <button id="btn-download-app-footer" class="app-link-btn download-highlight-btn" title="Tải ứng dụng KahoiiMusic cho máy tính & điện thoại">
@@ -212,7 +233,7 @@
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            <span>Tải ứng dụng</span>
+            <span>Tải App</span>
           </button>
         </div>
       </footer>
@@ -225,20 +246,30 @@
           <div class="modal-title-wrap">
             <div class="modal-icon">📥</div>
             <div>
-              <h3 class="modal-title">Tải ứng dụng KahoiiMusic</h3>
-              <p class="modal-subtitle">Chọn nền tảng bạn muốn tải và cài đặt</p>
+              <h3 class="modal-title">Tải & Trải nghiệm KahoiiMusic</h3>
+              <p class="modal-subtitle">Chọn nền tảng bạn muốn trải nghiệm hoặc cài đặt</p>
             </div>
           </div>
           <button id="btn-close-modal" class="modal-close-btn" title="Đóng">✕</button>
         </div>
 
         <div class="modal-body">
+          <!-- Option 0: Web App (Trực tuyến không cần cài đặt) -->
+          <a id="link-open-web-modal" href="https://iiwa-san.github.io/KahoiiMusic/" target="_blank" class="download-item-card web-item-card">
+            <div class="item-icon-box web-icon">🌐</div>
+            <div class="item-info">
+              <div class="item-title">KahoiiMusic Web App (Trực tuyến)</div>
+              <div class="item-desc">Mở ngay trên trình duyệt • Không cần tải cài đặt</div>
+            </div>
+            <div class="item-action-badge web-badge">Truy cập</div>
+          </a>
+
           <!-- Option 1: Windows PC -->
-          <a id="link-download-pc" href="https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.28.exe" target="_blank" class="download-item-card" download>
+          <a id="link-download-pc" href="https://raw.githubusercontent.com/Iiwa-San/KahoiiMusic/main/publish/Installer/KahoiiMusic_Setup_v1.0.34.exe" target="_blank" class="download-item-card" download>
             <div class="item-icon-box pc-icon">💻</div>
             <div class="item-info">
               <div class="item-title">KahoiiMusic cho Windows (PC)</div>
-              <div class="item-desc">Phiên bản v1.0.28 • Bộ cài đặt (.exe) cho Windows</div>
+              <div class="item-desc">Phiên bản v1.0.34 • Bộ cài đặt (.exe) cho Windows</div>
             </div>
             <div class="item-action-badge">Tải về</div>
           </a>
@@ -287,8 +318,9 @@
         <div class="cyber-dialog-body">
           <p id="cyber-dialog-message" class="cyber-dialog-message">Nội dung thông báo...</p>
         </div>
-        <div class="cyber-dialog-footer">
+        <div class="cyber-dialog-footer" id="cyber-dialog-footer">
           <button type="button" id="cyber-dialog-cancel" class="cyber-dialog-btn secondary">Hủy bỏ</button>
+          <button type="button" id="cyber-dialog-web" class="cyber-dialog-btn web hidden">🌐 Mở Web</button>
           <button type="button" id="cyber-dialog-confirm" class="cyber-dialog-btn primary">Xác nhận</button>
         </div>
       </div>
