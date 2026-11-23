@@ -828,9 +828,21 @@ async function focusAndPlayInWebApp(tab, trackData) {
           const title = encodeURIComponent(trackData.title || "");
           const author = encodeURIComponent(trackData.author || "");
           const dur = trackData.dur || trackData.duration || 0;
+          let extra = "";
+          if (trackData.listId) extra += `&list=${encodeURIComponent(trackData.listId)}`;
+          if (trackData.items && Array.isArray(trackData.items) && trackData.items.length > 0) {
+            const itemStrings = trackData.items.map(x => {
+              const id = x.Id || x.id || x.videoId;
+              const d = x.DurationSeconds || x.duration || x.dur || 0;
+              return d > 0 ? `${id}:${d}` : id;
+            }).filter(Boolean);
+            if (itemStrings.length > 0) {
+              extra += `&items=${encodeURIComponent(itemStrings.slice(0, 100).join(","))}`;
+            }
+          }
           const currentUrl = tab.url || "https://kahoiimusic.vercel.app/";
           const baseClean = currentUrl.split("?")[0].split("#")[0].replace(/\/$/, "");
-          const targetUrl = `${baseClean}/?v=${encodeURIComponent(vId)}&title=${title}&author=${author}&dur=${dur}&play=true`;
+          const targetUrl = `${baseClean}/?v=${encodeURIComponent(vId)}&title=${title}&author=${author}&dur=${dur}&play=true${extra}`;
           await chrome.tabs.update(tab.id, { url: targetUrl });
         } catch (tabUpdateErr) {
           console.warn("[Background] tab update url fallback error:", tabUpdateErr);
@@ -854,7 +866,21 @@ async function openNewWebAppTab(trackData, play = true, windowId = null) {
       const title = encodeURIComponent(trackData.title || "");
       const author = encodeURIComponent(trackData.author || "");
       const dur = trackData.dur || trackData.duration || 0;
-      targetUrl = `${baseClean}/?v=${encodeURIComponent(vId)}&title=${title}&author=${author}&dur=${dur}&play=${play}`;
+      let extra = "";
+      if (trackData.listId) {
+        extra += `&list=${encodeURIComponent(trackData.listId)}`;
+      }
+      if (trackData.items && Array.isArray(trackData.items) && trackData.items.length > 0) {
+        const itemStrings = trackData.items.map(x => {
+          const id = x.Id || x.id || x.videoId;
+          const d = x.DurationSeconds || x.duration || x.dur || 0;
+          return d > 0 ? `${id}:${d}` : id;
+        }).filter(Boolean);
+        if (itemStrings.length > 0) {
+          extra += `&items=${encodeURIComponent(itemStrings.slice(0, 100).join(","))}`;
+        }
+      }
+      targetUrl = `${baseClean}/?v=${encodeURIComponent(vId)}&title=${title}&author=${author}&dur=${dur}&play=${play}${extra}`;
     }
 
     const createProps = { url: targetUrl, active: true };

@@ -678,9 +678,11 @@
       const rtParam = currentSession && currentSession.refreshToken ? `&auth_rt=${encodeURIComponent(currentSession.refreshToken)}` : "";
 
       let itemsParam = "";
+      let playlistTracks = [];
       if (isPlaylist) {
         const extracted = extractPlaylistItemsFromPage();
         if (extracted && extracted.length > 0) {
+          playlistTracks = extracted;
           const itemStrings = extracted.map(x => (x.DurationSeconds > 0 ? `${x.Id}:${x.DurationSeconds}` : x.Id)).filter(Boolean);
           if (itemStrings.length > 0) {
             itemsParam = `&items=${encodeURIComponent(itemStrings.slice(0, 100).join(","))}`;
@@ -696,7 +698,10 @@
         title: title,
         author: author,
         dur: dur,
-        listId: listId
+        listId: listId,
+        isPlaylist: isPlaylist,
+        playlistTitle: isPlaylist ? (getPlaylistTitle() || title) : null,
+        items: playlistTracks
       };
 
       chrome.runtime.sendMessage(

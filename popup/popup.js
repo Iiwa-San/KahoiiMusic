@@ -954,6 +954,9 @@ document.addEventListener("DOMContentLoaded", () => {
       title: currentTitle,
       author: currentAuthor,
       dur: currentDurationSeconds,
+      listId: isCurrentPlaylist ? extractYouTubeListId(currentTargetUrl) : null,
+      isPlaylist: isCurrentPlaylist,
+      playlistTitle: isCurrentPlaylist ? currentPlaylistTitle : null,
       items: currentPlaylistItems
     };
 
