@@ -1155,11 +1155,16 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnOpenWeb) {
     btnOpenWeb.addEventListener("click", (e) => {
       e.preventDefault();
+      showStatus("🌐 Đang kiểm tra & mở Web App...", "info");
       chrome.runtime.sendMessage({ action: "OPEN_OR_FOCUS_WEB_APP" }, (res) => {
+        if (chrome.runtime.lastError) {
+          showStatus("⚠️ Không thể kết nối với Web App: " + chrome.runtime.lastError.message, "danger");
+          return;
+        }
         if (res && res.mode === "focused") {
           showStatus("🌐 Đã chuyển sang tab KahoiiMusic Web!", "success");
         } else {
-          showStatus("🌐 Đang mở KahoiiMusic Web...", "success");
+          showStatus("🌐 Đã mở KahoiiMusic Web!", "success");
         }
       });
     });

@@ -662,16 +662,76 @@ try {
 // ================= WEB APP ROUTING HELPERS ================= //
 const DEFAULT_WEB_APP_URL = "https://iiwa-san.github.io/KahoiiMusic/";
 
+// Tự động phân giải URL Web App: ưu tiên URL tuỳ chỉnh -> server dev cục bộ (3000/5173) -> deploy chính thức
+async function resolveWebAppBaseUrl() {
+  // 1. Kiểm tra URL tuỳ biến nếu người dùng đã lưu
+  try {
+    const stored = await chrome.storage.local.get(['customWebAppUrl']);
+    if (stored && stored.customWebAppUrl && typeof stored.customWebAppUrl === "string" && stored.customWebAppUrl.startsWith("http")) {
+      return stored.customWebAppUrl.replace(/\/$/, "");
+    }
+  } catch { }
+
+  // 2. Thử kiểm tra dev server cục bộ nếu đang chạy trên máy (như Vite port 3000)
+  try {
+    const probe = await fetch("http://localhost:3000/", {
+      method: "HEAD",
+      signal: AbortSignal.timeout(500)
+    });
+    if (probe.ok || probe.status === 200 || probe.status === 304) {
+      return "http://localhost:3000";
+    }
+  } catch { }
+
+  // 3. Dự phòng cho cổng 5173
+  try {
+    const probe5173 = await fetch("http://localhost:5173/", {
+      method: "HEAD",
+      signal: AbortSignal.timeout(400)
+    });
+    if (probe5173.ok || probe5173.status === 200 || probe5173.status === 304) {
+      return "http://localhost:5173";
+    }
+  } catch { }
+
+  // 4. Mặc định dùng bản chính thức
+  return DEFAULT_WEB_APP_URL.replace(/\/$/, "");
+}
+
 function isWebAppUrl(urlStr) {
-  if (!urlStr) return false;
+  if (!urlStr || typeof urlStr !== "string") return false;
   try {
     const u = new URL(urlStr);
-    // GitHub Pages deployment
-    if (u.hostname.includes("iiwa-san.github.io") && u.pathname.includes("KahoiiMusic")) return true;
-    // Local dev servers
-    if ((u.hostname === "localhost" || u.hostname === "127.0.0.1") && (u.port === "3000" || u.port === "3001" || u.port === "5173")) return true;
-    // Custom domain
-    if (u.hostname.includes("kahoiimusic") || u.pathname.includes("kahoiimusic")) return true;
+    const host = u.hostname.toLowerCase();
+    const path = u.pathname.toLowerCase();
+
+    // TUYỆT ĐỐI KHÔNG nhận diện nhầm tab GitHub, YouTube hay Google là Web App
+    if (host === "github.com" || host.endsWith(".github.com") || host.includes("youtube.com") || host.includes("google.com")) {
+      return false;
+    }
+
+    // 1. Local dev servers
+    if (host === "localhost" || host === "127.0.0.1") {
+      const port = u.port;
+      if (port === "3000" || port === "3001" || port === "5173" || port === "4173" || port === "8080" || !port) {
+        return true;
+      }
+    }
+
+    // 2. GitHub Pages deployment
+    if (host === "iiwa-san.github.io" && path.startsWith("/kahoiimusic")) {
+      return true;
+    }
+
+    // 3. Vercel deployment
+    if (host.endsWith(".vercel.app") && host.includes("kahoii")) {
+      return true;
+    }
+
+    // 4. Firebase Hosting / Custom domain
+    if (host.includes("kahoiimusic.web.app") || host.includes("kahoiimusic.firebaseapp.com")) {
+      return true;
+    }
   } catch { }
   return false;
 }
@@ -680,7 +740,8 @@ async function findOpenWebAppTab() {
   try {
     const tabs = await chrome.tabs.query({});
     for (const t of tabs) {
-      if (t.id && (isWebAppUrl(t.url) || (t.title && (t.title.includes("KahoiiMusic") || t.title.includes("Kahoii Music"))))) {
+      // CHỈ kiểm tra URL hợp lệ của Web App, KHÔNG so sánh title lỏng lẻo để tránh dính tab GitHub repo hay YouTube video
+      if (t.id && t.url && isWebAppUrl(t.url)) {
         return t;
       }
     }
@@ -692,40 +753,56 @@ async function findOpenWebAppTab() {
 
 async function focusAndPlayInWebApp(tab, trackData) {
   try {
-    if (tab.id) {
-      await chrome.tabs.update(tab.id, { active: true });
-      if (tab.windowId) {
-        await chrome.windows.update(tab.windowId, { focused: true });
+    if (!tab || !tab.id) return false;
+
+    // Chuyển tab sang active và focus cửa sổ
+    await chrome.tabs.update(tab.id, { active: true });
+    if (tab.windowId) {
+      chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    }
+
+    if (trackData) {
+      let scriptSent = false;
+      // 1. Thử gửi qua postMessage DOM thông qua executeScript với timeout giới hạn (tránh treo Service Worker)
+      try {
+        const execPromise = chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (track) => {
+            window.postMessage({ type: "KAHOII_PLAY_TRACK", track }, "*");
+            window.dispatchEvent(new CustomEvent("kahoii-play-track", { detail: track }));
+          },
+          args: [trackData]
+        });
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("executeScript timeout")), 1200)
+        );
+
+        await Promise.race([execPromise, timeoutPromise]);
+        scriptSent = true;
+      } catch (scriptErr) {
+        console.warn("[Background] executeScript failed or timed out, trying tabs.sendMessage:", scriptErr);
       }
 
-      if (trackData) {
+      // 2. Fallback gửi qua message channel nếu executeScript thất bại
+      if (!scriptSent) {
         try {
-          await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: (track) => {
-              window.postMessage({ type: "KAHOII_PLAY_TRACK", track }, "*");
-              window.dispatchEvent(new CustomEvent("kahoii-play-track", { detail: track }));
-            },
-            args: [trackData]
-          });
-        } catch (scriptErr) {
-          console.warn("[Background] Scripting error, falling back to tab messaging:", scriptErr);
           chrome.tabs.sendMessage(tab.id, { action: "PLAY_TRACK", track: trackData }, () => {
             if (chrome.runtime.lastError) {}
           });
-        }
+        } catch { }
       }
-      return true;
     }
+    return true;
   } catch (err) {
     console.warn("[Background] Error focusing Web App tab:", err);
+    return false;
   }
-  return false;
 }
 
 async function openNewWebAppTab(trackData, play = true) {
   try {
-    const base = DEFAULT_WEB_APP_URL.replace(/\/$/, "");
+    const base = await resolveWebAppBaseUrl();
     let targetUrl = base + "/";
     if (trackData && (trackData.v || trackData.id)) {
       const vId = trackData.v || trackData.id;
