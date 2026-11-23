@@ -1155,17 +1155,20 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnOpenWeb) {
     btnOpenWeb.addEventListener("click", (e) => {
       e.preventDefault();
-      showStatus("🌐 Đang kiểm tra & mở Web App...", "info");
-      chrome.runtime.sendMessage({ action: "OPEN_OR_FOCUS_WEB_APP" }, (res) => {
-        if (chrome.runtime.lastError) {
-          showStatus("⚠️ Không thể kết nối với Web App: " + chrome.runtime.lastError.message, "danger");
-          return;
-        }
-        if (res && res.mode === "focused") {
-          showStatus("🌐 Đã chuyển sang tab KahoiiMusic Web!", "success");
-        } else {
-          showStatus("🌐 Đã mở KahoiiMusic Web!", "success");
-        }
+      showStatus("🌐 Đang mở KahoiiMusic Web...", "info");
+      chrome.windows.getCurrent((win) => {
+        const windowId = win ? win.id : null;
+        chrome.runtime.sendMessage({ action: "OPEN_OR_FOCUS_WEB_APP", windowId }, (res) => {
+          if (chrome.runtime.lastError) {
+            showStatus("⚠️ Không thể kết nối với Web App: " + chrome.runtime.lastError.message, "danger");
+            return;
+          }
+          if (res && res.mode === "focused") {
+            showStatus("🌐 Đã chuyển sang tab KahoiiMusic Web!", "success");
+          } else {
+            showStatus("🌐 Đã mở KahoiiMusic Web!", "success");
+          }
+        });
       });
     });
   }
@@ -1173,8 +1176,11 @@ document.addEventListener("DOMContentLoaded", () => {
   if (linkOpenWebModal) {
     linkOpenWebModal.addEventListener("click", (e) => {
       e.preventDefault();
-      chrome.runtime.sendMessage({ action: "OPEN_OR_FOCUS_WEB_APP" });
-      closeDownloadModal();
+      chrome.windows.getCurrent((win) => {
+        const windowId = win ? win.id : null;
+        chrome.runtime.sendMessage({ action: "OPEN_OR_FOCUS_WEB_APP", windowId });
+        closeDownloadModal();
+      });
     });
   }
 

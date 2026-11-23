@@ -660,7 +660,7 @@ try {
 } catch { }
 
 // ================= WEB APP ROUTING HELPERS ================= //
-const DEFAULT_WEB_APP_URL = "https://iiwa-san.github.io/KahoiiMusic/";
+const DEFAULT_WEB_APP_URL = "https://kahoiimusic.vercel.app";
 
 // Tự động phân giải URL Web App: ưu tiên URL tuỳ chỉnh -> server dev cục bộ (3000/5173) -> deploy chính thức
 async function resolveWebAppBaseUrl() {
@@ -676,7 +676,7 @@ async function resolveWebAppBaseUrl() {
   try {
     const probe = await fetch("http://localhost:3000/", {
       method: "HEAD",
-      signal: AbortSignal.timeout(500)
+      signal: AbortSignal.timeout(300)
     });
     if (probe.ok || probe.status === 200 || probe.status === 304) {
       return "http://localhost:3000";
@@ -687,14 +687,14 @@ async function resolveWebAppBaseUrl() {
   try {
     const probe5173 = await fetch("http://localhost:5173/", {
       method: "HEAD",
-      signal: AbortSignal.timeout(400)
+      signal: AbortSignal.timeout(300)
     });
     if (probe5173.ok || probe5173.status === 200 || probe5173.status === 304) {
       return "http://localhost:5173";
     }
   } catch { }
 
-  // 4. Mặc định dùng bản chính thức
+  // 4. Mặc định dùng bản chính thức Vercel
   return DEFAULT_WEB_APP_URL.replace(/\/$/, "");
 }
 
@@ -710,7 +710,12 @@ function isWebAppUrl(urlStr) {
       return false;
     }
 
-    // 1. Local dev servers
+    // 1. Vercel deployment (Chính thức: kahoiimusic.vercel.app hoặc kahoimusic.vercel.app)
+    if (host === "kahoiimusic.vercel.app" || host === "kahoimusic.vercel.app" || (host.endsWith(".vercel.app") && host.includes("kahoi"))) {
+      return true;
+    }
+
+    // 2. Local dev servers
     if (host === "localhost" || host === "127.0.0.1") {
       const port = u.port;
       if (port === "3000" || port === "3001" || port === "5173" || port === "4173" || port === "8080" || !port) {
@@ -718,13 +723,8 @@ function isWebAppUrl(urlStr) {
       }
     }
 
-    // 2. GitHub Pages deployment
+    // 3. GitHub Pages deployment
     if (host === "iiwa-san.github.io" && path.startsWith("/kahoiimusic")) {
-      return true;
-    }
-
-    // 3. Vercel deployment
-    if (host.endsWith(".vercel.app") && host.includes("kahoii")) {
       return true;
     }
 
@@ -800,18 +800,28 @@ async function focusAndPlayInWebApp(tab, trackData) {
   }
 }
 
-async function openNewWebAppTab(trackData, play = true) {
+async function openNewWebAppTab(trackData, play = true, windowId = null) {
   try {
     const base = await resolveWebAppBaseUrl();
-    let targetUrl = base + "/";
+    const baseClean = base.replace(/\/$/, "");
+    let targetUrl = baseClean + "/";
     if (trackData && (trackData.v || trackData.id)) {
       const vId = trackData.v || trackData.id;
       const title = encodeURIComponent(trackData.title || "");
       const author = encodeURIComponent(trackData.author || "");
       const dur = trackData.dur || trackData.duration || 0;
-      targetUrl = `${base}/?v=${encodeURIComponent(vId)}&title=${title}&author=${author}&dur=${dur}&play=${play}`;
+      targetUrl = `${baseClean}/?v=${encodeURIComponent(vId)}&title=${title}&author=${author}&dur=${dur}&play=${play}`;
     }
-    const createdTab = await chrome.tabs.create({ url: targetUrl, active: true });
+
+    const createProps = { url: targetUrl, active: true };
+    if (windowId) {
+      createProps.windowId = windowId;
+    }
+
+    const createdTab = await chrome.tabs.create(createProps);
+    if (createdTab && createdTab.windowId) {
+      chrome.windows.update(createdTab.windowId, { focused: true }).catch(() => {});
+    }
     return createdTab;
   } catch (err) {
     console.warn("[Background] Error creating new Web App tab:", err);
@@ -859,24 +869,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const webTab = await findOpenWebAppTab();
         sendResponse({ success: true, isOpen: !!webTab, tab: webTab });
       } else if (request.action === 'OPEN_OR_FOCUS_WEB_APP') {
+        const winId = request.windowId || sender.tab?.windowId || null;
         const webTab = await findOpenWebAppTab();
         if (webTab) {
           await focusAndPlayInWebApp(webTab, request.trackData);
           sendResponse({ success: true, mode: "focused", tabId: webTab.id });
         } else {
-          const newTab = await openNewWebAppTab(request.trackData, request.play !== false);
+          const newTab = await openNewWebAppTab(request.trackData, request.play !== false, winId);
           sendResponse({ success: true, mode: "opened", tabId: newTab?.id });
         }
       } else if (request.action === 'OPEN_NEW_WEB_APP_TAB') {
-        const newTab = await openNewWebAppTab(request.trackData, request.play !== false);
+        const winId = request.windowId || sender.tab?.windowId || null;
+        const newTab = await openNewWebAppTab(request.trackData, request.play !== false, winId);
         sendResponse({ success: true, tabId: newTab?.id });
       } else if (request.action === 'SET_APP_STATUS') {
         const dataToSave = {};
         if (typeof request.hasAppInstalled === "boolean") dataToSave.hasAppInstalled = request.hasAppInstalled;
         if (request.preferredTarget) dataToSave.preferredTarget = request.preferredTarget;
+        if (request.customWebAppUrl) dataToSave.customWebAppUrl = request.customWebAppUrl;
         await chrome.storage.local.set(dataToSave);
         sendResponse({ success: true, ...dataToSave });
       } else if (request.action === 'ROUTE_PLAY_TRACK') {
+        const winId = request.windowId || sender.tab?.windowId || null;
         // Step 1: If Web App is currently open, jump to Web App first!
         const webTab = await findOpenWebAppTab();
         if (webTab) {
@@ -888,7 +902,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Step 2: Web App is not open. Check user preferences & app status
         const localSettings = await chrome.storage.local.get(['hasAppInstalled', 'preferredTarget']);
         if (localSettings.preferredTarget === "web") {
-          const newTab = await openNewWebAppTab(request.trackData, true);
+          const newTab = await openNewWebAppTab(request.trackData, true, winId);
           sendResponse({ success: true, routedTo: "web_new_tab", tabId: newTab?.id });
           return;
         }
