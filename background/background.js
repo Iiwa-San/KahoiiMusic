@@ -805,7 +805,6 @@ async function focusAndPlayInWebApp(tab, trackData) {
           target: { tabId: tab.id },
           func: (track) => {
             window.postMessage({ type: "KAHOII_PLAY_TRACK", track }, "*");
-            window.dispatchEvent(new CustomEvent("kahoii-play-track", { detail: track }));
           },
           args: [trackData]
         });
