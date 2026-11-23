@@ -333,6 +333,18 @@ const CURATED_FEATURED_ARTISTS = [
 ];
 
 type LeftTab = "library" | "favorites" | "offline" | "history";
+type DragScope = "queue" | "sidebar";
+
+// Generic array reordering utility function
+function reorderArray<T>(list: T[], fromIndex: number, toIndex: number): T[] {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= list.length || toIndex >= list.length) {
+    return list;
+  }
+  const result = [...list];
+  const [moved] = result.splice(fromIndex, 1);
+  result.splice(toIndex, 0, moved);
+  return result;
+}
 
 const SIDEBAR_TABS: { key: LeftTab; label: string }[] = [
   { key: "library", label: "Thư viện" },
@@ -520,14 +532,10 @@ export default function App() {
   const queueTracksRef = useRef<Track[]>([]);
   const lastIncomingTrackTimeRef = useRef<{ id: string; mode?: string; time: number } | null>(null);
   const currentIndexRef = useRef<number>(0);
-  // Drag and Drop Queue Reordering State
-  const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
-  const [dragOverQueueIndex, setDragOverQueueIndex] = useState<number | null>(null);
-  const touchDragItemRef = useRef<{ index: number; startY: number } | null>(null);
-  // Drag and Drop Sidebar 1 Reordering State
-  const [draggedSidebarIndex, setDraggedSidebarIndex] = useState<number | null>(null);
-  const [dragOverSidebarIndex, setDragOverSidebarIndex] = useState<number | null>(null);
-  const touchSidebarDragItemRef = useRef<{ index: number; startY: number } | null>(null);
+  // Unified Drag and Drop Reordering State (Reused across Queue & Sidebar 1)
+  const [dragItem, setDragItem] = useState<{ scope: DragScope; index: number } | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<{ scope: DragScope; index: number } | null>(null);
+  const touchDragRef = useRef<{ scope: DragScope; index: number; startY: number } | null>(null);
   const shuffleHistoryRef = useRef<number[]>([]);
   const isTransitioningRef = useRef<boolean>(false);
   const lastEndedTrackIdRef = useRef<string | null>(null);
@@ -1627,76 +1635,6 @@ export default function App() {
     setQueuePlaylistName("");
     showToast(`Đã lưu ${queueTracks.length} bài vào danh sách "${newPl.name}" trong Thư viện!`, "success");
     await persistLibraryData({ playlists: updatedPlaylists });
-  };
-
-  // Reorder queue tracks via Drag & Drop (move track from fromIndex to toIndex)
-  const reorderQueueTracks = (fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
-    if (fromIndex >= queueTracks.length || toIndex >= queueTracks.length) return;
-
-    if (isQueueSorted) {
-      setIsQueueSorted(false);
-    }
-
-    const newQueue = [...queueTracks];
-    const [movedTrack] = newQueue.splice(fromIndex, 1);
-    newQueue.splice(toIndex, 0, movedTrack);
-
-    setQueueTracks(newQueue);
-    queueTracksRef.current = newQueue;
-    setPlaylist(newQueue);
-    playlistRef.current = newQueue;
-
-    // Keep currently playing track aligned with its updated position
-    if (currentTrack) {
-      const newCurrentIdx = newQueue.findIndex((t) => t.id === currentTrack.id);
-      if (newCurrentIdx !== -1) {
-        setCurrentIndex(newCurrentIdx);
-        currentIndexRef.current = newCurrentIdx;
-      }
-    }
-
-    // If user is playing a custom playlist from library, sync reordered tracks into the playlist
-    if (activeLibraryPlaylistId) {
-      setLibraryData((prev) => {
-        const updated = prev.playlists.map((pl, idx) => {
-          if ((pl.id || `pl-${idx}`) === activeLibraryPlaylistId || pl.name === activeLibraryPlaylistId) {
-            return { ...pl, items: newQueue };
-          }
-          return pl;
-        });
-        persistLibraryData({ playlists: updated });
-        return { ...prev, playlists: updated };
-      });
-    }
-  };
-
-  const handleTouchStart = (index: number, e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    touchDragItemRef.current = { index, startY: touch.clientY };
-    setDraggedQueueIndex(index);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchDragItemRef.current) return;
-    const touch = e.touches[0];
-    const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    const queueItem = element?.closest("[data-queue-index]");
-    if (queueItem) {
-      const targetIdx = Number(queueItem.getAttribute("data-queue-index"));
-      if (!isNaN(targetIdx) && targetIdx !== dragOverQueueIndex) {
-        setDragOverQueueIndex(targetIdx);
-      }
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (touchDragItemRef.current !== null && dragOverQueueIndex !== null) {
-      reorderQueueTracks(touchDragItemRef.current.index, dragOverQueueIndex);
-    }
-    touchDragItemRef.current = null;
-    setDraggedQueueIndex(null);
-    setDragOverQueueIndex(null);
   };
 
   // Toggle track inside a playlist
@@ -3869,103 +3807,183 @@ export default function App() {
     return items;
   };
 
-  // Reorder Sidebar 1 items via Drag & Drop (Playlists, Favorites, Offline, History)
-  const reorderSidebarItems = (fromIndex: number, toIndex: number) => {
+  // Unified Reorder Logic (Handles both Queue and Sidebar 1)
+  const handleReorder = (scope: DragScope, fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
-    const currentItems = getSidebarItems();
-    if (fromIndex >= currentItems.length || toIndex >= currentItems.length) return;
 
-    if (isLeftSorted) {
-      setIsLeftSorted(false);
-    }
+    if (scope === "queue") {
+      if (isQueueSorted) setIsQueueSorted(false);
+      if (fromIndex >= queueTracks.length || toIndex >= queueTracks.length) return;
 
-    const sourceItem = currentItems[fromIndex];
-    const targetItem = currentItems[toIndex];
-    if (!sourceItem || !targetItem) return;
+      const newQueue = reorderArray(queueTracks, fromIndex, toIndex);
+      setQueueTracks(newQueue);
+      queueTracksRef.current = newQueue;
+      setPlaylist(newQueue);
+      playlistRef.current = newQueue;
 
-    if (activeLeftTab === "favorites") {
-      const updated = [...libraryData.favorites];
-      const realFrom = updated.findIndex((t) => t.id === sourceItem.id);
-      const realTo = updated.findIndex((t) => t.id === targetItem.id);
-      if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
-        const [moved] = updated.splice(realFrom, 1);
-        updated.splice(realTo, 0, moved);
-        setLibraryData((prev) => ({ ...prev, favorites: updated }));
-        persistLibraryData({ favorites: updated });
-      }
-    } else if (activeLeftTab === "library") {
-      const updated = [...libraryData.playlists];
-      const realFrom = updated.findIndex((p, idx) => (p.id || `pl-${idx}`) === sourceItem.id || p.name === sourceItem.title);
-      const realTo = updated.findIndex((p, idx) => (p.id || `pl-${idx}`) === targetItem.id || p.name === targetItem.title);
-      if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
-        const [moved] = updated.splice(realFrom, 1);
-        updated.splice(realTo, 0, moved);
-        setLibraryData((prev) => ({ ...prev, playlists: updated }));
-        persistLibraryData({ playlists: updated });
-      }
-    } else if (activeLeftTab === "offline") {
-      const updatedSaved = [...libraryData.savedTracks];
-      const realFrom = updatedSaved.findIndex((t) => t.id === sourceItem.id);
-      const realTo = updatedSaved.findIndex((t) => t.id === targetItem.id);
-      if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
-        const [moved] = updatedSaved.splice(realFrom, 1);
-        updatedSaved.splice(realTo, 0, moved);
-        setLibraryData((prev) => ({ ...prev, savedTracks: updatedSaved }));
-        persistLibraryData({ savedTracks: updatedSaved });
-      } else if (realFrom === -1 && sourceItem.rawTrack && realTo !== -1) {
-        updatedSaved.splice(realTo, 0, sourceItem.rawTrack);
-        setLibraryData((prev) => ({ ...prev, savedTracks: updatedSaved }));
-        persistLibraryData({ savedTracks: updatedSaved });
+      if (currentTrack) {
+        const newCurrentIdx = newQueue.findIndex((t) => t.id === currentTrack.id);
+        if (newCurrentIdx !== -1) {
+          setCurrentIndex(newCurrentIdx);
+          currentIndexRef.current = newCurrentIdx;
+        }
       }
 
-      const realOffFrom = offlineTracks.findIndex((t) => t.id === sourceItem.id);
-      const realOffTo = offlineTracks.findIndex((t) => t.id === targetItem.id);
-      if (realOffFrom !== -1 && realOffTo !== -1 && realOffFrom !== realOffTo) {
-        const updatedOff = [...offlineTracks];
-        const [movedOff] = updatedOff.splice(realOffFrom, 1);
-        updatedOff.splice(realOffTo, 0, movedOff);
-        setOfflineTracks(updatedOff);
+      if (activeLibraryPlaylistId) {
+        setLibraryData((prev) => {
+          const updated = prev.playlists.map((pl, idx) => {
+            if ((pl.id || `pl-${idx}`) === activeLibraryPlaylistId || pl.name === activeLibraryPlaylistId) {
+              return { ...pl, items: newQueue };
+            }
+            return pl;
+          });
+          persistLibraryData({ playlists: updated });
+          return { ...prev, playlists: updated };
+        });
       }
-    } else if (activeLeftTab === "history") {
-      const updated = [...libraryData.history];
-      const realFrom = updated.findIndex((t) => t.id === sourceItem.id);
-      const realTo = updated.findIndex((t) => t.id === targetItem.id);
-      if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
-        const [moved] = updated.splice(realFrom, 1);
-        updated.splice(realTo, 0, moved);
-        setLibraryData((prev) => ({ ...prev, history: updated }));
-        persistLibraryData({ history: updated });
+    } else if (scope === "sidebar") {
+      if (isLeftSorted) setIsLeftSorted(false);
+      const currentItems = getSidebarItems();
+      if (fromIndex >= currentItems.length || toIndex >= currentItems.length) return;
+
+      const sourceItem = currentItems[fromIndex];
+      const targetItem = currentItems[toIndex];
+      if (!sourceItem || !targetItem) return;
+
+      if (activeLeftTab === "favorites") {
+        const realFrom = libraryData.favorites.findIndex((t) => t.id === sourceItem.id);
+        const realTo = libraryData.favorites.findIndex((t) => t.id === targetItem.id);
+        if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
+          const updated = reorderArray(libraryData.favorites, realFrom, realTo);
+          setLibraryData((prev) => ({ ...prev, favorites: updated }));
+          persistLibraryData({ favorites: updated });
+        }
+      } else if (activeLeftTab === "library") {
+        const realFrom = libraryData.playlists.findIndex((p, idx) => (p.id || `pl-${idx}`) === sourceItem.id || p.name === sourceItem.title);
+        const realTo = libraryData.playlists.findIndex((p, idx) => (p.id || `pl-${idx}`) === targetItem.id || p.name === targetItem.title);
+        if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
+          const updated = reorderArray(libraryData.playlists, realFrom, realTo);
+          setLibraryData((prev) => ({ ...prev, playlists: updated }));
+          persistLibraryData({ playlists: updated });
+        }
+      } else if (activeLeftTab === "offline") {
+        const realFrom = libraryData.savedTracks.findIndex((t) => t.id === sourceItem.id);
+        const realTo = libraryData.savedTracks.findIndex((t) => t.id === targetItem.id);
+        if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
+          const updated = reorderArray(libraryData.savedTracks, realFrom, realTo);
+          setLibraryData((prev) => ({ ...prev, savedTracks: updated }));
+          persistLibraryData({ savedTracks: updated });
+        } else if (realFrom === -1 && sourceItem.rawTrack && realTo !== -1) {
+          const updated = [...libraryData.savedTracks];
+          updated.splice(realTo, 0, sourceItem.rawTrack);
+          setLibraryData((prev) => ({ ...prev, savedTracks: updated }));
+          persistLibraryData({ savedTracks: updated });
+        }
+
+        const realOffFrom = offlineTracks.findIndex((t) => t.id === sourceItem.id);
+        const realOffTo = offlineTracks.findIndex((t) => t.id === targetItem.id);
+        if (realOffFrom !== -1 && realOffTo !== -1 && realOffFrom !== realOffTo) {
+          const updatedOff = reorderArray(offlineTracks, realOffFrom, realOffTo);
+          setOfflineTracks(updatedOff);
+        }
+      } else if (activeLeftTab === "history") {
+        const realFrom = libraryData.history.findIndex((t) => t.id === sourceItem.id);
+        const realTo = libraryData.history.findIndex((t) => t.id === targetItem.id);
+        if (realFrom !== -1 && realTo !== -1 && realFrom !== realTo) {
+          const updated = reorderArray(libraryData.history, realFrom, realTo);
+          setLibraryData((prev) => ({ ...prev, history: updated }));
+          persistLibraryData({ history: updated });
+        }
       }
     }
   };
 
-  const handleSidebarTouchStart = (index: number, e: React.TouchEvent) => {
+  // Reusable Touch Drag Handlers (Queue & Sidebar)
+  const handleDragTouchStart = (scope: DragScope, index: number, e: React.TouchEvent) => {
     const touch = e.touches[0];
-    touchSidebarDragItemRef.current = { index, startY: touch.clientY };
-    setDraggedSidebarIndex(index);
+    touchDragRef.current = { scope, index, startY: touch.clientY };
+    setDragItem({ scope, index });
   };
 
-  const handleSidebarTouchMove = (e: React.TouchEvent) => {
-    if (!touchSidebarDragItemRef.current) return;
+  const handleDragTouchMove = (e: React.TouchEvent) => {
+    if (!touchDragRef.current) return;
     const touch = e.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    const sidebarItem = element?.closest("[data-sidebar-index]");
-    if (sidebarItem) {
-      const targetIdx = Number(sidebarItem.getAttribute("data-sidebar-index"));
-      if (!isNaN(targetIdx) && targetIdx !== dragOverSidebarIndex) {
-        setDragOverSidebarIndex(targetIdx);
+    const matched = element?.closest(`[data-drag-scope="${touchDragRef.current.scope}"]`);
+    if (matched) {
+      const targetIdx = Number(matched.getAttribute("data-drag-index"));
+      if (!isNaN(targetIdx) && (!dragOverItem || dragOverItem.index !== targetIdx || dragOverItem.scope !== touchDragRef.current.scope)) {
+        setDragOverItem({ scope: touchDragRef.current.scope, index: targetIdx });
       }
     }
   };
 
-  const handleSidebarTouchEnd = () => {
-    if (touchSidebarDragItemRef.current !== null && dragOverSidebarIndex !== null) {
-      reorderSidebarItems(touchSidebarDragItemRef.current.index, dragOverSidebarIndex);
+  const handleDragTouchEnd = () => {
+    if (touchDragRef.current && dragOverItem && touchDragRef.current.scope === dragOverItem.scope) {
+      handleReorder(touchDragRef.current.scope, touchDragRef.current.index, dragOverItem.index);
     }
-    touchSidebarDragItemRef.current = null;
-    setDraggedSidebarIndex(null);
-    setDragOverSidebarIndex(null);
+    touchDragRef.current = null;
+    setDragItem(null);
+    setDragOverItem(null);
   };
+
+  // Reusable Props Builders for Drag & Drop Items & Handles
+  const getDragItemProps = (scope: DragScope, index: number) => ({
+    "data-drag-scope": scope,
+    "data-drag-index": index,
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      setDragItem({ scope, index });
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", `${scope}:${index}`);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (!dragOverItem || dragOverItem.scope !== scope || dragOverItem.index !== index) {
+        setDragOverItem({ scope, index });
+      }
+    },
+    onDragEnter: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOverItem({ scope, index });
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragItem && dragItem.scope === scope && dragItem.index !== index) {
+        handleReorder(scope, dragItem.index, index);
+      }
+      setDragItem(null);
+      setDragOverItem(null);
+    },
+    onDragEnd: () => {
+      setDragItem(null);
+      setDragOverItem(null);
+    },
+  });
+
+  const getDragHandleProps = (scope: DragScope, index: number) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.stopPropagation();
+      setDragItem({ scope, index });
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", `${scope}:${index}`);
+    },
+    onTouchStart: (e: React.TouchEvent) => {
+      e.stopPropagation();
+      handleDragTouchStart(scope, index, e);
+    },
+    onTouchMove: handleDragTouchMove,
+    onTouchEnd: handleDragTouchEnd,
+    onClick: (e: React.MouseEvent) => e.stopPropagation(),
+  });
+
+  const isItemDragging = (scope: DragScope, index: number) =>
+    dragItem?.scope === scope && dragItem.index === index;
+
+  const isItemDragOver = (scope: DragScope, index: number) =>
+    dragOverItem?.scope === scope && dragOverItem.index === index && !isItemDragging(scope, index);
 
   // Real tracks to display in Discovery Feed (Center Canvas)
   const recentTracksToDisplay = libraryData.history.slice(0, 12);
@@ -4564,42 +4582,15 @@ export default function App() {
                 {getSidebarItems().length > 0 ? (
                   getSidebarItems().map((item, idx) => {
                     const itemId = item.id || (item.rawPlaylist?.id || item.rawPlaylist?.name) || `sidebar-item-${idx}`;
-                    const isDragging = draggedSidebarIndex === idx;
-                    const isDragOver = dragOverSidebarIndex === idx && draggedSidebarIndex !== idx;
+                    const isDragging = isItemDragging("sidebar", idx);
+                    const isDragOver = isItemDragOver("sidebar", idx);
                     const isSelected =
                       (activeLeftTab === "library" && activeLibraryPlaylistId === (item.rawPlaylist?.id || item.rawPlaylist?.name)) ||
                       ((activeLeftTab === "favorites" || activeLeftTab === "history" || activeLeftTab === "offline") && currentTrack && currentTrack.id === item.id);
                     return (
                       <div
                         key={itemId}
-                        data-sidebar-index={idx}
-                        draggable
-                        onDragStart={(e) => {
-                          setDraggedSidebarIndex(idx);
-                          e.dataTransfer.effectAllowed = "move";
-                          e.dataTransfer.setData("text/plain", idx.toString());
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = "move";
-                          if (dragOverSidebarIndex !== idx) setDragOverSidebarIndex(idx);
-                        }}
-                        onDragEnter={(e) => {
-                          e.preventDefault();
-                          setDragOverSidebarIndex(idx);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (draggedSidebarIndex !== null && draggedSidebarIndex !== idx) {
-                            reorderSidebarItems(draggedSidebarIndex, idx);
-                          }
-                          setDraggedSidebarIndex(null);
-                          setDragOverSidebarIndex(null);
-                        }}
-                        onDragEnd={() => {
-                          setDraggedSidebarIndex(null);
-                          setDragOverSidebarIndex(null);
-                        }}
+                        {...getDragItemProps("sidebar", idx)}
                         onClick={() => {
                           if (item.rawTrack) {
                             if (activeLeftTab === "favorites") {
@@ -4711,20 +4702,7 @@ export default function App() {
                           </div>
                         )}
                         <div
-                          draggable
-                          onDragStart={(e) => {
-                            e.stopPropagation();
-                            setDraggedSidebarIndex(idx);
-                            e.dataTransfer.effectAllowed = "move";
-                            e.dataTransfer.setData("text/plain", idx.toString());
-                          }}
-                          onTouchStart={(e) => {
-                            e.stopPropagation();
-                            handleSidebarTouchStart(idx, e);
-                          }}
-                          onTouchMove={handleSidebarTouchMove}
-                          onTouchEnd={handleSidebarTouchEnd}
-                          onClick={(e) => e.stopPropagation()}
+                          {...getDragHandleProps("sidebar", idx)}
                           className="p-1 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/80 active:text-[var(--theme-accent)] transition-colors flex-shrink-0 touch-none ml-auto"
                           title="Nắm kéo để thay đổi thứ tự"
                         >
@@ -7057,41 +7035,14 @@ export default function App() {
                 <div className="flex-1 min-h-0 flex flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1">
                   {queueTracks.map((track, i) => {
                     const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
-                    const isDragging = draggedQueueIndex === i;
-                    const isDragOver = dragOverQueueIndex === i && draggedQueueIndex !== i;
+                    const isDragging = isItemDragging("queue", i);
+                    const isDragOver = isItemDragOver("queue", i);
                     return (
                       <div
                         key={track.id + i}
-                        data-queue-index={i}
                         ref={isCurrent ? mobileActiveQueueRef : undefined}
                         style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
-                        draggable
-                        onDragStart={(e) => {
-                          setDraggedQueueIndex(i);
-                          e.dataTransfer.effectAllowed = "move";
-                          e.dataTransfer.setData("text/plain", i.toString());
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = "move";
-                          if (dragOverQueueIndex !== i) setDragOverQueueIndex(i);
-                        }}
-                        onDragEnter={(e) => {
-                          e.preventDefault();
-                          setDragOverQueueIndex(i);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (draggedQueueIndex !== null && draggedQueueIndex !== i) {
-                            reorderQueueTracks(draggedQueueIndex, i);
-                          }
-                          setDraggedQueueIndex(null);
-                          setDragOverQueueIndex(null);
-                        }}
-                        onDragEnd={() => {
-                          setDraggedQueueIndex(null);
-                          setDragOverQueueIndex(null);
-                        }}
+                        {...getDragItemProps("queue", i)}
                         onClick={() => {
                           setCurrentIndex(i);
                           currentIndexRef.current = i;
@@ -7128,20 +7079,7 @@ export default function App() {
                           {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
                         </span>
                         <div
-                          draggable
-                          onDragStart={(e) => {
-                            e.stopPropagation();
-                            setDraggedQueueIndex(i);
-                            e.dataTransfer.effectAllowed = "move";
-                            e.dataTransfer.setData("text/plain", i.toString());
-                          }}
-                          onTouchStart={(e) => {
-                            e.stopPropagation();
-                            handleTouchStart(i, e);
-                          }}
-                          onTouchMove={handleTouchMove}
-                          onTouchEnd={handleTouchEnd}
-                          onClick={(e) => e.stopPropagation()}
+                          {...getDragHandleProps("queue", i)}
                           className="p-1 cursor-grab active:cursor-grabbing text-white/25 hover:text-white/80 active:text-[var(--theme-accent)] transition-colors flex-shrink-0 touch-none"
                           title="Nắm kéo để thay đổi thứ tự phát"
                         >
@@ -7758,41 +7696,14 @@ export default function App() {
             {queueTracks.length > 0 ? (
               queueTracks.map((track, i) => {
                 const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
-                const isDragging = draggedQueueIndex === i;
-                const isDragOver = dragOverQueueIndex === i && draggedQueueIndex !== i;
+                const isDragging = isItemDragging("queue", i);
+                const isDragOver = isItemDragOver("queue", i);
                 const artistLabel = formatTrackArtist(track.title, track.author);
                 return (
                   <div
                     key={track.id + i}
-                    data-queue-index={i}
                     style={{ animationDelay: `${Math.min(i * 20, 200)}ms` }}
-                    draggable
-                    onDragStart={(e) => {
-                      setDraggedQueueIndex(i);
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", i.toString());
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                      if (dragOverQueueIndex !== i) setDragOverQueueIndex(i);
-                    }}
-                    onDragEnter={(e) => {
-                      e.preventDefault();
-                      setDragOverQueueIndex(i);
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (draggedQueueIndex !== null && draggedQueueIndex !== i) {
-                        reorderQueueTracks(draggedQueueIndex, i);
-                      }
-                      setDraggedQueueIndex(null);
-                      setDragOverQueueIndex(null);
-                    }}
-                    onDragEnd={() => {
-                      setDraggedQueueIndex(null);
-                      setDragOverQueueIndex(null);
-                    }}
+                    {...getDragItemProps("queue", i)}
                     onClick={() => {
                       setCurrentIndex(i);
                       currentIndexRef.current = i;
@@ -7830,20 +7741,7 @@ export default function App() {
                       {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
                     </span>
                     <div
-                      draggable
-                      onDragStart={(e) => {
-                        e.stopPropagation();
-                        setDraggedQueueIndex(i);
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", i.toString());
-                      }}
-                      onTouchStart={(e) => {
-                        e.stopPropagation();
-                        handleTouchStart(i, e);
-                      }}
-                      onTouchMove={handleTouchMove}
-                      onTouchEnd={handleTouchEnd}
-                      onClick={(e) => e.stopPropagation()}
+                      {...getDragHandleProps("queue", i)}
                       className="p-1 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/80 active:text-[var(--theme-accent)] transition-colors flex-shrink-0 touch-none"
                       title="Nắm kéo để thay đổi thứ tự phát"
                     >
