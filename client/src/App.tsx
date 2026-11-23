@@ -2812,7 +2812,7 @@ export default function App() {
             thumbnail: `https://i.ytimg.com/vi/${v}/mqdefault.jpg`,
           };
           loadAndPlayTrack(incomingTrack, shouldPlay);
-          const cleanUrl = window.location.origin + window.location.pathname;
+          const cleanUrl = window.location.origin + window.location.pathname + (window.location.hash || "");
           window.history.replaceState({}, document.title, cleanUrl);
         }
       }
@@ -2821,7 +2821,7 @@ export default function App() {
     // 2. Listen for live incoming tracks from KahoiiMusic Extension (instant play when tab is already open)
     const handleExtensionMsg = (event: MessageEvent) => {
       try {
-        if (event.data && event.data.type === "KAHOII_PLAY_TRACK" && event.data.track) {
+        if (event.data && typeof event.data === "object" && event.data.type === "KAHOII_PLAY_TRACK" && event.data.track) {
           const t = event.data.track;
           const trackId = t.id || t.v;
           if (trackId) {
@@ -2841,7 +2841,7 @@ export default function App() {
     const handleCustomEvent = (e: Event) => {
       try {
         const ce = e as CustomEvent;
-        if (ce.detail) {
+        if (ce.detail && typeof ce.detail === "object") {
           const t = ce.detail;
           const trackId = t.id || t.v;
           if (trackId) {
