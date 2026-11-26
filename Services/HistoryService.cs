@@ -29,21 +29,94 @@ namespace KahoiiMusic.Services
         private static int _lyricsFontSizeLevel = 1; // 0 = Nhỏ, 1 = Vừa (chuẩn), 2 = Lớn
         private static int _artworkDisplayMode = 0; // 0 = VinylRecord, 1 = RoundedCard
         private static bool _isMaximizedMode = false;
+        private static float _volume = 1.0f; // Default: 100%
         private static bool _initialized = false;
+        private static System.Threading.Timer _saveSettingsTimer;
 
         public static bool IsMaximizedMode
         {
-            get { lock (_lock) { return _isMaximizedMode; } }
+            get
+            {
+                lock (_lock)
+                {
+                    if (!_initialized) Init();
+                    return _isMaximizedMode;
+                }
+            }
             set
             {
                 lock (_lock)
                 {
+                    if (!_initialized) Init();
                     if (_isMaximizedMode != value)
                     {
                         _isMaximizedMode = value;
                         SaveSettings();
                     }
                 }
+            }
+        }
+
+        public static float Volume
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    if (!_initialized) Init();
+                    return _volume;
+                }
+            }
+            set
+            {
+                lock (_lock)
+                {
+                    if (!_initialized) Init();
+                    float clamped = Math.Max(0.0f, Math.Min(1.0f, value));
+                    if (Math.Abs(_volume - clamped) > 0.005f)
+                    {
+                        _volume = clamped;
+                        ScheduleSaveSettings();
+                    }
+                }
+            }
+        }
+
+        private static void ScheduleSaveSettings()
+        {
+            try
+            {
+                if (_saveSettingsTimer == null)
+                {
+                    _saveSettingsTimer = new System.Threading.Timer(_ =>
+                    {
+                        lock (_lock)
+                        {
+                            SaveSettings();
+                        }
+                    }, null, 500, System.Threading.Timeout.Infinite);
+                }
+                else
+                {
+                    _saveSettingsTimer.Change(500, System.Threading.Timeout.Infinite);
+                }
+            }
+            catch { }
+        }
+
+        public static void SaveSettingsImmediately()
+        {
+            lock (_lock)
+            {
+                try
+                {
+                    if (_saveSettingsTimer != null)
+                    {
+                        _saveSettingsTimer.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+                    }
+                }
+                catch { }
+                SaveSettings();
             }
         }
 
@@ -722,6 +795,15 @@ namespace KahoiiMusic.Services
                             _lyricsFontSizeLevel = Math.Max(0, Math.Min(2, fontVal));
                         }
                     }
+
+                    Match mVol = Regex.Match(text, "\"volume\"\\s*:\\s*([0-9.]+)", RegexOptions.IgnoreCase);
+                    if (mVol.Success)
+                    {
+                        if (float.TryParse(mVol.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v))
+                        {
+                            _volume = Math.Max(0.0f, Math.Min(1.0f, v));
+                        }
+                    }
                     return;
                 }
             }
@@ -732,19 +814,22 @@ namespace KahoiiMusic.Services
             _lyricsFontSizeLevel = 1;
             _artworkDisplayMode = 0;
             _isMaximizedMode = false;
+            _volume = 1.0f;
         }
 
         private static void SaveSettings()
         {
             try
             {
-                string json = string.Format("{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2},\r\n  \"artworkDisplayMode\": {3},\r\n  \"isMaximizedMode\": {4},\r\n  \"lyricsFontSizeLevel\": {5}\r\n}}",
+                string json = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "{{\r\n  \"autoCleanTempOnExit\": {0},\r\n  \"lyricsDelayOffsetMs\": {1},\r\n  \"lyricsRomanizationMode\": {2},\r\n  \"artworkDisplayMode\": {3},\r\n  \"isMaximizedMode\": {4},\r\n  \"lyricsFontSizeLevel\": {5},\r\n  \"volume\": {6:0.00}\r\n}}",
                     _autoCleanTempOnExit ? "true" : "false",
                     _lyricsDelayOffsetMs,
                     _lyricsRomanizationMode,
                     _artworkDisplayMode,
                     _isMaximizedMode ? "true" : "false",
-                    _lyricsFontSizeLevel);
+                    _lyricsFontSizeLevel,
+                    _volume);
                 File.WriteAllText(SettingsFile, json, Encoding.UTF8);
             }
             catch { }

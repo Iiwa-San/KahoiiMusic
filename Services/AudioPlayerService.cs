@@ -1519,97 +1519,19 @@ namespace KahoiiMusic.Services
             set => _currentQueueSource = value;
         }
 
-        public void PlayHistory(List<PlaylistItem> historyItems, int startIndex = 0)
-        {
-            if (historyItems == null || historyItems.Count == 0) return;
-
-            _isPlayingFromHistory = true;
-            _currentQueueSource = ActiveQueueSource.History;
-            _playlist = new List<PlaylistItem>(historyItems);
-            _currentPlaylistId = null;
-
-            CurrentPlaylistTitle = "Lịch sử nghe";
-            _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
-
-            lock (_shufflePlayedIndices)
-            {
-                _shufflePlayedIndices.Clear();
-                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
-            }
-
-            _syncContext?.Post(delegate
-            {
-                PlaylistLoaded?.Invoke(this, _playlist);
-                PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
-            }, null);
-
-            PlayTrackAtIndex(_currentPlaylistIndex);
-        }
-
-        public void PlaySavedTracks(List<PlaylistItem> savedItems, int startIndex = 0)
-        {
-            if (savedItems == null || savedItems.Count == 0) return;
-
-            _isPlayingFromHistory = false;
-            _currentQueueSource = ActiveQueueSource.Saved;
-            _playlist = new List<PlaylistItem>(savedItems);
-            _currentPlaylistId = null;
-
-            CurrentPlaylistTitle = "Đã tải";
-            _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
-
-            lock (_shufflePlayedIndices)
-            {
-                _shufflePlayedIndices.Clear();
-                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
-            }
-
-            _syncContext?.Post(delegate
-            {
-                PlaylistLoaded?.Invoke(this, _playlist);
-                PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
-            }, null);
-
-            PlayTrackAtIndex(_currentPlaylistIndex, debounce: false);
-        }
-
-        public void PlayFavorites(List<PlaylistItem> favoriteItems, int startIndex = 0)
-        {
-            if (favoriteItems == null || favoriteItems.Count == 0) return;
-
-            _isPlayingFromHistory = false;
-            _currentQueueSource = ActiveQueueSource.Favorites;
-            _playlist = new List<PlaylistItem>(favoriteItems);
-            _currentPlaylistId = null;
-
-            CurrentPlaylistTitle = "Yêu thích";
-            _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
-
-            lock (_shufflePlayedIndices)
-            {
-                _shufflePlayedIndices.Clear();
-                if (_currentPlaylistIndex >= 0) _shufflePlayedIndices.Add(_currentPlaylistIndex);
-            }
-
-            _syncContext?.Post(delegate
-            {
-                PlaylistLoaded?.Invoke(this, _playlist);
-                PlaylistIndexChanged?.Invoke(this, _currentPlaylistIndex);
-            }, null);
-
-            PlayTrackAtIndex(_currentPlaylistIndex, debounce: false);
-        }
-
-        public void PlayCollection(List<PlaylistItem> items, int startIndex, string playlistTitle, string playlistId)
+        public void PlayList(List<PlaylistItem> items, int startIndex, ActiveQueueSource source, string playlistTitle = null, string playlistId = null, bool isFromHistory = false)
         {
             if (items == null || items.Count == 0) return;
 
-            _isPlayingFromHistory = false;
-            _currentQueueSource = ActiveQueueSource.Collection;
+            _isPlayingFromHistory = isFromHistory;
+            _currentQueueSource = source;
             _playlist = new List<PlaylistItem>(items);
             _currentPlaylistId = playlistId;
 
-            CurrentPlaylistTitle = playlistTitle;
+            if (!string.IsNullOrEmpty(playlistTitle))
+            {
+                CurrentPlaylistTitle = playlistTitle;
+            }
             _currentPlaylistIndex = Math.Max(0, Math.Min(startIndex, _playlist.Count - 1));
 
             lock (_shufflePlayedIndices)
@@ -1626,6 +1548,18 @@ namespace KahoiiMusic.Services
 
             PlayTrackAtIndex(_currentPlaylistIndex, debounce: false);
         }
+
+        public void PlayHistory(List<PlaylistItem> historyItems, int startIndex = 0)
+            => PlayList(historyItems, startIndex, ActiveQueueSource.History, "Lịch sử nghe", null, isFromHistory: true);
+
+        public void PlaySavedTracks(List<PlaylistItem> savedItems, int startIndex = 0)
+            => PlayList(savedItems, startIndex, ActiveQueueSource.Saved, "Đã tải");
+
+        public void PlayFavorites(List<PlaylistItem> favoriteItems, int startIndex = 0)
+            => PlayList(favoriteItems, startIndex, ActiveQueueSource.Favorites, "Yêu thích");
+
+        public void PlayCollection(List<PlaylistItem> items, int startIndex, string playlistTitle, string playlistId)
+            => PlayList(items, startIndex, ActiveQueueSource.Collection, playlistTitle, playlistId);
 
         public void RestoreSessionPlaylist(int index = 0)
         {

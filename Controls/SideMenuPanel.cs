@@ -27,6 +27,9 @@ namespace KahoiiMusic.Controls
         private const int ScrollBarW = 6;
 
         private SideTab _activeTab = SideTab.Queue;
+        private bool IsCollectionTab => (_activeTab == SideTab.Queue);
+        private bool _isSorted = false;
+        private bool _isHoveringSortBtn = false;
         private List<PlaylistItem> _rawItems = new List<PlaylistItem>();
         private List<PlaylistItem> _filteredItems = new List<PlaylistItem>();
         private PlaylistSearchBox _searchBox;
@@ -39,7 +42,7 @@ namespace KahoiiMusic.Controls
         // Collection (2-column layout) state
         private List<UserPlaylist> _collectionPlaylists = new List<UserPlaylist>();
         private List<PlaylistItem> _filteredCollectionTracks = new List<PlaylistItem>();
-        private int _selectedPlaylistIndex = 0;
+        private int _selectedPlaylistIndex = -1;
         private int _hoveredPlaylistIndex = -1;
         private int _hoveredTrackRow = -1;
         private int _colLeftScroll = 0;
@@ -270,25 +273,8 @@ namespace KahoiiMusic.Controls
             {
                 switch (_activeTab)
                 {
-                    case SideTab.Queue:
-                        // Strictly show ONLY tracks imported via link or extension!
-                        var qList = _audioPlayer?.SessionPlaylist;
-                        if (qList != null && qList.Count > 0)
-                        {
-                            _rawItems = new List<PlaylistItem>(qList);
-                        }
-                        else
-                        {
-                            _rawItems = new List<PlaylistItem>();
-                        }
-                        break;
-
-                    case SideTab.Favorites: // Tab 1: "Bộ sưu tập"
+                    case SideTab.Queue: // Tab 0: "Thư viện" (Bộ sưu tập)
                         _collectionPlaylists.Clear();
-                        // 1. Built-in "Yêu thích"
-                        var favList = FavoritesService.GetFavorites() ?? new List<PlaylistItem>();
-                        _collectionPlaylists.Add(new UserPlaylist("Yêu thích", favList) { Id = "__FAVORITES__" });
-                        // 2. Custom user-created playlists
                         var userPlaylists = PlaylistCollectionService.Instance.GetPlaylists();
                         if (userPlaylists != null)
                         {
@@ -299,17 +285,21 @@ namespace KahoiiMusic.Controls
                         }
                         if (_selectedPlaylistIndex >= _collectionPlaylists.Count)
                         {
-                            _selectedPlaylistIndex = Math.Max(0, _collectionPlaylists.Count - 1);
+                            _selectedPlaylistIndex = _collectionPlaylists.Count - 1;
                         }
                         RefreshCollectionTracks();
                         break;
 
-                    case SideTab.History:
-                        _rawItems = HistoryService.GetHistory() ?? new List<PlaylistItem>();
+                    case SideTab.Favorites: // Tab 1: "Yêu thích"
+                        _rawItems = FavoritesService.GetFavorites() ?? new List<PlaylistItem>();
                         break;
 
-                    case SideTab.Saved:
+                    case SideTab.History: // Tab 2: "Đã tải"
                         _rawItems = SavedTracksService.Instance.GetSavedTracks() ?? new List<PlaylistItem>();
+                        break;
+
+                    case SideTab.Saved: // Tab 3: "Lịch sử"
+                        _rawItems = HistoryService.GetHistory() ?? new List<PlaylistItem>();
                         break;
                 }
             }
@@ -328,11 +318,23 @@ namespace KahoiiMusic.Controls
         {
             get
             {
-                if (string.IsNullOrWhiteSpace(_searchCollectionsQuery)) return _collectionPlaylists;
-                string clean = RemoveDiacritics(_searchCollectionsQuery);
-                return _collectionPlaylists.FindAll(x =>
-                    x.Name.IndexOf(_searchCollectionsQuery, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    RemoveDiacritics(x.Name).IndexOf(clean, StringComparison.OrdinalIgnoreCase) >= 0);
+                List<UserPlaylist> list;
+                if (string.IsNullOrWhiteSpace(_searchCollectionsQuery))
+                {
+                    list = new List<UserPlaylist>(_collectionPlaylists);
+                }
+                else
+                {
+                    string clean = RemoveDiacritics(_searchCollectionsQuery);
+                    list = _collectionPlaylists.FindAll(x =>
+                        x.Name.IndexOf(_searchCollectionsQuery, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        RemoveDiacritics(x.Name).IndexOf(clean, StringComparison.OrdinalIgnoreCase) >= 0);
+                }
+                if (_isSorted)
+                {
+                    list.Sort((a, b) => string.Compare(a?.Name, b?.Name, StringComparison.CurrentCultureIgnoreCase));
+                }
+                return list;
             }
         }
 
@@ -348,22 +350,28 @@ namespace KahoiiMusic.Controls
             if (string.IsNullOrWhiteSpace(_searchCollectionTracksQuery))
             {
                 _filteredCollectionTracks = new List<PlaylistItem>(curP.Items);
-                return;
+            }
+            else
+            {
+                string cleanQuery = RemoveDiacritics(_searchCollectionTracksQuery);
+                _filteredCollectionTracks = curP.Items.FindAll(x =>
+                {
+                    if (string.IsNullOrEmpty(x.Title)) return false;
+                    if (x.Title.IndexOf(_searchCollectionTracksQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    if (RemoveDiacritics(x.Title).IndexOf(cleanQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    if (!string.IsNullOrEmpty(x.Author))
+                    {
+                        if (x.Author.IndexOf(_searchCollectionTracksQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                        if (RemoveDiacritics(x.Author).IndexOf(cleanQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    }
+                    return false;
+                });
             }
 
-            string cleanQuery = RemoveDiacritics(_searchCollectionTracksQuery);
-            _filteredCollectionTracks = curP.Items.FindAll(x =>
+            if (_isSorted)
             {
-                if (string.IsNullOrEmpty(x.Title)) return false;
-                if (x.Title.IndexOf(_searchCollectionTracksQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-                if (RemoveDiacritics(x.Title).IndexOf(cleanQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-                if (!string.IsNullOrEmpty(x.Author))
-                {
-                    if (x.Author.IndexOf(_searchCollectionTracksQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-                    if (RemoveDiacritics(x.Author).IndexOf(cleanQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-                }
-                return false;
-            });
+                _filteredCollectionTracks.Sort((a, b) => string.Compare(a?.Title, b?.Title, StringComparison.CurrentCultureIgnoreCase));
+            }
         }
 
         private UserPlaylist GetSelectedCollectionPlaylist()
@@ -373,6 +381,40 @@ namespace KahoiiMusic.Controls
                 return _collectionPlaylists[_selectedPlaylistIndex];
             }
             return null;
+        }
+
+        private string ResolveDisplayAuthor(PlaylistItem item)
+        {
+            if (item == null) return string.Empty;
+            string raw = item.Author;
+            if (!string.IsNullOrWhiteSpace(raw) && !string.Equals(raw.Trim(), "YouTube", StringComparison.OrdinalIgnoreCase))
+            {
+                return raw;
+            }
+
+            string fromTitle = YouTubeSearchService.ExtractSmartArtistFromTitle(item.Title);
+            if (!string.IsNullOrWhiteSpace(fromTitle))
+            {
+                item.Author = fromTitle;
+                return fromTitle;
+            }
+
+            string cached = YouTubeSearchService.GetCachedArtist(item.Id);
+            if (!string.IsNullOrWhiteSpace(cached))
+            {
+                item.Author = cached;
+                return cached;
+            }
+
+            YouTubeSearchService.QueueResolveArtist(item, () =>
+            {
+                if (!IsDisposed)
+                {
+                    try { BeginInvoke(new Action(Invalidate)); } catch { }
+                }
+            });
+
+            return "Nghệ sĩ";
         }
 
         private static string RemoveDiacritics(string text)
@@ -394,7 +436,7 @@ namespace KahoiiMusic.Controls
 
         private void ApplyFilter()
         {
-            if (_activeTab == SideTab.Favorites)
+            if (IsCollectionTab)
             {
                 RefreshCollectionTracks();
                 return;
@@ -403,22 +445,28 @@ namespace KahoiiMusic.Controls
             if (string.IsNullOrWhiteSpace(_searchQuery))
             {
                 _filteredItems = new List<PlaylistItem>(_rawItems);
-                return;
+            }
+            else
+            {
+                string cleanQuery = RemoveDiacritics(_searchQuery);
+                _filteredItems = _rawItems.FindAll(x =>
+                {
+                    if (string.IsNullOrEmpty(x.Title)) return false;
+                    if (x.Title.IndexOf(_searchQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    if (RemoveDiacritics(x.Title).IndexOf(cleanQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    if (!string.IsNullOrEmpty(x.Author))
+                    {
+                        if (x.Author.IndexOf(_searchQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                        if (RemoveDiacritics(x.Author).IndexOf(cleanQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    }
+                    return false;
+                });
             }
 
-            string cleanQuery = RemoveDiacritics(_searchQuery);
-            _filteredItems = _rawItems.FindAll(x =>
+            if (_isSorted)
             {
-                if (string.IsNullOrEmpty(x.Title)) return false;
-                if (x.Title.IndexOf(_searchQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-                if (RemoveDiacritics(x.Title).IndexOf(cleanQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-                if (!string.IsNullOrEmpty(x.Author))
-                {
-                    if (x.Author.IndexOf(_searchQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-                    if (RemoveDiacritics(x.Author).IndexOf(cleanQuery, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-                }
-                return false;
-            });
+                _filteredItems.Sort((a, b) => string.Compare(a?.Title, b?.Title, StringComparison.CurrentCultureIgnoreCase));
+            }
         }
 
         private int ListTop => 10 + TabsH + 8 + SearchBoxH + 10;
@@ -427,11 +475,19 @@ namespace KahoiiMusic.Controls
 
         // Collection column layout metrics
         private const int ColHeaderH = 36;
-        private int LeftColWidth => Math.Max(150, Math.Min(220, (int)((Width - 28) * 0.38f)));
+        private bool IsCompactSingleCol => Width < 450;
+        private bool _inCollectionTrackView = false;
+        private bool _isHoveringBackCol = false;
+        private int LeftColWidth => IsCompactSingleCol ? Math.Max(100, Width - 20) : Math.Max(150, Math.Min(220, (int)((Width - 28) * 0.38f)));
         private int LeftListTop => ListTop + ColHeaderH;
         private int LeftListHeight => Math.Max(10, Height - LeftListTop - 8);
         private int RightListTop => ListTop + ColHeaderH;
         private int RightListHeight => Math.Max(10, Height - RightListTop - 8);
+
+        private Rectangle GetCollectionBackBtnRect()
+        {
+            return new Rectangle(10, ListTop + 4, 82, 22);
+        }
 
         private Rectangle GetNewPlaylistBtnRect()
         {
@@ -440,6 +496,10 @@ namespace KahoiiMusic.Controls
 
         private Rectangle GetPlayAllBtnRect()
         {
+            if (IsCompactSingleCol)
+            {
+                return new Rectangle(Width - 84, ListTop + 4, 74, 22);
+            }
             int divX = 10 + LeftColWidth + 4;
             int rightColX = divX + 6;
             int rightColW = Width - rightColX - 10;
@@ -496,17 +556,24 @@ namespace KahoiiMusic.Controls
             Invalidate();
         }
 
+        private Rectangle GetSortBtnRect()
+        {
+            int searchY = 10 + TabsH + 8;
+            return new Rectangle(Width - 10 - 34, searchY, 34, SearchBoxH);
+        }
+
         private void UpdateSearchBoxesLayout()
         {
             int tabY = 10;
             int searchY = tabY + TabsH + 8;
-            bool isCol = (_activeTab == SideTab.Favorites);
+            bool isCol = IsCollectionTab;
+            bool useSingleSearch = !isCol || IsCompactSingleCol;
 
             if (_searchBox != null)
             {
-                _searchBox.Visible = !isCol;
+                _searchBox.Visible = useSingleSearch;
                 _searchBox.Location = new Point(10, searchY);
-                _searchBox.Size = new Size(Math.Max(100, Width - 20), SearchBoxH);
+                _searchBox.Size = new Size(Math.Max(80, Width - 20 - 38), SearchBoxH);
             }
 
             int leftColW = LeftColWidth;
@@ -516,14 +583,14 @@ namespace KahoiiMusic.Controls
 
             if (_searchCollectionsBox != null)
             {
-                _searchCollectionsBox.Visible = isCol;
+                _searchCollectionsBox.Visible = isCol && !IsCompactSingleCol;
                 _searchCollectionsBox.Location = new Point(10, searchY);
                 _searchCollectionsBox.Size = new Size(leftColW, SearchBoxH);
             }
 
             if (_searchCollectionTracksBox != null)
             {
-                _searchCollectionTracksBox.Visible = isCol;
+                _searchCollectionTracksBox.Visible = isCol && !IsCompactSingleCol;
                 _searchCollectionTracksBox.Location = new Point(rightColX, searchY);
                 _searchCollectionTracksBox.Size = new Size(rightColW, SearchBoxH);
             }
@@ -620,7 +687,11 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            if (_activeTab == SideTab.Favorites)
+            bool prevSortHov = _isHoveringSortBtn;
+            _isHoveringSortBtn = (!IsCollectionTab || IsCompactSingleCol) && GetSortBtnRect().Contains(e.Location);
+            if (_isHoveringSortBtn != prevSortHov) needRepaint = true;
+
+            if (IsCollectionTab)
             {
                 // Collection 2-column mode hover detection
                 bool prevNewBtn = _isHoveringNewBtn;
@@ -745,7 +816,7 @@ namespace KahoiiMusic.Controls
             // Context Menu on Right Click
             if (e.Button == MouseButtons.Right)
             {
-                if (_activeTab == SideTab.Favorites)
+                if (IsCollectionTab)
                 {
                     int leftColX = 10;
                     int leftColW = LeftColWidth;
@@ -808,9 +879,71 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            // Collection 2-Column Interactions
-            if (_activeTab == SideTab.Favorites)
+            // Sort button click
+            if ((!IsCollectionTab || IsCompactSingleCol) && GetSortBtnRect().Contains(e.Location))
             {
+                _isSorted = !_isSorted;
+                ApplyFilter();
+                Invalidate();
+                return;
+            }
+
+            // Collection 2-Column / Compact 1-Column Interactions
+            if (IsCollectionTab)
+            {
+                if (IsCompactSingleCol)
+                {
+                    if (!_inCollectionTrackView)
+                    {
+                        if (GetNewPlaylistBtnRect().Contains(e.Location))
+                        {
+                            PromptCreateNewPlaylist();
+                            return;
+                        }
+                        if (e.X >= 10 && e.X <= Width - 10 && e.Y >= LeftListTop && e.Y <= LeftListTop + LeftListHeight)
+                        {
+                            var filtered = FilteredCollectionPlaylists;
+                            int relY = e.Y - LeftListTop + _colLeftScroll;
+                            int pIdx = relY / PlaylistRowH;
+                            if (pIdx >= 0 && pIdx < filtered.Count)
+                            {
+                                int realIdx = _collectionPlaylists.FindIndex(p => p.Id == filtered[pIdx].Id);
+                                if (realIdx >= 0) _selectedPlaylistIndex = realIdx;
+                                _colRightScroll = 0;
+                                RefreshCollectionTracks();
+                                PlayAllInSelectedCollection();
+                                Invalidate();
+                            }
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        if (GetCollectionBackBtnRect().Contains(e.Location))
+                        {
+                            _inCollectionTrackView = false;
+                            Invalidate();
+                            return;
+                        }
+                        if (GetPlayAllBtnRect().Contains(e.Location))
+                        {
+                            PlayAllInSelectedCollection();
+                            return;
+                        }
+                        if (e.X >= 10 && e.X <= Width - 10 && e.Y >= RightListTop && e.Y <= RightListTop + RightListHeight)
+                        {
+                            int relY = e.Y - RightListTop + _colRightScroll;
+                            int tIdx = relY / RowH;
+                            if (tIdx >= 0 && tIdx < _filteredCollectionTracks.Count)
+                            {
+                                PlayCollectionTrack(tIdx);
+                                return;
+                            }
+                        }
+                    }
+                    return;
+                }
+
                 // "+ Mới" button clicked
                 if (GetNewPlaylistBtnRect().Contains(e.Location))
                 {
@@ -922,30 +1055,20 @@ namespace KahoiiMusic.Controls
                 if (rowIdx >= 0 && rowIdx < _filteredItems.Count)
                 {
                     PlaylistItem item = _filteredItems[rowIdx];
-                    if (_activeTab == SideTab.Queue)
+                    int realIdx = _rawItems.IndexOf(item);
+                    int playIdx = realIdx >= 0 ? realIdx : 0;
+
+                    if (_activeTab == SideTab.Favorites)
                     {
-                        if (_audioPlayer != null)
-                        {
-                            int sIdx = _audioPlayer.SessionPlaylist?.FindIndex(x => string.Equals(x.Id, item.Id, StringComparison.OrdinalIgnoreCase)) ?? -1;
-                            if (sIdx >= 0)
-                            {
-                                _audioPlayer.RestoreSessionPlaylist(sIdx);
-                            }
-                            else
-                            {
-                                TrackSelected?.Invoke(this, item);
-                            }
-                        }
+                        _audioPlayer?.PlayList(_rawItems, playIdx, ActiveQueueSource.Favorites, "Yêu thích");
                     }
-                    else if (_activeTab == SideTab.History)
+                    else if (_activeTab == SideTab.History) // Tab 2: "Đã tải"
                     {
-                        int realIdx = _rawItems.IndexOf(item);
-                        _audioPlayer?.PlayHistory(_rawItems, realIdx >= 0 ? realIdx : 0);
+                        _audioPlayer?.PlayList(_rawItems, playIdx, ActiveQueueSource.Saved, "Đã tải");
                     }
-                    else if (_activeTab == SideTab.Saved)
+                    else if (_activeTab == SideTab.Saved) // Tab 3: "Lịch sử"
                     {
-                        int realIdx = _rawItems.IndexOf(item);
-                        _audioPlayer?.PlaySavedTracks(_rawItems, realIdx >= 0 ? realIdx : 0);
+                        _audioPlayer?.PlayList(_rawItems, playIdx, ActiveQueueSource.History, "Lịch sử nghe", null, isFromHistory: true);
                     }
                     Invalidate();
                 }
@@ -1089,7 +1212,7 @@ namespace KahoiiMusic.Controls
 
         protected override void OnMouseWheel(MouseEventArgs e)
         {
-            if (_activeTab == SideTab.Favorites)
+            if (IsCollectionTab)
             {
                 int leftColX = 10;
                 int leftColW = LeftColWidth;
@@ -1133,7 +1256,7 @@ namespace KahoiiMusic.Controls
 
             // 1. Panel Background (Glassmorphism dark translucent card, opacity < 100%)
             Rectangle cardRect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath path = RoundedRect(cardRect, 14))
+            using (GraphicsPath path = RoundedRect(cardRect, 22))
             {
                 Color bg = IsPopup ? Color.FromArgb(246, 22, 10, 42) : Color.FromArgb(150, 22, 10, 42);
                 using (SolidBrush bgBrush = new SolidBrush(bg))
@@ -1166,12 +1289,12 @@ namespace KahoiiMusic.Controls
                 }
             }
 
-            // 2. Tabs (Pill Buttons directly at top) - Pure Titles without (n)
+            // 2. Tabs (Pill Buttons directly at top) - WebApp order
             string[] tabLabels = new string[4];
-            tabLabels[0] = "Danh sách phát";
-            tabLabels[1] = "Bộ sưu tập";
-            tabLabels[2] = "Lịch sử";
-            tabLabels[3] = "Đã tải";
+            tabLabels[0] = "Thư viện";
+            tabLabels[1] = "Yêu thích";
+            tabLabels[2] = "Đã tải";
+            tabLabels[3] = "Lịch sử";
             for (int i = 0; i < 4; i++)
             {
                 Rectangle tr = _tabRects[i];
@@ -1195,7 +1318,8 @@ namespace KahoiiMusic.Controls
                     }
                 }
 
-                using (Font tabFont = new Font("Segoe UI", 9.0f, fs))
+                float tabFontSize = Width < 400 ? 7.8f : 9.0f;
+                using (Font tabFont = new Font("Segoe UI", tabFontSize, fs))
                 using (SolidBrush tabBrush = new SolidBrush(textColor))
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
@@ -1203,8 +1327,29 @@ namespace KahoiiMusic.Controls
                 }
             }
 
+            // Sort (A-Z) button next to search box
+            if (!IsCollectionTab || IsCompactSingleCol)
+            {
+                Rectangle sortRect = GetSortBtnRect();
+                Color sBg = _isSorted ? _theme.AccentColor : (_isHoveringSortBtn ? Color.FromArgb(60, 42, 92) : Color.FromArgb(140, 28, 14, 52));
+                Color sBrd = _isSorted ? Color.White : Color.FromArgb(80, _theme.SecondaryAccentColor);
+                using (GraphicsPath sp = RoundedRect(sortRect, 8))
+                using (SolidBrush sb = new SolidBrush(sBg))
+                using (Pen spen = new Pen(sBrd, 1f))
+                {
+                    g.FillPath(sb, sp);
+                    g.DrawPath(spen, sp);
+                }
+                using (Font sf = new Font("Segoe UI", 8.0f, FontStyle.Bold))
+                using (SolidBrush stb = new SolidBrush(Color.White))
+                using (StringFormat ssf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    g.DrawString("A-Z", sf, stb, sortRect, ssf);
+                }
+            }
+
             // 3. Render Session Area
-            if (_activeTab == SideTab.Favorites)
+            if (IsCollectionTab)
             {
                 DrawCollectionSession(g);
             }
@@ -1218,85 +1363,122 @@ namespace KahoiiMusic.Controls
         {
             int listTop = ListTop;
             int listH = ListHeight;
+            bool compactSingle = IsCompactSingleCol;
+            bool drawLeft = !compactSingle || !_inCollectionTrackView;
+            bool drawRight = !compactSingle || _inCollectionTrackView;
+
             int leftColX = 10;
             int leftColW = LeftColWidth;
             int divX = leftColX + leftColW + 4;
-            int rightColX = divX + 6;
-            int rightColW = Width - rightColX - 10;
+            int rightColX = compactSingle ? 10 : (divX + 6);
+            int rightColW = compactSingle ? Math.Max(100, Width - 20) : (Width - rightColX - 10);
 
-            // ===== LEFT COLUMN HEADER =====
-            using (Font subHeaderFont = new Font("Segoe UI", 8.25f, FontStyle.Bold))
-            using (SolidBrush subHeaderBrush = new SolidBrush(ColorExtractorService.Lerp(_theme.SecondaryAccentColor, Color.White, 0.4f)))
+            if (drawLeft)
             {
-                g.DrawString("DANH SÁCH LƯU", subHeaderFont, subHeaderBrush, leftColX + 2, listTop + 4);
-            }
+                // ===== LEFT COLUMN HEADER =====
+                using (Font subHeaderFont = new Font("Segoe UI", 8.25f, FontStyle.Bold))
+                using (SolidBrush subHeaderBrush = new SolidBrush(ColorExtractorService.Lerp(_theme.SecondaryAccentColor, Color.White, 0.4f)))
+                {
+                    g.DrawString("DANH SÁCH LƯU", subHeaderFont, subHeaderBrush, leftColX + 2, listTop + 4);
+                }
 
-            // Button "+ Mới"
-            Rectangle newBtnRect = GetNewPlaylistBtnRect();
-            Color newBtnBg = _isHoveringNewBtn ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(35, _theme.AccentColor);
-            Color newBtnBorder = _isHoveringNewBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor;
-            using (GraphicsPath nbp = RoundedRect(newBtnRect, 5))
-            using (SolidBrush nbb = new SolidBrush(newBtnBg))
-            using (Pen nbpPen = new Pen(newBtnBorder, 1f))
-            {
-                g.FillPath(nbb, nbp);
-                g.DrawPath(nbpPen, nbp);
-            }
-            using (Font nbf = new Font("Segoe UI", 7.5f, FontStyle.Bold))
-            using (SolidBrush nbt = new SolidBrush(Color.White))
-            using (StringFormat nbsf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            {
-                g.DrawString("+ Mới", nbf, nbt, newBtnRect, nbsf);
-            }
-
-            // ===== RIGHT COLUMN HEADER =====
-            UserPlaylist curP = GetSelectedCollectionPlaylist();
-            string selTitle = curP != null ? curP.Name : "Bộ sưu tập";
-            using (Font rightHeaderFont = new Font("Segoe UI", 9.0f, FontStyle.Bold))
-            using (SolidBrush rightHeaderBrush = new SolidBrush(Color.White))
-            using (StringFormat sfNear = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
-            {
-                RectangleF titleBounds = new RectangleF(rightColX, listTop + 4, rightColW - 84, 20);
-                g.DrawString(selTitle, rightHeaderFont, rightHeaderBrush, titleBounds, sfNear);
+                // Button "+ Mới"
+                Rectangle newBtnRect = GetNewPlaylistBtnRect();
+                Color newBtnBg = _isHoveringNewBtn ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(35, _theme.AccentColor);
+                Color newBtnBorder = _isHoveringNewBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor;
+                using (GraphicsPath nbp = RoundedRect(newBtnRect, 5))
+                using (SolidBrush nbb = new SolidBrush(newBtnBg))
+                using (Pen nbpPen = new Pen(newBtnBorder, 1f))
+                {
+                    g.FillPath(nbb, nbp);
+                    g.DrawPath(nbpPen, nbp);
+                }
+                using (Font nbf = new Font("Segoe UI", 7.5f, FontStyle.Bold))
+                using (SolidBrush nbt = new SolidBrush(Color.White))
+                using (StringFormat nbsf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    g.DrawString("+ Mới", nbf, nbt, newBtnRect, nbsf);
+                }
             }
 
-            // Button "[▶ Phát tất cả]"
-            Rectangle playAllRect = GetPlayAllBtnRect();
-            Color playAllBg = _isHoveringPlayAllBtn ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(35, _theme.AccentColor);
-            Color playAllBorder = _isHoveringPlayAllBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor;
-            using (GraphicsPath pap = RoundedRect(playAllRect, 5))
-            using (SolidBrush pab = new SolidBrush(playAllBg))
-            using (Pen papPen = new Pen(playAllBorder, 1f))
+            if (drawRight)
             {
-                g.FillPath(pab, pap);
-                g.DrawPath(papPen, pap);
-            }
-            using (Font paf = new Font("Segoe UI", 7.5f, FontStyle.Bold))
-            using (SolidBrush pat = new SolidBrush(Color.White))
-            using (StringFormat pasf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            {
-                g.DrawString("▶ Phát tất cả", paf, pat, playAllRect, pasf);
+                // ===== RIGHT COLUMN HEADER =====
+                int titleOffsetX = 0;
+                if (compactSingle)
+                {
+                    Rectangle backRect = GetCollectionBackBtnRect();
+                    Color bkBg = _isHoveringBackCol ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(35, _theme.AccentColor);
+                    using (GraphicsPath bkp = RoundedRect(backRect, 5))
+                    using (SolidBrush bkb = new SolidBrush(bkBg))
+                    using (Pen bkpPen = new Pen(_theme.AccentColor, 1f))
+                    {
+                        g.FillPath(bkb, bkp);
+                        g.DrawPath(bkpPen, bkp);
+                    }
+                    using (Font bkf = new Font("Segoe UI", 7.5f, FontStyle.Bold))
+                    using (SolidBrush bkt = new SolidBrush(Color.White))
+                    using (StringFormat bksf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                    {
+                        g.DrawString("← Danh sách", bkf, bkt, backRect, bksf);
+                    }
+                    titleOffsetX = backRect.Width + 8;
+                }
+
+                UserPlaylist curP = GetSelectedCollectionPlaylist();
+                string selTitle = curP != null ? curP.Name : "Bộ sưu tập";
+                using (Font rightHeaderFont = new Font("Segoe UI", 9.0f, FontStyle.Bold))
+                using (SolidBrush rightHeaderBrush = new SolidBrush(Color.White))
+                using (StringFormat sfNear = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+                {
+                    RectangleF titleBounds = new RectangleF(rightColX + titleOffsetX, listTop + 4, Math.Max(40, rightColW - 84 - titleOffsetX), 20);
+                    g.DrawString(selTitle, rightHeaderFont, rightHeaderBrush, titleBounds, sfNear);
+                }
+
+                // Button "[▶ Phát tất cả]"
+                Rectangle playAllRect = GetPlayAllBtnRect();
+                Color playAllBg = _isHoveringPlayAllBtn ? Color.FromArgb(70, _theme.AccentColor) : Color.FromArgb(35, _theme.AccentColor);
+                Color playAllBorder = _isHoveringPlayAllBtn ? ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.3f) : _theme.AccentColor;
+                using (GraphicsPath pap = RoundedRect(playAllRect, 5))
+                using (SolidBrush pab = new SolidBrush(playAllBg))
+                using (Pen papPen = new Pen(playAllBorder, 1f))
+                {
+                    g.FillPath(pab, pap);
+                    g.DrawPath(papPen, pap);
+                }
+                using (Font paf = new Font("Segoe UI", 7.5f, FontStyle.Bold))
+                using (SolidBrush pat = new SolidBrush(Color.White))
+                using (StringFormat pasf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    g.DrawString("▶ Phát tất cả", paf, pat, playAllRect, pasf);
+                }
             }
 
             // Header Separators (spaced comfortably below buttons)
             using (Pen sepPen = new Pen(Color.FromArgb(25, 255, 255, 255), 1f))
             {
                 int sepY = listTop + 32;
-                g.DrawLine(sepPen, leftColX, sepY, leftColX + leftColW, sepY);
-                g.DrawLine(sepPen, rightColX, sepY, rightColX + rightColW, sepY);
+                if (drawLeft) g.DrawLine(sepPen, leftColX, sepY, leftColX + leftColW, sepY);
+                if (drawRight) g.DrawLine(sepPen, rightColX, sepY, rightColX + rightColW, sepY);
             }
 
-            // Vertical divider between Left and Right columns
-            using (Pen divPen = new Pen(Color.FromArgb(35, _theme.SecondaryAccentColor), 1.2f))
+            // Vertical divider between Left and Right columns (only in 2-col mode)
+            if (!compactSingle)
             {
-                g.DrawLine(divPen, divX, listTop + 2, divX, listTop + listH - 2);
+                using (Pen divPen = new Pen(Color.FromArgb(35, _theme.SecondaryAccentColor), 1.2f))
+                {
+                    g.DrawLine(divPen, divX, listTop + 2, divX, listTop + listH - 2);
+                }
             }
 
+            Region oldClip = g.Clip;
+
+            if (drawLeft)
+            {
             // ===== LEFT COLUMN LIST (Saved Playlists) =====
             int leftListTop = LeftListTop;
             int leftListH = LeftListHeight;
             Rectangle leftClip = new Rectangle(leftColX, leftListTop, leftColW, leftListH);
-            Region oldClip = g.Clip;
             g.SetClip(leftClip);
 
             var filteredPlaylists = FilteredCollectionPlaylists;
@@ -1384,6 +1566,9 @@ namespace KahoiiMusic.Controls
                     g.FillPath(thumbBrush, thumbPath);
                 }
             }
+            } // end if (drawLeft)
+
+            if (!drawRight) return;
 
             // ===== RIGHT COLUMN LIST (Tracks in Selected Playlist) =====
             int rightListTop = RightListTop;
@@ -1488,10 +1673,7 @@ namespace KahoiiMusic.Controls
                         {
                             if (thumb != null)
                             {
-                                GraphicsState gs = g.Save();
-                                g.SetClip(tp, CombineMode.Intersect);
-                                g.DrawImage(thumb, thumbRect);
-                                g.Restore(gs);
+                                ThumbnailManager.DrawRoundedImage(g, thumb, thumbRect, tp);
                                 using (Pen p = new Pen(Color.FromArgb(40, 255, 255, 255), 1))
                                 {
                                     g.DrawPath(p, tp);
@@ -1544,8 +1726,7 @@ namespace KahoiiMusic.Controls
                             {
                                 g.DrawString(item.Title ?? "Unknown Title", titleFont, titleBrush, new RectangleF(leftX, rowY + 7, textW, 20), titleSf);
                             }
-                            string authorText = !string.IsNullOrWhiteSpace(item.Author) ? item.Author : Services.AudioPlayerService.ExtractAuthorFromTitle(item.Title);
-                            if (string.IsNullOrWhiteSpace(authorText)) authorText = "YouTube";
+                            string authorText = ResolveDisplayAuthor(item);
                             using (SolidBrush authorBrush = new SolidBrush(authorColor))
                             {
                                 g.DrawString(authorText, authorFont, authorBrush, new RectangleF(leftX, rowY + 28, textW, 18), titleSf);
@@ -1684,10 +1865,7 @@ namespace KahoiiMusic.Controls
                         {
                             if (thumb != null)
                             {
-                                GraphicsState gs = g.Save();
-                                g.SetClip(tp, CombineMode.Intersect);
-                                g.DrawImage(thumb, thumbRect);
-                                g.Restore(gs);
+                                ThumbnailManager.DrawRoundedImage(g, thumb, thumbRect, tp);
                                 using (Pen p = new Pen(Color.FromArgb(40, 255, 255, 255), 1))
                                 {
                                     g.DrawPath(p, tp);
@@ -1740,8 +1918,7 @@ namespace KahoiiMusic.Controls
                             {
                                 g.DrawString(item.Title ?? "Unknown Title", titleFont, titleBrush, new RectangleF(leftX, rowY + 7, textW, 20), titleSf);
                             }
-                            string authorText = !string.IsNullOrWhiteSpace(item.Author) ? item.Author : Services.AudioPlayerService.ExtractAuthorFromTitle(item.Title);
-                            if (string.IsNullOrWhiteSpace(authorText)) authorText = "YouTube";
+                            string authorText = ResolveDisplayAuthor(item);
                             using (SolidBrush authorBrush = new SolidBrush(authorColor))
                             {
                                 g.DrawString(authorText, authorFont, authorBrush, new RectangleF(leftX, rowY + 28, textW, 18), titleSf);

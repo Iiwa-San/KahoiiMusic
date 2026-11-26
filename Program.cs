@@ -30,8 +30,8 @@ namespace KahoiiMusic
         {
             string startUrl = (args != null && args.Length > 0) ? args[0] : null;
 
-            // Single instance lock per user session
-            string mutexId = @"Local\KahoiiMusic_SingleInstance_" + Environment.UserName;
+            // Single instance lock per user session (Dev and Release have independent IDs)
+            string mutexId = AppEnvironment.MutexId;
             bool createdNew = false;
             Mutex mutex = null;
             try
@@ -145,7 +145,7 @@ namespace KahoiiMusic
         {
             try
             {
-                string pipeName = "KahoiiMusic_Pipe_" + Environment.UserName;
+                string pipeName = AppEnvironment.PipeName;
                 using (var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out))
                 {
                     client.Connect(1000);
@@ -166,7 +166,7 @@ namespace KahoiiMusic
         {
             try
             {
-                IntPtr hwnd = FindWindow(null, "Kahoii Music");
+                IntPtr hwnd = FindWindow(null, AppEnvironment.AppDisplayName);
                 if (hwnd == IntPtr.Zero)
                 {
                     var current = System.Diagnostics.Process.GetCurrentProcess();

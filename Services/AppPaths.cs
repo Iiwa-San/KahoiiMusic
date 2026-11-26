@@ -30,7 +30,11 @@ namespace KahoiiMusic.Services
                         bool isProgramFiles = (!string.IsNullOrEmpty(pf) && baseDir.StartsWith(pf, StringComparison.OrdinalIgnoreCase)) ||
                                               (!string.IsNullOrEmpty(pf86) && baseDir.StartsWith(pf86, StringComparison.OrdinalIgnoreCase));
 
-                        if (isDesktop || isProgramFiles)
+                        if (AppEnvironment.IsDev)
+                        {
+                            _dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KahoiiMusic_Dev");
+                        }
+                        else if (isDesktop || isProgramFiles)
                         {
                             _dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KahoiiMusic");
                         }

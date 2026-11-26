@@ -130,6 +130,9 @@
     <Compile Include="Controls\ActiveQueuePanel.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Controls\CenterDiscoveryPanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Controls\RoundedCardPanel.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -198,6 +201,7 @@
     <Compile Include="Services\HistoryService.cs" />
     <Compile Include="Services\ThumbnailManager.cs" />
     <Compile Include="Services\SleepTimerService.cs" />
+    <Compile Include="Services\AppEnvironment.cs" />
     <Compile Include="Services\AppPaths.cs" />
     <Compile Include="Services\FavoritesService.cs" />
     <Compile Include="Services\SavedTracksService.cs" />

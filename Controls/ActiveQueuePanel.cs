@@ -16,6 +16,7 @@ namespace KahoiiMusic.Controls
         private const int ScrollBarW = 6;
 
         public bool IsSingleNextTrackMode { get; set; } = false;
+        public bool EmbeddedMode { get; set; } = false;
 
         public int GetNextTrackIndex()
         {
@@ -42,6 +43,12 @@ namespace KahoiiMusic.Controls
         private bool _isHoveringScroll = false;
 
         private bool _isLoading = false;
+        private bool _isSorted = false;
+        private bool _hoverSaveBtn = false;
+        private bool _hoverSortBtn = false;
+
+        private Rectangle GetSortBtnRect() => new Rectangle(Width - 12 - 36, 5, 36, 24);
+        private Rectangle GetSaveBtnRect() => new Rectangle(Width - 12 - 36 - 6 - 62, 5, 62, 24);
         private Timer _dotsTimer;
         private int _dotCount = 1;
         private DynamicThemePalette _theme = ColorExtractorService.GetDefaultTheme();
@@ -147,6 +154,11 @@ namespace KahoiiMusic.Controls
                         });
                     }
                 }
+
+                if (_isSorted && _items.Count > 1)
+                {
+                    _items.Sort((a, b) => string.Compare(a?.Title, b?.Title, StringComparison.CurrentCultureIgnoreCase));
+                }
             }
             catch { }
 
@@ -245,7 +257,21 @@ namespace KahoiiMusic.Controls
             }
 
             if (needRepaint) Invalidate();
-            Cursor = (_hoveredRow >= 0 || _isHoveringScroll || _isDraggingScroll) ? Cursors.Hand : Cursors.Default;
+            bool prevSave = _hoverSaveBtn;
+            bool prevSort = _hoverSortBtn;
+            if (!IsSingleNextTrackMode && _items.Count > 0)
+            {
+                _hoverSaveBtn = GetSaveBtnRect().Contains(e.Location);
+                _hoverSortBtn = GetSortBtnRect().Contains(e.Location);
+            }
+            else
+            {
+                _hoverSaveBtn = false;
+                _hoverSortBtn = false;
+            }
+            if (prevSave != _hoverSaveBtn || prevSort != _hoverSortBtn) Invalidate();
+
+            Cursor = (_hoveredRow >= 0 || _isHoveringScroll || _isDraggingScroll || _hoverSaveBtn || _hoverSortBtn) ? Cursors.Hand : Cursors.Default;
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -264,6 +290,21 @@ namespace KahoiiMusic.Controls
         {
             base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left) return;
+
+            if (!IsSingleNextTrackMode && _items.Count > 0)
+            {
+                if (GetSortBtnRect().Contains(e.Location))
+                {
+                    _isSorted = !_isSorted;
+                    RefreshData();
+                    return;
+                }
+                if (GetSaveBtnRect().Contains(e.Location))
+                {
+                    PromptSaveQueueToCollection();
+                    return;
+                }
+            }
 
             if (IsSingleNextTrackMode)
             {
@@ -379,25 +420,44 @@ namespace KahoiiMusic.Controls
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             // 1. Card Background & Border (Translucent glassmorphism, opacity < 100%)
-            Rectangle cardRect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath path = RoundedRect(cardRect, 14))
+            if (!EmbeddedMode)
             {
-                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(150, 22, 10, 42)))
+                Rectangle cardRect = new Rectangle(0, 0, Width - 1, Height - 1);
+                using (GraphicsPath path = RoundedRect(cardRect, 22))
                 {
-                    g.FillPath(bgBrush, path);
+                    using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(150, 22, 10, 42)))
+                    {
+                        g.FillPath(bgBrush, path);
+                    }
+                    using (Pen borderPen = new Pen(_theme.CardBorderColor, 1.2f))
+                    {
+                        g.DrawPath(borderPen, path);
+                    }
                 }
-                using (Pen borderPen = new Pen(_theme.CardBorderColor, 1.2f))
+            }
+            else
+            {
+                using (Pen topDiv = new Pen(Color.FromArgb(35, 255, 255, 255), 1f))
                 {
-                    g.DrawPath(borderPen, path);
+                    g.DrawLine(topDiv, 12, 0, Width - 12, 0);
                 }
             }
 
-            // 2. Header (Clean pure title, no count badge)
-            string titleText = IsSingleNextTrackMode ? "Bài tiếp theo" : "Hàng đợi";
+            // 2. Header (Title + Save List + Sort)
+            string titleText = IsSingleNextTrackMode ? "Bài tiếp theo" : (_items.Count > 0 ? $"Hàng đợi ({_items.Count})" : "Hàng đợi");
             using (Font titleFont = new Font("Segoe UI", Height < 140 ? 10.5f : 11.5f, FontStyle.Bold))
             using (SolidBrush titleBrush = new SolidBrush(Color.FromArgb(250, 245, 255)))
             {
                 g.DrawString(titleText, titleFont, titleBrush, new PointF(16, Height < 140 ? 7 : 9));
+            }
+
+            if (!IsSingleNextTrackMode && _items.Count > 0)
+            {
+                Rectangle saveRect = GetSaveBtnRect();
+                Rectangle sortRect = GetSortBtnRect();
+
+                DrawHeaderActionPill(g, saveRect, "Lưu list", _hoverSaveBtn, false);
+                DrawHeaderActionPill(g, sortRect, "A-Z", _hoverSortBtn, _isSorted);
             }
 
             // Header separator line
@@ -627,9 +687,7 @@ namespace KahoiiMusic.Controls
                     {
                         if (bmp != null)
                         {
-                            g.SetClip(tp, CombineMode.Intersect);
-                            g.DrawImage(bmp, thumbRect);
-                            g.SetClip(listBounds);
+                            ThumbnailManager.DrawRoundedImage(g, bmp, thumbRect, tp);
                         }
                         else
                         {
@@ -673,8 +731,7 @@ namespace KahoiiMusic.Controls
                             RectangleF tRect = new RectangleF(textLeft, rowRect.Y + 7, textWidth, 20);
                             RectangleF aRect = new RectangleF(textLeft, rowRect.Y + 28, textWidth, 18);
                             g.DrawString(item.Title ?? string.Empty, tFont, tBrush, tRect, sf);
-                            string authorText = !string.IsNullOrWhiteSpace(item.Author) ? item.Author : Services.AudioPlayerService.ExtractAuthorFromTitle(item.Title);
-                            if (string.IsNullOrWhiteSpace(authorText)) authorText = "YouTube";
+                            string authorText = ResolveDisplayAuthor(item);
                             g.DrawString(authorText, aFont, aBrush, aRect, sf);
                         }
                     }
@@ -723,6 +780,132 @@ namespace KahoiiMusic.Controls
                 return;
             }
             base.WndProc(ref m);
+        }
+
+        private void DrawHeaderActionPill(Graphics g, Rectangle rect, string text, bool hovered, bool active)
+        {
+            Color bg = active
+                ? _theme.AccentColor
+                : (hovered ? Color.FromArgb(180, 50, 28, 88) : Color.FromArgb(130, 32, 18, 60));
+            Color brd = active ? Color.White : Color.FromArgb(95, _theme.SecondaryAccentColor);
+
+            using (GraphicsPath p = RoundedRect(rect, 11))
+            using (SolidBrush b = new SolidBrush(bg))
+            using (Pen pen = new Pen(brd, 1f))
+            {
+                g.FillPath(b, p);
+                g.DrawPath(pen, p);
+            }
+
+            using (Font f = new Font("Segoe UI", 7.8f, FontStyle.Bold))
+            using (SolidBrush tb = new SolidBrush(Color.White))
+            using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                g.DrawString(text, f, tb, rect, sf);
+            }
+        }
+
+        private void PromptSaveQueueToCollection()
+        {
+            if (_items == null || _items.Count == 0) return;
+
+            using (Form dlg = new Form())
+            {
+                dlg.Text = "Lưu hàng đợi vào Bộ sưu tập";
+                dlg.Size = new Size(340, 155);
+                dlg.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dlg.StartPosition = FormStartPosition.CenterParent;
+                dlg.MaximizeBox = false;
+                dlg.MinimizeBox = false;
+                dlg.BackColor = Color.FromArgb(24, 14, 46);
+                dlg.ForeColor = Color.White;
+
+                Label lbl = new Label
+                {
+                    Text = "Tên danh sách mới:",
+                    Location = new Point(16, 14),
+                    AutoSize = true,
+                    Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                    ForeColor = Color.White
+                };
+                TextBox txt = new TextBox
+                {
+                    Location = new Point(16, 40),
+                    Width = 290,
+                    Text = "Hàng đợi " + DateTime.Now.ToString("dd/MM HH:mm"),
+                    BackColor = Color.FromArgb(38, 22, 68),
+                    ForeColor = Color.White,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Font = new Font("Segoe UI", 9.5f)
+                };
+                Button btnOk = new Button
+                {
+                    Text = "Lưu",
+                    DialogResult = DialogResult.OK,
+                    Location = new Point(146, 78),
+                    Size = new Size(76, 28),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = _theme.AccentColor,
+                    ForeColor = Color.White
+                };
+                Button btnCancel = new Button
+                {
+                    Text = "Hủy",
+                    DialogResult = DialogResult.Cancel,
+                    Location = new Point(230, 78),
+                    Size = new Size(76, 28),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Color.FromArgb(50, 34, 80),
+                    ForeColor = Color.White
+                };
+
+                dlg.Controls.AddRange(new Control[] { lbl, txt, btnOk, btnCancel });
+                dlg.AcceptButton = btnOk;
+                dlg.CancelButton = btnCancel;
+
+                if (dlg.ShowDialog(FindForm()) == DialogResult.OK)
+                {
+                    string name = txt.Text?.Trim();
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        PlaylistCollectionService.Instance.SavePlaylist(name, new List<PlaylistItem>(_items));
+                    }
+                }
+            }
+        }
+
+        private string ResolveDisplayAuthor(PlaylistItem item)
+        {
+            if (item == null) return string.Empty;
+            string raw = item.Author;
+            if (!string.IsNullOrWhiteSpace(raw) && !string.Equals(raw.Trim(), "YouTube", StringComparison.OrdinalIgnoreCase))
+            {
+                return raw;
+            }
+
+            string fromTitle = YouTubeSearchService.ExtractSmartArtistFromTitle(item.Title);
+            if (!string.IsNullOrWhiteSpace(fromTitle))
+            {
+                item.Author = fromTitle;
+                return fromTitle;
+            }
+
+            string cached = YouTubeSearchService.GetCachedArtist(item.Id);
+            if (!string.IsNullOrWhiteSpace(cached))
+            {
+                item.Author = cached;
+                return cached;
+            }
+
+            YouTubeSearchService.QueueResolveArtist(item, () =>
+            {
+                if (!IsDisposed)
+                {
+                    try { BeginInvoke(new Action(Invalidate)); } catch { }
+                }
+            });
+
+            return "Nghệ sĩ";
         }
 
         private static GraphicsPath RoundedRect(Rectangle rect, int radius)

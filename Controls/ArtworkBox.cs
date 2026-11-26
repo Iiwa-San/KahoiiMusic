@@ -20,6 +20,8 @@ namespace KahoiiMusic.Controls
         private const float DegreesPerSecond = 36f; // Exactly 10 seconds per revolution (smooth, natural, relaxing)
         private System.Windows.Forms.Timer _spinTimer;
         private ArtworkDisplayMode _displayMode = ArtworkDisplayMode.RoundedCard;
+        public bool UseWebAppOverlay { get; set; } = false;
+        public float CardCornerRadius { get; set; } = 14f;
         private ContextMenuStrip _contextMenu;
         private ToolStripMenuItem _miVinyl;
         private ToolStripMenuItem _miCard;
@@ -665,7 +667,7 @@ namespace KahoiiMusic.Controls
             if (!ShowBottomTimeText)
             {
                 // Maximized template: rounded card fills the full bounds of ArtworkBox neatly
-                DrawRoundedCard(g, 0, 0, Width, Height, 14f);
+                DrawRoundedCard(g, 0, 0, Width, Height, CardCornerRadius);
             }
             else
             {
@@ -829,13 +831,13 @@ namespace KahoiiMusic.Controls
 
                     if (!ShowBottomTimeText)
                     {
-                        // Dark gradient scrim at the bottom to ensure seekbar & controls pop over bright album art
-                        int scrimH = (int)(cardH * 0.44f);
+                        // Dark gradient scrim at the bottom to ensure title, seekbar & controls pop over bright album art
+                        int scrimH = UseWebAppOverlay ? (int)(cardH * 0.62f) : (int)(cardH * 0.44f);
                         Rectangle scrimRect = new Rectangle(cardX, cardY + cardH - scrimH, cardW, scrimH);
                         using (LinearGradientBrush scrimBrush = new LinearGradientBrush(
                             scrimRect,
-                            Color.FromArgb(0, 10, 5, 25),
-                            Color.FromArgb(170, 10, 5, 25),
+                            Color.FromArgb(0, 6, 3, 14),
+                            Color.FromArgb(UseWebAppOverlay ? 242 : 170, 6, 3, 14),
                             LinearGradientMode.Vertical))
                         {
                             g.FillRectangle(scrimBrush, scrimRect);

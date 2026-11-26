@@ -53,7 +53,31 @@ namespace KahoiiMusic.Controls
 
         public event EventHandler<PlaylistItem> TrackPlaySelected;
         public event EventHandler<PlaylistItem> TrackAddSelected;
+        public event EventHandler<List<PlaylistItem>> PlayAllRequested;
+        public event EventHandler<List<PlaylistItem>> ShuffleAllRequested;
+        public event EventHandler<KahoiiMusic.Services.ArtistItem> ArtistSelected;
+        public event EventHandler<KahoiiMusic.Services.PlaylistSearchItem> PlaylistSelected;
         public event EventHandler CloseRequested;
+
+        private bool _isArtistMode = false;
+        private KahoiiMusic.Services.ArtistItem _profileArtist = null;
+        private Rectangle _artistShuffleRect = Rectangle.Empty;
+        private bool _isHoveringArtistShuffle = false;
+        private readonly List<(Rectangle CardRect, Rectangle AddRect, PlaylistItem Track)> _trackCardRects = new List<(Rectangle, Rectangle, PlaylistItem)>();
+        private int _hoveredTrackCardIdx = -1;
+        private bool _hoveredTrackCardAdd = false;
+
+        private List<KahoiiMusic.Services.ArtistItem> _artists = new List<KahoiiMusic.Services.ArtistItem>();
+        private List<KahoiiMusic.Services.PlaylistSearchItem> _playlists = new List<KahoiiMusic.Services.PlaylistSearchItem>();
+        private int _activeSearchTab = 0; // 0: Tất cả, 1: Nhạc, 2: Nhạc sĩ, 3: Playlist
+        private readonly Rectangle[] _searchTabRects = new Rectangle[4];
+        private int _hoveredSearchTab = -1;
+        private readonly List<(Rectangle Rect, KahoiiMusic.Services.ArtistItem Artist)> _artistCardRects = new List<(Rectangle, KahoiiMusic.Services.ArtistItem)>();
+        private readonly List<(Rectangle Rect, KahoiiMusic.Services.PlaylistSearchItem Playlist)> _playlistCardRects = new List<(Rectangle, KahoiiMusic.Services.PlaylistSearchItem)>();
+        private int _hoveredArtistIdx = -1;
+        private int _hoveredPlaylistIdx = -1;
+        private int _tracksStartY = 0;
+        private int TabBarHeight => IsLarge ? 42 : 0;
         private KahoiiMusic.Services.DynamicThemePalette _customTheme = null;
         private KahoiiMusic.Services.DynamicThemePalette _theme => _customTheme ?? KahoiiMusic.Services.ColorExtractorService.CurrentTheme ?? KahoiiMusic.Services.ColorExtractorService.GetDefaultTheme();
 
@@ -70,7 +94,7 @@ namespace KahoiiMusic.Controls
                      ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.ResizeRedraw, true);
 
-            BackColor = Color.FromArgb(16, 13, 30);
+            BackColor = Color.Transparent;
             DoubleBuffered = true;
         }
 
@@ -108,6 +132,294 @@ namespace KahoiiMusic.Controls
                 _loadingAnimTimer?.Stop();
             }
             catch { }
+        }
+
+        private void DrawFilterTabBar(Graphics g, int tabY)
+        {
+            int tabH = 28;
+            int tx = 16;
+            string[] tabLabels = _isArtistMode
+                ? new[] { "Tất cả", $"Nhạc Single ({_items.Count})", "", $"Danh sách phát ({_playlists?.Count ?? 0})" }
+                : new[] { "Tất cả", $"Nhạc ({_items.Count})", $"Nhạc sĩ ({_artists?.Count ?? 0})", $"Playlist ({_playlists?.Count ?? 0})" };
+
+            using (Font tabFont = new Font("Segoe UI", 8.8f, FontStyle.Bold))
+            using (StringFormat tSf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                for (int t = 0; t < 4; t++)
+                {
+                    if (string.IsNullOrEmpty(tabLabels[t]))
+                    {
+                        _searchTabRects[t] = Rectangle.Empty;
+                        continue;
+                    }
+                    int tw = (int)Math.Ceiling(g.MeasureString(tabLabels[t], tabFont).Width) + 24;
+                    _searchTabRects[t] = new Rectangle(tx, tabY, tw, tabH);
+                    bool isAct = (_activeSearchTab == t);
+                    bool isHov = (_hoveredSearchTab == t);
+                    Color bg = isAct ? _theme.AccentColor : (isHov ? Color.FromArgb(60, 42, 92) : Color.FromArgb(30, 22, 52));
+                    Color brd = isAct ? Color.White : Color.FromArgb(65, _theme.SecondaryAccentColor);
+
+                    using (GraphicsPath tp = CreateRoundedRectPath(_searchTabRects[t], 14))
+                    using (SolidBrush tb = new SolidBrush(bg))
+                    using (Pen tpen = new Pen(brd, 1f))
+                    {
+                        g.FillPath(tb, tp);
+                        g.DrawPath(tpen, tp);
+                    }
+                    using (SolidBrush txtB = new SolidBrush(isAct || isHov ? Color.White : Color.FromArgb(190, 180, 215)))
+                    {
+                        g.DrawString(tabLabels[t], tabFont, txtB, _searchTabRects[t], tSf);
+                    }
+                    tx += tw + 8;
+                }
+            }
+        }
+
+        private int DrawArtistsSection(Graphics g, string title, List<KahoiiMusic.Services.ArtistItem> artists, int y, int padX, bool singleRow)
+        {
+            if (artists == null || artists.Count == 0) return y;
+            using (Font secFont = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+            using (SolidBrush secBrush = new SolidBrush(Color.White))
+            {
+                g.DrawString(title, secFont, secBrush, padX, y);
+            }
+            y += 26;
+
+            int gap = 12;
+            int cols = Math.Max(2, (Width - padX * 2 - 16) / 132);
+            int cardW = Math.Min(136, Math.Max(92, (Width - padX * 2 - 16 - gap * (cols - 1)) / cols));
+            int cardH = cardW + 36;
+            int maxShow = singleRow ? Math.Min(artists.Count, cols) : artists.Count;
+
+            using (Font nameFont = new Font("Segoe UI", 8.8f, FontStyle.Bold))
+            using (Font subFont = new Font("Segoe UI", 7.5f, FontStyle.Regular))
+            using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+            {
+                for (int i = 0; i < maxShow; i++)
+                {
+                    int col = i % cols;
+                    int row = i / cols;
+                    int x = padX + col * (cardW + gap);
+                    int cy = y + row * (cardH + gap);
+                    Rectangle cardRect = new Rectangle(x, cy, cardW, cardH);
+                    int hitIdx = _artistCardRects.Count;
+                    _artistCardRects.Add((cardRect, artists[i]));
+
+                    if (cardRect.Bottom < ActualTopHeaderHeight || cardRect.Top > Height) continue;
+
+                    bool isHov = (_hoveredArtistIdx == hitIdx);
+                    Rectangle avRect = new Rectangle(x + 8, cy, cardW - 16, cardW - 16);
+                    using (GraphicsPath ap = new GraphicsPath())
+                    {
+                        ap.AddEllipse(avRect);
+                        using (SolidBrush ph = new SolidBrush(Color.FromArgb(40, 26, 68))) g.FillPath(ph, ap);
+                        string key = "artist_" + artists[i].Id;
+                        Bitmap bmp = KahoiiMusic.Services.ThumbnailManager.GetCardThumbnail(key);
+                        if (bmp != null)
+                        {
+                            KahoiiMusic.Services.ThumbnailManager.DrawRoundedImage(g, bmp, avRect, ap);
+                        }
+                        else if (!string.IsNullOrEmpty(artists[i].ThumbnailUrl))
+                        {
+                            KahoiiMusic.Services.ThumbnailManager.QueueLoadCard(key, artists[i].ThumbnailUrl, false, () =>
+                            {
+                                if (!IsDisposed) try { BeginInvoke(new Action(Invalidate)); } catch { }
+                            });
+                        }
+                        using (Pen p = new Pen(isHov ? _theme.AccentColor : Color.FromArgb(70, _theme.SecondaryAccentColor), isHov ? 2f : 1.2f))
+                            g.DrawPath(p, ap);
+                    }
+
+                    using (SolidBrush nb = new SolidBrush(isHov ? Color.White : Color.FromArgb(240, 236, 255)))
+                        g.DrawString(artists[i].Name ?? "", nameFont, nb, new RectangleF(x, avRect.Bottom + 4, cardW, 18), sf);
+                    if (!string.IsNullOrEmpty(artists[i].Subscribers))
+                    {
+                        using (SolidBrush sb = new SolidBrush(Color.FromArgb(165, 155, 195)))
+                            g.DrawString(artists[i].Subscribers, subFont, sb, new RectangleF(x, avRect.Bottom + 20, cardW, 15), sf);
+                    }
+                }
+            }
+
+            int rows = (int)Math.Ceiling(maxShow / (double)cols);
+            return y + rows * cardH + Math.Max(0, rows - 1) * gap + 12;
+        }
+
+        private int DrawPlaylistsSection(Graphics g, string title, List<KahoiiMusic.Services.PlaylistSearchItem> playlists, int y, int padX, bool singleRow)
+        {
+            if (playlists == null || playlists.Count == 0) return y;
+            using (Font secFont = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+            using (SolidBrush secBrush = new SolidBrush(Color.White))
+            {
+                g.DrawString(title, secFont, secBrush, padX, y);
+            }
+            y += 26;
+
+            int gap = 12;
+            int cols = Math.Max(2, (Width - padX * 2 - 16) / 140);
+            int cardW = Math.Min(144, Math.Max(96, (Width - padX * 2 - 16 - gap * (cols - 1)) / cols));
+            int cardH = cardW + 38;
+            int maxShow = singleRow ? Math.Min(playlists.Count, cols) : playlists.Count;
+
+            using (Font nameFont = new Font("Segoe UI", 8.8f, FontStyle.Bold))
+            using (Font subFont = new Font("Segoe UI", 7.5f, FontStyle.Regular))
+            using (StringFormat sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+            {
+                for (int i = 0; i < maxShow; i++)
+                {
+                    int col = i % cols;
+                    int row = i / cols;
+                    int x = padX + col * (cardW + gap);
+                    int cy = y + row * (cardH + gap);
+                    Rectangle cardRect = new Rectangle(x, cy, cardW, cardH);
+                    int hitIdx = _playlistCardRects.Count;
+                    _playlistCardRects.Add((cardRect, playlists[i]));
+
+                    if (cardRect.Bottom < ActualTopHeaderHeight || cardRect.Top > Height) continue;
+
+                    bool isHov = (_hoveredPlaylistIdx == hitIdx);
+                    Rectangle thumbRect = new Rectangle(x, cy, cardW, cardW);
+                    using (GraphicsPath tp = CreateRoundedRectPath(thumbRect, 10))
+                    {
+                        using (SolidBrush ph = new SolidBrush(Color.FromArgb(40, 26, 68))) g.FillPath(ph, tp);
+                        string key = "pl_" + playlists[i].Id;
+                        Bitmap bmp = KahoiiMusic.Services.ThumbnailManager.GetCardThumbnail(key);
+                        if (bmp != null)
+                        {
+                            KahoiiMusic.Services.ThumbnailManager.DrawRoundedImage(g, bmp, thumbRect, tp);
+                        }
+                        else if (!string.IsNullOrEmpty(playlists[i].ThumbnailUrl))
+                        {
+                            KahoiiMusic.Services.ThumbnailManager.QueueLoadCard(key, playlists[i].ThumbnailUrl, false, () =>
+                            {
+                                if (!IsDisposed) try { BeginInvoke(new Action(Invalidate)); } catch { }
+                            });
+                        }
+                        using (Pen p = new Pen(isHov ? _theme.AccentColor : Color.FromArgb(55, 255, 255, 255), isHov ? 1.5f : 1f))
+                            g.DrawPath(p, tp);
+                    }
+
+                    using (SolidBrush nb = new SolidBrush(isHov ? Color.White : Color.FromArgb(240, 236, 255)))
+                        g.DrawString(playlists[i].Title ?? "", nameFont, nb, new RectangleF(x + 2, thumbRect.Bottom + 4, cardW - 4, 18), sf);
+                    if (!string.IsNullOrEmpty(playlists[i].TrackCountText))
+                    {
+                        using (SolidBrush sb = new SolidBrush(Color.FromArgb(165, 155, 195)))
+                            g.DrawString(playlists[i].TrackCountText, subFont, sb, new RectangleF(x + 2, thumbRect.Bottom + 21, cardW - 4, 15), sf);
+                    }
+                }
+            }
+
+            int rows = (int)Math.Ceiling(maxShow / (double)cols);
+            return y + rows * cardH + Math.Max(0, rows - 1) * gap + 12;
+        }
+
+        private int DrawTrackCardsGrid(Graphics g, string title, List<PlaylistItem> tracks, int y, int padX)
+        {
+            if (tracks == null || tracks.Count == 0) return y;
+            using (Font secFont = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+            using (SolidBrush secBrush = new SolidBrush(Color.White))
+            {
+                g.DrawString(title, secFont, secBrush, padX, y);
+            }
+            y += 28;
+
+            int gap = 14;
+            int cols = Math.Max(3, (Width - padX * 2 - 18) / 145);
+            int cardW = Math.Max(96, (Width - padX * 2 - 18 - gap * (cols - 1)) / cols);
+            int cardH = cardW + 44;
+
+            using (Font tFont = new Font("Segoe UI", 8.8f, FontStyle.Bold))
+            using (Font aFont = new Font("Segoe UI", 7.8f, FontStyle.Regular))
+            using (Font durFont = new Font("Segoe UI", 7.3f, FontStyle.Bold))
+            using (StringFormat sfTrim = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+            using (StringFormat sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                for (int i = 0; i < tracks.Count; i++)
+                {
+                    int col = i % cols;
+                    int row = i / cols;
+                    int x = padX + col * (cardW + gap);
+                    int cy = y + row * (cardH + gap);
+
+                    Rectangle cardRect = new Rectangle(x, cy, cardW, cardH);
+                    Rectangle addRect = new Rectangle(x + cardW - 30, cy + cardW - 30, 24, 24);
+                    int hitIdx = _trackCardRects.Count;
+                    _trackCardRects.Add((cardRect, addRect, tracks[i]));
+
+                    if (cardRect.Bottom < ActualTopHeaderHeight || cardRect.Top > Height) continue;
+
+                    PlaylistItem item = tracks[i];
+                    bool isHov = (_hoveredTrackCardIdx == hitIdx);
+                    Rectangle thumbRect = new Rectangle(x, cy, cardW, cardW);
+
+                    using (GraphicsPath tp = CreateRoundedRectPath(thumbRect, 14))
+                    {
+                        using (SolidBrush ph = new SolidBrush(Color.FromArgb(40, 26, 68))) g.FillPath(ph, tp);
+                        string key = "trk_" + item.Id;
+                        Bitmap bmp = KahoiiMusic.Services.ThumbnailManager.GetCardThumbnail(key);
+                        if (bmp != null)
+                        {
+                            KahoiiMusic.Services.ThumbnailManager.DrawRoundedImage(g, bmp, thumbRect, tp);
+                        }
+                        else if (!string.IsNullOrEmpty(item.Id))
+                        {
+                            KahoiiMusic.Services.ThumbnailManager.QueueLoadCard(key, item.Id, true, () =>
+                            {
+                                if (!IsDisposed) try { BeginInvoke(new Action(Invalidate)); } catch { }
+                            });
+                        }
+
+                        if (!isHov && item.DurationSeconds > 0)
+                        {
+                            string dur = "♬ " + item.FormattedDuration;
+                            int dw = (int)Math.Ceiling(g.MeasureString(dur, durFont).Width) + 10;
+                            Rectangle durRect = new Rectangle(thumbRect.Right - dw - 6, thumbRect.Bottom - 22, dw, 16);
+                            using (GraphicsPath dp = CreateRoundedRectPath(durRect, 6))
+                            using (SolidBrush db = new SolidBrush(Color.FromArgb(185, 10, 6, 20)))
+                            {
+                                g.FillPath(db, dp);
+                            }
+                            using (SolidBrush dtb = new SolidBrush(Color.White))
+                            {
+                                g.DrawString(dur, durFont, dtb, durRect, sfCenter);
+                            }
+                        }
+
+                        if (isHov)
+                        {
+                            using (SolidBrush ov = new SolidBrush(Color.FromArgb(115, 10, 4, 22))) g.FillPath(ov, tp);
+                            int playR = 34;
+                            Rectangle playCircle = new Rectangle(x + (cardW - playR) / 2, cy + (cardW - playR) / 2, playR, playR);
+                            using (SolidBrush pb = new SolidBrush(_theme.AccentColor)) g.FillEllipse(pb, playCircle);
+                            PointF[] tri = new PointF[]
+                            {
+                                new PointF(playCircle.X + 13, playCircle.Y + 9),
+                                new PointF(playCircle.X + 13, playCircle.Y + 25),
+                                new PointF(playCircle.X + 25, playCircle.Y + 17)
+                            };
+                            using (SolidBrush wb = new SolidBrush(Color.White)) g.FillPolygon(wb, tri);
+
+                            using (SolidBrush ab = new SolidBrush(_hoveredTrackCardAdd ? _theme.AccentColor : Color.FromArgb(190, 26, 12, 50)))
+                                g.FillEllipse(ab, addRect);
+                            using (Pen ap = new Pen(Color.FromArgb(180, 255, 255, 255), 1f))
+                                g.DrawEllipse(ap, addRect);
+                            using (Font pf = new Font("Segoe UI", 10f, FontStyle.Bold))
+                            using (SolidBrush wb = new SolidBrush(Color.White))
+                                g.DrawString("+", pf, wb, addRect, sfCenter);
+                        }
+
+                        using (Pen p = new Pen(isHov ? _theme.AccentColor : Color.FromArgb(45, 255, 255, 255), isHov ? 1.5f : 1f))
+                            g.DrawPath(p, tp);
+                    }
+
+                    using (SolidBrush tb = new SolidBrush(isHov ? Color.White : Color.FromArgb(242, 238, 255)))
+                        g.DrawString(item.Title ?? "Bài hát", tFont, tb, new RectangleF(x + 2, thumbRect.Bottom + 5, cardW - 4, 18), sfTrim);
+                    using (SolidBrush ab = new SolidBrush(Color.FromArgb(175, 165, 205)))
+                        g.DrawString(item.Author ?? string.Empty, aFont, ab, new RectangleF(x + 2, thumbRect.Bottom + 23, cardW - 4, 16), sfTrim);
+                }
+            }
+
+            int rows = (int)Math.Ceiling(tracks.Count / (double)cols);
+            return y + rows * cardH + Math.Max(0, rows - 1) * gap + 16;
         }
 
         private void DrawBouncingText(Graphics g, string text, Font font, Brush brush, float centerX, float centerY, float dotSize = 5f, float dotGap = 5f)
@@ -153,6 +465,36 @@ namespace KahoiiMusic.Controls
             _hoveredIndex = -1;
             StartLoadingAnim();
             Invalidate();
+        }
+
+        public void ShowArtistLoading(KahoiiMusic.Services.ArtistItem artist)
+        {
+            _isArtistMode = true;
+            _profileArtist = artist;
+            _artists = new List<KahoiiMusic.Services.ArtistItem>();
+            _playlists = new List<KahoiiMusic.Services.PlaylistSearchItem>();
+            _activeSearchTab = 0;
+            ShowLoading(artist?.Name ?? "Nghệ sĩ");
+        }
+
+        public void SetArtistProfile(KahoiiMusic.Services.ArtistProfileResult profile)
+        {
+            _isArtistMode = true;
+            _profileArtist = profile?.Artist ?? _profileArtist;
+            _artists = new List<KahoiiMusic.Services.ArtistItem>();
+            _playlists = profile?.Playlists ?? new List<KahoiiMusic.Services.PlaylistSearchItem>();
+            _activeSearchTab = 0;
+            SetResults(_profileArtist?.Name ?? "Nghệ sĩ", profile?.Tracks, null);
+        }
+
+        public void SetStructuredResults(string query, KahoiiMusic.Services.StructuredSearchResult result)
+        {
+            _isArtistMode = false;
+            _profileArtist = null;
+            _artists = result?.Artists ?? new List<KahoiiMusic.Services.ArtistItem>();
+            _playlists = result?.Playlists ?? new List<KahoiiMusic.Services.PlaylistSearchItem>();
+            _activeSearchTab = 0;
+            SetResults(query, result?.Tracks, result?.NextContinuationToken);
         }
 
         public void SetResults(string query, List<PlaylistItem> items, string nextContinuationToken = null)
@@ -310,11 +652,71 @@ namespace KahoiiMusic.Controls
             return new Rectangle(ScrollTrackX, thumbY, ScrollTrackWidth, thumbHeight);
         }
 
+        private int GetArtistStripHeight()
+        {
+            if (!IsLarge || _artists == null || _artists.Count == 0) return 0;
+            return 162;
+        }
+
+        private int GetPlaylistStripHeight()
+        {
+            if (!IsLarge || _playlists == null || _playlists.Count == 0) return 0;
+            return 172;
+        }
+
+        private int GetTrackGridHeight(int count)
+        {
+            if (count <= 0) return 0;
+            int padX = IsLarge ? 16 : 12;
+            int gap = 14;
+            int cols = Math.Max(3, (Width - padX * 2 - 18) / 145);
+            int cardW = Math.Max(96, (Width - padX * 2 - 18 - gap * (cols - 1)) / cols);
+            int cardH = cardW + 44;
+            int rows = (int)Math.Ceiling(count / (double)cols);
+            return 28 + rows * cardH + Math.Max(0, rows - 1) * gap + 16;
+        }
+
         private void UpdateScrollBounds()
         {
-            int listStartY = ActualTopHeaderHeight + (_items.Count > 0 ? ActualHeroCardHeight + 12 : 0);
-            int bottomExtra = (!string.IsNullOrEmpty(_nextContinuationToken) || _isLoadingMore) ? 64 : 24;
-            int totalContentHeight = listStartY + (_items.Count * ActualItemRowHeight) + bottomExtra;
+            int contentTop = ActualTopHeaderHeight + (_isArtistMode ? 0 : TabBarHeight);
+            int totalContentHeight = contentTop + 24;
+
+            if (_isArtistMode)
+            {
+                int heroH = ActualHeroCardHeight + 14;
+                int tabsH = IsLarge ? 42 : 0;
+                int trkH = (_activeSearchTab == 0 || _activeSearchTab == 1) ? GetTrackGridHeight(_items.Count) : 0;
+                int plH = (_activeSearchTab == 0 || _activeSearchTab == 3) ? GetPlaylistStripHeight() + ((_activeSearchTab == 3) ? 160 : 0) : 0;
+                totalContentHeight = contentTop + 10 + heroH + tabsH + trkH + plH + 24;
+            }
+            else if (_activeSearchTab == 0)
+            {
+                int heroH = _items.Count > 0 ? ActualHeroCardHeight + 12 : 0;
+                int artH = GetArtistStripHeight();
+                int plH = GetPlaylistStripHeight();
+                int trkH = IsLarge ? GetTrackGridHeight(_items.Count) : (_items.Count * ActualItemRowHeight);
+                int bottomExtra = (!string.IsNullOrEmpty(_nextContinuationToken) || _isLoadingMore) ? 64 : 24;
+                totalContentHeight = contentTop + 8 + heroH + artH + plH + trkH + bottomExtra;
+            }
+            else if (_activeSearchTab == 1)
+            {
+                int trkH = IsLarge ? GetTrackGridHeight(_items.Count) : (_items.Count * ActualItemRowHeight);
+                int bottomExtra = (!string.IsNullOrEmpty(_nextContinuationToken) || _isLoadingMore) ? 64 : 24;
+                totalContentHeight = contentTop + 8 + trkH + bottomExtra;
+            }
+            else if (_activeSearchTab == 2)
+            {
+                int cols = Math.Max(2, (Width - 32) / 140);
+                int rows = (int)Math.Ceiling((_artists?.Count ?? 0) / (double)cols);
+                totalContentHeight = contentTop + 16 + rows * 168;
+            }
+            else if (_activeSearchTab == 3)
+            {
+                int cols = Math.Max(2, (Width - 32) / 150);
+                int rows = (int)Math.Ceiling((_playlists?.Count ?? 0) / (double)cols);
+                totalContentHeight = contentTop + 16 + rows * 184;
+            }
+
             _maxScroll = Math.Max(0, totalContentHeight - Height);
             _scrollOffset = Math.Max(0, Math.Min(_scrollOffset, _maxScroll));
         }
@@ -357,27 +759,79 @@ namespace KahoiiMusic.Controls
             bool prevBack = _isHoveringBack;
             bool prevBest = _isHoveringBestMatchPlay;
             int prevIdx = _hoveredIndex;
+            int prevTab = _hoveredSearchTab;
+            int prevArt = _hoveredArtistIdx;
+            int prevPl = _hoveredPlaylistIdx;
 
             _isHoveringBack = _backBtnRect.Contains(e.Location);
             _isHoveringBestMatchPlay = _bestMatchPlayRect.Contains(e.Location);
-            _hoveredIndex = -1;
-
-            int listStartY = ActualTopHeaderHeight + (_items.Count > 0 ? ActualHeroCardHeight + 12 : 0) - _scrollOffset;
-
-            if (e.X < Width - 18 && e.Y >= listStartY)
+            _hoveredSearchTab = -1;
+            if (IsLarge)
             {
-                int row = (e.Y - listStartY) / ActualItemRowHeight;
+                for (int i = 0; i < 4; i++)
+                {
+                    if (_searchTabRects[i].Contains(e.Location))
+                    {
+                        _hoveredSearchTab = i;
+                        break;
+                    }
+                }
+            }
+
+            _hoveredArtistIdx = -1;
+            for (int i = 0; i < _artistCardRects.Count; i++)
+            {
+                if (_artistCardRects[i].Rect.Contains(e.Location))
+                {
+                    _hoveredArtistIdx = i;
+                    break;
+                }
+            }
+
+            _hoveredPlaylistIdx = -1;
+            for (int i = 0; i < _playlistCardRects.Count; i++)
+            {
+                if (_playlistCardRects[i].Rect.Contains(e.Location))
+                {
+                    _hoveredPlaylistIdx = i;
+                    break;
+                }
+            }
+
+            _hoveredIndex = -1;
+            if (!IsLarge && (_activeSearchTab == 0 || _activeSearchTab == 1) && e.X < Width - 18 && e.Y >= _tracksStartY && _tracksStartY > 0)
+            {
+                int row = (e.Y - _tracksStartY) / ActualItemRowHeight;
                 if (row >= 0 && row < _items.Count)
                 {
                     _hoveredIndex = row;
                 }
             }
 
+            int prevTrackCard = _hoveredTrackCardIdx;
+            bool prevTrackAdd = _hoveredTrackCardAdd;
+            bool prevShuf = _isHoveringArtistShuffle;
+            _hoveredTrackCardIdx = -1;
+            _hoveredTrackCardAdd = false;
+            _isHoveringArtistShuffle = _isArtistMode && _artistShuffleRect.Contains(e.Location);
+
+            for (int i = 0; i < _trackCardRects.Count; i++)
+            {
+                if (_trackCardRects[i].CardRect.Contains(e.Location))
+                {
+                    _hoveredTrackCardIdx = i;
+                    _hoveredTrackCardAdd = _trackCardRects[i].AddRect.Contains(e.Location);
+                    break;
+                }
+            }
+
             bool isOverScrollbar = _maxScroll > 0 && GetScrollTrackHitRect().Contains(e.Location);
-            Cursor = (_isHoveringBack || _isHoveringBestMatchPlay || _hoveredIndex >= 0 || isOverScrollbar)
+            Cursor = (_isHoveringBack || _isHoveringBestMatchPlay || _isHoveringArtistShuffle || _hoveredSearchTab >= 0 || _hoveredArtistIdx >= 0 || _hoveredPlaylistIdx >= 0 || _hoveredTrackCardIdx >= 0 || _hoveredIndex >= 0 || isOverScrollbar)
                 ? Cursors.Hand : Cursors.Default;
 
-            if (prevBack != _isHoveringBack || prevBest != _isHoveringBestMatchPlay || prevIdx != _hoveredIndex)
+            if (prevBack != _isHoveringBack || prevBest != _isHoveringBestMatchPlay || prevShuf != _isHoveringArtistShuffle || prevIdx != _hoveredIndex ||
+                prevTab != _hoveredSearchTab || prevArt != _hoveredArtistIdx || prevPl != _hoveredPlaylistIdx ||
+                prevTrackCard != _hoveredTrackCardIdx || prevTrackAdd != _hoveredTrackCardAdd)
             {
                 Invalidate();
             }
@@ -418,17 +872,67 @@ namespace KahoiiMusic.Controls
                     return;
                 }
 
+                if (_hoveredSearchTab >= 0 && _hoveredSearchTab < 4)
+                {
+                    _activeSearchTab = _hoveredSearchTab;
+                    _scrollOffset = 0;
+                    _hoveredIndex = -1;
+                    _hoveredArtistIdx = -1;
+                    _hoveredPlaylistIdx = -1;
+                    UpdateScrollBounds();
+                    Invalidate();
+                    return;
+                }
+
+                if (_hoveredArtistIdx >= 0 && _hoveredArtistIdx < _artistCardRects.Count)
+                {
+                    ArtistSelected?.Invoke(this, _artistCardRects[_hoveredArtistIdx].Artist);
+                    return;
+                }
+
+                if (_hoveredPlaylistIdx >= 0 && _hoveredPlaylistIdx < _playlistCardRects.Count)
+                {
+                    PlaylistSelected?.Invoke(this, _playlistCardRects[_hoveredPlaylistIdx].Playlist);
+                    return;
+                }
+
+                if (_isHoveringArtistShuffle && _isArtistMode && _items.Count > 0)
+                {
+                    ShuffleAllRequested?.Invoke(this, new List<PlaylistItem>(_items));
+                    return;
+                }
+
+                if (_hoveredTrackCardIdx >= 0 && _hoveredTrackCardIdx < _trackCardRects.Count)
+                {
+                    var tc = _trackCardRects[_hoveredTrackCardIdx];
+                    if (tc.AddRect.Contains(e.Location))
+                    {
+                        TrackAddSelected?.Invoke(this, tc.Track);
+                    }
+                    else
+                    {
+                        TrackPlaySelected?.Invoke(this, tc.Track);
+                    }
+                    return;
+                }
+
                 if (_isHoveringBestMatchPlay && _items.Count > 0)
                 {
-                    TrackPlaySelected?.Invoke(this, _items[0]);
+                    if (_isArtistMode)
+                    {
+                        PlayAllRequested?.Invoke(this, new List<PlaylistItem>(_items));
+                    }
+                    else
+                    {
+                        TrackPlaySelected?.Invoke(this, _items[0]);
+                    }
                     return;
                 }
 
                 if (_hoveredIndex >= 0 && _hoveredIndex < _items.Count)
                 {
                     PlaylistItem item = _items[_hoveredIndex];
-                    int listStartY = ActualTopHeaderHeight + (_items.Count > 0 ? ActualHeroCardHeight + 12 : 0) - _scrollOffset;
-                    int rowY = listStartY + (_hoveredIndex * ActualItemRowHeight);
+                    int rowY = _tracksStartY + (_hoveredIndex * ActualItemRowHeight);
                     int btnSize = IsLarge ? 32 : 24;
                     int rightPad = IsLarge ? 16 : 10;
                     int addX = Width - rightPad - btnSize;
@@ -462,10 +966,28 @@ namespace KahoiiMusic.Controls
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // Background gradient
-            using (LinearGradientBrush bgBrush = new LinearGradientBrush(ClientRectangle, Color.FromArgb(20, 15, 38), Color.FromArgb(12, 9, 24), LinearGradientMode.Vertical))
+            // Background matching WebApp figma-panel in 3-col maxsize mode
+            if (IsLarge)
             {
-                g.FillRectangle(bgBrush, ClientRectangle);
+                Rectangle cardRect = new Rectangle(0, 0, Width - 1, Height - 1);
+                using (GraphicsPath cardPath = CreateRoundedRectPath(cardRect, 22))
+                {
+                    using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(150, 22, 10, 42)))
+                    {
+                        g.FillPath(bgBrush, cardPath);
+                    }
+                    using (Pen borderPen = new Pen(_theme.CardBorderColor, 1.2f))
+                    {
+                        g.DrawPath(borderPen, cardPath);
+                    }
+                }
+            }
+            else
+            {
+                using (LinearGradientBrush bgBrush = new LinearGradientBrush(ClientRectangle, Color.FromArgb(20, 15, 38), Color.FromArgb(12, 9, 24), LinearGradientMode.Vertical))
+                {
+                    g.FillRectangle(bgBrush, ClientRectangle);
+                }
             }
 
             // Top Header
@@ -496,12 +1018,19 @@ namespace KahoiiMusic.Controls
             using (SolidBrush qBrush = new SolidBrush(_theme.AccentColor))
             {
                 StringFormat tsf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, LineAlignment = StringAlignment.Center };
-                string prefix = "Kết quả: ";
                 int titleY = ActualTopHeaderHeight / 2;
-                g.DrawString(prefix, tFont, tBrush, titleX, titleY, tsf);
-                float pW = g.MeasureString(prefix, tFont).Width;
-                int textH = IsLarge ? 26 : 20;
-                g.DrawString("\"" + _query + "\"", qFont, qBrush, new RectangleF(titleX + pW, titleY - textH / 2, titleW - pW, textH), tsf);
+                if (_isArtistMode)
+                {
+                    g.DrawString("Thông tin Nghệ sĩ", tFont, tBrush, titleX, titleY, tsf);
+                }
+                else
+                {
+                    string prefix = "Kết quả: ";
+                    g.DrawString(prefix, tFont, tBrush, titleX, titleY, tsf);
+                    float pW = g.MeasureString(prefix, tFont).Width;
+                    int textH = IsLarge ? 26 : 20;
+                    g.DrawString("\"" + _query + "\"", qFont, qBrush, new RectangleF(titleX + pW, titleY - textH / 2, titleW - pW, textH), tsf);
+                }
             }
 
             using (Pen divPen = new Pen(Color.FromArgb(38, 30, 60)))
@@ -509,8 +1038,20 @@ namespace KahoiiMusic.Controls
                 g.DrawLine(divPen, 10, ActualTopHeaderHeight - 1, Width - 10, ActualTopHeaderHeight - 1);
             }
 
+            _artistCardRects.Clear();
+            _playlistCardRects.Clear();
+            _trackCardRects.Clear();
+            _artistShuffleRect = Rectangle.Empty;
+
+            if (IsLarge && !_isArtistMode)
+            {
+                DrawFilterTabBar(g, ActualTopHeaderHeight + 7);
+            }
+
+            int contentTop = ActualTopHeaderHeight + (_isArtistMode ? 0 : TabBarHeight);
+
             // Clip for scrollable area
-            Rectangle contentArea = new Rectangle(0, ActualTopHeaderHeight, Width, Height - ActualTopHeaderHeight);
+            Rectangle contentArea = new Rectangle(0, contentTop, Width, Math.Max(1, Height - contentTop));
             g.SetClip(contentArea);
 
             if (_isLoading)
@@ -527,7 +1068,7 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
-            if (_items.Count == 0)
+            if (_items.Count == 0 && (_artists == null || _artists.Count == 0) && (_playlists == null || _playlists.Count == 0))
             {
                 using (Font emptyFont = new Font("Segoe UI", IsLarge ? 12.0f : 9.5f, FontStyle.Regular))
                 using (SolidBrush emptyBrush = new SolidBrush(Color.FromArgb(160, 150, 185)))
@@ -538,13 +1079,26 @@ namespace KahoiiMusic.Controls
                 return;
             }
 
-            int curY = ActualTopHeaderHeight + 8 - _scrollOffset;
+            int curY = contentTop + 8 - _scrollOffset;
             int cardPad = IsLarge ? 16 : 12;
 
-            // Best Match Hero Card
-            if (_items.Count > 0)
+            if (!_isArtistMode && _activeSearchTab == 2)
             {
-                PlaylistItem hero = _items[0];
+                _tracksStartY = Height + 100;
+                DrawArtistsSection(g, "Nhạc sĩ", _artists, curY, cardPad, singleRow: false);
+                return;
+            }
+            if (!_isArtistMode && _activeSearchTab == 3)
+            {
+                _tracksStartY = Height + 100;
+                DrawPlaylistsSection(g, "Playlist", _playlists, curY, cardPad, singleRow: false);
+                return;
+            }
+
+            // Hero Card: Always shown at top in Artist mode, or in "Tất cả" tab of Search mode
+            if ((_isArtistMode && _profileArtist != null) || (_activeSearchTab == 0 && _items.Count > 0))
+            {
+                PlaylistItem hero = _items.Count > 0 ? _items[0] : new PlaylistItem();
                 _bestMatchRect = new Rectangle(cardPad, curY, Width - (cardPad * 2), ActualHeroCardHeight);
 
                 using (GraphicsPath hPath = CreateRoundedRectPath(_bestMatchRect, IsLarge ? 12 : 8))
@@ -555,43 +1109,90 @@ namespace KahoiiMusic.Controls
                     g.DrawPath(hPen, hPath);
                 }
 
-                // Thumbnail (144x81 when large, 96x54 normal)
-                int heroThumbW = IsLarge ? 144 : 96;
-                int heroThumbH = IsLarge ? 81 : 54;
+                // Thumbnail (Circular Artist Avatar in Artist mode, or 144x81 track thumb)
+                int heroThumbW = _isArtistMode ? 88 : (IsLarge ? 144 : 96);
+                int heroThumbH = _isArtistMode ? 88 : (IsLarge ? 81 : 54);
                 Rectangle heroThumbRect = new Rectangle(_bestMatchRect.X + (IsLarge ? 16 : 10), _bestMatchRect.Y + (_bestMatchRect.Height - heroThumbH) / 2, heroThumbW, heroThumbH);
-                
-                using (GraphicsPath tp = CreateRoundedRectPath(heroThumbRect, IsLarge ? 8 : 4))
+
+                if (_isArtistMode && _profileArtist != null)
                 {
-                    Region oldRgn = g.Clip;
-                    g.SetClip(tp, CombineMode.Intersect);
-                    if (_thumbCache.TryGetValue(hero.Id, out Image hThumb) && hThumb != null)
+                    using (GraphicsPath ap = new GraphicsPath())
                     {
-                        g.DrawImage(hThumb, heroThumbRect);
-                    }
-                    else
-                    {
-                        RequestThumbnail(hero.Id);
-                        using (SolidBrush tb = new SolidBrush(Color.FromArgb(30, 22, 50)))
+                        ap.AddEllipse(heroThumbRect);
+                        string aKey = "artist_" + _profileArtist.Id;
+                        Bitmap aBmp = KahoiiMusic.Services.ThumbnailManager.GetCardThumbnail(aKey);
+                        if (aBmp != null)
                         {
-                            g.FillRectangle(tb, heroThumbRect);
+                            KahoiiMusic.Services.ThumbnailManager.DrawRoundedImage(g, aBmp, heroThumbRect, ap);
+                        }
+                        else
+                        {
+                            if (!string.IsNullOrEmpty(_profileArtist.ThumbnailUrl))
+                            {
+                                KahoiiMusic.Services.ThumbnailManager.QueueLoadCard(aKey, _profileArtist.ThumbnailUrl, false, () =>
+                                {
+                                    if (!IsDisposed) try { BeginInvoke(new Action(Invalidate)); } catch { }
+                                });
+                            }
+                            using (SolidBrush tb = new SolidBrush(Color.FromArgb(40, 26, 68))) g.FillPath(tb, ap);
+                        }
+                        using (Pen apen = new Pen(_theme.AccentColor, 1.5f)) g.DrawPath(apen, ap);
+                    }
+                }
+                else
+                {
+                    using (GraphicsPath tp = CreateRoundedRectPath(heroThumbRect, IsLarge ? 8 : 4))
+                    {
+                        if (_thumbCache.TryGetValue(hero.Id, out Image hThumb) && hThumb != null)
+                        {
+                            KahoiiMusic.Services.ThumbnailManager.DrawRoundedImage(g, hThumb, heroThumbRect, tp);
+                        }
+                        else
+                        {
+                            RequestThumbnail(hero.Id);
+                            using (SolidBrush tb = new SolidBrush(Color.FromArgb(30, 22, 50)))
+                            {
+                                g.FillPath(tb, tp);
+                            }
                         }
                     }
-                    g.Clip = oldRgn;
                 }
 
-                // Big Play button
+                // Big Play button (+ Shuffle button in Artist mode)
                 int heroPlayW = IsLarge ? 120 : 74;
                 int heroPlayH = IsLarge ? 38 : 30;
-                _bestMatchPlayRect = new Rectangle(_bestMatchRect.Right - heroPlayW - (IsLarge ? 16 : 10), _bestMatchRect.Y + (_bestMatchRect.Height - heroPlayH) / 2, heroPlayW, heroPlayH);
-                using (GraphicsPath pPath = CreateRoundedRectPath(_bestMatchPlayRect, 6))
+                if (_isArtistMode && IsLarge)
+                {
+                    int shufW = 136;
+                    _artistShuffleRect = new Rectangle(_bestMatchRect.Right - shufW - 16, _bestMatchRect.Y + (_bestMatchRect.Height - heroPlayH) / 2, shufW, heroPlayH);
+                    _bestMatchPlayRect = new Rectangle(_artistShuffleRect.Left - 10 - heroPlayW, _bestMatchRect.Y + (_bestMatchRect.Height - heroPlayH) / 2, heroPlayW, heroPlayH);
+
+                    using (GraphicsPath sp = CreateRoundedRectPath(_artistShuffleRect, 10))
+                    using (SolidBrush sb = new SolidBrush(_isHoveringArtistShuffle ? Color.FromArgb(65, 45, 100) : Color.FromArgb(40, 26, 68)))
+                    using (Pen spen = new Pen(Color.FromArgb(90, _theme.SecondaryAccentColor), 1f))
+                    using (Font pFont = new Font("Segoe UI", 9.5f, FontStyle.Bold))
+                    using (SolidBrush ptBrush = new SolidBrush(Color.White))
+                    using (StringFormat psf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                    {
+                        g.FillPath(sb, sp);
+                        g.DrawPath(spen, sp);
+                        g.DrawString("🔀 Phát ngẫu nhiên", pFont, ptBrush, _artistShuffleRect, psf);
+                    }
+                }
+                else
+                {
+                    _bestMatchPlayRect = new Rectangle(_bestMatchRect.Right - heroPlayW - (IsLarge ? 16 : 10), _bestMatchRect.Y + (_bestMatchRect.Height - heroPlayH) / 2, heroPlayW, heroPlayH);
+                }
+
+                using (GraphicsPath pPath = CreateRoundedRectPath(_bestMatchPlayRect, IsLarge ? 10 : 6))
                 using (SolidBrush pbBrush = new SolidBrush(_isHoveringBestMatchPlay ? KahoiiMusic.Services.ColorExtractorService.Lerp(_theme.AccentColor, Color.White, 0.25f) : _theme.AccentColor))
                 {
                     g.FillPath(pbBrush, pPath);
-                    using (Font pFont = new Font("Segoe UI", IsLarge ? 10.0f : 8.0f, FontStyle.Bold))
+                    using (Font pFont = new Font("Segoe UI", IsLarge ? 9.8f : 8.0f, FontStyle.Bold))
                     using (SolidBrush ptBrush = new SolidBrush(Color.White))
                     {
                         StringFormat psf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                        g.DrawString("▶ Phát ngay", pFont, ptBrush, _bestMatchPlayRect, psf);
+                        g.DrawString(_isArtistMode ? "▶ Phát tất cả" : "▶ Phát ngay", pFont, ptBrush, _bestMatchPlayRect, psf);
                     }
                 }
 
@@ -612,15 +1213,71 @@ namespace KahoiiMusic.Controls
                     int subY = IsLarge ? _bestMatchRect.Y + 68 : _bestMatchRect.Y + 44;
                     int lineH = IsLarge ? 26 : 18;
 
-                    g.DrawString("BÀI HÁT PHÙ HỢP NHẤT", tagFont, tagBrush, infoX, tagY);
-                    g.DrawString(hero.Title ?? "Bài hát", heroTitleFont, hTitleBrush, new RectangleF(infoX, titleY, infoW, lineH), tsf);
-                    g.DrawString((hero.Author ?? "Nghệ sĩ") + " • " + hero.FormattedDuration, heroSubFont, hSubBrush, new RectangleF(infoX, subY, infoW, lineH), tsf);
+                    if (_isArtistMode && _profileArtist != null)
+                    {
+                        g.DrawString("NGHỆ SĨ CHÍNH THỨC", tagFont, tagBrush, infoX, tagY);
+                        g.DrawString(_profileArtist.Name ?? "Nghệ sĩ", heroTitleFont, hTitleBrush, new RectangleF(infoX, titleY, infoW, lineH), tsf);
+                        string subLine = !string.IsNullOrEmpty(_profileArtist.Subscribers)
+                            ? $"{_profileArtist.Subscribers} • {_items.Count} bài hát"
+                            : $"{_items.Count} bài hát • {_playlists.Count} danh sách phát";
+                        g.DrawString(subLine, heroSubFont, hSubBrush, new RectangleF(infoX, subY, infoW, lineH), tsf);
+                    }
+                    else
+                    {
+                        g.DrawString("BÀI HÁT PHÙ HỢP NHẤT", tagFont, tagBrush, infoX, tagY);
+                        g.DrawString(hero.Title ?? "Bài hát", heroTitleFont, hTitleBrush, new RectangleF(infoX, titleY, infoW, lineH), tsf);
+                        g.DrawString((hero.Author ?? "Nghệ sĩ") + " • " + hero.FormattedDuration, heroSubFont, hSubBrush, new RectangleF(infoX, subY, infoW, lineH), tsf);
+                    }
                 }
 
                 curY += ActualHeroCardHeight + 12;
             }
 
-            // Results List
+            if (_isArtistMode && IsLarge)
+            {
+                DrawFilterTabBar(g, curY);
+                curY += 40;
+
+                if (_activeSearchTab == 3)
+                {
+                    _tracksStartY = Height + 100;
+                    DrawPlaylistsSection(g, $"Danh sách phát & Album ({_playlists?.Count ?? 0})", _playlists, curY, cardPad, singleRow: false);
+                    return;
+                }
+                if (_activeSearchTab == 0 || _activeSearchTab == 1)
+                {
+                    _tracksStartY = Height + 100;
+                    curY = DrawTrackCardsGrid(g, $"Nhạc Single & Bài hát ({_items.Count})", _items, curY, cardPad);
+                }
+                if (_activeSearchTab == 0 && _playlists != null && _playlists.Count > 0)
+                {
+                    DrawPlaylistsSection(g, $"Danh sách phát & Album ({_playlists.Count})", _playlists, curY, cardPad, singleRow: true);
+                }
+                return;
+            }
+
+            if (_activeSearchTab == 0 && IsLarge)
+            {
+                if (_artists != null && _artists.Count > 0)
+                {
+                    curY = DrawArtistsSection(g, "Nhạc sĩ", _artists, curY, cardPad, singleRow: true);
+                }
+                if (_playlists != null && _playlists.Count > 0)
+                {
+                    curY = DrawPlaylistsSection(g, "Playlist", _playlists, curY, cardPad, singleRow: true);
+                }
+            }
+
+            if (IsLarge && (_activeSearchTab == 0 || _activeSearchTab == 1))
+            {
+                _tracksStartY = Height + 100;
+                DrawTrackCardsGrid(g, $"Bài hát ({_items.Count})", _items, curY, cardPad);
+                return;
+            }
+
+            _tracksStartY = curY;
+
+            // Results List (Compact / Minisize mode)
             for (int i = 0; i < _items.Count; i++)
             {
                 PlaylistItem item = _items[i];
@@ -658,21 +1315,18 @@ namespace KahoiiMusic.Controls
                     
                     using (GraphicsPath tp = CreateRoundedRectPath(thumbRect, IsLarge ? 6 : 4))
                     {
-                        Region oldRgn = g.Clip;
-                        g.SetClip(tp, CombineMode.Intersect);
                         if (_thumbCache.TryGetValue(item.Id, out Image thumb) && thumb != null)
                         {
-                            g.DrawImage(thumb, thumbRect);
+                            KahoiiMusic.Services.ThumbnailManager.DrawRoundedImage(g, thumb, thumbRect, tp);
                         }
                         else
                         {
                             RequestThumbnail(item.Id);
                             using (SolidBrush tb = new SolidBrush(Color.FromArgb(28, 22, 48)))
                             {
-                                g.FillRectangle(tb, thumbRect);
+                                g.FillPath(tb, tp);
                             }
                         }
-                        g.Clip = oldRgn;
                     }
 
                     // Buttons sizing

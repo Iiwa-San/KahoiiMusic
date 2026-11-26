@@ -235,9 +235,10 @@ namespace KahoiiMusic
             btnClose.SetTheme(_accentColor, _secondaryAccentColor);
             btnClose.Click += (s, e) => this.Hide();
 
+            string devSuffix = AppEnvironment.IsDev ? " [Dev]" : "";
             lblVersion = new Label
             {
-                Text = $"v{AppUpdateService.CurrentVersionName}  •  Kiểm tra cập nhật",
+                Text = $"v{AppUpdateService.CurrentVersionName}{devSuffix}  •  Kiểm tra cập nhật",
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
                 ForeColor = Color.FromArgb(170, 165, 195),
                 Location = new Point(20, 330),
@@ -269,7 +270,7 @@ namespace KahoiiMusic
                     finally
                     {
                         lblVersion.Enabled = true;
-                        lblVersion.Text = $"v{AppUpdateService.CurrentVersionName}  •  Kiểm tra cập nhật";
+                        lblVersion.Text = $"v{AppUpdateService.CurrentVersionName}{devSuffix}  •  Kiểm tra cập nhật";
                     }
                 }
             };

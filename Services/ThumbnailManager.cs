@@ -13,10 +13,16 @@ namespace KahoiiMusic.Services
     {
         private const int ThumbSize = 48;
         private const int MaxMemoryCache = 45; // Strict LRU limit: 45 * ~9KB = ~400KB RAM
+        private const int CardThumbSize = 220;
+        private const int MaxCardCache = 48;
         private static readonly object _lock = new object();
         private static readonly Dictionary<string, Bitmap> _memCache = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
         private static readonly LinkedList<string> _lruOrder = new LinkedList<string>();
         private static readonly HashSet<string> _pendingLoads = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly Dictionary<string, Bitmap> _cardCache = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
+        private static readonly LinkedList<string> _cardLruOrder = new LinkedList<string>();
+        private static readonly HashSet<string> _pendingCardLoads = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         static ThumbnailManager()
         {
@@ -41,10 +47,122 @@ namespace KahoiiMusic.Services
             return null;
         }
 
+        public static void DrawRoundedImage(Graphics g, Image img, Rectangle destRect, GraphicsPath path)
+        {
+            if (g == null || img == null || path == null || destRect.Width <= 0 || destRect.Height <= 0) return;
+            var prevSmooth = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (TextureBrush tb = new TextureBrush(img, WrapMode.Clamp))
+            {
+                float sx = (float)destRect.Width / Math.Max(1, img.Width);
+                float sy = (float)destRect.Height / Math.Max(1, img.Height);
+                tb.TranslateTransform(destRect.X, destRect.Y);
+                tb.ScaleTransform(sx, sy);
+                g.FillPath(tb, path);
+            }
+            g.SmoothingMode = prevSmooth;
+        }
+
+        public static Bitmap GetCardThumbnail(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return null;
+            lock (_lock)
+            {
+                if (_cardCache.TryGetValue(key, out Bitmap bmp))
+                {
+                    _cardLruOrder.Remove(key);
+                    _cardLruOrder.AddLast(key);
+                    return bmp;
+                }
+            }
+            return null;
+        }
+
+        public static void QueueLoadCard(string key, string urlOrVideoId, bool isVideoId, Action onLoaded)
+        {
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(urlOrVideoId)) return;
+
+            lock (_lock)
+            {
+                if (_cardCache.ContainsKey(key) || _pendingCardLoads.Contains(key)) return;
+                _pendingCardLoads.Add(key);
+            }
+
+            string url = isVideoId
+                ? string.Format("https://img.youtube.com/vi/{0}/hqdefault.jpg", urlOrVideoId)
+                : urlOrVideoId;
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                Bitmap result = null;
+                try
+                {
+                    using (WebClient wc = new WebClient())
+                    {
+                        byte[] data = wc.DownloadData(url);
+                        if (data != null && data.Length > 200)
+                        {
+                            using (MemoryStream ms = new MemoryStream(data))
+                            using (Image img = Image.FromStream(ms))
+                            {
+                                result = ResizeToMicro(img, CardThumbSize, CardThumbSize);
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                bool added = false;
+                lock (_lock)
+                {
+                    _pendingCardLoads.Remove(key);
+                    if (result != null)
+                    {
+                        if (_cardCache.ContainsKey(key))
+                        {
+                            try { result.Dispose(); } catch { }
+                        }
+                        else
+                        {
+                            while (_cardCache.Count >= MaxCardCache && _cardLruOrder.Count > 0)
+                            {
+                                string oldest = _cardLruOrder.First.Value;
+                                _cardLruOrder.RemoveFirst();
+                                if (_cardCache.TryGetValue(oldest, out Bitmap evictBmp))
+                                {
+                                    _cardCache.Remove(oldest);
+                                    try { evictBmp.Dispose(); } catch { }
+                                }
+                            }
+                            _cardCache[key] = result;
+                            _cardLruOrder.AddLast(key);
+                            added = true;
+                        }
+                    }
+                }
+
+                if (added && onLoaded != null)
+                {
+                    try { onLoaded(); } catch { }
+                }
+            });
+        }
+
         public static void QueueLoad(string videoId, Action onLoaded)
         {
             if (string.IsNullOrWhiteSpace(videoId)) return;
+            QueueLoadInternal(videoId, string.Format("https://img.youtube.com/vi/{0}/mqdefault.jpg", videoId), true, onLoaded);
+        }
 
+        public static void QueueLoadUrl(string cacheKey, string url, Action onLoaded)
+        {
+            if (string.IsNullOrWhiteSpace(cacheKey) || string.IsNullOrWhiteSpace(url)) return;
+            QueueLoadInternal(cacheKey, url, false, onLoaded);
+        }
+
+        private static void QueueLoadInternal(string cacheKey, string url, bool checkLocalFiles, Action onLoaded)
+        {
+            string videoId = cacheKey;
             lock (_lock)
             {
                 if (_memCache.ContainsKey(videoId) || _pendingLoads.Contains(videoId))
@@ -63,7 +181,7 @@ namespace KahoiiMusic.Services
                     string tempThumbFile = Path.Combine(AppPaths.TempThumbDir, videoId + ".jpg");
 
                     // 1. Check Saved/thumb/ first (Instant local read, 0ms network)
-                    if (File.Exists(savedThumbFile))
+                    if (checkLocalFiles && File.Exists(savedThumbFile))
                     {
                         try
                         {
@@ -77,7 +195,7 @@ namespace KahoiiMusic.Services
                     }
 
                     // 2. Check KahoiiTemp/thumb/ next
-                    if (result == null && File.Exists(tempThumbFile))
+                    if (result == null && checkLocalFiles && File.Exists(tempThumbFile))
                     {
                         try
                         {
@@ -90,10 +208,9 @@ namespace KahoiiMusic.Services
                         catch { }
                     }
 
-                    // 3. Download sharp mqdefault.jpg (320x180, ~8KB payload) from YouTube
+                    // 3. Download thumbnail from URL
                     if (result == null)
                     {
-                        string url = string.Format("https://img.youtube.com/vi/{0}/mqdefault.jpg", videoId);
                         using (WebClient wc = new WebClient())
                         {
                             byte[] data = wc.DownloadData(url);
@@ -105,7 +222,7 @@ namespace KahoiiMusic.Services
                                     result = ResizeToMicro(img, ThumbSize, ThumbSize);
 
                                     // Persist thumbnail on disk only if no high-res thumbnail already exists
-                                    if (data != null && !File.Exists(tempThumbFile))
+                                    if (checkLocalFiles && data != null && !File.Exists(tempThumbFile))
                                     {
                                         try
                                         {

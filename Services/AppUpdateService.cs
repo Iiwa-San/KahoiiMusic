@@ -28,43 +28,7 @@ namespace KahoiiMusic.Services
         public static int CurrentVersionCode => CurrentVersion.Build > 0 ? CurrentVersion.Build : 24;
         public static string CurrentVersionName => $"{CurrentVersion.Major}.{CurrentVersion.Minor}.{Math.Max(0, CurrentVersion.Build)}";
 
-        public static bool IsDevEnvironment
-        {
-            get
-            {
-#if DEBUG
-                return true;
-#else
-                if (Debugger.IsAttached) return true;
-
-                try
-                {
-                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                    if (baseDir.IndexOf(@"\bin\Debug", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        baseDir.IndexOf(@"\bin\Release", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        return true;
-                    }
-
-                    string current = baseDir;
-                    for (int i = 0; i < 4; i++)
-                    {
-                        if (string.IsNullOrEmpty(current)) break;
-                        if (File.Exists(Path.Combine(current, "KahoiiMusic.csproj")) ||
-                            File.Exists(Path.Combine(current, "KahoiiMusic.sln")) ||
-                            Directory.Exists(Path.Combine(current, ".git")))
-                        {
-                            return true;
-                        }
-                        current = Path.GetDirectoryName(current);
-                    }
-                }
-                catch { }
-
-                return false;
-#endif
-            }
-        }
+        public static bool IsDevEnvironment => AppEnvironment.IsDev;
 
         private AppUpdateService()
         {
