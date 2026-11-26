@@ -2778,6 +2778,10 @@ export default function App() {
             })
             .catch((err) => {
               console.warn("[Player] Direct stream play promise catch:", err);
+              // Keep isPlaying false only if not already playing; onCanPlay will retry if user didn't pause
+              if (audioRef.current?.paused) {
+                setIsPlaying(false);
+              }
             });
         }
       } else {
@@ -4074,6 +4078,13 @@ export default function App() {
         onCanPlay={() => {
           if (activePlayerType.current === "audio") {
             setIsLoading(false);
+            if (!isUserPausedRef.current && audioRef.current && audioRef.current.paused && currentTrackRef.current) {
+              audioRef.current.play().then(() => {
+                setIsPlaying(true);
+              }).catch(() => {
+                setIsPlaying(false);
+              });
+            }
           }
         }}
         onPlaying={() => {
