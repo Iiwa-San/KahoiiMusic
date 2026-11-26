@@ -440,12 +440,17 @@ function formatTrackArtist(title?: string, author?: string): string {
 
     // " / ": e.g. "『ラベンダー』 / MIMI feat. saewool (Music Video)" -> "MIMI feat. saewool"
     // "【MV】「言っといてよ」 / 9Lana" -> "9Lana"
-    if (titleCleaned.includes(" / ") || /\s+\/\s+/.test(titleCleaned)) {
-      const parts = titleCleaned.split(/\s+\/\s+/);
+    // "ロクデナシ「ブリザード」/ Rokudenashi - Blizzard【Official Music Video】" -> "Rokudenashi"
+    const slashSplitRegex = /(?:\s+\/\s+|(?<=[」』】\]\)])\s*\/\s*)/;
+    if (slashSplitRegex.test(titleCleaned)) {
+      const parts = titleCleaned.split(slashSplitRegex);
       if (parts.length >= 2) {
         let cand = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").replace(/\(.*?\)/g, "").trim();
+        if (/\s+-\s+/.test(cand)) {
+          cand = cand.split(/\s+-\s+/)[0].trim();
+        }
         cand = cand.replace(/^[【\[\(]+|[】\]\)]+$/g, "").trim();
-        if (cand && !/^(mv|official|video|audio|lyrics?|hd|4k)$/i.test(cand)) return cand;
+        if (cand && !/^(mv|official(?:\s+(?:music\s+)?video)?|video|audio|lyrics?|hd|4k)$/i.test(cand)) return cand;
       }
     }
 
@@ -454,6 +459,10 @@ function formatTrackArtist(title?: string, author?: string): string {
       const parts = titleCleaned.split(/\s+-\s+/);
       if (parts.length >= 2) {
         let cand = parts[0].trim();
+        if (slashSplitRegex.test(cand)) {
+          const slashParts = cand.split(slashSplitRegex);
+          cand = slashParts[slashParts.length - 1].trim();
+        }
         cand = cand.replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "").trim();
         cand = cand.replace(/^[【\[\(]+|[】\]\)]+$/g, "").trim();
         if (cand && !/^(mv|official|lyric|audio|video|teaser|hd|4k)$/i.test(cand)) {
@@ -2980,102 +2989,42 @@ export default function App() {
           loadAndPlayTrack(playlistTracks[playIdx], autoPlay);
           showToast(`Đã nạp toàn bộ danh sách (${playlistTracks.length} bài) vào hàng đợi!`, "success");
 
-          // Hydrate any remaining placeholder tracks ("Bài hát X" / "YouTube") via YouTube oEmbed directly from browser
-          const hydrateRemainingPlaceholders = async (tracksSnapshot: Track[]) => {
-            const targets = tracksSnapshot.filter(
-              (tr) => tr.id && (tr.title.startsWith("Bài hát ") || tr.author === "YouTube")
-            );
-            if (targets.length === 0) return;
-
-            const resolvedMap = new Map<string, { title: string; author: string }>();
-            const BATCH_SIZE = 5;
-            for (let i = 0; i < targets.length; i += BATCH_SIZE) {
-              const slice = targets.slice(i, i + BATCH_SIZE);
-              await Promise.all(
-                slice.map(async (tr) => {
-                  try {
-                    const r = await fetch(
-                      `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${tr.id}`)}&format=json`
-                    );
-                    if (r.ok) {
-                      const info = await r.json();
-                      if (info?.title) {
-                        resolvedMap.set(tr.id, {
-                          title: info.title,
-                          author: info.author_name || "YouTube",
-                        });
-                      }
-                    }
-                  } catch { }
-                })
-              );
-
-              if (resolvedMap.size > 0) {
-                const applyUpdates = (list: Track[]) =>
-                  list.map((tr) => {
-                    const hit = resolvedMap.get(tr.id);
-                    return hit ? { ...tr, title: hit.title, author: hit.author } : tr;
-                  });
-
-                const nextPl = applyUpdates(playlistRef.current);
-                const nextQ = applyUpdates(queueTracksRef.current);
-                setPlaylist(nextPl);
-                playlistRef.current = nextPl;
-                setQueueTracks(nextQ);
-                queueTracksRef.current = nextQ;
-
-                if (currentTrackRef.current && resolvedMap.has(currentTrackRef.current.id)) {
-                  const curHit = resolvedMap.get(currentTrackRef.current.id)!;
-                  setCurrentTrack((prev) =>
-                    prev ? { ...prev, title: curHit.title, author: curHit.author } : prev
-                  );
-                }
-              }
-            }
-          };
-
-          // Nếu có listId và các bài có placeholder (Bài hát X / YouTube), enrich toàn bộ metadata từ backend API rồi hydrate phần còn thiếu
+          // Nếu có listId và các bài có placeholder (Bài hát X / YouTube), enrich toàn bộ metadata từ backend API
           const hasPlaceholders = playlistTracks.some((tr) => tr.title.startsWith("Bài hát ") || tr.author === "YouTube");
-          if (hasPlaceholders) {
-            if (t.listId) {
-              fetch(`${API_BASE}/api/playlist?id=${encodeURIComponent(t.listId)}`)
-                .then((res) => (res.ok ? res.json() : null))
-                .then((data) => {
-                  let latestList = playlistRef.current;
-                  if (data && Array.isArray(data.tracks) && data.tracks.length > 0) {
-                    const enrichedMap = new Map<string, Track>(data.tracks.map((tr: Track): [string, Track] => [tr.id, tr]));
-                    latestList = playlistRef.current.map((tr: Track) => {
-                      const match = enrichedMap.get(tr.id);
-                      if (match) {
-                        return {
-                          ...tr,
-                          title: match.title || tr.title,
-                          author: match.author || tr.author,
-                          thumbnail: match.thumbnail || tr.thumbnail,
-                          duration: match.duration || tr.duration,
-                        };
-                      }
-                      return tr;
-                    });
-                    setPlaylist(latestList);
-                    playlistRef.current = latestList;
-                    setQueueTracks(latestList);
-                    queueTracksRef.current = latestList;
-                    if (currentTrackRef.current) {
-                      const enrichedCurrent = enrichedMap.get(currentTrackRef.current.id);
-                      if (enrichedCurrent) {
-                        setCurrentTrack((prev) =>
-                          prev ? { ...prev, title: enrichedCurrent.title || prev.title, author: enrichedCurrent.author || prev.author } : prev
-                        );
-                      }
+          if (t.listId && hasPlaceholders) {
+            fetch(`${API_BASE}/api/playlist?id=${encodeURIComponent(t.listId)}`)
+              .then((res) => (res.ok ? res.json() : null))
+              .then((data) => {
+                if (data && Array.isArray(data.tracks) && data.tracks.length > 0) {
+                  const enrichedMap = new Map<string, Track>(data.tracks.map((tr: Track): [string, Track] => [tr.id, tr]));
+                  const enrichedList = playlistRef.current.map((tr: Track) => {
+                    const match = enrichedMap.get(tr.id);
+                    if (match) {
+                      return {
+                        ...tr,
+                        title: match.title || tr.title,
+                        author: match.author || tr.author,
+                        thumbnail: match.thumbnail || tr.thumbnail,
+                        duration: match.duration || tr.duration,
+                      };
+                    }
+                    return tr;
+                  });
+                  setPlaylist(enrichedList);
+                  playlistRef.current = enrichedList;
+                  setQueueTracks(enrichedList);
+                  queueTracksRef.current = enrichedList;
+                  if (currentTrackRef.current) {
+                    const enrichedCurrent = enrichedMap.get(currentTrackRef.current.id);
+                    if (enrichedCurrent) {
+                      setCurrentTrack((prev) =>
+                        prev ? { ...prev, title: enrichedCurrent.title || prev.title, author: enrichedCurrent.author || prev.author } : prev
+                      );
                     }
                   }
-                  hydrateRemainingPlaceholders(latestList);
-                })
-                .catch(() => hydrateRemainingPlaceholders(playlistRef.current));
-            } else {
-              hydrateRemainingPlaceholders(playlistTracks);
-            }
+                }
+              })
+              .catch((err) => console.warn("[App] Enrich playlist error:", err));
           }
           return;
         }
