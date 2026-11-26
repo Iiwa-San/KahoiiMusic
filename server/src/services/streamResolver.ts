@@ -8,8 +8,16 @@ export interface StreamInfo {
   author?: string;
   duration?: number;
   thumbnail?: string;
-  provider: "visionos" | "innertube" | "yt-dlp";
+  provider: "visionos" | "innertube" | "piped" | "yt-dlp";
 }
+
+const PIPED_INSTANCES = [
+  "https://pipedapi.kavin.rocks",
+  "https://api.piped.privacy.com.de",
+  "https://piped-api.lunar.icu",
+  "https://pipedapi.tokhmi.xyz",
+  "https://api-piped.mha.fi",
+];
 
 let cachedVisitorData: string | null = null;
 let cachedSts = Math.floor(Date.now() / 86400000);
@@ -285,10 +293,45 @@ async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
   });
 }
 
+/**
+ * Method 2b: Resolve via Piped API instances in parallel (bypasses datacenter IP throttling)
+ */
+async function resolveViaPiped(videoId: string): Promise<StreamInfo | null> {
+  try {
+    return await Promise.any(
+      PIPED_INSTANCES.map(async (instance) => {
+        const res = await fetch(`${instance}/streams/${videoId}`, {
+          signal: AbortSignal.timeout(4500),
+          headers: { "User-Agent": "KahoiiMusic-Web/1.0" },
+        });
+        if (!res.ok) throw new Error(`piped-${res.status}`);
+        const data = (await res.json()) as any;
+        const audioStreams: any[] = Array.isArray(data?.audioStreams) ? data.audioStreams : [];
+        if (audioStreams.length === 0) throw new Error("piped-no-audio");
+        const m4a = audioStreams.find(
+          (s: any) => s.format === "M4A" || (s.mimeType && s.mimeType.includes("mp4"))
+        );
+        const best = m4a || audioStreams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+        if (!best?.url) throw new Error("piped-no-url");
+        return {
+          streamUrl: best.url,
+          title: data.title || "Kahoii Music",
+          author: data.uploader || "",
+          duration: data.duration || 0,
+          thumbnail: data.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+          provider: "piped" as const,
+        };
+      })
+    );
+  } catch {
+    return null;
+  }
+}
+
 const inFlightResolves = new Map<string, Promise<StreamInfo>>();
 
 /**
- * Master Stream Resolver: races VisionOS + InnerTube VR in parallel, then falls back to yt-dlp.
+ * Master Stream Resolver: races VisionOS + InnerTube VR + Piped in parallel, then falls back to yt-dlp.
  * Deduplicates concurrent Range-request probes for the same videoId.
  */
 export async function resolveAudioStream(videoId: string): Promise<StreamInfo> {
@@ -297,14 +340,15 @@ export async function resolveAudioStream(videoId: string): Promise<StreamInfo> {
 
   const task = (async (): Promise<StreamInfo> => {
     try {
-      // Race VisionOS and Android VR in parallel so the fastest valid stream wins immediately
+      // Race VisionOS, Android VR, and Piped in parallel so the fastest valid stream wins immediately
       const fastWinner = await Promise.any([
         resolveViaVisionOS(videoId).then((r) => (r ? r : Promise.reject(new Error("no-visionos")))),
         resolveViaInnerTubeVR(videoId).then((r) => (r ? r : Promise.reject(new Error("no-vr")))),
+        resolveViaPiped(videoId).then((r) => (r ? r : Promise.reject(new Error("no-piped")))),
       ]);
       if (fastWinner) return fastWinner;
     } catch {
-      // Both parallel InnerTube methods failed, fall back to yt-dlp
+      // All fast parallel methods failed, fall back to yt-dlp
     }
 
     try {
