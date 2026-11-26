@@ -244,6 +244,53 @@ async function resolveViaInnerTubeVR(videoId: string): Promise<StreamInfo | null
   return null;
 }
 
+async function resolveViaTvEmbedded(videoId: string): Promise<StreamInfo | null> {
+  try {
+    const payload = {
+      videoId,
+      context: {
+        client: {
+          clientName: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+          clientVersion: "2.0",
+          hl: "en",
+          gl: "US",
+        },
+        thirdParty: { embedUrl: "https://www.youtube.com/" },
+      },
+      contentCheckOk: true,
+      racyCheckOk: true,
+    };
+
+    const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return null;
+    const json = (await res.json()) as any;
+    if (json.playabilityStatus?.status !== "OK") return null;
+
+    const videoDetails = json.videoDetails;
+    const streamUrl = extractBestAudioFormat(json.streamingData);
+    if (streamUrl) {
+      return {
+        streamUrl,
+        title: videoDetails?.title || "Kahoii Music",
+        author: videoDetails?.author || "",
+        duration: parseInt(videoDetails?.lengthSeconds || "0", 10) || 0,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+        provider: "innertube",
+      };
+    }
+  } catch { }
+  return null;
+}
+
 /**
  * Locate local yt-dlp binary if running in local environment
  */
@@ -262,6 +309,20 @@ function getLocalYtDlpPath(): string | null {
   return null;
 }
 
+function getCookiesArg(): string {
+  const rawCookies = process.env.YT_COOKIES;
+  if (!rawCookies || !rawCookies.trim()) return "";
+  try {
+    const cookiePath = "/tmp/yt_cookies.txt";
+    if (!fs.existsSync(cookiePath)) {
+      fs.writeFileSync(cookiePath, rawCookies.replace(/\\n/g, "\n"), "utf8");
+    }
+    return `--cookies "${cookiePath}" `;
+  } catch {
+    return "";
+  }
+}
+
 /**
  * Method 3: Resolve using local yt-dlp CLI tool
  */
@@ -271,7 +332,8 @@ async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
 
   return new Promise((resolve) => {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const cmd = `"${ytDlpPath}" -g --no-playlist --no-warnings --force-ipv4 -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`;
+    const cookiesArg = getCookiesArg();
+    const cmd = `"${ytDlpPath}" ${cookiesArg}-g --no-playlist --no-warnings --force-ipv4 -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`;
 
     exec(cmd, { timeout: 15000 }, (error, stdout, stderr) => {
       if (error || !stdout) {
@@ -377,10 +439,11 @@ export async function resolveAudioStream(videoId: string): Promise<StreamInfo> {
 
   const task = (async (): Promise<StreamInfo> => {
     try {
-      // Race VisionOS, Android VR, Piped, and Invidious in parallel so the fastest valid stream wins immediately
+      // Race VisionOS, Android VR, TV Embedded, Piped, and Invidious in parallel so the fastest valid stream wins immediately
       const fastWinner = await Promise.any([
         resolveViaVisionOS(videoId).then((r) => (r ? r : Promise.reject(new Error("no-visionos")))),
         resolveViaInnerTubeVR(videoId).then((r) => (r ? r : Promise.reject(new Error("no-vr")))),
+        resolveViaTvEmbedded(videoId).then((r) => (r ? r : Promise.reject(new Error("no-tv")))),
         resolveViaPiped(videoId).then((r) => (r ? r : Promise.reject(new Error("no-piped")))),
         resolveViaInvidious(videoId).then((r) => (r ? r : Promise.reject(new Error("no-inv")))),
       ]);
