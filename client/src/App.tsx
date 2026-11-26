@@ -3462,12 +3462,16 @@ export default function App() {
     handleStopRef.current = handleStop;
   });
 
+  const mediaSessionClearedRef = useRef(false);
   const registerMediaSessionHandlers = () => {
     if (!("mediaSession" in navigator)) return;
 
-    try { navigator.mediaSession.setActionHandler("stop", null); } catch { }
-    try { navigator.mediaSession.setActionHandler("seekbackward", null); } catch { }
-    try { navigator.mediaSession.setActionHandler("seekforward", null); } catch { }
+    if (!mediaSessionClearedRef.current) {
+      mediaSessionClearedRef.current = true;
+      try { navigator.mediaSession.setActionHandler("stop", null); } catch { }
+      try { navigator.mediaSession.setActionHandler("seekbackward", null); } catch { }
+      try { navigator.mediaSession.setActionHandler("seekforward", null); } catch { }
+    }
 
     const actionList: [MediaSessionAction, MediaSessionActionHandler][] = [
       ["play", () => handlePlayRef.current()],
@@ -3506,7 +3510,12 @@ export default function App() {
       return;
     }
 
-    const artUrl = getTrackThumbnail(currentTrack, "hd");
+    const reliableThumb = currentTrack.id
+      ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`
+      : getTrackThumbnail(currentTrack, "sd");
+    const hqThumb = currentTrack.id
+      ? `https://i.ytimg.com/vi/${currentTrack.id}/hqdefault.jpg`
+      : reliableThumb;
 
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
@@ -3514,14 +3523,10 @@ export default function App() {
         artist: formatTrackArtist(currentTrack.title, currentTrack.author) || "Kahoii Music",
         album: "Kahoii Music",
         artwork: [
-          { src: artUrl, sizes: "96x96", type: "image/jpeg" },
-          { src: artUrl, sizes: "128x128", type: "image/jpeg" },
-          { src: artUrl, sizes: "192x192", type: "image/jpeg" },
-          { src: artUrl, sizes: "256x256", type: "image/jpeg" },
-          { src: artUrl, sizes: "512x512", type: "image/jpeg" },
+          { src: reliableThumb, sizes: "320x180", type: "image/jpeg" },
+          { src: hqThumb, sizes: "480x360", type: "image/jpeg" },
         ],
       });
-      registerMediaSessionHandlers();
     } catch (err) {
       console.warn("[MediaSession] Metadata update error:", err);
     }
@@ -3557,15 +3562,16 @@ export default function App() {
       navigator.mediaSession.playbackState = effectivePlaying ? "playing" : "paused";
     } catch { }
 
-    if ("setPositionState" in navigator.mediaSession && duration > 0) {
+    if ("setPositionState" in navigator.mediaSession && Number.isFinite(duration) && duration > 0) {
       try {
         const cur = activePlayerType.current === "audio" && audioRef.current
           ? audioRef.current.currentTime
           : currentTime;
+        const safePos = Number.isFinite(cur) ? Math.min(Math.max(0, cur), duration) : 0;
         navigator.mediaSession.setPositionState({
           duration: duration,
           playbackRate: effectivePlaying ? 1 : 0,
-          position: Math.min(Math.max(0, cur), duration),
+          position: safePos,
         });
       } catch (err) {
         console.warn("[MediaSession] Position state error:", err);
