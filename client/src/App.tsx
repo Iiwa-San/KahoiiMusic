@@ -94,6 +94,7 @@ const getTrackThumbnail = (track: Track | null, quality: "hd" | "sd" = "hd"): st
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const STORAGE_USER_SESSION_KEY = "kahoii_user_session";
 const STORAGE_LIBRARY_KEY = "kahoii_cached_library";
+const STORAGE_PLAYBACK_CACHE_KEY = "kahoii_playback_cache";
 
 const FIREBASE_API_KEY = "AIzaSyB4fUCZZN41WmnxGeH8jSdz1M5mi2LhLX8";
 
@@ -577,6 +578,9 @@ export default function App() {
   const activePlayerType = useRef<"audio" | "youtube">("youtube");
   const lastPlayPositionRef = useRef<number>(0);
   const lastLocalPersistRef = useRef<number>(0);
+  const hasRestoredPlaybackCacheRef = useRef<boolean>(false);
+  const pendingRestoreSeekRef = useRef<number | null>(null);
+  const lastPlaybackCacheSaveRef = useRef<number>(0);
   const isUserPausedRef = useRef<boolean>(false);
   const [_lyrics, setLyrics] = useState<any>(null);
 
@@ -3065,6 +3069,7 @@ export default function App() {
     };
 
     // 1. Check URL parameters on mount
+    let handledIncomingFromUrl = false;
     try {
       const searchStr = window.location.search;
       if (searchStr) {
@@ -3093,6 +3098,7 @@ export default function App() {
         }
 
         if (v || parsedItems.length > 0 || list) {
+          handledIncomingFromUrl = true;
           playIncomingTrackOrPlaylist({
             v,
             id: v,
@@ -3110,6 +3116,60 @@ export default function App() {
       }
     } catch { }
 
+    // 1b. Restore last playing track & queue from browser cache if no incoming URL track/playlist
+    if (!handledIncomingFromUrl) {
+      try {
+        const rawCache = localStorage.getItem(STORAGE_PLAYBACK_CACHE_KEY);
+        if (rawCache) {
+          const parsed = JSON.parse(rawCache);
+          const restoredQueue: Track[] = Array.isArray(parsed?.queue)
+            ? parsed.queue.filter((tr: any) => tr && typeof tr.id === "string" && tr.id.trim())
+            : [];
+          const rawIdx = typeof parsed?.currentIndex === "number" ? parsed.currentIndex : 0;
+          const clampedIdx = restoredQueue.length > 0
+            ? Math.max(0, Math.min(rawIdx, restoredQueue.length - 1))
+            : 0;
+          const restoredTrack: Track | null =
+            (parsed?.currentTrack && parsed.currentTrack.id ? parsed.currentTrack : null) ||
+            restoredQueue[clampedIdx] ||
+            null;
+
+          if (restoredQueue.length > 0) {
+            setQueueTracks(restoredQueue);
+            queueTracksRef.current = restoredQueue;
+            setPlaylist(restoredQueue);
+            playlistRef.current = restoredQueue;
+            setCurrentIndex(clampedIdx);
+            currentIndexRef.current = clampedIdx;
+          }
+
+          if (parsed?.repeatMode && ["all", "one", "shuffle", "off"].includes(parsed.repeatMode)) {
+            setRepeatMode(parsed.repeatMode);
+            repeatModeRef.current = parsed.repeatMode;
+          }
+
+          if (restoredTrack) {
+            const savedPos = typeof parsed?.currentTime === "number" && parsed.currentTime > 1
+              ? parsed.currentTime
+              : 0;
+            const maxDur = restoredTrack.duration && restoredTrack.duration > 0 ? restoredTrack.duration : Infinity;
+            const validPos = savedPos < maxDur - 2 ? savedPos : 0;
+            if (validPos > 0) {
+              pendingRestoreSeekRef.current = validPos;
+            }
+            loadAndPlayTrack(restoredTrack, false);
+            if (validPos > 0) {
+              setCurrentTime(validPos);
+              lastPlayPositionRef.current = validPos;
+            }
+          }
+        }
+      } catch (cacheErr) {
+        console.warn("[PlaybackCache] Restore failed:", cacheErr);
+      }
+    }
+    hasRestoredPlaybackCacheRef.current = true;
+
     // 2. Listen for live incoming tracks/playlists from KahoiiMusic Extension (instant play when tab is already open)
     const handleExtensionMsg = (event: MessageEvent) => {
       try {
@@ -3125,6 +3185,57 @@ export default function App() {
     };
   }, []);
 
+  // Persist current track, queue, and playback position to browser localStorage cache
+  const persistPlaybackCache = (customTime?: number) => {
+    if (!hasRestoredPlaybackCacheRef.current) return;
+    try {
+      const sanitizeTrack = (tr: Track): Track => ({
+        id: tr.id,
+        title: tr.title,
+        author: tr.author,
+        duration: tr.duration || 0,
+        thumbnail: tr.thumbnail,
+      });
+      const q = queueTracksRef.current.slice(0, 500).map(sanitizeTrack);
+      const cur = currentTrackRef.current ? sanitizeTrack(currentTrackRef.current) : null;
+      if (q.length === 0 && !cur) {
+        localStorage.removeItem(STORAGE_PLAYBACK_CACHE_KEY);
+        return;
+      }
+      const payload = {
+        queue: q,
+        currentIndex: currentIndexRef.current,
+        currentTrack: cur,
+        currentTime: Math.floor(customTime ?? lastPlayPositionRef.current ?? 0),
+        repeatMode: repeatModeRef.current,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(STORAGE_PLAYBACK_CACHE_KEY, JSON.stringify(payload));
+      lastPlaybackCacheSaveRef.current = Date.now();
+    } catch { }
+  };
+
+  useEffect(() => {
+    persistPlaybackCache();
+  }, [queueTracks, currentTrack, currentIndex, repeatMode]);
+
+  useEffect(() => {
+    const handleVisibilityOrHide = () => {
+      if (document.visibilityState === "hidden") {
+        persistPlaybackCache();
+      }
+    };
+    const handlePageHide = () => {
+      persistPlaybackCache();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityOrHide);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityOrHide);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, []);
+
   const handleTimeUpdate = () => {
     if (activePlayerType.current === "audio" && audioRef.current) {
       const cur = audioRef.current.currentTime;
@@ -3133,6 +3244,9 @@ export default function App() {
       const dur = audioRef.current.duration;
       if (dur > 0 && !isNaN(dur) && dur !== duration) {
         setDuration(Math.round(dur));
+      }
+      if (Date.now() - lastPlaybackCacheSaveRef.current > 5000) {
+        persistPlaybackCache(cur);
       }
     }
   };
@@ -4101,7 +4215,17 @@ export default function App() {
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={() => {
           if (activePlayerType.current === "audio") {
-            setDuration(audioRef.current?.duration || currentTrack?.duration || 207);
+            const metaDur = audioRef.current?.duration || currentTrack?.duration || 207;
+            setDuration(metaDur);
+            if (pendingRestoreSeekRef.current !== null && audioRef.current) {
+              const targetSeek = Math.min(pendingRestoreSeekRef.current, Math.max(0, metaDur - 1));
+              try {
+                audioRef.current.currentTime = targetSeek;
+                setCurrentTime(targetSeek);
+                lastPlayPositionRef.current = targetSeek;
+              } catch { }
+              pendingRestoreSeekRef.current = null;
+            }
             setIsLoading(false);
           }
         }}
