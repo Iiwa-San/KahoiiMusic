@@ -241,6 +241,8 @@ async function resolveViaInnerTubeVR(videoId: string): Promise<StreamInfo | null
  */
 function getLocalYtDlpPath(): string | null {
   const possiblePaths = [
+    "/usr/local/bin/yt-dlp",
+    "/usr/bin/yt-dlp",
     path.resolve(process.cwd(), "../../KahoiiMusic/yt-dlp.exe"),
     path.resolve(process.cwd(), "../KahoiiMusic/yt-dlp.exe"),
     path.resolve(process.cwd(), "yt-dlp.exe"),
@@ -283,31 +285,44 @@ async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
   });
 }
 
+const inFlightResolves = new Map<string, Promise<StreamInfo>>();
+
 /**
- * Master Stream Resolver: tries VisionOS -> InnerTube VR -> yt-dlp sequentially
+ * Master Stream Resolver: races VisionOS + InnerTube VR in parallel, then falls back to yt-dlp.
+ * Deduplicates concurrent Range-request probes for the same videoId.
  */
 export async function resolveAudioStream(videoId: string): Promise<StreamInfo> {
-  // Method 1: VisionOS client with valid visitor & sts
-  const visionResult = await resolveViaVisionOS(videoId);
-  if (visionResult) {
-    return visionResult;
-  }
+  const existing = inFlightResolves.get(videoId);
+  if (existing) return existing;
 
-  // Method 2: InnerTube VR fallback
-  const vrResult = await resolveViaInnerTubeVR(videoId);
-  if (vrResult) {
-    return vrResult;
-  }
-
-  // Method 3: Local yt-dlp
-  try {
-    const ytDlpResult = await resolveViaYtDlp(videoId);
-    if (ytDlpResult) {
-      return ytDlpResult;
+  const task = (async (): Promise<StreamInfo> => {
+    try {
+      // Race VisionOS and Android VR in parallel so the fastest valid stream wins immediately
+      const fastWinner = await Promise.any([
+        resolveViaVisionOS(videoId).then((r) => (r ? r : Promise.reject(new Error("no-visionos")))),
+        resolveViaInnerTubeVR(videoId).then((r) => (r ? r : Promise.reject(new Error("no-vr")))),
+      ]);
+      if (fastWinner) return fastWinner;
+    } catch {
+      // Both parallel InnerTube methods failed, fall back to yt-dlp
     }
-  } catch (err) {
-    console.warn("[StreamResolver] yt-dlp fallback error:", err);
-  }
 
-  throw new Error("Không thể trích xuất luồng âm thanh từ video YouTube này. Vui lòng thử lại!");
+    try {
+      const ytDlpResult = await resolveViaYtDlp(videoId);
+      if (ytDlpResult) {
+        return ytDlpResult;
+      }
+    } catch (err) {
+      console.warn("[StreamResolver] yt-dlp fallback error:", err);
+    }
+
+    throw new Error("Không thể trích xuất luồng âm thanh từ video YouTube này. Vui lòng thử lại!");
+  })();
+
+  inFlightResolves.set(videoId, task);
+  try {
+    return await task;
+  } finally {
+    inFlightResolves.delete(videoId);
+  }
 }
