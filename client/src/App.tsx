@@ -3498,9 +3498,30 @@ export default function App() {
     }
   };
 
-  // 1. MediaSession API: Register Standard Actions on Mount
+  // 1. MediaSession API: Register Standard Actions on Mount + Unlock iOS <audio> on first touch
   useEffect(() => {
     registerMediaSessionHandlers();
+
+    const unlockAudioOnFirstTouch = () => {
+      const a = audioRef.current;
+      if (!a || currentTrackRef.current || a.src) return;
+      try {
+        a.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+        const p = a.play();
+        if (p && typeof p.then === "function") {
+          p.then(() => {
+            if (!currentTrackRef.current) a.pause();
+          }).catch(() => { });
+        }
+      } catch { }
+    };
+
+    window.addEventListener("touchstart", unlockAudioOnFirstTouch, { once: true, capture: true, passive: true });
+    window.addEventListener("pointerdown", unlockAudioOnFirstTouch, { once: true, capture: true, passive: true });
+    return () => {
+      window.removeEventListener("touchstart", unlockAudioOnFirstTouch, true);
+      window.removeEventListener("pointerdown", unlockAudioOnFirstTouch, true);
+    };
   }, []);
 
   // 2. MediaSession API: Synchronize Track Metadata when Current Track Changes
