@@ -348,16 +348,20 @@ app.get("/api/home", async (req, res) => {
   }
 });
 
-// Serve frontend dist in production
+// Serve frontend dist in standalone non-Vercel production
 const clientDist = path.resolve(process.cwd(), "../client/dist");
-if (fs.existsSync(clientDist)) {
+if (!process.env.VERCEL && fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get("*", (req, res) => {
     res.sendFile(path.join(clientDist, "index.html"));
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`🎵 [Kahoii Music Server] Running on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🎵 [Kahoii Music Server] Running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
 

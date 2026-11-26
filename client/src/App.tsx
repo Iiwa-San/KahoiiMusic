@@ -31,6 +31,13 @@ import {
   Plus,
   Trash2,
   FolderPlus,
+  Download,
+  Music,
+  Laptop,
+  Smartphone,
+  Tablet,
+  Puzzle,
+  ExternalLink,
 } from "lucide-react";
 import type {
   Track,
@@ -64,6 +71,27 @@ const handleThumbError = (e: React.SyntheticEvent<HTMLImageElement>, videoId?: s
 
 // Base API URL for flexible deployment (GitHub Pages + Remote Backend or Monolithic Express)
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const KAHOII_URL =
+  import.meta.env.VITE_KAHOII_URL ||
+  (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://localhost:3000"
+    : "https://kahoiimusic.vercel.app");
+
+const NON_MUSIC_PATTERN =
+  /tập\s*\d+|episode\s*\d+|\bep\.?\s*\d+|\bfull\s*bộ|\bhoạt\s*hình|\banime\b|\bdoraemon\b|\bconan\b|\bdragon\s*ball|\bnaruto|\bone\s*piece|\bphim\b|\bmovie\b|\btrailer\b|\breview\b|\bvlog\b|\bgaming\b|\bgameplay\b|\bminecraft|\bliên\s*quân|\bpodcast|\btin\s*tức|\bnews\b|\bthời\s*sự|\bhài\s*kịch|\btiểu\s*phẩm|\bthuyết\s*minh|\bvietsub\s*tập/i;
+
+const MUSIC_PATTERN =
+  /\b(official\s*(mv|music\s*video|audio|lyric)|mv|lyrics?|lời\s*bài\s*hát|acoustic|remix|lofi|cover|mashup|karaoke|instrumental|beat|ost|nhạc|ca\s*khúc|bài\s*hát|album|single|topic|vevo|records|music|prod\.|liên\s*khúc)\b/i;
+
+const isTrackMusic = (track: Track | null): boolean => {
+  if (!track) return false;
+  if (typeof track.isMusic === "boolean") return track.isMusic;
+  const text = `${track.title || ""} ${track.author || ""}`;
+  if (NON_MUSIC_PATTERN.test(text)) return false;
+  if (MUSIC_PATTERN.test(text) || /-\s*topic$/i.test(track.author || "")) return true;
+  if (track.duration && track.duration > 900) return false;
+  return true;
+};
 
 // Nhạc Sĩ Nổi Bật (Featured Artists - High-res local avatars)
 const FEATURED_ARTISTS = [
@@ -161,6 +189,12 @@ export default function App() {
   const isAdaptiveSyncedRef = useRef<boolean>(false);
   const lastSyncTimeRef = useRef<number>(0);
   const seekTokenRef = useRef<number>(0);
+  const [trackMusicMap, setTrackMusicMap] = useState<Record<string, boolean>>({});
+  const pendingYtTrackRef = useRef<{
+    videoId: string;
+    startSeconds: number;
+    autoPlay: boolean;
+  } | null>(null);
   const [playerMode, setPlayerMode] = useState<"video" | "audio" | "youtube">("video");
   const [availableQualities, setAvailableQualities] = useState<VideoQualityOption[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<string>("720p");
@@ -357,7 +391,7 @@ export default function App() {
           playlists: Array.isArray(parsed.playlists) ? parsed.playlists : [],
         };
       }
-    } catch {}
+    } catch { }
     return { favorites: [], history: [], playlists: [] };
   });
 
@@ -365,25 +399,25 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem("thuongtube_library", JSON.stringify(libraryData));
-    } catch {}
+    } catch { }
   }, [libraryData]);
 
   useEffect(() => {
     try {
       localStorage.setItem("thuongtube_playlist", JSON.stringify(playlist));
-    } catch {}
+    } catch { }
   }, [playlist]);
 
   useEffect(() => {
     try {
       localStorage.setItem("thuongtube_queue", JSON.stringify(queueTracks));
-    } catch {}
+    } catch { }
   }, [queueTracks]);
 
   useEffect(() => {
     try {
       localStorage.setItem("thuongtube_current_index", String(currentIndex));
-    } catch {}
+    } catch { }
   }, [currentIndex]);
 
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -428,7 +462,7 @@ export default function App() {
           return;
         }
       }
-    } catch {}
+    } catch { }
     setIsLoadingRelated(false);
   };
 
@@ -500,7 +534,7 @@ export default function App() {
       const updated = [trimmed, ...filtered].slice(0, 10);
       try {
         localStorage.setItem("kahoii_search_history", JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
   };
@@ -511,7 +545,7 @@ export default function App() {
       const updated = prev.filter((item) => item !== itemToRemove);
       try {
         localStorage.setItem("kahoii_search_history", JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
   };
@@ -521,7 +555,7 @@ export default function App() {
     setSearchHistory([]);
     try {
       localStorage.removeItem("kahoii_search_history");
-    } catch {}
+    } catch { }
   };
 
   const executeSearch = async (query: string) => {
@@ -579,6 +613,101 @@ export default function App() {
     }
   };
 
+  // Multi-platform App Downloads (Auto-synced with latest GitHub releases)
+  const [showDownloadMenu, setShowDownloadMenu] = useState<boolean>(false);
+  const downloadMenuRef = useRef<HTMLDivElement | null>(null);
+  const [downloadData, setDownloadData] = useState({
+    pc: {
+      version: "v1.0.34",
+      fileName: "KahoiiMusic_Setup_v1.0.34.exe",
+      downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/v1.0.34/KahoiiMusic_Setup_v1.0.34.exe",
+      size: "24.2 MB",
+    },
+    android: {
+      version: "Bản mới nhất",
+      fileName: "KahoiiMusic.apk",
+      downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-android/KahoiiMusic.apk",
+      size: "14.6 MB",
+    },
+    ios: {
+      version: "Bản mới nhất",
+      fileName: "KahoiiMusic.ipa",
+      downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/releases/download/latest-ios/KahoiiMusic.ipa",
+      size: "1.4 MB",
+    },
+    extension: {
+      version: "Bản mới nhất",
+      fileName: "Extension.zip",
+      downloadUrl: "https://github.com/Iiwa-San/KahoiiMusic/archive/refs/heads/Extension.zip",
+      size: "Source ZIP",
+    },
+  });
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  useEffect(() => {
+    const fetchLatestDownloads = async () => {
+      try {
+        const ghRes = await fetch("https://api.github.com/repos/Iiwa-San/KahoiiMusic/releases");
+        if (!ghRes.ok) return;
+        const releases = (await ghRes.json()) as any[];
+        const pcRelease = releases.find((r) => /^v\d+/i.test(r.tag_name));
+        const pcAsset = pcRelease?.assets?.find((a: any) => a.name.endsWith(".exe"));
+        const androidRelease = releases.find(
+          (r) => r.tag_name === "latest-android" || r.assets?.some((a: any) => a.name.endsWith(".apk"))
+        );
+        const androidAsset = androidRelease?.assets?.find((a: any) => a.name.endsWith(".apk"));
+        const iosRelease = releases.find(
+          (r) => r.tag_name === "latest-ios" || r.assets?.some((a: any) => a.name.endsWith(".ipa"))
+        );
+        const iosAsset = iosRelease?.assets?.find((a: any) => a.name.endsWith(".ipa"));
+        const extRelease = releases.find((r) =>
+          r.assets?.some((a: any) => a.name.toLowerCase().includes("extension") && a.name.endsWith(".zip"))
+        );
+        const extAsset = extRelease?.assets?.find(
+          (a: any) => a.name.toLowerCase().includes("extension") && a.name.endsWith(".zip")
+        );
+        const formatBytes = (bytes: number) => (bytes ? (bytes / (1024 * 1024)).toFixed(1) + " MB" : "");
+
+        setDownloadData((prev) => ({
+          pc: {
+            version: pcRelease?.tag_name || prev.pc.version,
+            fileName: pcAsset?.name || prev.pc.fileName,
+            downloadUrl: pcAsset?.browser_download_url || prev.pc.downloadUrl,
+            size: pcAsset?.size ? formatBytes(pcAsset.size) : prev.pc.size,
+          },
+          android: {
+            version: "Bản mới nhất",
+            fileName: androidAsset?.name || prev.android.fileName,
+            downloadUrl: androidAsset?.browser_download_url || prev.android.downloadUrl,
+            size: androidAsset?.size ? formatBytes(androidAsset.size) : prev.android.size,
+          },
+          ios: {
+            version: "Bản mới nhất",
+            fileName: iosAsset?.name || prev.ios.fileName,
+            downloadUrl: iosAsset?.browser_download_url || prev.ios.downloadUrl,
+            size: iosAsset?.size ? formatBytes(iosAsset.size) : prev.ios.size,
+          },
+          extension: {
+            version: "Bản mới nhất",
+            fileName: extAsset?.name || prev.extension.fileName,
+            downloadUrl: extAsset?.browser_download_url || prev.extension.downloadUrl,
+            size: "Source ZIP",
+          },
+        }));
+      } catch { }
+    };
+    fetchLatestDownloads();
+  }, []);
+
   // Sleep Timer State & Controller
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
   const sleepTimerRef = useRef<any>(null);
@@ -632,6 +761,39 @@ export default function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const currentTrack = playlist[currentIndex] || null;
+  const isCurrentTrackMusic = currentTrack
+    ? isTrackMusic(
+        trackMusicMap[currentTrack.id] !== undefined
+          ? { ...currentTrack, isMusic: trackMusicMap[currentTrack.id] }
+          : currentTrack
+      )
+    : true;
+
+  const handleSwitchToKahoii = () => {
+    if (currentTrack && !isCurrentTrackMusic) return;
+    if (!currentTrack) {
+      window.location.href = KAHOII_URL;
+      return;
+    }
+
+    // Pause local playback before handing off to Kahoii Music
+    try { audioRef.current?.pause(); } catch {}
+    try { videoRef.current?.pause(); } catch {}
+    try { ytPlayerRef.current?.pauseVideo?.(); } catch {}
+    setIsPlaying(false);
+
+    const params = new URLSearchParams({
+      handoff: "1",
+      id: currentTrack.id,
+      title: currentTrack.title || "",
+      author: currentTrack.author || "",
+      duration: String(Math.floor(currentTrack.duration || duration || 0)),
+      thumbnail: currentTrack.thumbnail || "",
+      t: String(Math.floor(currentTime || 0)),
+      autoplay: isPlaying ? "1" : "0",
+    });
+    window.location.href = `${KAHOII_URL}?${params.toString()}`;
+  };
 
   // Apply theme CSS custom variables to document root for seamless 1.2s color transitions
   useEffect(() => {
@@ -654,8 +816,8 @@ export default function App() {
       currentTrack.thumbnail && !currentTrack.thumbnail.includes("figma")
         ? currentTrack.thumbnail
         : currentTrack.id
-        ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`
-        : "";
+          ? `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`
+          : "";
 
     if (thumbUrl) {
       loadAndExtractTheme(thumbUrl).then((palette) => {
@@ -678,7 +840,7 @@ export default function App() {
     if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === "function") {
       try {
         ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
-      } catch {}
+      } catch { }
     }
   }, [volume, isMuted]);
 
@@ -697,7 +859,7 @@ export default function App() {
           videoRef.current.currentTime = target;
         }
         if (!audioRef.current.paused && videoRef.current.paused) {
-          videoRef.current.play().catch(() => {});
+          videoRef.current.play().catch(() => { });
         }
       }
     };
@@ -766,10 +928,10 @@ export default function App() {
           mappedHist.length > 0
             ? mappedHist
             : mappedFavs.length > 0
-            ? mappedFavs
-            : rawPlaylists[0]?.items?.length > 0
-            ? rawPlaylists[0].items
-            : [];
+              ? mappedFavs
+              : rawPlaylists[0]?.items?.length > 0
+                ? rawPlaylists[0].items
+                : [];
 
         if (initialTracks.length > 0 && libraryData.history.length === 0 && playlist.length === 0) {
           setPlaylist((prev) => (prev.length === 0 ? initialTracks : prev));
@@ -788,17 +950,44 @@ export default function App() {
 
   // Preload initial track metadata, user data, home feed & YouTube Player API on mount
   useEffect(() => {
-    const mostRecent = libraryData.history[0] || playlist[currentIndex] || playlist[0];
-    if (mostRecent) {
-      const idx = playlist.findIndex((t) => t.id === mostRecent.id);
-      if (idx >= 0) {
-        setCurrentIndex(idx);
-      } else {
-        setPlaylist((prev) => [mostRecent, ...prev.filter((t) => t.id !== mostRecent.id)]);
-        setQueueTracks((prev) => [mostRecent, ...prev.filter((t) => t.id !== mostRecent.id)]);
-        setCurrentIndex(0);
+    const urlParams = new URLSearchParams(window.location.search);
+    const handoffId = urlParams.get("id");
+    if (handoffId) {
+      const handoffTrack: Track = {
+        id: handoffId,
+        title: urlParams.get("title") || "Đang phát",
+        author: urlParams.get("author") || "YouTube",
+        duration: Number(urlParams.get("duration") || 0) || 0,
+        thumbnail:
+          urlParams.get("thumbnail") ||
+          `https://i.ytimg.com/vi/${handoffId}/hqdefault.jpg`,
+        isMusic: true,
+      };
+      const startAt = Math.max(0, Number(urlParams.get("t") || 0) || 0);
+      const shouldAutoPlay = urlParams.get("autoplay") !== "0";
+
+      try {
+        window.history.replaceState({}, "", window.location.pathname);
+      } catch {}
+
+      setPlaylist((prev) => [handoffTrack, ...prev.filter((t) => t.id !== handoffId)]);
+      setQueueTracks((prev) => [handoffTrack, ...prev.filter((t) => t.id !== handoffId)]);
+      setCurrentIndex(0);
+      setTrackMusicMap((prev) => ({ ...prev, [handoffId]: true }));
+      loadAndPlayTrack(handoffTrack, shouldAutoPlay, { startTime: startAt });
+    } else {
+      const mostRecent = libraryData.history[0] || playlist[currentIndex] || playlist[0];
+      if (mostRecent) {
+        const idx = playlist.findIndex((t) => t.id === mostRecent.id);
+        if (idx >= 0) {
+          setCurrentIndex(idx);
+        } else {
+          setPlaylist((prev) => [mostRecent, ...prev.filter((t) => t.id !== mostRecent.id)]);
+          setQueueTracks((prev) => [mostRecent, ...prev.filter((t) => t.id !== mostRecent.id)]);
+          setCurrentIndex(0);
+        }
+        loadAndPlayTrack(mostRecent, false);
       }
-      loadAndPlayTrack(mostRecent, false);
     }
 
     fetchUserSession();
@@ -819,7 +1008,7 @@ export default function App() {
           }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // Initialize YouTube Iframe Player
     const loadYtScript = () => {
@@ -851,6 +1040,23 @@ export default function App() {
               onReady: () => {
                 if (typeof ytPlayerRef.current?.setVolume === "function") {
                   ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
+                }
+                if (pendingYtTrackRef.current && typeof ytPlayerRef.current?.loadVideoById === "function") {
+                  const pending = pendingYtTrackRef.current;
+                  pendingYtTrackRef.current = null;
+                  try {
+                    ytPlayerRef.current.loadVideoById({
+                      videoId: pending.videoId,
+                      startSeconds: pending.startSeconds,
+                    });
+                    if (pending.autoPlay) {
+                      ytPlayerRef.current.playVideo();
+                      setIsPlaying(true);
+                    } else {
+                      ytPlayerRef.current.pauseVideo();
+                      setIsPlaying(false);
+                    }
+                  } catch {}
                 }
               },
               onStateChange: (event: any) => {
@@ -898,7 +1104,7 @@ export default function App() {
           const dur = ytPlayerRef.current.getDuration() || 0;
           if (ct > 0) setCurrentTime(ct);
           if (dur > 0 && Math.abs(dur - duration) > 1) setDuration(dur);
-        } catch {}
+        } catch { }
       }
     }, 250);
     return () => clearInterval(timer);
@@ -915,7 +1121,7 @@ export default function App() {
         ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
         if (isMuted) ytPlayerRef.current.mute();
         else ytPlayerRef.current.unMute();
-      } catch {}
+      } catch { }
     }
   }, [volume, isMuted]);
 
@@ -1101,10 +1307,10 @@ export default function App() {
 
   const applyQualityOption = (option: VideoQualityOption, autoPlay: boolean, resumeTime = 0) => {
     if (audioRef.current) {
-      try { audioRef.current.pause(); } catch {}
+      try { audioRef.current.pause(); } catch { }
     }
     if (videoRef.current) {
-      try { videoRef.current.pause(); } catch {}
+      try { videoRef.current.pause(); } catch { }
     }
 
     setSelectedQuality(option.quality);
@@ -1167,8 +1373,8 @@ export default function App() {
 
       if (autoPlay) {
         Promise.all([
-          videoRef.current.play().catch(() => {}),
-          audioRef.current ? audioRef.current.play().catch(() => {}) : Promise.resolve(),
+          videoRef.current.play().catch(() => { }),
+          audioRef.current ? audioRef.current.play().catch(() => { }) : Promise.resolve(),
         ]).then(() => setIsPlaying(true));
       } else {
         setIsPlaying(false);
@@ -1181,8 +1387,8 @@ export default function App() {
       activePlayerType.current === "video" && videoRef.current
         ? videoRef.current.currentTime
         : activePlayerType.current === "audio" && audioRef.current
-        ? audioRef.current.currentTime
-        : currentTime;
+          ? audioRef.current.currentTime
+          : currentTime;
     applyQualityOption(option, isPlaying, resumeTime);
   };
 
@@ -1197,7 +1403,7 @@ export default function App() {
     if (activePlayerType.current === "youtube" && ytPlayerRef.current?.setPlaybackRate) {
       try {
         ytPlayerRef.current.setPlaybackRate(speed);
-      } catch {}
+      } catch { }
     }
   };
 
@@ -1214,7 +1420,7 @@ export default function App() {
         }
         showToast("Đã làm mới gợi ý Khám phá!");
       }
-    } catch {}
+    } catch { }
   };
 
   const playAudioInDiscovery = (track: Track, list?: Track[]) => {
@@ -1241,12 +1447,13 @@ export default function App() {
   const loadAndPlayTrack = async (
     track: Track,
     autoPlay = true,
-    options?: { stayInView?: boolean; audioOnly?: boolean }
+    options?: { stayInView?: boolean; audioOnly?: boolean; startTime?: number }
   ) => {
     if (!track) return;
+    const initialStartTime = Math.max(0, options?.startTime || 0);
     setIsLoading(true);
     setErrorMessage(null);
-    setCurrentTime(0);
+    setCurrentTime(initialStartTime);
     setAvailableQualities([]);
     if (!options?.stayInView) {
       setShowDiscovery(false);
@@ -1264,13 +1471,13 @@ export default function App() {
 
     // Stop current audio, video, and YouTube player
     if (audioRef.current) {
-      try { audioRef.current.pause(); } catch {}
+      try { audioRef.current.pause(); } catch { }
     }
     if (videoRef.current) {
-      try { videoRef.current.pause(); } catch {}
+      try { videoRef.current.pause(); } catch { }
     }
     if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
-      try { ytPlayerRef.current.stopVideo(); } catch {}
+      try { ytPlayerRef.current.stopVideo(); } catch { }
     }
 
     // Strategy 1: Resolve direct video + audio streams from server
@@ -1286,16 +1493,19 @@ export default function App() {
 
       if (res.ok) {
         const data = await res.json();
+        if (typeof data.isMusic === "boolean") {
+          setTrackMusicMap((prev) => ({ ...prev, [track.id]: data.isMusic }));
+        }
         const qualities: VideoQualityOption[] = Array.isArray(data.qualities) ? data.qualities : [];
         if (qualities.length > 0) {
           setAvailableQualities(qualities);
           const preferred = options?.audioOnly
             ? qualities.find((q) => q.height === 0) || qualities[qualities.length - 1]
             : qualities.find((q) => q.quality === selectedQuality) ||
-              qualities.find((q) => q.height === 720) ||
-              qualities.find((q) => q.height > 0) ||
-              qualities[0];
-          applyQualityOption(preferred, autoPlay, 0);
+            qualities.find((q) => q.height === 720) ||
+            qualities.find((q) => q.height > 0) ||
+            qualities[0];
+          applyQualityOption(preferred, autoPlay, initialStartTime);
           streamPlayed = true;
         } else if (data.streamUrl && audioRef.current) {
           const fallbackOpt: VideoQualityOption = {
@@ -1306,7 +1516,7 @@ export default function App() {
             isMuxed: false,
           };
           setAvailableQualities([fallbackOpt]);
-          applyQualityOption(fallbackOpt, autoPlay, 0);
+          applyQualityOption(fallbackOpt, autoPlay, initialStartTime);
           streamPlayed = true;
         }
       }
@@ -1324,7 +1534,7 @@ export default function App() {
         try {
           ytPlayerRef.current.loadVideoById({
             videoId: track.id,
-            startSeconds: 0,
+            startSeconds: initialStartTime,
           });
           if (ytPlayerRef.current.setPlaybackRate) {
             ytPlayerRef.current.setPlaybackRate(playbackRate);
@@ -1340,6 +1550,12 @@ export default function App() {
         } catch (ytErr) {
           console.warn("YouTube player fallback warning:", ytErr);
         }
+      } else {
+        pendingYtTrackRef.current = {
+          videoId: track.id,
+          startSeconds: initialStartTime,
+          autoPlay,
+        };
       }
     }
 
@@ -1352,7 +1568,7 @@ export default function App() {
         const lyricsData = await lyricsRes.json();
         setLyrics(lyricsData);
       }
-    } catch {}
+    } catch { }
 
     setIsLoading(false);
   };
@@ -1401,7 +1617,7 @@ export default function App() {
           setIsPlaying(true);
         }
         return;
-      } catch {}
+      } catch { }
     }
 
     if (activePlayerType.current === "video" && videoRef.current) {
@@ -1414,10 +1630,10 @@ export default function App() {
           loadAndPlayTrack(currentTrack, true);
           return;
         }
-        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => { });
         if (isAdaptiveSyncedRef.current && audioRef.current) {
           audioRef.current.currentTime = videoRef.current.currentTime;
-          audioRef.current.play().catch(() => {});
+          audioRef.current.play().catch(() => { });
         }
       }
       return;
@@ -1454,7 +1670,7 @@ export default function App() {
     if (playlist.length === 0) return;
     if (currentTime > 3) {
       if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
-        try { ytPlayerRef.current.seekTo(0, true); } catch {}
+        try { ytPlayerRef.current.seekTo(0, true); } catch { }
       } else if (activePlayerType.current === "video" && videoRef.current) {
         videoRef.current.currentTime = 0;
         if (isAdaptiveSyncedRef.current && audioRef.current) audioRef.current.currentTime = 0;
@@ -1473,7 +1689,7 @@ export default function App() {
     setCurrentTime(newTime);
     lastSyncTimeRef.current = Date.now();
     if (activePlayerType.current === "youtube" && ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === "function") {
-      try { ytPlayerRef.current.seekTo(newTime, true); } catch {}
+      try { ytPlayerRef.current.seekTo(newTime, true); } catch { }
     } else if (activePlayerType.current === "video" && videoRef.current) {
       const video = videoRef.current;
       const audio = audioRef.current;
@@ -1511,8 +1727,8 @@ export default function App() {
 
           Promise.all([waitSeeked(video), waitSeeked(audio)]).then(() => {
             if (token !== seekTokenRef.current) return;
-            video.play().catch(() => {});
-            audio.play().catch(() => {});
+            video.play().catch(() => { });
+            audio.play().catch(() => { });
           });
         }
       } else {
@@ -1535,17 +1751,17 @@ export default function App() {
         try {
           ytPlayerRef.current.seekTo(0, true);
           ytPlayerRef.current.playVideo();
-        } catch {}
+        } catch { }
       } else if (activePlayerType.current === "video" && videoRef.current) {
         videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch(() => { });
         if (isAdaptiveSyncedRef.current && audioRef.current) {
           audioRef.current.currentTime = 0;
-          audioRef.current.play().catch(() => {});
+          audioRef.current.play().catch(() => { });
         }
       } else if (audioRef.current) {
         audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => {});
+        audioRef.current.play().catch(() => { });
       }
     } else {
       handleNext();
@@ -1624,17 +1840,17 @@ export default function App() {
         e.preventDefault();
         const container = document.getElementById("thuongtube-video-container");
         if (!document.fullscreenElement && container) {
-          container.requestFullscreen().catch(() => {});
+          container.requestFullscreen().catch(() => { });
         } else if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
       } else if (key === "i") {
         e.preventDefault();
         if (activePlayerType.current === "video" && videoRef.current && document.pictureInPictureEnabled) {
           if (document.pictureInPictureElement) {
-            document.exitPictureInPicture().catch(() => {});
+            document.exitPictureInPicture().catch(() => { });
           } else if (videoRef.current.readyState > 0) {
-            videoRef.current.requestPictureInPicture().catch(() => {});
+            videoRef.current.requestPictureInPicture().catch(() => { });
           }
         }
       } else if (key === "n" && e.shiftKey) {
@@ -1820,7 +2036,7 @@ export default function App() {
             try {
               ytPlayerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: currentTime || 0 });
               ytPlayerRef.current.playVideo();
-            } catch {}
+            } catch { }
           }
         }}
       />
@@ -1864,11 +2080,10 @@ export default function App() {
               setIsSearchOpen(false);
             }}
             title="Khám phá video & nhạc thịnh hành"
-            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ml-1 ${
-              showDiscovery && !isSearchOpen
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ml-1 ${showDiscovery && !isSearchOpen
                 ? "bg-pink-500/25 border-pink-500/60 text-pink-300"
                 : "bg-white/5 border-white/10 text-white/75 hover:text-white hover:bg-white/10"
-            }`}
+              }`}
           >
             <Compass className="w-3.5 h-3.5 text-pink-400" />
             <span>Khám phá</span>
@@ -1958,8 +2173,192 @@ export default function App() {
           )}
         </div>
 
-        {/* Right: User Avatar Pill Button (Real avatar from database) */}
-        <div className="w-[140px] flex justify-end">
+        {/* Right: Switch to Kahoii Music, Download Apps & User Avatar Pill Buttons */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleSwitchToKahoii}
+            disabled={Boolean(currentTrack && !isCurrentTrackMusic)}
+            title={
+              currentTrack && !isCurrentTrackMusic
+                ? "Không thể chuyển sang Kahoii Music vì video đang phát không phải là nhạc"
+                : currentTrack
+                ? `Nghe tiếp "${currentTrack.title}" bên Kahoii Music`
+                : "Chuyển sang Kahoii Music (Nghe Nhạc Chuyên Dụng)"
+            }
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full border transition-all shadow-md ${
+              currentTrack && !isCurrentTrackMusic
+                ? "bg-white/5 border-white/10 text-white/35 opacity-45 cursor-not-allowed"
+                : "bg-white/5 hover:bg-pink-500/25 border-white/15 hover:border-pink-500/50 text-white/90 hover:text-white cursor-pointer hover:scale-105"
+            }`}
+          >
+            <Music
+              className={`w-3.5 h-3.5 ${
+                currentTrack && !isCurrentTrackMusic ? "text-white/40" : "text-pink-400"
+              }`}
+            />
+            <span className="hidden sm:inline text-xs font-semibold">Kahoii Music</span>
+          </button>
+
+          {/* Download App Button & Dropdown */}
+          <div className="relative" ref={downloadMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowDownloadMenu((v) => !v)}
+              title="Tải ứng dụng Kahoii Music (PC, Extension, Android, iOS)"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer shadow-md border ${showDownloadMenu
+                  ? "bg-pink-500/30 border-pink-500/60 text-white scale-105"
+                  : "bg-white/5 hover:bg-pink-500/25 border-white/15 hover:border-pink-500/50 text-white/90 hover:text-white hover:scale-105"
+                }`}
+            >
+              <Download className="w-3.5 h-3.5 text-pink-400" />
+              <span className="hidden sm:inline text-xs font-semibold">Tải ứng dụng</span>
+            </button>
+
+            {showDownloadMenu && (
+              <div className="absolute top-[44px] right-0 z-50 w-[310px] sm:w-[350px] bg-[#160430]/95 backdrop-blur-2xl rounded-2xl shadow-2xl p-3 border border-pink-500/40 flex flex-col gap-2">
+                <div className="flex items-center justify-between px-1 pb-1.5 border-b border-white/10">
+                  <div>
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Download className="w-3.5 h-3.5 text-pink-400" />
+                      <span>Tải ứng dụng Kahoii Music</span>
+                    </p>
+                    <p className="text-[10px] text-white/50">Tự động lấy bản mới nhất từ GitHub</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDownloadMenu(false)}
+                    className="p-1 text-white/40 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <a
+                    href={downloadData.pc.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
+                        <Laptop className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                          <span>Windows PC</span>
+                          <span className="text-[9px] px-1.5 rounded-full bg-blue-500/20 text-blue-300 font-mono">
+                            {downloadData.pc.version}
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">
+                          {downloadData.pc.fileName} {downloadData.pc.size ? `• ${downloadData.pc.size}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:bg-pink-500 text-white/60 group-hover:text-white transition-all flex-shrink-0 ml-2">
+                      <Download className="w-3.5 h-3.5" />
+                    </div>
+                  </a>
+
+                  <a
+                    href={downloadData.extension.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0">
+                        <Puzzle className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                          <span>Extension</span>
+                          <span className="text-[9px] px-1.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">
+                            {downloadData.extension.version}
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">Chrome, Edge, Cốc Cốc (.zip)</p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:bg-pink-500 text-white/60 group-hover:text-white transition-all flex-shrink-0 ml-2">
+                      <Download className="w-3.5 h-3.5" />
+                    </div>
+                  </a>
+
+                  <a
+                    href={downloadData.android.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                        <Smartphone className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                          <span>Android</span>
+                          <span className="text-[9px] px-1.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                            APK
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">
+                          Cài trực tiếp {downloadData.android.size ? `• ${downloadData.android.size}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:bg-pink-500 text-white/60 group-hover:text-white transition-all flex-shrink-0 ml-2">
+                      <Download className="w-3.5 h-3.5" />
+                    </div>
+                  </a>
+
+                  <a
+                    href={downloadData.ios.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-all group border border-white/5 hover:border-white/15 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center flex-shrink-0">
+                        <Tablet className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                          <span>iOS (iPhone/iPad)</span>
+                          <span className="text-[9px] px-1.5 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+                            IPA
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-white/50 truncate">Sideloadly / AltStore / TrollStore</p>
+                      </div>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white/5 group-hover:bg-pink-500 text-white/60 group-hover:text-white transition-all flex-shrink-0 ml-2">
+                      <Download className="w-3.5 h-3.5" />
+                    </div>
+                  </a>
+                </div>
+
+                <div className="pt-1.5 border-t border-white/10 flex items-center justify-between text-[10px] text-white/40 px-1">
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Tự động lấy bản mới nhất
+                  </span>
+                  <a
+                    href="https://github.com/Iiwa-San/KahoiiMusic/releases"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-pink-400 hover:underline flex items-center gap-0.5"
+                  >
+                    <span>Releases</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
           {userSession?.isLoggedIn ? (
             <button
               onClick={() => setIsAccountOpen(true)}
@@ -2017,11 +2416,10 @@ export default function App() {
         {/* COLUMN 1 (LEFT): Sidebar / Library Panel (Responsive Drawer on Mobile)  */}
         {/* ----------------------------------------------------------------------- */}
         <aside
-          className={`${
-            isMobileSidebarOpen
+          className={`${isMobileSidebarOpen
               ? "fixed inset-y-3 left-3 w-[84vw] max-w-[320px] z-50 flex"
               : "hidden lg:flex lg:w-[290px] xl:w-[320px]"
-          } flex-shrink-0 figma-panel flex-col min-h-0 overflow-hidden`}
+            } flex-shrink-0 figma-panel flex-col min-h-0 overflow-hidden`}
           style={{ padding: "24px 16px 18px 16px" }}
         >
           {/* Top 3 Tabs Row: Silky Smooth Sliding Indicator Animation */}
@@ -2051,9 +2449,8 @@ export default function App() {
               <button
                 key={tab.key}
                 onClick={() => setActiveLeftTab(tab.key)}
-                className={`relative z-20 py-2 px-1 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer truncate ${
-                  activeLeftTab === tab.key ? "text-white" : "text-white/70 hover:text-white"
-                }`}
+                className={`relative z-20 py-2 px-1 rounded-xl text-xs font-semibold text-center transition-colors duration-200 cursor-pointer truncate ${activeLeftTab === tab.key ? "text-white" : "text-white/70 hover:text-white"
+                  }`}
               >
                 {tab.label}
               </button>
@@ -2195,97 +2592,97 @@ export default function App() {
               );
             })()
           ) : (
-          /* Vertical List of Playlist / Favorites / History Items */
-          <div
-            className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
-            style={{ gap: "10px" }}
-          >
-            {getSidebarItems().length > 0 ? (
-              getSidebarItems().map((item, idx) => (
-                <div
-                  key={item.id + idx}
-                  onClick={() => {
-                    if (item.rawTrack) {
-                      playTrackDirectly(item.rawTrack);
-                    } else if (item.rawPlaylist) {
-                      setSelectedPlaylistId(item.rawPlaylist.id);
-                    } else if (playlist[idx % playlist.length]) {
-                      playTrackDirectly(playlist[idx % playlist.length]);
-                    }
-                  }}
-                  className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white/10 transition-all duration-200 cursor-pointer group"
-                >
-                  <img
-                    src={item.thumb}
-                    alt=""
-                    onError={(e) => {
-                      e.currentTarget.src = DEFAULT_TRACK_ART;
+            /* Vertical List of Playlist / Favorites / History Items */
+            <div
+              className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
+              style={{ gap: "10px" }}
+            >
+              {getSidebarItems().length > 0 ? (
+                getSidebarItems().map((item, idx) => (
+                  <div
+                    key={item.id + idx}
+                    onClick={() => {
+                      if (item.rawTrack) {
+                        playTrackDirectly(item.rawTrack);
+                      } else if (item.rawPlaylist) {
+                        setSelectedPlaylistId(item.rawPlaylist.id);
+                      } else if (playlist[idx % playlist.length]) {
+                        playTrackDirectly(playlist[idx % playlist.length]);
+                      }
                     }}
-                    className="w-10 h-10 rounded-[12px] object-cover flex-shrink-0 border border-white/10 shadow-sm"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-white group-hover:text-pink-300 truncate transition-colors">
-                      {item.title}
-                    </p>
-                    <p className="text-[11px] text-purple-200/60 truncate mt-0.5">
-                      {item.subtitle}
-                    </p>
-                  </div>
-                  {item.rawTrack ? (
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={(e) => handleAddToQueue(item.rawTrack, e)}
-                        title="Thêm vào hàng chờ"
-                        className="p-1 rounded-md hover:bg-pink-500/30 text-white/70 hover:text-pink-300 cursor-pointer"
-                      >
-                        <ListEnd className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPlaylistTargetTrack(item.rawTrack);
-                        }}
-                        title="Thêm vào danh sách phát"
-                        className="p-1 rounded-md hover:bg-purple-500/30 text-white/70 hover:text-purple-300 cursor-pointer"
-                      >
-                        <ListPlus className="w-3.5 h-3.5" />
-                      </button>
+                    className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white/10 transition-all duration-200 cursor-pointer group"
+                  >
+                    <img
+                      src={item.thumb}
+                      alt=""
+                      onError={(e) => {
+                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                      }}
+                      className="w-10 h-10 rounded-[12px] object-cover flex-shrink-0 border border-white/10 shadow-sm"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-white group-hover:text-pink-300 truncate transition-colors">
+                        {item.title}
+                      </p>
+                      <p className="text-[11px] text-purple-200/60 truncate mt-0.5">
+                        {item.subtitle}
+                      </p>
                     </div>
-                  ) : item.rawPlaylist ? (
+                    {item.rawTrack ? (
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => handleAddToQueue(item.rawTrack, e)}
+                          title="Thêm vào hàng chờ"
+                          className="p-1 rounded-md hover:bg-pink-500/30 text-white/70 hover:text-pink-300 cursor-pointer"
+                        >
+                          <ListEnd className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPlaylistTargetTrack(item.rawTrack);
+                          }}
+                          title="Thêm vào danh sách phát"
+                          className="p-1 rounded-md hover:bg-purple-500/30 text-white/70 hover:text-purple-300 cursor-pointer"
+                        >
+                          <ListPlus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : item.rawPlaylist ? (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeletePlaylist(item.rawPlaylist.id, e)}
+                        title="Xóa danh sách phát"
+                        className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-500/30 text-white/60 hover:text-red-400 transition-all cursor-pointer flex-shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs px-2 gap-2">
+                  <p>
+                    {activeLeftTab === "library"
+                      ? "Chưa có danh sách phát nào"
+                      : activeLeftTab === "favorites"
+                        ? "Chưa có bài hát yêu thích nào"
+                        : "Chưa có lịch sử phát nhạc"}
+                  </p>
+                  {activeLeftTab === "library" && (
                     <button
                       type="button"
-                      onClick={(e) => handleDeletePlaylist(item.rawPlaylist.id, e)}
-                      title="Xóa danh sách phát"
-                      className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-red-500/30 text-white/60 hover:text-red-400 transition-all cursor-pointer flex-shrink-0"
+                      onClick={() => setIsCreatePlaylistOpen(true)}
+                      className="px-3 py-1.5 rounded-full bg-pink-500/20 hover:bg-pink-500 text-pink-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      + Tạo danh sách phát đầu tiên
                     </button>
-                  ) : null}
+                  )}
                 </div>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-white/40 text-xs px-2 gap-2">
-                <p>
-                  {activeLeftTab === "library"
-                    ? "Chưa có danh sách phát nào"
-                    : activeLeftTab === "favorites"
-                    ? "Chưa có bài hát yêu thích nào"
-                    : "Chưa có lịch sử phát nhạc"}
-                </p>
-                {activeLeftTab === "library" && (
-                  <button
-                    type="button"
-                    onClick={() => setIsCreatePlaylistOpen(true)}
-                    className="px-3 py-1.5 rounded-full bg-pink-500/20 hover:bg-pink-500 text-pink-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors"
-                  >
-                    + Tạo danh sách phát đầu tiên
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           )}
         </aside>
 
@@ -2303,118 +2700,115 @@ export default function App() {
             style={{ padding: "20px 24px" }}
           >
             {isSearchOpen ? (
-            /* ===================================================================== */
-            /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
-            /* ===================================================================== */
-            <div className="flex flex-col h-full min-h-0 overflow-y-auto pr-1 custom-scrollbar">
-              {/* Header with Back button, search title and result count */}
-              <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-4 flex-shrink-0">
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSearchOpen(false);
-                      setTopSearchText("");
-                      setSearchQueryTitle("");
-                      setActiveSearchTab("all");
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-pink-500/20 text-white/80 hover:text-white border border-white/10 transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
-                  >
-                    <ArrowLeft className="w-4 h-4 text-pink-400 group-hover:-translate-x-0.5 transition-transform" />
-                    <span>Quay lại Khám phá</span>
-                  </button>
-                  <h2 className="text-[20px] font-bold text-white tracking-wide truncate">
-                    {searchQueryTitle ? `Kết quả: "${searchQueryTitle}"` : "Kết quả tìm kiếm"}
-                  </h2>
-                </div>
-                {searchResults.length > 0 && (
-                  <span className="text-xs text-purple-200/60 font-mono">
-                    {searchResults.length} kết quả
-                  </span>
-                )}
-              </div>
-
-              {/* Navigation Tabs: Tất cả / Video / Nhạc / Kênh / Playlist */}
-              <div className="flex items-center gap-2 mb-5 flex-wrap flex-shrink-0">
-                {[
-                  { key: "all", label: "Tất cả" },
-                  {
-                    key: "videos",
-                    label: "Video",
-                    count: searchStructured?.videos?.length || 0,
-                  },
-                  {
-                    key: "tracks",
-                    label: "Nhạc",
-                    count: searchStructured?.tracks?.length || 0,
-                  },
-                  {
-                    key: "artists",
-                    label: "Kênh / Nghệ sĩ",
-                    count: searchStructured?.artists?.length || 0,
-                  },
-                  {
-                    key: "playlists",
-                    label: "Playlist",
-                    count: searchStructured?.playlists?.length || 0,
-                  },
-                ].map((tab) => {
-                  const isActive = activeSearchTab === tab.key;
-                  return (
+              /* ===================================================================== */
+              /* SEARCH VIEW (Dynamically transforms Center Canvas when searching)     */
+              /* ===================================================================== */
+              <div className="flex flex-col h-full min-h-0 overflow-y-auto pr-1 custom-scrollbar">
+                {/* Header with Back button, search title and result count */}
+                <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-4 flex-shrink-0">
+                  <div className="flex items-center gap-3">
                     <button
-                      key={tab.key}
                       type="button"
-                      onClick={() =>
-                        setActiveSearchTab(tab.key as "all" | "videos" | "tracks" | "artists" | "playlists")
-                      }
-                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${
-                        isActive
-                          ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25 scale-[1.02]"
-                          : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5"
-                      }`}
+                      onClick={() => {
+                        setIsSearchOpen(false);
+                        setTopSearchText("");
+                        setSearchQueryTitle("");
+                        setActiveSearchTab("all");
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-pink-500/20 text-white/80 hover:text-white border border-white/10 transition-all cursor-pointer flex items-center gap-2 text-xs font-semibold group"
                     >
-                      <span>{tab.label}</span>
-                      {typeof tab.count === "number" && tab.count > 0 && (
-                        <span
-                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                            isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
-                          }`}
-                        >
-                          {tab.count}
-                        </span>
-                      )}
+                      <ArrowLeft className="w-4 h-4 text-pink-400 group-hover:-translate-x-0.5 transition-transform" />
+                      <span>Quay lại Khám phá</span>
                     </button>
-                  );
-                })}
-              </div>
-
-              {/* Body: Loading / Results Multi-tier Grid / Empty state */}
-              {isSearching ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-pink-400" />
-                  <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
+                    <h2 className="text-[20px] font-bold text-white tracking-wide truncate">
+                      {searchQueryTitle ? `Kết quả: "${searchQueryTitle}"` : "Kết quả tìm kiếm"}
+                    </h2>
+                  </div>
+                  {searchResults.length > 0 && (
+                    <span className="text-xs text-purple-200/60 font-mono">
+                      {searchResults.length} kết quả
+                    </span>
+                  )}
                 </div>
-              ) : searchResults.length > 0 || (searchStructured && (searchStructured.artists.length > 0 || searchStructured.playlists.length > 0)) ? (
-                <div className="flex flex-col gap-6 pb-8">
-                  {/* ========================================================================= */}
-                  {/* TAB: TẤT CẢ                                                               */}
-                  {/* ========================================================================= */}
-                  {activeSearchTab === "all" && (
-                    <>
-                      {/* TẦNG 1: Hero Top Match Card (Kết quả khớp nhất / Bài hát phù hợp nhất) */}
-                      {(() => {
-                        const top =
-                          searchStructured?.topResult ||
-                          (searchResults.length > 0
-                            ? {
+
+                {/* Navigation Tabs: Tất cả / Video / Nhạc / Kênh / Playlist */}
+                <div className="flex items-center gap-2 mb-5 flex-wrap flex-shrink-0">
+                  {[
+                    { key: "all", label: "Tất cả" },
+                    {
+                      key: "videos",
+                      label: "Video",
+                      count: searchStructured?.videos?.length || 0,
+                    },
+                    {
+                      key: "tracks",
+                      label: "Nhạc",
+                      count: searchStructured?.tracks?.length || 0,
+                    },
+                    {
+                      key: "artists",
+                      label: "Kênh / Nghệ sĩ",
+                      count: searchStructured?.artists?.length || 0,
+                    },
+                    {
+                      key: "playlists",
+                      label: "Playlist",
+                      count: searchStructured?.playlists?.length || 0,
+                    },
+                  ].map((tab) => {
+                    const isActive = activeSearchTab === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() =>
+                          setActiveSearchTab(tab.key as "all" | "videos" | "tracks" | "artists" | "playlists")
+                        }
+                        className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer ${isActive
+                            ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25 scale-[1.02]"
+                            : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5"
+                          }`}
+                      >
+                        <span>{tab.label}</span>
+                        {typeof tab.count === "number" && tab.count > 0 && (
+                          <span
+                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${isActive ? "bg-white/20 text-white" : "bg-white/10 text-white/60"
+                              }`}
+                          >
+                            {tab.count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Body: Loading / Results Multi-tier Grid / Empty state */}
+                {isSearching ? (
+                  <div className="flex-1 flex flex-col items-center justify-center py-24 text-center gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-pink-400" />
+                    <p className="text-sm font-medium text-purple-200/80">Đang tải dữ liệu...</p>
+                  </div>
+                ) : searchResults.length > 0 || (searchStructured && (searchStructured.artists.length > 0 || searchStructured.playlists.length > 0)) ? (
+                  <div className="flex flex-col gap-6 pb-8">
+                    {/* ========================================================================= */}
+                    {/* TAB: TẤT CẢ                                                               */}
+                    {/* ========================================================================= */}
+                    {activeSearchTab === "all" && (
+                      <>
+                        {/* TẦNG 1: Hero Top Match Card (Kết quả khớp nhất / Bài hát phù hợp nhất) */}
+                        {(() => {
+                          const top =
+                            searchStructured?.topResult ||
+                            (searchResults.length > 0
+                              ? {
                                 id: searchResults[0].id,
                                 title: searchResults[0].title,
                                 author: searchResults[0].author,
-                                subtitle: `${searchResults[0].author}${
-                                  searchResults[0].duration > 0
+                                subtitle: `${searchResults[0].author}${searchResults[0].duration > 0
                                     ? " • " + formatTime(searchResults[0].duration)
                                     : ""
-                                }`,
+                                  }`,
                                 duration: searchResults[0].duration,
                                 durationText:
                                   searchResults[0].duration > 0
@@ -2423,131 +2817,460 @@ export default function App() {
                                 thumbnail: searchResults[0].thumbnail,
                                 type: "song" as const,
                               }
-                            : null);
+                              : null);
 
-                        if (!top) return null;
-                        const isCurrentPlaying = currentTrack?.id === top.id;
+                          if (!top) return null;
+                          const isCurrentPlaying = currentTrack?.id === top.id;
 
-                        return (
-                          <div className="w-full sticky top-0 z-30 pt-0.5 pb-1">
-                            <div
-                              onClick={() => {
-                                if (isCurrentPlaying) {
-                                  togglePlayPause();
-                                } else {
-                                  playSearchResult({
-                                    id: top.id,
-                                    title: top.title,
-                                    author: top.author,
-                                    duration: top.duration,
-                                    thumbnail: top.thumbnail,
-                                  });
-                                }
-                              }}
-                              className="w-full rounded-[20px] p-3.5 bg-gradient-to-r from-[#2f1647]/95 via-[#1e1335]/95 to-[#140d24]/95 backdrop-blur-xl border border-pink-500/45 hover:border-pink-500/75 shadow-2xl shadow-black/50 transition-all flex items-center justify-between gap-4 group cursor-pointer"
-                            >
-                              <div className="flex items-center gap-4 min-w-0">
-                                {/* Large Artwork */}
-                                <div className="relative w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
-                                  <img
-                                    src={top.thumbnail || DEFAULT_TRACK_ART}
-                                    alt={top.title}
-                                    onError={(e) => {
-                                      e.currentTarget.src = DEFAULT_TRACK_ART;
-                                    }}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                  />
-                                  {top.duration > 0 && (
-                                    <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono text-white/90">
-                                      {top.durationText || formatTime(top.duration)}
+                          return (
+                            <div className="w-full sticky top-0 z-30 pt-0.5 pb-1">
+                              <div
+                                onClick={() => {
+                                  if (isCurrentPlaying) {
+                                    togglePlayPause();
+                                  } else {
+                                    playSearchResult({
+                                      id: top.id,
+                                      title: top.title,
+                                      author: top.author,
+                                      duration: top.duration,
+                                      thumbnail: top.thumbnail,
+                                    });
+                                  }
+                                }}
+                                className="w-full rounded-[20px] p-3.5 bg-gradient-to-r from-[#2f1647]/95 via-[#1e1335]/95 to-[#140d24]/95 backdrop-blur-xl border border-pink-500/45 hover:border-pink-500/75 shadow-2xl shadow-black/50 transition-all flex items-center justify-between gap-4 group cursor-pointer"
+                              >
+                                <div className="flex items-center gap-4 min-w-0">
+                                  {/* Large Artwork */}
+                                  <div className="relative w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border border-white/10 bg-purple-950">
+                                    <img
+                                      src={top.thumbnail || DEFAULT_TRACK_ART}
+                                      alt={top.title}
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                                      }}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    />
+                                    {top.duration > 0 && (
+                                      <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono text-white/90">
+                                        {top.durationText || formatTime(top.duration)}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Track Info */}
+                                  <div className="min-w-0 flex flex-col justify-center">
+                                    <span className="text-[10px] uppercase font-bold tracking-widest text-pink-400 mb-1 flex items-center gap-1.5">
+                                      <Sparkles className="w-3 h-3 text-pink-400" />
+                                      BÀI HÁT PHÙ HỢP NHẤT
                                     </span>
-                                  )}
+                                    <h3 className="text-base sm:text-lg font-bold text-white tracking-wide truncate group-hover:text-pink-300 transition-colors">
+                                      {top.title}
+                                    </h3>
+                                    <p className="text-xs text-purple-200/70 truncate mt-1">
+                                      {top.author} •{" "}
+                                      {top.durationText ||
+                                        (top.duration > 0
+                                          ? formatTime(top.duration)
+                                          : "YouTube Music")}
+                                    </p>
+                                  </div>
                                 </div>
 
-                                {/* Track Info */}
-                                <div className="min-w-0 flex flex-col justify-center">
-                                  <span className="text-[10px] uppercase font-bold tracking-widest text-pink-400 mb-1 flex items-center gap-1.5">
-                                    <Sparkles className="w-3 h-3 text-pink-400" />
-                                    BÀI HÁT PHÙ HỢP NHẤT
-                                  </span>
-                                  <h3 className="text-base sm:text-lg font-bold text-white tracking-wide truncate group-hover:text-pink-300 transition-colors">
-                                    {top.title}
-                                  </h3>
-                                  <p className="text-xs text-purple-200/70 truncate mt-1">
-                                    {top.author} •{" "}
-                                    {top.durationText ||
-                                      (top.duration > 0
-                                        ? formatTime(top.duration)
-                                        : "YouTube Music")}
-                                  </p>
+                                {/* Play Action Button */}
+                                <div className="flex items-center gap-3 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isCurrentPlaying) {
+                                        togglePlayPause();
+                                      } else {
+                                        playSearchResult({
+                                          id: top.id,
+                                          title: top.title,
+                                          author: top.author,
+                                          duration: top.duration,
+                                          thumbnail: top.thumbnail,
+                                        });
+                                      }
+                                    }}
+                                    className="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                                  >
+                                    {isCurrentPlaying && isPlaying ? (
+                                      <>
+                                        <Pause className="w-4 h-4 fill-current" />
+                                        <span>Tạm dừng</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                                        <span>Phát ngay</span>
+                                      </>
+                                    )}
+                                  </button>
                                 </div>
                               </div>
+                            </div>
+                          );
+                        })()}
 
-                              {/* Play Action Button */}
-                              <div className="flex items-center gap-3 flex-shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
+                        {/* TẦNG 2: Nhạc sĩ (Row of Artists - Enlarged Items) */}
+                        {searchStructured?.artists && searchStructured.artists.length > 0 && (
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h3
+                                onClick={() => setActiveSearchTab("artists")}
+                                className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                              >
+                                <span>Nhạc sĩ</span>
+                              </h3>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSearchTab("artists")}
+                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              >
+                                Xem tất cả ({searchStructured.artists.length})
+                              </button>
+                            </div>
+                            <div className="flex items-start gap-7 overflow-x-auto pb-2 custom-scrollbar">
+                              {searchStructured.artists.map((artist) => (
+                                <div
+                                  key={artist.id || artist.name}
+                                  onClick={() => executeSearch(artist.name)}
+                                  className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0"
+                                  style={{ width: "170px" }}
+                                >
+                                  <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-[3px] border-pink-500/30 group-hover:border-pink-500 group-hover:shadow-[0_0_22px_rgba(236,72,153,0.45)] group-hover:scale-105 transition-all duration-300 shadow-xl bg-purple-950/60 mb-2.5 relative">
+                                    <img
+                                      src={artist.thumbnail || DEFAULT_TRACK_ART}
+                                      alt={artist.name}
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                                      }}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    />
+                                    <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <div className="w-9 h-9 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                        <Search className="w-4 h-4 text-white" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <p className="text-sm font-bold text-white group-hover:text-pink-300 text-center truncate w-full">
+                                    {artist.name}
+                                  </p>
+                                  <p className="text-[11px] text-purple-200/60 text-center truncate w-full mt-0.5">
+                                    {artist.subscribers || "Nghệ sĩ"}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* TẦNG 3: Playlist (Row of Playlists) */}
+                        {searchStructured?.playlists && searchStructured.playlists.length > 0 && (
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h3
+                                onClick={() => setActiveSearchTab("playlists")}
+                                className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                              >
+                                <span>Playlist</span>
+                              </h3>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSearchTab("playlists")}
+                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              >
+                                Xem tất cả ({searchStructured.playlists.length})
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-6 gap-4">
+                              {searchStructured.playlists.slice(0, 6).map((pl) => (
+                                <div
+                                  key={pl.id || pl.title}
+                                  onClick={() => playPlaylistItem(pl)}
+                                  className="flex flex-col cursor-pointer group"
+                                >
+                                  <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
+                                    <img
+                                      src={pl.thumbnail || DEFAULT_TRACK_ART}
+                                      alt={pl.title}
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                                      }}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          playPlaylistItem(pl);
+                                        }}
+                                        className="w-11 h-11 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                        title="Phát danh sách này"
+                                      >
+                                        <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                      </button>
+                                    </div>
+                                    <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                      Playlist
+                                    </span>
+                                  </div>
+                                  <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5">
+                                    {pl.title}
+                                  </p>
+                                  <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                    {pl.author || "YouTube Music"}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* TẦNG 4: Bài hát (Songs Grid) */}
+                        {searchResults.length > 0 && (
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h3
+                                onClick={() => setActiveSearchTab("tracks")}
+                                className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
+                              >
+                                <span>Bài hát</span>
+                              </h3>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSearchTab("tracks")}
+                                className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
+                              >
+                                Xem tất cả ({searchResults.length})
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 w-full" style={{ gap: "16px" }}>
+                              {searchResults.slice(0, 12).map((item) => {
+                                const isCurrentPlaying = currentTrack?.id === item.id;
+                                return (
+                                  <div
+                                    key={item.id}
+                                    onClick={() => {
+                                      if (isCurrentPlaying) {
+                                        togglePlayPause();
+                                      } else {
+                                        playSearchResult(item);
+                                      }
+                                    }}
+                                    className="w-full flex flex-col cursor-pointer group"
+                                  >
+                                    <div
+                                      className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${isCurrentPlaying
+                                          ? "border-pink-500 shadow-pink-500/30"
+                                          : "border-white/5 bg-purple-900/30"
+                                        }`}
+                                    >
+                                      <img
+                                        src={
+                                          item.thumbnail ||
+                                          `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
+                                        }
+                                        alt={item.title}
+                                        onError={(e) => {
+                                          e.currentTarget.src = DEFAULT_TRACK_ART;
+                                        }}
+                                        className="w-full h-full object-cover"
+                                      />
+                                      <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => handleAddToQueue(item, e)}
+                                          title="Thêm vào hàng chờ"
+                                          className="p-1.5 rounded-full bg-black/75 hover:bg-pink-500 text-white cursor-pointer transition-colors"
+                                        >
+                                          <ListEnd className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setPlaylistTargetTrack(item);
+                                          }}
+                                          title="Thêm vào danh sách phát"
+                                          className="p-1.5 rounded-full bg-black/75 hover:bg-purple-500 text-white cursor-pointer transition-colors"
+                                        >
+                                          <ListPlus className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                      <div
+                                        className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${isCurrentPlaying
+                                            ? "opacity-100"
+                                            : "opacity-0 group-hover:opacity-100"
+                                          }`}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isCurrentPlaying) {
+                                              togglePlayPause();
+                                            } else {
+                                              playSearchResult(item);
+                                            }
+                                          }}
+                                          className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                        >
+                                          {isCurrentPlaying && isPlaying ? (
+                                            <Pause className="w-5 h-5 text-white fill-current" />
+                                          ) : (
+                                            <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                          )}
+                                        </button>
+                                      </div>
+                                      {item.duration > 0 && (
+                                        <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                          {formatTime(item.duration)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p
+                                      className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${isCurrentPlaying
+                                          ? "text-pink-300 font-bold"
+                                          : "text-white/90 group-hover:text-pink-300"
+                                        }`}
+                                    >
+                                      {item.title}
+                                    </p>
+                                    <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                      {item.author || "Kahoii Music"}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* ========================================================================= */}
+                    {/* TAB: NHẠC (Tất cả bài hát)                                                */}
+                    {/* ========================================================================= */}
+                    {(activeSearchTab === "videos" || activeSearchTab === "tracks") && (() => {
+                      const itemsToRender =
+                        activeSearchTab === "videos"
+                          ? searchStructured?.videos || searchResults
+                          : searchStructured?.tracks || searchResults;
+                      return (
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-[18px] font-bold text-white tracking-wide">
+                              {activeSearchTab === "videos"
+                                ? `Tất cả Video (${itemsToRender.length})`
+                                : `Tất cả bài hát (${itemsToRender.length})`}
+                            </h3>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 w-full" style={{ gap: "16px" }}>
+                            {itemsToRender.map((item) => {
+                              const isCurrentPlaying = currentTrack?.id === item.id;
+                              return (
+                                <div
+                                  key={item.id}
+                                  onClick={() => {
                                     if (isCurrentPlaying) {
                                       togglePlayPause();
                                     } else {
-                                      playSearchResult({
-                                        id: top.id,
-                                        title: top.title,
-                                        author: top.author,
-                                        duration: top.duration,
-                                        thumbnail: top.thumbnail,
-                                      });
+                                      playSearchResult(item);
                                     }
                                   }}
-                                  className="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                                  className="w-full flex flex-col cursor-pointer group"
                                 >
-                                  {isCurrentPlaying && isPlaying ? (
-                                    <>
-                                      <Pause className="w-4 h-4 fill-current" />
-                                      <span>Tạm dừng</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Play className="w-4 h-4 fill-current translate-x-0.5" />
-                                      <span>Phát ngay</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
+                                  <div
+                                    className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${isCurrentPlaying
+                                        ? "border-pink-500 shadow-pink-500/30"
+                                        : "border-white/5 bg-purple-900/30"
+                                      }`}
+                                  >
+                                    <img
+                                      src={
+                                        item.thumbnail ||
+                                        `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
+                                      }
+                                      alt={item.title}
+                                      onError={(e) => {
+                                        e.currentTarget.src = DEFAULT_TRACK_ART;
+                                      }}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div
+                                      className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${isCurrentPlaying
+                                          ? "opacity-100"
+                                          : "opacity-0 group-hover:opacity-100"
+                                        }`}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (isCurrentPlaying) {
+                                            togglePlayPause();
+                                          } else {
+                                            playSearchResult(item);
+                                          }
+                                        }}
+                                        className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                                      >
+                                        {isCurrentPlaying && isPlaying ? (
+                                          <Pause className="w-5 h-5 text-white fill-current" />
+                                        ) : (
+                                          <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
+                                        )}
+                                      </button>
+                                    </div>
+                                    {item.duration > 0 && (
+                                      <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
+                                        {formatTime(item.duration)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p
+                                    className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${isCurrentPlaying
+                                        ? "text-pink-300 font-bold"
+                                        : "text-white/90 group-hover:text-pink-300"
+                                      }`}
+                                  >
+                                    {item.title}
+                                  </p>
+                                  <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                                    {item.author || "Kahoii Music"}
+                                  </p>
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })()}
+                        </div>
+                      );
+                    })()}
 
-                      {/* TẦNG 2: Nhạc sĩ (Row of Artists - Enlarged Items) */}
-                      {searchStructured?.artists && searchStructured.artists.length > 0 && (
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <h3
-                              onClick={() => setActiveSearchTab("artists")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
-                            >
-                              <span>Nhạc sĩ</span>
-                            </h3>
-                            <button
-                              type="button"
-                              onClick={() => setActiveSearchTab("artists")}
-                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
-                            >
-                              Xem tất cả ({searchStructured.artists.length})
-                            </button>
-                          </div>
-                          <div className="flex items-start gap-7 overflow-x-auto pb-2 custom-scrollbar">
+                    {/* ========================================================================= */}
+                    {/* TAB: NHẠC SĨ (Tất cả nghệ sĩ - Enlarged Grid)                             */}
+                    {/* ========================================================================= */}
+                    {activeSearchTab === "artists" && (
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-[18px] font-bold text-white tracking-wide">
+                            Tất cả nhạc sĩ ({searchStructured?.artists?.length || 0})
+                          </h3>
+                        </div>
+                        {searchStructured?.artists && searchStructured.artists.length > 0 ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                             {searchStructured.artists.map((artist) => (
                               <div
                                 key={artist.id || artist.name}
                                 onClick={() => executeSearch(artist.name)}
-                                className="flex flex-col items-center p-3 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group flex-shrink-0"
-                                style={{ width: "170px" }}
+                                className="flex flex-col items-center p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
                               >
-                                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-[3px] border-pink-500/30 group-hover:border-pink-500 group-hover:shadow-[0_0_22px_rgba(236,72,153,0.45)] group-hover:scale-105 transition-all duration-300 shadow-xl bg-purple-950/60 mb-2.5 relative">
+                                <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden border-[3px] border-pink-500/30 group-hover:border-pink-500 group-hover:shadow-[0_0_25px_rgba(236,72,153,0.45)] group-hover:scale-105 transition-all duration-300 shadow-xl bg-purple-950/60 mb-3 relative">
                                   <img
                                     src={artist.thumbnail || DEFAULT_TRACK_ART}
                                     alt={artist.name}
@@ -2557,43 +3280,41 @@ export default function App() {
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                   />
                                   <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                    <div className="w-9 h-9 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
-                                      <Search className="w-4 h-4 text-white" />
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                      <Search className="w-5 h-5 text-white" />
                                     </div>
                                   </div>
                                 </div>
-                                <p className="text-sm font-bold text-white group-hover:text-pink-300 text-center truncate w-full">
+                                <p className="text-base font-bold text-white group-hover:text-pink-300 text-center truncate w-full">
                                   {artist.name}
                                 </p>
-                                <p className="text-[11px] text-purple-200/60 text-center truncate w-full mt-0.5">
+                                <p className="text-xs text-purple-200/60 text-center truncate w-full mt-1">
                                   {artist.subscribers || "Nghệ sĩ"}
                                 </p>
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        ) : (
+                          <p className="text-sm text-white/50 italic py-10 text-center">
+                            Không tìm thấy thông tin nhạc sĩ phù hợp.
+                          </p>
+                        )}
+                      </div>
+                    )}
 
-                      {/* TẦNG 3: Playlist (Row of Playlists) */}
-                      {searchStructured?.playlists && searchStructured.playlists.length > 0 && (
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <h3
-                              onClick={() => setActiveSearchTab("playlists")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
-                            >
-                              <span>Playlist</span>
-                            </h3>
-                            <button
-                              type="button"
-                              onClick={() => setActiveSearchTab("playlists")}
-                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
-                            >
-                              Xem tất cả ({searchStructured.playlists.length})
-                            </button>
-                          </div>
+                    {/* ========================================================================= */}
+                    {/* TAB: PLAYLIST (Tất cả danh sách phát)                                      */}
+                    {/* ========================================================================= */}
+                    {activeSearchTab === "playlists" && (
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-[18px] font-bold text-white tracking-wide">
+                            Tất cả danh sách phát ({searchStructured?.playlists?.length || 0})
+                          </h3>
+                        </div>
+                        {searchStructured?.playlists && searchStructured.playlists.length > 0 ? (
                           <div className="grid grid-cols-6 gap-4">
-                            {searchStructured.playlists.slice(0, 6).map((pl) => (
+                            {searchStructured.playlists.map((pl) => (
                               <div
                                 key={pl.id || pl.title}
                                 onClick={() => playPlaylistItem(pl)}
@@ -2634,1033 +3355,698 @@ export default function App() {
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
-
-                      {/* TẦNG 4: Bài hát (Songs Grid) */}
-                      {searchResults.length > 0 && (
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <h3
-                              onClick={() => setActiveSearchTab("tracks")}
-                              className="text-[17px] font-bold text-white tracking-wide flex items-center gap-2 cursor-pointer hover:text-pink-300 transition-colors"
-                            >
-                              <span>Bài hát</span>
-                            </h3>
-                            <button
-                              type="button"
-                              onClick={() => setActiveSearchTab("tracks")}
-                              className="text-xs text-pink-400 hover:text-pink-300 font-medium transition-colors cursor-pointer"
-                            >
-                              Xem tất cả ({searchResults.length})
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 w-full" style={{ gap: "16px" }}>
-                            {searchResults.slice(0, 12).map((item) => {
-                              const isCurrentPlaying = currentTrack?.id === item.id;
-                              return (
-                                <div
-                                  key={item.id}
-                                  onClick={() => {
-                                    if (isCurrentPlaying) {
-                                      togglePlayPause();
-                                    } else {
-                                      playSearchResult(item);
-                                    }
-                                  }}
-                                  className="w-full flex flex-col cursor-pointer group"
-                                >
-                                  <div
-                                    className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
-                                      isCurrentPlaying
-                                        ? "border-pink-500 shadow-pink-500/30"
-                                        : "border-white/5 bg-purple-900/30"
-                                    }`}
-                                  >
-                                    <img
-                                      src={
-                                        item.thumbnail ||
-                                        `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
-                                      }
-                                      alt={item.title}
-                                      onError={(e) => {
-                                        e.currentTarget.src = DEFAULT_TRACK_ART;
-                                      }}
-                                      className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleAddToQueue(item, e)}
-                                        title="Thêm vào hàng chờ"
-                                        className="p-1.5 rounded-full bg-black/75 hover:bg-pink-500 text-white cursor-pointer transition-colors"
-                                      >
-                                        <ListEnd className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setPlaylistTargetTrack(item);
-                                        }}
-                                        title="Thêm vào danh sách phát"
-                                        className="p-1.5 rounded-full bg-black/75 hover:bg-purple-500 text-white cursor-pointer transition-colors"
-                                      >
-                                        <ListPlus className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                    <div
-                                      className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-                                        isCurrentPlaying
-                                          ? "opacity-100"
-                                          : "opacity-0 group-hover:opacity-100"
-                                      }`}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isCurrentPlaying) {
-                                            togglePlayPause();
-                                          } else {
-                                            playSearchResult(item);
-                                          }
-                                        }}
-                                        className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                                      >
-                                        {isCurrentPlaying && isPlaying ? (
-                                          <Pause className="w-5 h-5 text-white fill-current" />
-                                        ) : (
-                                          <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                        )}
-                                      </button>
-                                    </div>
-                                    {item.duration > 0 && (
-                                      <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
-                                        {formatTime(item.duration)}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p
-                                    className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
-                                      isCurrentPlaying
-                                        ? "text-pink-300 font-bold"
-                                        : "text-white/90 group-hover:text-pink-300"
-                                    }`}
-                                  >
-                                    {item.title}
-                                  </p>
-                                  <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                                    {item.author || "Kahoii Music"}
-                                  </p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* ========================================================================= */}
-                  {/* TAB: NHẠC (Tất cả bài hát)                                                */}
-                  {/* ========================================================================= */}
-                  {(activeSearchTab === "videos" || activeSearchTab === "tracks") && (() => {
-                    const itemsToRender =
-                      activeSearchTab === "videos"
-                        ? searchStructured?.videos || searchResults
-                        : searchStructured?.tracks || searchResults;
-                    return (
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[18px] font-bold text-white tracking-wide">
-                          {activeSearchTab === "videos"
-                            ? `Tất cả Video (${itemsToRender.length})`
-                            : `Tất cả bài hát (${itemsToRender.length})`}
-                        </h3>
+                        ) : (
+                          <p className="text-sm text-white/50 italic py-10 text-center">
+                            Không tìm thấy danh sách phát phù hợp.
+                          </p>
+                        )}
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 w-full" style={{ gap: "16px" }}>
-                        {itemsToRender.map((item) => {
-                          const isCurrentPlaying = currentTrack?.id === item.id;
-                          return (
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
+                    <p className="text-sm text-white/50 italic">Không tìm thấy dữ liệu phù hợp.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSearchOpen(false);
+                        setTopSearchText("");
+                        setSearchQueryTitle("");
+                        setActiveSearchTab("all");
+                      }}
+                      className="px-4 py-2 rounded-xl bg-white/10 hover:bg-pink-600 text-xs font-semibold text-white transition-all cursor-pointer"
+                    >
+                      Quay lại Khám phá
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ===================================================================== */
+              /* DISCOVERY VIEW (Nhạc Trending, Mới Phát Hành, Nhạc Sĩ Nổi Bật, ...)   */
+              /* ===================================================================== */
+              <div className="flex flex-col gap-8 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-6">
+                {/* Sticky Audio-Only Mini-Player Card while browsing Discovery */}
+                <div className="sticky top-0 z-30 flex flex-col gap-2 p-3 rounded-2xl bg-[#1a0836]/95 backdrop-blur-xl border border-pink-500/45 shadow-2xl shadow-black/50">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {currentTrack ? (
+                        <>
+                          <img
+                            src={currentTrack.thumbnail || `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`}
+                            alt=""
+                            onError={(e) => { e.currentTarget.src = DEFAULT_TRACK_ART; }}
+                            className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-pink-500/40 shadow"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 text-[9px] font-bold uppercase tracking-wider flex-shrink-0">
+                                {playerMode === "audio" ? "Chỉ âm thanh" : "Đang phát"}
+                              </span>
+                              <p className="text-xs md:text-sm font-bold text-white truncate">{currentTrack.title}</p>
+                            </div>
+                            <p className="text-[11px] text-white/60 truncate mt-0.5">
+                              {currentTrack.author} • {formatTime(currentTime)} / {formatTime(duration)}
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-xs text-white/70 font-semibold">
+                          Chọn bài hát bất kỳ bên dưới để nghe nhạc khi lướt Khám phá
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {currentTrack && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handlePrev}
+                            title="Bài trước"
+                            className="p-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-pink-300 cursor-pointer transition-colors"
+                          >
+                            <SkipBack className="w-4 h-4 fill-current" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={togglePlayPause}
+                            className="w-9 h-9 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center text-white shadow-lg cursor-pointer hover:scale-105 transition-transform"
+                            title={isPlaying ? "Tạm dừng" : "Phát"}
+                          >
+                            {isLoading ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : isPlaying ? (
+                              <Pause className="w-4 h-4 fill-current" />
+                            ) : (
+                              <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleNext}
+                            title="Bài kế tiếp"
+                            className="p-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-pink-300 cursor-pointer transition-colors"
+                          >
+                            <SkipForward className="w-4 h-4 fill-current" />
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={refreshDiscoveryFeed}
+                        title="Đổi danh sách gợi ý Khám phá"
+                        className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-pink-500/20 text-white/80 hover:text-pink-300 border border-white/10 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span className="hidden md:inline">Đổi gợi ý</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowDiscovery(false);
+                          if (currentTrack && playerMode === "audio") {
+                            const hdOpt =
+                              availableQualities.find((q) => q.height === 720) ||
+                              availableQualities.find((q) => q.height > 0);
+                            if (hdOpt) {
+                              handleSelectQuality(hdOpt);
+                            }
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-pink-500/20 hover:bg-pink-500 text-pink-200 hover:text-white border border-pink-500/40 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                      >
+                        <Film className="w-3.5 h-3.5" />
+                        <span>Xem Video</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {currentTrack && (
+                    <input
+                      type="range"
+                      min={0}
+                      max={duration || 100}
+                      step={0.5}
+                      value={currentTime}
+                      onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                      className="w-full h-1 rounded-full appearance-none cursor-pointer accent-pink-500 bg-white/15"
+                    />
+                  )}
+                </div>
+
+                {/* Section 1: Nhạc Trending */}
+                <div>
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <Sparkles className="w-5 h-5 text-pink-400" />
+                      <h2 className="text-[20px] font-bold text-white tracking-wide">
+                        Nhạc Trending hôm nay
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (trendingTracks.length > 0) {
+                          playAudioInDiscovery(trendingTracks[0], trendingTracks);
+                        }
+                      }}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full bg-pink-500/10 hover:bg-pink-500 text-pink-400 hover:text-white border border-pink-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Phát tất cả</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {trendingTracks.slice(0, 12).map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => playAudioInDiscovery(item, trendingTracks)}
+                        className="w-full flex flex-col cursor-pointer group"
+                      >
+                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                          <img
+                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                            alt={item.title}
+                            onError={(e) => handleThumbError(e, item.id)}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/40 text-white">
+                              <Play className="w-5 h-5 fill-white ml-0.5" />
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                          {item.author || "Kahoii Music"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 2: Mới Phát Hành */}
+                <div>
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <Flame className="w-5 h-5 text-orange-400" />
+                      <h2 className="text-[20px] font-bold text-white tracking-wide">
+                        Mới Phát Hành
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newReleaseTracks.length > 0) {
+                          playAudioInDiscovery(newReleaseTracks[0], newReleaseTracks);
+                        }
+                      }}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Phát tất cả</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {newReleaseTracks.slice(0, 12).map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => playAudioInDiscovery(item, newReleaseTracks)}
+                        className="w-full flex flex-col cursor-pointer group"
+                      >
+                        <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
+                          <img
+                            src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                            alt={item.title}
+                            onError={(e) => handleThumbError(e, item.id)}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/40 text-white">
+                              <Play className="w-5 h-5 fill-white ml-0.5" />
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
+                          {item.author || "Kahoii Music"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 3: Nhạc Sĩ Nổi Bật (Đổi từ Nhạc Sĩ) */}
+                <div>
+                  <div className="flex items-center gap-2.5 mb-3.5">
+                    <Mic2 className="w-5 h-5 text-purple-400" />
+                    <h2 className="text-[20px] font-bold text-white tracking-wide">
+                      Nhạc Sĩ Nổi Bật
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                    {FEATURED_ARTISTS.map((artist, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => searchArtistSongs(artist.query)}
+                        className="w-full flex flex-col items-center cursor-pointer group"
+                      >
+                        <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.04] transition-all duration-200">
+                          <img
+                            src={artist.avatar}
+                            alt={artist.name}
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 text-center w-full transition-colors">
+                          {artist.name}
+                        </p>
+                        <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
+                          {artist.genre}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 4 & 5: Gần đây & Có thể bạn sẽ thích (CHỈ XUẤT HIỆN KHI ĐÃ ĐĂNG NHẬP) */}
+                {userSession?.isLoggedIn && (
+                  <>
+                    {/* Section 4: Gần đây */}
+                    <div>
+                      <div className="flex items-center gap-2.5 mb-3.5">
+                        <Clock className="w-5 h-5 text-emerald-400" />
+                        <h2 className="text-[20px] font-bold text-white tracking-wide">
+                          Gần đây
+                        </h2>
+                      </div>
+                      {recentTracksToDisplay.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                          {recentTracksToDisplay.map((item) => (
                             <div
                               key={item.id}
-                              onClick={() => {
-                                if (isCurrentPlaying) {
-                                  togglePlayPause();
-                                } else {
-                                  playSearchResult(item);
-                                }
-                              }}
+                              onClick={() => playTrackDirectly(item)}
                               className="w-full flex flex-col cursor-pointer group"
                             >
-                              <div
-                                className={`w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border ${
-                                  isCurrentPlaying
-                                    ? "border-pink-500 shadow-pink-500/30"
-                                    : "border-white/5 bg-purple-900/30"
-                                }`}
-                              >
+                              <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
                                 <img
-                                  src={
-                                    item.thumbnail ||
-                                    `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
-                                  }
+                                  src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
                                   alt={item.title}
                                   onError={(e) => {
                                     e.currentTarget.src = DEFAULT_TRACK_ART;
                                   }}
                                   className="w-full h-full object-cover"
                                 />
-                                <div
-                                  className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-                                    isCurrentPlaying
-                                      ? "opacity-100"
-                                      : "opacity-0 group-hover:opacity-100"
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (isCurrentPlaying) {
-                                        togglePlayPause();
-                                      } else {
-                                        playSearchResult(item);
-                                      }
-                                    }}
-                                    className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                                  >
-                                    {isCurrentPlaying && isPlaying ? (
-                                      <Pause className="w-5 h-5 text-white fill-current" />
-                                    ) : (
-                                      <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                    )}
-                                  </button>
-                                </div>
-                                {item.duration > 0 && (
-                                  <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
-                                    {formatTime(item.duration)}
-                                  </span>
-                                )}
                               </div>
-                              <p
-                                className={`text-[12px] font-semibold truncate mt-1.5 transition-colors ${
-                                  isCurrentPlaying
-                                    ? "text-pink-300 font-bold"
-                                    : "text-white/90 group-hover:text-pink-300"
-                                }`}
-                              >
+                              <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
                                 {item.title}
                               </p>
                               <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
                                 {item.author || "Kahoii Music"}
                               </p>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    );
-                  })()}
-
-                  {/* ========================================================================= */}
-                  {/* TAB: NHẠC SĨ (Tất cả nghệ sĩ - Enlarged Grid)                             */}
-                  {/* ========================================================================= */}
-                  {activeSearchTab === "artists" && (
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[18px] font-bold text-white tracking-wide">
-                          Tất cả nhạc sĩ ({searchStructured?.artists?.length || 0})
-                        </h3>
-                      </div>
-                      {searchStructured?.artists && searchStructured.artists.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                          {searchStructured.artists.map((artist) => (
-                            <div
-                              key={artist.id || artist.name}
-                              onClick={() => executeSearch(artist.name)}
-                              className="flex flex-col items-center p-4 rounded-2xl hover:bg-white/5 transition-all cursor-pointer group"
-                            >
-                              <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-full overflow-hidden border-[3px] border-pink-500/30 group-hover:border-pink-500 group-hover:shadow-[0_0_25px_rgba(236,72,153,0.45)] group-hover:scale-105 transition-all duration-300 shadow-xl bg-purple-950/60 mb-3 relative">
-                                <img
-                                  src={artist.thumbnail || DEFAULT_TRACK_ART}
-                                  alt={artist.name}
-                                  onError={(e) => {
-                                    e.currentTarget.src = DEFAULT_TRACK_ART;
-                                  }}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                                <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
-                                    <Search className="w-5 h-5 text-white" />
-                                  </div>
-                                </div>
-                              </div>
-                              <p className="text-base font-bold text-white group-hover:text-pink-300 text-center truncate w-full">
-                                {artist.name}
-                              </p>
-                              <p className="text-xs text-purple-200/60 text-center truncate w-full mt-1">
-                                {artist.subscribers || "Nghệ sĩ"}
-                              </p>
-                            </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-white/50 italic py-10 text-center">
-                          Không tìm thấy thông tin nhạc sĩ phù hợp.
-                        </p>
+                        <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
+                          Chưa có bài hát nào gần đây. Hãy chọn hoặc tìm kiếm bài hát để phát.
+                        </div>
                       )}
                     </div>
-                  )}
 
-                  {/* ========================================================================= */}
-                  {/* TAB: PLAYLIST (Tất cả danh sách phát)                                      */}
-                  {/* ========================================================================= */}
-                  {activeSearchTab === "playlists" && (
+                    {/* Section 5: Có thể bạn sẽ thích */}
                     <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-[18px] font-bold text-white tracking-wide">
-                          Tất cả danh sách phát ({searchStructured?.playlists?.length || 0})
-                        </h3>
+                      <div className="flex items-center gap-2.5 mb-3.5">
+                        <Heart className="w-5 h-5 text-rose-400 fill-rose-500/20" />
+                        <h2 className="text-[20px] font-bold text-white tracking-wide">
+                          Có thể bạn sẽ thích
+                        </h2>
                       </div>
-                      {searchStructured?.playlists && searchStructured.playlists.length > 0 ? (
-                        <div className="grid grid-cols-6 gap-4">
-                          {searchStructured.playlists.map((pl) => (
+                      {recommendedTracksToDisplay.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                          {recommendedTracksToDisplay.map((item) => (
                             <div
-                              key={pl.id || pl.title}
-                              onClick={() => playPlaylistItem(pl)}
-                              className="flex flex-col cursor-pointer group"
+                              key={item.id}
+                              onClick={() => playTrackDirectly(item)}
+                              className="w-full flex flex-col cursor-pointer group"
                             >
-                              <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden relative shadow-md group-hover:scale-[1.03] transition-all duration-200 border border-white/10 bg-purple-900/30">
+                              <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
                                 <img
-                                  src={pl.thumbnail || DEFAULT_TRACK_ART}
-                                  alt={pl.title}
+                                  src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
+                                  alt={item.title}
                                   onError={(e) => {
                                     e.currentTarget.src = DEFAULT_TRACK_ART;
                                   }}
                                   className="w-full h-full object-cover"
                                 />
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      playPlaylistItem(pl);
-                                    }}
-                                    className="w-11 h-11 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-transform cursor-pointer"
-                                    title="Phát danh sách này"
-                                  >
-                                    <Play className="w-5 h-5 text-white fill-current translate-x-0.5" />
-                                  </button>
-                                </div>
-                                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 text-[10px] font-mono text-white/90">
-                                  Playlist
-                                </span>
                               </div>
-                              <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-1.5">
-                                {pl.title}
+                              <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
+                                {item.title}
                               </p>
                               <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                                {pl.author || "YouTube Music"}
+                                {item.author || "Kahoii Music"}
                               </p>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-white/50 italic py-10 text-center">
-                          Không tìm thấy danh sách phát phù hợp.
-                        </p>
+                        <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
+                          Chưa có bài hát yêu thích nào.
+                        </div>
                       )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Main Video Stage + Compact Queue + Right Random Playlist */}
+          <div
+            className={
+              isSearchOpen || showDiscovery
+                ? "hidden"
+                : "flex-1 flex flex-col lg:flex-row gap-3 min-h-0 overflow-hidden"
+            }
+          >
+            {/* CENTER COLUMN: Video Player (shrunk width) + Compact Queue */}
+            <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0 overflow-hidden">
+              <VideoPlayerStage
+                currentTrack={currentTrack}
+                isPlaying={isPlaying}
+                isLoading={isLoading}
+                currentTime={currentTime}
+                duration={duration}
+                volume={volume}
+                isMuted={isMuted}
+                repeatMode={repeatMode}
+                activePlayerType={playerMode}
+                availableQualities={availableQualities}
+                selectedQuality={selectedQuality}
+                playbackRate={playbackRate}
+                isFavorite={
+                  !!(currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id))
+                }
+                lyricsText={lyrics?.plainLyrics || lyrics?.syncedLyrics || null}
+                sleepTimerMinutes={sleepTimerMinutes}
+                videoRef={videoRef}
+                onTogglePlayPause={togglePlayPause}
+                onNext={handleNext}
+                onPrev={handlePrev}
+                onSeek={handleSeek}
+                onVolumeChange={(val) => {
+                  setIsMuted(false);
+                  setVolume(val);
+                }}
+                onToggleMute={() => setIsMuted((m) => !m)}
+                onCycleRepeat={cycleRepeatMode}
+                onSelectQuality={handleSelectQuality}
+                onSelectSpeed={handleSelectSpeed}
+                onToggleFavorite={toggleCurrentFavorite}
+                onSelectSleepTimer={(m) => startSleepTimer(m)}
+                onVideoTimeUpdate={handleTimeUpdate}
+                onVideoLoadedMetadata={() => {
+                  if (activePlayerType.current === "video" && videoRef.current) {
+                    setDuration(videoRef.current.duration || currentTrack?.duration || 207);
+                  }
+                }}
+                onVideoEnded={() => {
+                  if (activePlayerType.current === "video") {
+                    handleTrackEnded();
+                  }
+                }}
+                onVideoPlay={() => {
+                  if (activePlayerType.current === "video") {
+                    setIsPlaying(true);
+                    if (isAdaptiveSyncedRef.current && audioRef.current && audioRef.current.paused) {
+                      if (videoRef.current) audioRef.current.currentTime = videoRef.current.currentTime;
+                      audioRef.current.play().catch(() => { });
+                    }
+                  }
+                }}
+                onVideoPause={() => {
+                  if (activePlayerType.current === "video") {
+                    setIsPlaying(false);
+                    if (isAdaptiveSyncedRef.current && audioRef.current && !audioRef.current.paused && !videoRef.current?.seeking) {
+                      audioRef.current.pause();
+                    }
+                  }
+                }}
+                onAddToPlaylist={() => currentTrack && setPlaylistTargetTrack(currentTrack)}
+                onVideoError={() => {
+                  if (activePlayerType.current === "video" && currentTrack && ytPlayerRef.current?.loadVideoById) {
+                    isAdaptiveSyncedRef.current = false;
+                    if (audioRef.current) {
+                      try { audioRef.current.pause(); } catch { }
+                    }
+                    activePlayerType.current = "youtube";
+                    setPlayerMode("youtube");
+                    setSelectedQuality("Auto");
+                    try {
+                      ytPlayerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: currentTime || 0 });
+                      ytPlayerRef.current.playVideo();
+                    } catch { }
+                  }
+                }}
+              />
+
+              {/* Compact Queue Panel (Shrunk below Video Player matching layout) */}
+              <div className="h-[160px] lg:h-[185px] flex-shrink-0 figma-panel flex flex-col min-h-0 overflow-hidden p-3">
+                <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10 flex-shrink-0">
+                  <span className="text-xs font-bold text-white/90">
+                    Hàng đợi ({queueTracks.length})
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {queueTracks.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleShuffleQueue}
+                        title="Trộn hàng đợi"
+                        className="p-1 rounded-md hover:bg-white/10 text-white/60 hover:text-pink-300 transition-colors cursor-pointer"
+                      >
+                        <Shuffle className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {queueTracks.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearQueue}
+                        title="Xóa toàn bộ hàng đợi"
+                        className="p-1 rounded-md hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowDiscovery(true)}
+                      className="text-[11px] text-pink-400 hover:text-pink-300 font-semibold cursor-pointer ml-1"
+                    >
+                      + Khám phá thêm
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bottom Part: Queue List (Starting directly with Active Highlight Beam) */}
+                <div
+                  className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
+                  style={{ gap: "8px" }}
+                >
+                  {queueTracks.length > 0 ? (
+                    queueTracks.map((track, i) => {
+                      const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
+                      return (
+                        <div
+                          key={track.id + i}
+                          onClick={() => {
+                            const plIdx = playlist.findIndex((t) => t.id === track.id);
+                            if (plIdx >= 0) {
+                              setCurrentIndex(plIdx);
+                              loadAndPlayTrack(playlist[plIdx], true);
+                            } else {
+                              playTrackDirectly(track);
+                            }
+                          }}
+                          className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group ${isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
+                            }`}
+                        >
+                          <img
+                            src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
+                            alt=""
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-white truncate group-hover:text-pink-300 transition-colors">
+                              {track.title}
+                            </p>
+                            {track.author && (
+                              <p className="text-[10px] text-white/50 truncate">
+                                {track.author}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPlaylistTargetTrack(track);
+                              }}
+                              title="Thêm vào danh sách phát"
+                              className="p-1 rounded-md hover:bg-purple-500/30 text-white/70 hover:text-purple-300 cursor-pointer"
+                            >
+                              <ListPlus className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleRemoveFromQueue(i, e)}
+                              title="Xóa khỏi hàng đợi"
+                              className="p-1 rounded-md hover:bg-red-500/30 text-white/70 hover:text-red-400 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
+                            {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-6 text-center text-white/40 text-xs">
+                      <p>Hàng đợi đang trống</p>
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center gap-3">
-                  <p className="text-sm text-white/50 italic">Không tìm thấy dữ liệu phù hợp.</p>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Random Playlist Panel */}
+            <aside className="w-full lg:w-[275px] xl:w-[310px] flex-shrink-0 figma-panel flex flex-col min-h-[210px] lg:min-h-0 overflow-hidden p-3">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10 flex-shrink-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Shuffle className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
+                  <span className="text-xs font-bold text-white/95 truncate">
+                    Gợi ý liên quan ({randomTracks.length})
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsSearchOpen(false);
-                      setTopSearchText("");
-                      setSearchQueryTitle("");
-                      setActiveSearchTab("all");
-                    }}
-                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-pink-600 text-xs font-semibold text-white transition-all cursor-pointer"
+                    onClick={shuffleRandomTracks}
+                    title="Trộn lại danh sách gợi ý"
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-pink-500/20 text-white/75 hover:text-pink-300 transition-colors cursor-pointer"
                   >
-                    Quay lại Khám phá
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRelated ? "animate-spin text-pink-400" : ""}`} />
                   </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* ===================================================================== */
-            /* DISCOVERY VIEW (Nhạc Trending, Mới Phát Hành, Nhạc Sĩ Nổi Bật, ...)   */
-            /* ===================================================================== */
-            <div className="flex flex-col gap-8 min-h-0 overflow-y-auto pr-1 custom-scrollbar pb-6">
-              {/* Sticky Audio-Only Mini-Player Card while browsing Discovery */}
-              <div className="sticky top-0 z-30 flex flex-col gap-2 p-3 rounded-2xl bg-[#1a0836]/95 backdrop-blur-xl border border-pink-500/45 shadow-2xl shadow-black/50">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    {currentTrack ? (
-                      <>
-                        <img
-                          src={currentTrack.thumbnail || `https://i.ytimg.com/vi/${currentTrack.id}/mqdefault.jpg`}
-                          alt=""
-                          onError={(e) => { e.currentTarget.src = DEFAULT_TRACK_ART; }}
-                          className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-pink-500/40 shadow"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 text-[9px] font-bold uppercase tracking-wider flex-shrink-0">
-                              {playerMode === "audio" ? "Chỉ âm thanh" : "Đang phát"}
-                            </span>
-                            <p className="text-xs md:text-sm font-bold text-white truncate">{currentTrack.title}</p>
-                          </div>
-                          <p className="text-[11px] text-white/60 truncate mt-0.5">
-                            {currentTrack.author} • {formatTime(currentTime)} / {formatTime(duration)}
-                          </p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-xs text-white/70 font-semibold">
-                        Chọn bài hát bất kỳ bên dưới để nghe nhạc khi lướt Khám phá
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {currentTrack && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handlePrev}
-                          title="Bài trước"
-                          className="p-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-pink-300 cursor-pointer transition-colors"
-                        >
-                          <SkipBack className="w-4 h-4 fill-current" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={togglePlayPause}
-                          className="w-9 h-9 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 flex items-center justify-center text-white shadow-lg cursor-pointer hover:scale-105 transition-transform"
-                          title={isPlaying ? "Tạm dừng" : "Phát"}
-                        >
-                          {isLoading ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : isPlaying ? (
-                            <Pause className="w-4 h-4 fill-current" />
-                          ) : (
-                            <Play className="w-4 h-4 fill-current translate-x-0.5" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleNext}
-                          title="Bài kế tiếp"
-                          className="p-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/80 hover:text-pink-300 cursor-pointer transition-colors"
-                        >
-                          <SkipForward className="w-4 h-4 fill-current" />
-                        </button>
-                      </>
-                    )}
-
+                  {randomTracks.length > 0 && (
                     <button
                       type="button"
-                      onClick={refreshDiscoveryFeed}
-                      title="Đổi danh sách gợi ý Khám phá"
-                      className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-pink-500/20 text-white/80 hover:text-pink-300 border border-white/10 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span className="hidden md:inline">Đổi gợi ý</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowDiscovery(false);
-                        if (currentTrack && playerMode === "audio") {
-                          const hdOpt =
-                            availableQualities.find((q) => q.height === 720) ||
-                            availableQualities.find((q) => q.height > 0);
-                          if (hdOpt) {
-                            handleSelectQuality(hdOpt);
-                          }
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-pink-500/20 hover:bg-pink-500 text-pink-200 hover:text-white border border-pink-500/40 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-                    >
-                      <Film className="w-3.5 h-3.5" />
-                      <span>Xem Video</span>
-                    </button>
-                  </div>
-                </div>
-
-                {currentTrack && (
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || 100}
-                    step={0.5}
-                    value={currentTime}
-                    onChange={(e) => handleSeek(parseFloat(e.target.value))}
-                    className="w-full h-1 rounded-full appearance-none cursor-pointer accent-pink-500 bg-white/15"
-                  />
-                )}
-              </div>
-
-              {/* Section 1: Nhạc Trending */}
-              <div>
-                <div className="flex items-center justify-between mb-3.5">
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-5 h-5 text-pink-400" />
-                    <h2 className="text-[20px] font-bold text-white tracking-wide">
-                      Nhạc Trending hôm nay
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (trendingTracks.length > 0) {
-                        playAudioInDiscovery(trendingTracks[0], trendingTracks);
-                      }
-                    }}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-pink-500/10 hover:bg-pink-500 text-pink-400 hover:text-white border border-pink-500/30 transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Phát tất cả</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                  {trendingTracks.slice(0, 12).map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => playAudioInDiscovery(item, trendingTracks)}
-                      className="w-full flex flex-col cursor-pointer group"
-                    >
-                      <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                        <img
-                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                          alt={item.title}
-                          onError={(e) => handleThumbError(e, item.id)}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <div className="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center shadow-lg shadow-pink-500/40 text-white">
-                            <Play className="w-5 h-5 fill-white ml-0.5" />
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
-                        {item.title}
-                      </p>
-                      <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                        {item.author || "Kahoii Music"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Section 2: Mới Phát Hành */}
-              <div>
-                <div className="flex items-center justify-between mb-3.5">
-                  <div className="flex items-center gap-2.5">
-                    <Flame className="w-5 h-5 text-orange-400" />
-                    <h2 className="text-[20px] font-bold text-white tracking-wide">
-                      Mới Phát Hành
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (newReleaseTracks.length > 0) {
-                        playAudioInDiscovery(newReleaseTracks[0], newReleaseTracks);
-                      }
-                    }}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Phát tất cả</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                  {newReleaseTracks.slice(0, 12).map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => playAudioInDiscovery(item, newReleaseTracks)}
-                      className="w-full flex flex-col cursor-pointer group"
-                    >
-                      <div className="relative w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                        <img
-                          src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                          alt={item.title}
-                          onError={(e) => handleThumbError(e, item.id)}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/40 text-white">
-                            <Play className="w-5 h-5 fill-white ml-0.5" />
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
-                        {item.title}
-                      </p>
-                      <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                        {item.author || "Kahoii Music"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Section 3: Nhạc Sĩ Nổi Bật (Đổi từ Nhạc Sĩ) */}
-              <div>
-                <div className="flex items-center gap-2.5 mb-3.5">
-                  <Mic2 className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-[20px] font-bold text-white tracking-wide">
-                    Nhạc Sĩ Nổi Bật
-                  </h2>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                  {FEATURED_ARTISTS.map((artist, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => searchArtistSongs(artist.query)}
-                      className="w-full flex flex-col items-center cursor-pointer group"
-                    >
-                      <div className="w-full aspect-square rounded-full overflow-hidden bg-purple-900/30 shadow-md border-2 border-white/10 group-hover:border-pink-500 group-hover:scale-[1.04] transition-all duration-200">
-                        <img
-                          src={artist.avatar}
-                          alt={artist.name}
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_TRACK_ART;
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 text-center w-full transition-colors">
-                        {artist.name}
-                      </p>
-                      <p className="text-[10px] text-purple-200/60 truncate text-center w-full">
-                        {artist.genre}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Section 4 & 5: Gần đây & Có thể bạn sẽ thích (CHỈ XUẤT HIỆN KHI ĐÃ ĐĂNG NHẬP) */}
-              {userSession?.isLoggedIn && (
-                <>
-                  {/* Section 4: Gần đây */}
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-3.5">
-                      <Clock className="w-5 h-5 text-emerald-400" />
-                      <h2 className="text-[20px] font-bold text-white tracking-wide">
-                        Gần đây
-                      </h2>
-                    </div>
-                    {recentTracksToDisplay.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                        {recentTracksToDisplay.map((item) => (
-                          <div
-                            key={item.id}
-                            onClick={() => playTrackDirectly(item)}
-                            className="w-full flex flex-col cursor-pointer group"
-                          >
-                            <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                              <img
-                                src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                                alt={item.title}
-                                onError={(e) => {
-                                  e.currentTarget.src = DEFAULT_TRACK_ART;
-                                }}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
-                              {item.title}
-                            </p>
-                            <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                              {item.author || "Kahoii Music"}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
-                        Chưa có bài hát nào gần đây. Hãy chọn hoặc tìm kiếm bài hát để phát.
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Section 5: Có thể bạn sẽ thích */}
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-3.5">
-                      <Heart className="w-5 h-5 text-rose-400 fill-rose-500/20" />
-                      <h2 className="text-[20px] font-bold text-white tracking-wide">
-                        Có thể bạn sẽ thích
-                      </h2>
-                    </div>
-                    {recommendedTracksToDisplay.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
-                        {recommendedTracksToDisplay.map((item) => (
-                          <div
-                            key={item.id}
-                            onClick={() => playTrackDirectly(item)}
-                            className="w-full flex flex-col cursor-pointer group"
-                          >
-                            <div className="w-full aspect-square rounded-[18px] xl:rounded-[22px] overflow-hidden bg-purple-900/30 shadow-md group-hover:scale-[1.03] transition-transform duration-200 border border-white/5">
-                              <img
-                                src={item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`}
-                                alt={item.title}
-                                onError={(e) => {
-                                  e.currentTarget.src = DEFAULT_TRACK_ART;
-                                }}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <p className="text-[12px] font-semibold text-white/90 group-hover:text-pink-300 truncate mt-2 transition-colors">
-                              {item.title}
-                            </p>
-                            <p className="text-[10px] text-purple-200/60 truncate mt-0.5">
-                              {item.author || "Kahoii Music"}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-6 text-center text-white/40 text-xs italic bg-white/5 rounded-2xl border border-white/5">
-                        Chưa có bài hát yêu thích nào.
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* Main Video Stage + Compact Queue + Right Random Playlist */}
-        <div
-          className={
-            isSearchOpen || showDiscovery
-              ? "hidden"
-              : "flex-1 flex flex-col lg:flex-row gap-3 min-h-0 overflow-hidden"
-          }
-        >
-          {/* CENTER COLUMN: Video Player (shrunk width) + Compact Queue */}
-          <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0 overflow-hidden">
-          <VideoPlayerStage
-            currentTrack={currentTrack}
-            isPlaying={isPlaying}
-            isLoading={isLoading}
-            currentTime={currentTime}
-            duration={duration}
-            volume={volume}
-            isMuted={isMuted}
-            repeatMode={repeatMode}
-            activePlayerType={playerMode}
-            availableQualities={availableQualities}
-            selectedQuality={selectedQuality}
-            playbackRate={playbackRate}
-            isFavorite={
-              !!(currentTrack && libraryData.favorites.some((t) => t.id === currentTrack.id))
-            }
-            lyricsText={lyrics?.plainLyrics || lyrics?.syncedLyrics || null}
-            sleepTimerMinutes={sleepTimerMinutes}
-            videoRef={videoRef}
-            onTogglePlayPause={togglePlayPause}
-            onNext={handleNext}
-            onPrev={handlePrev}
-            onSeek={handleSeek}
-            onVolumeChange={(val) => {
-              setIsMuted(false);
-              setVolume(val);
-            }}
-            onToggleMute={() => setIsMuted((m) => !m)}
-            onCycleRepeat={cycleRepeatMode}
-            onSelectQuality={handleSelectQuality}
-            onSelectSpeed={handleSelectSpeed}
-            onToggleFavorite={toggleCurrentFavorite}
-            onSelectSleepTimer={(m) => startSleepTimer(m)}
-            onVideoTimeUpdate={handleTimeUpdate}
-            onVideoLoadedMetadata={() => {
-              if (activePlayerType.current === "video" && videoRef.current) {
-                setDuration(videoRef.current.duration || currentTrack?.duration || 207);
-              }
-            }}
-            onVideoEnded={() => {
-              if (activePlayerType.current === "video") {
-                handleTrackEnded();
-              }
-            }}
-            onVideoPlay={() => {
-              if (activePlayerType.current === "video") {
-                setIsPlaying(true);
-                if (isAdaptiveSyncedRef.current && audioRef.current && audioRef.current.paused) {
-                  if (videoRef.current) audioRef.current.currentTime = videoRef.current.currentTime;
-                  audioRef.current.play().catch(() => {});
-                }
-              }
-            }}
-            onVideoPause={() => {
-              if (activePlayerType.current === "video") {
-                setIsPlaying(false);
-                if (isAdaptiveSyncedRef.current && audioRef.current && !audioRef.current.paused && !videoRef.current?.seeking) {
-                  audioRef.current.pause();
-                }
-              }
-            }}
-            onAddToPlaylist={() => currentTrack && setPlaylistTargetTrack(currentTrack)}
-            onVideoError={() => {
-              if (activePlayerType.current === "video" && currentTrack && ytPlayerRef.current?.loadVideoById) {
-                isAdaptiveSyncedRef.current = false;
-                if (audioRef.current) {
-                  try { audioRef.current.pause(); } catch {}
-                }
-                activePlayerType.current = "youtube";
-                setPlayerMode("youtube");
-                setSelectedQuality("Auto");
-                try {
-                  ytPlayerRef.current.loadVideoById({ videoId: currentTrack.id, startSeconds: currentTime || 0 });
-                  ytPlayerRef.current.playVideo();
-                } catch {}
-              }
-            }}
-          />
-
-          {/* Compact Queue Panel (Shrunk below Video Player matching layout) */}
-          <div className="h-[160px] lg:h-[185px] flex-shrink-0 figma-panel flex flex-col min-h-0 overflow-hidden p-3">
-            <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10 flex-shrink-0">
-              <span className="text-xs font-bold text-white/90">
-                Hàng đợi ({queueTracks.length})
-              </span>
-              <div className="flex items-center gap-1.5">
-                {queueTracks.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={handleShuffleQueue}
-                    title="Trộn hàng đợi"
-                    className="p-1 rounded-md hover:bg-white/10 text-white/60 hover:text-pink-300 transition-colors cursor-pointer"
-                  >
-                    <Shuffle className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                {queueTracks.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleClearQueue}
-                    title="Xóa toàn bộ hàng đợi"
-                    className="p-1 rounded-md hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowDiscovery(true)}
-                  className="text-[11px] text-pink-400 hover:text-pink-300 font-semibold cursor-pointer ml-1"
-                >
-                  + Khám phá thêm
-                </button>
-              </div>
-            </div>
-
-          {/* Bottom Part: Queue List (Starting directly with Active Highlight Beam) */}
-          <div
-            className="flex-1 overflow-y-auto flex flex-col min-h-0 pr-1"
-            style={{ gap: "8px" }}
-          >
-            {queueTracks.length > 0 ? (
-              queueTracks.map((track, i) => {
-                const isCurrent = currentTrack ? currentTrack.id === track.id : i === currentIndex;
-                return (
-                  <div
-                    key={track.id + i}
-                    onClick={() => {
-                      const plIdx = playlist.findIndex((t) => t.id === track.id);
-                      if (plIdx >= 0) {
-                        setCurrentIndex(plIdx);
-                        loadAndPlayTrack(playlist[plIdx], true);
-                      } else {
-                        playTrackDirectly(track);
-                      }
-                    }}
-                    className={`flex items-center gap-2.5 px-2.5 py-1.5 transition-all cursor-pointer group ${
-                      isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5 rounded-xl"
-                    }`}
-                  >
-                    <img
-                      src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
-                      alt=""
-                      onError={(e) => {
-                        e.currentTarget.src = DEFAULT_TRACK_ART;
-                      }}
-                      className="w-8 h-8 rounded-md object-cover flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-white truncate group-hover:text-pink-300 transition-colors">
-                        {track.title}
-                      </p>
-                      {track.author && (
-                        <p className="text-[10px] text-white/50 truncate">
-                          {track.author}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPlaylistTargetTrack(track);
-                        }}
-                        title="Thêm vào danh sách phát"
-                        className="p-1 rounded-md hover:bg-purple-500/30 text-white/70 hover:text-purple-300 cursor-pointer"
-                      >
-                        <ListPlus className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleRemoveFromQueue(i, e)}
-                        title="Xóa khỏi hàng đợi"
-                        className="p-1 rounded-md hover:bg-red-500/30 text-white/70 hover:text-red-400 cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <span className="text-[10px] text-white/60 font-mono pr-1 flex-shrink-0">
-                      {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
-                    </span>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex flex-col items-center justify-center py-6 text-center text-white/40 text-xs">
-                <p>Hàng đợi đang trống</p>
-              </div>
-            )}
-          </div>
-          </div>
-          </div>
-
-          {/* RIGHT COLUMN: Random Playlist Panel */}
-          <aside className="w-full lg:w-[275px] xl:w-[310px] flex-shrink-0 figma-panel flex flex-col min-h-[210px] lg:min-h-0 overflow-hidden p-3">
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10 flex-shrink-0">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <Shuffle className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
-                <span className="text-xs font-bold text-white/95 truncate">
-                  Gợi ý liên quan ({randomTracks.length})
-                </span>
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={shuffleRandomTracks}
-                  title="Trộn lại danh sách gợi ý"
-                  className="p-1.5 rounded-lg bg-white/5 hover:bg-pink-500/20 text-white/75 hover:text-pink-300 transition-colors cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRelated ? "animate-spin text-pink-400" : ""}`} />
-                </button>
-                {randomTracks.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlaylist(randomTracks);
-                      setQueueTracks(randomTracks);
-                      setCurrentIndex(0);
-                      loadAndPlayTrack(randomTracks[0], true);
-                    }}
-                    title="Phát toàn bộ danh sách ngẫu nhiên"
-                    className="px-2 py-1 rounded-lg bg-pink-500/20 hover:bg-pink-500 text-pink-300 hover:text-white text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <Play className="w-3 h-3 fill-current" />
-                    <span>Phát</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto flex flex-col gap-1.5 min-h-0 pr-1">
-              {randomTracks.length > 0 ? (
-                randomTracks.map((track, idx) => {
-                  const isCurrent = currentTrack?.id === track.id;
-                  return (
-                    <div
-                      key={`rand-${track.id}-${idx}`}
                       onClick={() => {
                         setPlaylist(randomTracks);
                         setQueueTracks(randomTracks);
-                        setCurrentIndex(idx);
-                        loadAndPlayTrack(track, true);
+                        setCurrentIndex(0);
+                        loadAndPlayTrack(randomTracks[0], true);
                       }}
-                      className={`flex items-center gap-2.5 p-1.5 rounded-xl transition-all cursor-pointer group ${
-                        isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5"
-                      }`}
+                      title="Phát toàn bộ danh sách ngẫu nhiên"
+                      className="px-2 py-1 rounded-lg bg-pink-500/20 hover:bg-pink-500 text-pink-300 hover:text-white text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1"
                     >
-                      <div className="relative w-14 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-black/40">
-                        <img
-                          src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
-                          alt=""
-                          onError={(e) => {
-                            e.currentTarget.src = DEFAULT_TRACK_ART;
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-white truncate group-hover:text-pink-300 transition-colors">
-                          {track.title}
-                        </p>
-                        <p className="text-[10px] text-white/50 truncate">
-                          {track.author || "ThuongTube"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => handleAddToQueue(track, e)}
-                          title="Thêm vào hàng chờ"
-                          className="p-1 rounded-md hover:bg-pink-500/30 text-white/70 hover:text-pink-300 cursor-pointer"
-                        >
-                          <ListEnd className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPlaylistTargetTrack(track);
-                          }}
-                          title="Thêm vào danh sách phát"
-                          className="p-1 rounded-md hover:bg-purple-500/30 text-white/70 hover:text-purple-300 cursor-pointer"
-                        >
-                          <ListPlus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <span className="text-[10px] text-white/55 font-mono flex-shrink-0">
-                        {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
-                      </span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center text-white/40 text-xs px-3 py-8">
-                  <p>Chưa có video để trộn ngẫu nhiên</p>
-                  <button
-                    type="button"
-                    onClick={() => setShowDiscovery(true)}
-                    className="mt-2 px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 hover:bg-pink-500 hover:text-white text-[11px] font-semibold cursor-pointer transition-colors"
-                  >
-                    Khám phá ngay
-                  </button>
+                      <Play className="w-3 h-3 fill-current" />
+                      <span>Phát</span>
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-          </aside>
-        </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto flex flex-col gap-1.5 min-h-0 pr-1">
+                {randomTracks.length > 0 ? (
+                  randomTracks.map((track, idx) => {
+                    const isCurrent = currentTrack?.id === track.id;
+                    return (
+                      <div
+                        key={`rand-${track.id}-${idx}`}
+                        onClick={() => {
+                          setPlaylist(randomTracks);
+                          setQueueTracks(randomTracks);
+                          setCurrentIndex(idx);
+                          loadAndPlayTrack(track, true);
+                        }}
+                        className={`flex items-center gap-2.5 p-1.5 rounded-xl transition-all cursor-pointer group ${isCurrent ? "active-queue-beam shadow-md" : "hover:bg-white/5"
+                          }`}
+                      >
+                        <div className="relative w-14 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-black/40">
+                          <img
+                            src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
+                            alt=""
+                            onError={(e) => {
+                              e.currentTarget.src = DEFAULT_TRACK_ART;
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white truncate group-hover:text-pink-300 transition-colors">
+                            {track.title}
+                          </p>
+                          <p className="text-[10px] text-white/50 truncate">
+                            {track.author || "ThuongTube"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => handleAddToQueue(track, e)}
+                            title="Thêm vào hàng chờ"
+                            className="p-1 rounded-md hover:bg-pink-500/30 text-white/70 hover:text-pink-300 cursor-pointer"
+                          >
+                            <ListEnd className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPlaylistTargetTrack(track);
+                            }}
+                            title="Thêm vào danh sách phát"
+                            className="p-1 rounded-md hover:bg-purple-500/30 text-white/70 hover:text-purple-300 cursor-pointer"
+                          >
+                            <ListPlus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-white/55 font-mono flex-shrink-0">
+                          {track.duration && track.duration > 0 ? formatTime(track.duration) : "--:--"}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center text-white/40 text-xs px-3 py-8">
+                    <p>Chưa có video để trộn ngẫu nhiên</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowDiscovery(true)}
+                      className="mt-2 px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 hover:bg-pink-500 hover:text-white text-[11px] font-semibold cursor-pointer transition-colors"
+                    >
+                      Khám phá ngay
+                    </button>
+                  </div>
+                )}
+              </div>
+            </aside>
+          </div>
         </div>
       </main>
 
@@ -3873,11 +4259,10 @@ export default function App() {
                       setAuthMode("login");
                       setLoginError(null);
                     }}
-                    className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      authMode === "login"
+                    className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${authMode === "login"
                         ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow"
                         : "text-white/60 hover:text-white"
-                    }`}
+                      }`}
                   >
                     Đăng nhập
                   </button>
@@ -3887,11 +4272,10 @@ export default function App() {
                       setAuthMode("register");
                       setLoginError(null);
                     }}
-                    className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      authMode === "register"
+                    className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${authMode === "register"
                         ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow"
                         : "text-white/60 hover:text-white"
-                    }`}
+                      }`}
                   >
                     Đăng ký
                   </button>

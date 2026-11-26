@@ -14,6 +14,7 @@ export interface Track {
   durationText?: string;
   thumbnail: string;
   streamUrl?: string;
+  isMusic?: boolean;
 }
 
 export interface LyricLine {

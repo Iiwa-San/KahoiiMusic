@@ -18,6 +18,8 @@ export interface StreamInfo {
   author?: string;
   duration?: number;
   thumbnail?: string;
+  categories?: string[];
+  isMusic?: boolean;
   provider: "yt-dlp" | "piped" | "invidious";
 }
 
@@ -179,6 +181,15 @@ async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
           qualities.find((q) => q.height > 0) ||
           undefined;
 
+        const categories: string[] | undefined = Array.isArray(info.categories)
+          ? info.categories.map((c: any) => String(c))
+          : undefined;
+        const isMusic: boolean | undefined = categories
+          ? categories.some((c) => /music|âm nhạc/i.test(c))
+          : info.track || info.artist
+          ? true
+          : undefined;
+
         resolve({
           streamUrl: fallbackAudio,
           videoUrl: defaultVideo?.videoUrl,
@@ -187,6 +198,8 @@ async function resolveViaYtDlp(videoId: string): Promise<StreamInfo | null> {
           author: info.uploader || info.channel,
           duration: info.duration,
           thumbnail: info.thumbnail,
+          categories,
+          isMusic,
           provider: "yt-dlp",
         });
       } catch {
@@ -266,6 +279,13 @@ async function resolveViaPiped(videoId: string): Promise<StreamInfo | null> {
         qualities.find((q) => q.height > 0) ||
         undefined;
 
+      const categories: string[] | undefined = data.category
+        ? [String(data.category)]
+        : undefined;
+      const isMusic: boolean | undefined = data.category
+        ? /music|âm nhạc/i.test(String(data.category))
+        : undefined;
+
       return {
         streamUrl,
         videoUrl: defaultVideo?.videoUrl,
@@ -274,6 +294,8 @@ async function resolveViaPiped(videoId: string): Promise<StreamInfo | null> {
         author: data.uploader,
         duration: data.duration,
         thumbnail: data.thumbnailUrl,
+        categories,
+        isMusic,
         provider: "piped",
       };
     } catch {
