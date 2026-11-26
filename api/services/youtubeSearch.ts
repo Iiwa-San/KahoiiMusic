@@ -219,11 +219,15 @@ export async function resolveTrackArtist(videoId: string, rawTitle?: string): Pr
 
   // Tier 1: Check title pattern
   if (title) {
-    if (title.includes(" / ")) {
-      const parts = title.split(" / ");
+    const slashSplitRegex = /(?:\s+\/\s+|(?<=[」』】\]\)])\s*\/\s*)/;
+    if (slashSplitRegex.test(title)) {
+      const parts = title.split(slashSplitRegex);
       if (parts.length >= 2) {
-        const cand = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").replace(/\(.*?\)/g, "").trim();
-        if (cand && !/^(mv|official|lyric|audio|video)$/i.test(cand)) {
+        let cand = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").replace(/\(.*?\)/g, "").trim();
+        if (/\s+-\s+/.test(cand)) {
+          cand = cand.split(/\s+-\s+/)[0].trim();
+        }
+        if (cand && !/^(mv|official(?:\s+(?:music\s+)?video)?|lyric|audio|video)$/i.test(cand)) {
           if (vid) artistMemoryCache.set(vid, cand);
           return cand;
         }
@@ -233,6 +237,10 @@ export async function resolveTrackArtist(videoId: string, rawTitle?: string): Pr
       const parts = title.split(" - ");
       if (parts.length >= 2) {
         let cand = parts[0].trim().replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "").trim();
+        if (slashSplitRegex.test(cand)) {
+          const slashParts = cand.split(slashSplitRegex);
+          cand = slashParts[slashParts.length - 1].trim();
+        }
         if (cand && !/^(mv|official|lyric|audio|video|teaser|hd|4k)$/i.test(cand)) {
           if (vid) artistMemoryCache.set(vid, cand);
           return cand;
@@ -391,13 +399,23 @@ function parseSongItem(renderer: any, fallbackAuthor = ""): SearchTrackResult | 
 
   // Check title for artist patterns
   if (!author && title) {
-    if (title.includes(" / ")) {
-      const parts = title.split(" / ");
-      if (parts.length >= 2) author = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").trim();
-    } else if (title.includes(" - ")) {
+    const slashSplitRegex = /(?:\s+\/\s+|(?<=[」』】\]\)])\s*\/\s*)/;
+    if (slashSplitRegex.test(title)) {
+      const parts = title.split(slashSplitRegex);
+      if (parts.length >= 2) {
+        let cand = parts[1].replace(/\(Music Video\)/gi, "").replace(/【.*?】/g, "").trim();
+        if (/\s+-\s+/.test(cand)) cand = cand.split(/\s+-\s+/)[0].trim();
+        if (cand && !/^(mv|official(?:\s+(?:music\s+)?video)?|lyric|audio|video)$/i.test(cand)) author = cand;
+      }
+    }
+    if (!author && title.includes(" - ")) {
       const parts = title.split(" - ");
       if (parts.length >= 2) {
-        const p0 = parts[0].trim().replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "");
+        let p0 = parts[0].trim().replace(/^\[.*?\]\s*/, "").replace(/^【.*?】\s*/, "");
+        if (slashSplitRegex.test(p0)) {
+          const slashParts = p0.split(slashSplitRegex);
+          p0 = slashParts[slashParts.length - 1].trim();
+        }
         if (p0 && !/^(mv|official|lyric|audio|video)$/i.test(p0)) author = p0;
       }
     } else if (title.includes(" | ")) {

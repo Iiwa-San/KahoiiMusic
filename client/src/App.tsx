@@ -424,6 +424,7 @@ function formatTrackArtist(title?: string, author?: string): string {
   const isGeneric =
     !cleanAuthor ||
     !strippedAuthor ||
+    cleanAuthor === "YouTube" ||
     cleanAuthor === "Kahoii Music" ||
     cleanAuthor === "YouTube Music" ||
     cleanAuthor === "Nghệ sĩ" ||
@@ -431,7 +432,16 @@ function formatTrackArtist(title?: string, author?: string): string {
     cleanAuthor === "Various Artists" ||
     /^(mv|official|video|audio|lyrics?|hd|4k|m\/v|teaser|visualizer|channel)[】\]\)]*$/i.test(strippedAuthor);
 
-  // 1. Try extracting artist from title with smart patterns
+  // 1. Prefer real author/artist metadata when available (e.g. YouTube Music artist "Rokudenashi"
+  //    even if the track title is bilingual like "三時のキス - 3 o'clock Kiss" or "ブリザード - Blizzard")
+  if (!isGeneric && cleanAuthor) {
+    const cleanCand = cleanAuthor.replace(/^[【\[\(]+|[】\]\)]+$/g, "").trim();
+    if (cleanCand && !/^(mv|official|video|audio|lyrics?)$/i.test(cleanCand)) {
+      return cleanCand;
+    }
+  }
+
+  // 2. Fallback: Try extracting artist from title with smart patterns when author is missing/generic
   if (rawTitle) {
     // Strip leading and trailing video metadata like 【MV】, [Official Video], (4K) before parsing
     const titleCleaned = rawTitle
