@@ -155,7 +155,7 @@ async function resolveViaVisionOS(videoId: string): Promise<StreamInfo | null> {
         "X-Goog-Visitor-Id": visitorData,
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) return null;
@@ -215,7 +215,7 @@ async function resolveViaInnerTubeVR(videoId: string): Promise<StreamInfo | null
         "User-Agent": "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12)",
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) return null;
@@ -328,10 +328,47 @@ async function resolveViaPiped(videoId: string): Promise<StreamInfo | null> {
   }
 }
 
+const INVIDIOUS_INSTANCES = [
+  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://yt.artemislena.eu",
+  "https://invidious.jing.rocks",
+];
+
+async function resolveViaInvidious(videoId: string): Promise<StreamInfo | null> {
+  try {
+    return await Promise.any(
+      INVIDIOUS_INSTANCES.map(async (instance) => {
+        const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
+          signal: AbortSignal.timeout(8000),
+          headers: { "User-Agent": "KahoiiMusic-Web/1.0" },
+        });
+        if (!res.ok) throw new Error(`inv-${res.status}`);
+        const data = (await res.json()) as any;
+        const adaptive: any[] = Array.isArray(data?.adaptiveFormats) ? data.adaptiveFormats : [];
+        const audio = adaptive.filter((f) => f.type && f.type.startsWith("audio/") && f.url);
+        const m4a = audio.find((f) => f.type.includes("mp4"));
+        const best = m4a || audio[0];
+        if (!best?.url) throw new Error("inv-no-audio");
+        return {
+          streamUrl: best.url,
+          title: data.title || "Kahoii Music",
+          author: data.author || "",
+          duration: data.lengthSeconds || 0,
+          thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+          provider: "piped" as const,
+        };
+      })
+    );
+  } catch {
+    return null;
+  }
+}
+
 const inFlightResolves = new Map<string, Promise<StreamInfo>>();
 
 /**
- * Master Stream Resolver: races VisionOS + InnerTube VR + Piped in parallel, then falls back to yt-dlp.
+ * Master Stream Resolver: races VisionOS + InnerTube VR + Piped + Invidious in parallel, then falls back to yt-dlp.
  * Deduplicates concurrent Range-request probes for the same videoId.
  */
 export async function resolveAudioStream(videoId: string): Promise<StreamInfo> {
@@ -340,11 +377,12 @@ export async function resolveAudioStream(videoId: string): Promise<StreamInfo> {
 
   const task = (async (): Promise<StreamInfo> => {
     try {
-      // Race VisionOS, Android VR, and Piped in parallel so the fastest valid stream wins immediately
+      // Race VisionOS, Android VR, Piped, and Invidious in parallel so the fastest valid stream wins immediately
       const fastWinner = await Promise.any([
         resolveViaVisionOS(videoId).then((r) => (r ? r : Promise.reject(new Error("no-visionos")))),
         resolveViaInnerTubeVR(videoId).then((r) => (r ? r : Promise.reject(new Error("no-vr")))),
         resolveViaPiped(videoId).then((r) => (r ? r : Promise.reject(new Error("no-piped")))),
+        resolveViaInvidious(videoId).then((r) => (r ? r : Promise.reject(new Error("no-inv")))),
       ]);
       if (fastWinner) return fastWinner;
     } catch {
