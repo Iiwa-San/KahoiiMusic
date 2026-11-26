@@ -3543,7 +3543,7 @@ export default function App() {
   useEffect(() => {
     if (!currentTrack || !nextTrack || nextTrack.id === currentTrack.id) return;
     const timer = setTimeout(() => {
-      fetch(`${API_BASE}/api/resolve-audio?id=${encodeURIComponent(nextTrack.id)}`).catch(() => { });
+      fetch(`${API_BASE}/api/stream?id=${encodeURIComponent(nextTrack.id)}`).catch(() => { });
     }, 3000);
     return () => clearTimeout(timer);
   }, [currentTrack?.id, nextTrack?.id]);
