@@ -38,6 +38,7 @@ import {
   Compass,
   Download,
   Plus,
+  Tv,
   Music,
   Laptop,
   Smartphone,
@@ -3022,13 +3023,13 @@ export default function App() {
       const searchStr = window.location.search;
       if (searchStr) {
         const params = new URLSearchParams(searchStr);
-        const v = params.get("v") || params.get("videoId");
+        const v = params.get("v") || params.get("videoId") || params.get("id");
         const list = params.get("list") || params.get("listId");
         const itemsParam = params.get("items");
         const title = params.get("title") || (v ? `YouTube (${v})` : "YouTube Playlist");
         const author = params.get("author") || "YouTube";
-        const dur = parseFloat(params.get("dur") || "0") || 0;
-        const shouldPlay = params.get("play") !== "false";
+        const dur = parseFloat(params.get("dur") || params.get("duration") || "0") || 0;
+        const shouldPlay = params.get("autoplay") === "0" ? false : params.get("play") !== "false";
         const mode = params.get("mode") || undefined;
 
         let parsedItems: any[] = [];
@@ -4204,6 +4205,37 @@ export default function App() {
                 <span className="hidden sm:inline">Ngoại tuyến (Offline)</span>
               </div>
             )}
+
+            {/* Switch to ThuongTube Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const targetBase = "https://tylortube.vercel.app";
+                if (!currentTrack) {
+                  window.location.href = targetBase;
+                  return;
+                }
+                try { audioRef.current?.pause(); } catch { }
+                try { ytPlayerRef.current?.pauseVideo?.(); } catch { }
+                setIsPlaying(false);
+                const params = new URLSearchParams({
+                  handoff: "1",
+                  id: currentTrack.id,
+                  title: currentTrack.title || "",
+                  author: currentTrack.author || "",
+                  duration: String(Math.floor(currentTrack.duration || duration || 0)),
+                  thumbnail: currentTrack.thumbnail || "",
+                  t: String(Math.floor(currentTime || 0)),
+                  autoplay: isPlaying ? "1" : "0",
+                });
+                window.location.href = `${targetBase}?${params.toString()}`;
+              }}
+              title={currentTrack ? `Xem video "${currentTrack.title}" bên ThuongTube` : "Chuyển sang ThuongTube"}
+              className="flex items-center justify-center p-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all cursor-pointer shadow-md border theme-badge hover:theme-btn-primary hover:text-white text-white/90 hover:scale-105 border-white/10 flex-shrink-0"
+            >
+              <Tv className="w-3.5 h-3.5 theme-accent-text" />
+              <span className="hidden sm:inline text-xs font-semibold ml-1.5">ThuongTube</span>
+            </button>
 
             {/* Download App Button & Dropdown */}
             <div className="relative flex-shrink-0" ref={downloadMenuRef}>
