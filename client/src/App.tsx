@@ -2529,8 +2529,8 @@ export default function App() {
   // Sync volume with Audio element and YouTube Player
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = volume;
-      audioRef.current.muted = isMuted;
+      audioRef.current.volume = isMuted ? 0 : volume;
+      audioRef.current.muted = isMuted || volume <= 0.001;
     }
     if (
       activePlayerType.current === "youtube" &&
@@ -2751,6 +2751,8 @@ export default function App() {
       }
       audioRef.current.src = directStreamUrl;
       audioRef.current.loop = false;
+      audioRef.current.volume = isMuted ? 0 : volume;
+      audioRef.current.muted = isMuted || volume <= 0.001;
       activePlayerType.current = "audio";
       if (autoPlay) {
         const playPromise = audioRef.current.play();
@@ -3426,8 +3428,7 @@ export default function App() {
     handleStopRef.current = handleStop;
   });
 
-  // 1. MediaSession API: Register Standard Actions ONCE on Mount (Ensures Back/Next, Seek 10s & Seekbar appear on Android/iOS Lock Screen & Desktop GMC)
-  useEffect(() => {
+  const registerMediaSessionHandlers = () => {
     if (!("mediaSession" in navigator)) return;
 
     try { navigator.mediaSession.setActionHandler("stop", null); } catch { }
@@ -3453,6 +3454,11 @@ export default function App() {
         console.warn(`[MediaSession] Action "${action}" registration:`, e);
       }
     }
+  };
+
+  // 1. MediaSession API: Register Standard Actions on Mount
+  useEffect(() => {
+    registerMediaSessionHandlers();
   }, []);
 
   // 2. MediaSession API: Synchronize Track Metadata when Current Track Changes
@@ -3481,6 +3487,7 @@ export default function App() {
           { src: artUrl, sizes: "512x512", type: "image/jpeg" },
         ],
       });
+      registerMediaSessionHandlers();
     } catch (err) {
       console.warn("[MediaSession] Metadata update error:", err);
     }
@@ -4024,6 +4031,7 @@ export default function App() {
             setIsPlaying(true);
             setIsLoading(false);
             trackPlayStartTimeRef.current = Date.now();
+            registerMediaSessionHandlers();
             setTimeout(() => {
               isTransitioningRef.current = false;
             }, 2000);
@@ -5234,8 +5242,9 @@ export default function App() {
                           step={0.01}
                           value={isMuted ? 0 : volume}
                           onChange={(e) => {
-                            setIsMuted(false);
-                            setVolume(parseFloat(e.target.value));
+                            const v = parseFloat(e.target.value);
+                            setVolume(v);
+                            setIsMuted(v <= 0.001);
                           }}
                           className="w-24 h-1 bg-white/30 rounded appearance-none cursor-pointer theme-slider"
                         />
@@ -7385,8 +7394,9 @@ export default function App() {
                             step={0.01}
                             value={isMuted ? 0 : volume}
                             onChange={(e) => {
-                              setIsMuted(false);
-                              setVolume(parseFloat(e.target.value));
+                              const v = parseFloat(e.target.value);
+                              setVolume(v);
+                              setIsMuted(v <= 0.001);
                             }}
                             className="w-20 h-1 bg-white/30 rounded appearance-none cursor-pointer theme-slider"
                           />
