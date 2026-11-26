@@ -2743,7 +2743,7 @@ export default function App() {
       playAbortControllerRef.current = null;
     }
 
-    // 1. Direct Native Audio Stream Initiation (Immediate Synchronous Execution to keep iOS/Android User-Gesture valid)
+    // 1. Direct Native Audio Stream Initiation (Immediate Synchronous Execution to keep iOS/Android User-Gesture & Background Session valid)
     const directStreamUrl = `${API_BASE}/api/stream-audio?id=${track.id}`;
     if (audioRef.current) {
       if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
@@ -2751,7 +2751,6 @@ export default function App() {
       }
       audioRef.current.src = directStreamUrl;
       audioRef.current.loop = false;
-      audioRef.current.load();
       activePlayerType.current = "audio";
       if (autoPlay) {
         const playPromise = audioRef.current.play();
@@ -2793,7 +2792,6 @@ export default function App() {
           const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
           audioRef.current.src = blobUrl;
           audioRef.current.loop = false;
-          audioRef.current.load();
           if (autoPlay) {
             audioRef.current.play().then(() => {
               setIsPlaying(true);
@@ -3433,14 +3431,14 @@ export default function App() {
     if (!("mediaSession" in navigator)) return;
 
     try { navigator.mediaSession.setActionHandler("stop", null); } catch { }
+    try { navigator.mediaSession.setActionHandler("seekbackward", null); } catch { }
+    try { navigator.mediaSession.setActionHandler("seekforward", null); } catch { }
 
     const actionList: [MediaSessionAction, MediaSessionActionHandler][] = [
       ["play", () => handlePlayRef.current()],
       ["pause", () => handlePauseRef.current()],
       ["previoustrack", () => handlePrevRef.current()],
       ["nexttrack", () => handleNextRef.current()],
-      ["seekbackward", (details) => handleSeekBackwardRef.current(details?.seekOffset || 10)],
-      ["seekforward", (details) => handleSeekForwardRef.current(details?.seekOffset || 10)],
       ["seekto", (details) => {
         if (details.seekTime !== undefined && details.seekTime !== null) {
           seekToTimeRef.current(details.seekTime);
@@ -3499,6 +3497,15 @@ export default function App() {
       document.title = "Kahoii Music";
     }
   }, [currentTrack?.id, currentTrack?.title, currentTrack?.author]);
+
+  // 3b. Pre-warm nextTrack stream URL on server so background track transitions happen instantly without OS suspension
+  useEffect(() => {
+    if (!currentTrack || !nextTrack || nextTrack.id === currentTrack.id) return;
+    const timer = setTimeout(() => {
+      fetch(`${API_BASE}/api/resolve-audio?id=${encodeURIComponent(nextTrack.id)}`).catch(() => { });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [currentTrack?.id, nextTrack?.id]);
 
   // 3. MediaSession API: Synchronize Playback State & Position on State/Track/Duration Changes
   useEffect(() => {
