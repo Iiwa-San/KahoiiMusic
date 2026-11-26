@@ -25,6 +25,7 @@ const PORT = process.env.PORT || 3001;
 
 // In-memory stream URL cache (YouTube URLs are valid for 4-6 hours)
 const streamUrlCache = new Map<string, { url: string; expiresAt: number }>();
+const musicCheckCache = new Map<string, { isMusic: boolean; category?: string; expiresAt: number }>();
 
 app.use(cors({
   origin: true,
@@ -32,6 +33,47 @@ app.use(cors({
   exposedHeaders: ["x-refreshed-id-token", "x-refreshed-refresh-token"],
 }));
 app.use(express.json());
+
+// 1c. Verify if a YouTube video is classified as Music (Category: Music or musicVideoType)
+app.get("/api/check-music", async (req, res) => {
+  const videoId = (req.query.id as string || "").trim();
+  if (!videoId) {
+    return res.status(400).json({ error: "Missing video ID parameter ('id')" });
+  }
+
+  const cached = musicCheckCache.get(videoId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json({ isMusic: cached.isMusic, category: cached.category });
+  }
+
+  try {
+    const resp = await fetch("https://www.youtube.com/youtubei/v1/player", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+      body: JSON.stringify({
+        videoId,
+        context: { client: { clientName: "WEB", clientVersion: "2.20240101.00.00", hl: "vi", gl: "VN" } },
+      }),
+    });
+
+    if (!resp.ok) {
+      return res.json({ isMusic: true });
+    }
+
+    const data: any = await resp.json();
+    const category = data?.microformat?.playerMicroformatRenderer?.category || "";
+    const musicType = data?.videoDetails?.musicVideoType || "";
+    const isMusic = /music|âm nhạc/i.test(category) || Boolean(musicType);
+
+    musicCheckCache.set(videoId, { isMusic, category, expiresAt: Date.now() + 10 * 60 * 1000 });
+    return res.json({ isMusic, category });
+  } catch {
+    return res.json({ isMusic: true });
+  }
+});
 
 // 1. Resolve Audio Stream URL
 app.get("/api/stream", async (req, res) => {

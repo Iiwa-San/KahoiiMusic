@@ -2852,12 +2852,32 @@ export default function App() {
   };
 
   // Handle incoming track requests from URL params (e.g. ?v=...) and live messages from Extension
+  const verifyVideoIsMusic = async (videoId: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/check-music?id=${encodeURIComponent(videoId)}`);
+      if (!res.ok) return true;
+      const data = await res.json();
+      return data?.isMusic !== false;
+    } catch {
+      return true;
+    }
+  };
+
   // Handle incoming track/playlist requests from URL params (e.g. ?v=...&items=...) and live messages from Extension
   useEffect(() => {
     const playIncomingTrackOrPlaylist = async (t: any, autoPlay = true) => {
       if (!t) return;
       const trackId = t.id || t.v;
       if (!trackId && (!t.items || t.items.length === 0)) return;
+
+      // Enforce Music-only rule for single incoming YouTube video links / handoffs
+      if (trackId && (!t.items || t.items.length === 0) && t.mode !== "enqueue") {
+        const isMusic = await verifyVideoIsMusic(trackId);
+        if (!isMusic) {
+          showToast("Video này không thuộc danh mục Âm nhạc trên YouTube — KahoiiMusic chỉ nhận nội dung Âm nhạc!", "warning");
+          return;
+        }
+      }
 
       const currentIncomingTrack: Track = {
         id: trackId || (t.items && t.items[0] ? (t.items[0].Id || t.items[0].id) : ""),
@@ -3550,6 +3570,11 @@ export default function App() {
     );
     if (ytMatch && ytMatch[1]) {
       const videoId = ytMatch[1];
+      const isMusic = await verifyVideoIsMusic(videoId);
+      if (!isMusic) {
+        showToast("Video này không thuộc danh mục Âm nhạc trên YouTube — KahoiiMusic chỉ nhận nội dung Âm nhạc!", "warning");
+        return;
+      }
       const directTrack: Track = {
         id: videoId,
         title: "YouTube Video",
@@ -3577,6 +3602,11 @@ export default function App() {
           );
           if (ytMatch && ytMatch[1]) {
             const videoId = ytMatch[1];
+            const isMusic = await verifyVideoIsMusic(videoId);
+            if (!isMusic) {
+              showToast("Video này không thuộc danh mục Âm nhạc trên YouTube — KahoiiMusic chỉ nhận nội dung Âm nhạc!", "warning");
+              return;
+            }
             const directTrack: Track = {
               id: videoId,
               title: "YouTube Video",
