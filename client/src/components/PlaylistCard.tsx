@@ -37,6 +37,8 @@ export const PlaylistCard: React.FC<PlaylistCardProps> = ({
         <img
           src={playlist.thumbnail || DEFAULT_TRACK_ART}
           alt={playlist.title}
+          loading="lazy"
+          decoding="async"
           onError={(e) => {
             e.currentTarget.src = DEFAULT_TRACK_ART;
           }}

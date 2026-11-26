@@ -52,6 +52,8 @@ export const TrackCard: React.FC<TrackCardProps> = ({
         <img
           src={track.thumbnail || `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`}
           alt={track.title}
+          loading="lazy"
+          decoding="async"
           onError={(e) => {
             e.currentTarget.src = DEFAULT_TRACK_ART;
           }}

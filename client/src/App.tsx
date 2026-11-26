@@ -563,6 +563,8 @@ export default function App() {
 
   // Dual-Engine Playback (Audio Element + Zero-Fail YouTube Iframe Player Fallback)
   const ytPlayerRef = useRef<any>(null);
+  const initYtFallbackRef = useRef<(videoId: string, startSeconds?: number) => void>(() => { });
+  const activeBlobUrlRef = useRef<string | null>(null);
   const activePlayerType = useRef<"audio" | "youtube">("youtube");
   const lastPlayPositionRef = useRef<number>(0);
   const lastLocalPersistRef = useRef<number>(0);
@@ -2348,110 +2350,116 @@ export default function App() {
     refreshHomeFeed(false);
     fetchRecommendations("all");
 
-    // Initialize YouTube Iframe Player
-    const loadYtScript = () => {
-      if (!(window as any).YT) {
-        const tag = document.createElement("script");
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScript = document.getElementsByTagName("script")[0];
-        firstScript.parentNode?.insertBefore(tag, firstScript);
+    // Lazy YouTube Iframe initializer: only loaded on-demand if native <audio> fails
+    const pendingYtFallbackRef = { videoId: "", startSeconds: 0 };
+    const setupYtPlayer = () => {
+      if (ytPlayerRef.current || !(window as any).YT || !(window as any).YT.Player) return;
+      try {
+        ytPlayerRef.current = new (window as any).YT.Player("kahoii-yt-iframe", {
+          height: "140",
+          width: "240",
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            rel: 0,
+            modestbranding: 1,
+            playsinline: 1,
+            enablejsapi: 1,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: () => {
+              const iframe = document.getElementById("kahoii-yt-iframe") as HTMLIFrameElement;
+              if (iframe && iframe.tagName === "IFRAME") {
+                const cur = iframe.getAttribute("allow") || "";
+                if (!cur.includes("mediasession 'none'")) {
+                  iframe.setAttribute("allow", `${cur}; mediasession 'none'`);
+                }
+              }
+              if (typeof ytPlayerRef.current?.setVolume === "function") {
+                ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
+              }
+              if (pendingYtFallbackRef.videoId && typeof ytPlayerRef.current?.loadVideoById === "function") {
+                activePlayerType.current = "youtube";
+                ytPlayerRef.current.loadVideoById({
+                  videoId: pendingYtFallbackRef.videoId,
+                  startSeconds: pendingYtFallbackRef.startSeconds || 0,
+                });
+                if (!isUserPausedRef.current) {
+                  try { ytPlayerRef.current.playVideo(); } catch { }
+                }
+                pendingYtFallbackRef.videoId = "";
+              }
+            },
+            onStateChange: (event: any) => {
+              if (event.data === 1) {
+                setIsPlaying(true);
+                setIsLoading(false);
+                isUserPausedRef.current = false;
+                setErrorMessage(null);
+                trackPlayStartTimeRef.current = Date.now();
+                setTimeout(() => {
+                  isTransitioningRef.current = false;
+                }, 2000);
+              } else if (event.data === 2) {
+                if (isUserPausedRef.current || document.visibilityState === "visible") {
+                  setIsPlaying(false);
+                }
+                setIsLoading(false);
+              } else if (event.data === 0) {
+                if (!isTransitioningRef.current && activePlayerType.current === "youtube") {
+                  const ytVid = ytPlayerRef.current?.getVideoData?.()?.video_id;
+                  const currentId = currentTrackRef.current?.id;
+                  if (ytVid && currentId && ytVid !== currentId) return;
+                  const ct = ytPlayerRef.current?.getCurrentTime?.() || 0;
+                  const dur = ytPlayerRef.current?.getDuration?.() || 0;
+                  if (dur > 5 && ct >= dur - 3 && Date.now() - trackPlayStartTimeRef.current > 4000) {
+                    handleTrackEndedRef.current();
+                  }
+                }
+              } else if (event.data === 3) {
+                setIsLoading(true);
+                setTimeout(() => setIsLoading(false), 2000);
+              }
+            },
+            onError: (err: any) => {
+              console.warn("[YouTube Player Error Event]:", err);
+              setIsLoading(false);
+              const errCode = err?.data;
+              if ((errCode === 100 || errCode === 101 || errCode === 150) && !isTransitioningRef.current && activePlayerType.current === "youtube") {
+                const currentId = currentTrackRef.current?.id;
+                if (currentId && lastEndedTrackIdRef.current !== currentId && Date.now() - trackPlayStartTimeRef.current > 4000) {
+                  isTransitioningRef.current = true;
+                  setTimeout(() => {
+                    handleTrackEndedRef.current();
+                  }, 1500);
+                }
+              }
+            },
+          },
+        });
+      } catch (e) {
+        console.warn("YouTube Player init error:", e);
       }
     };
 
-    const setupYtPlayer = () => {
+    initYtFallbackRef.current = (videoId: string, startSeconds = 0) => {
+      pendingYtFallbackRef.videoId = videoId;
+      pendingYtFallbackRef.startSeconds = startSeconds;
       if ((window as any).YT && (window as any).YT.Player) {
-        try {
-          ytPlayerRef.current = new (window as any).YT.Player("kahoii-yt-iframe", {
-            height: "140",
-            width: "240",
-            playerVars: {
-              autoplay: 0,
-              controls: 0,
-              disablekb: 1,
-              fs: 0,
-              rel: 0,
-              modestbranding: 1,
-              playsinline: 1,
-              enablejsapi: 1,
-              origin: window.location.origin,
-            },
-            events: {
-              onReady: () => {
-                const iframe = document.getElementById("kahoii-yt-iframe") as HTMLIFrameElement;
-                if (iframe && iframe.tagName === "IFRAME") {
-                  const cur = iframe.getAttribute("allow") || "";
-                  if (!cur.includes("mediasession 'none'")) {
-                    iframe.setAttribute("allow", `${cur}; mediasession 'none'`);
-                  }
-                }
-                if (typeof ytPlayerRef.current?.setVolume === "function") {
-                  ytPlayerRef.current.setVolume(isMuted ? 0 : volume * 100);
-                }
-              },
-              onStateChange: (event: any) => {
-                if (event.data === 1) {
-                  setIsPlaying(true);
-                  setIsLoading(false);
-                  isUserPausedRef.current = false;
-                  setErrorMessage(null);
-                  trackPlayStartTimeRef.current = Date.now();
-                  setTimeout(() => {
-                    isTransitioningRef.current = false;
-                  }, 2000);
-                } else if (event.data === 2) {
-                  // Only reflect paused if user explicitly pressed pause or app is visible in foreground
-                  if (isUserPausedRef.current || document.visibilityState === "visible") {
-                    setIsPlaying(false);
-                  }
-                  setIsLoading(false);
-                } else if (event.data === 0) {
-                  // Only advance track if in YouTube engine, NOT in transition, and track actually played to near end
-                  if (!isTransitioningRef.current && activePlayerType.current === "youtube") {
-                    const ytVid = ytPlayerRef.current?.getVideoData?.()?.video_id;
-                    const currentId = currentTrackRef.current?.id;
-                    if (ytVid && currentId && ytVid !== currentId) return; // Still old video!
-                    const ct = ytPlayerRef.current?.getCurrentTime?.() || 0;
-                    const dur = ytPlayerRef.current?.getDuration?.() || 0;
-                    if (dur > 5 && ct >= dur - 3 && Date.now() - trackPlayStartTimeRef.current > 4000) {
-                      handleTrackEndedRef.current();
-                    }
-                  }
-                } else if (event.data === 3) {
-                  // Buffer event: clear loading spinner after 2s max to prevent freeze on iOS
-                  setIsLoading(true);
-                  setTimeout(() => setIsLoading(false), 2000);
-                } else if (event.data === -1) {
-                  // Unstarted
-                }
-              },
-              onError: (err: any) => {
-                console.warn("[YouTube Player Error Event]:", err);
-                setIsLoading(false);
-                const errCode = err?.data;
-                if ((errCode === 100 || errCode === 101 || errCode === 150) && !isTransitioningRef.current && activePlayerType.current === "youtube") {
-                  const currentId = currentTrackRef.current?.id;
-                  if (currentId && lastEndedTrackIdRef.current !== currentId && Date.now() - trackPlayStartTimeRef.current > 4000) {
-                    isTransitioningRef.current = true;
-                    setTimeout(() => {
-                      handleTrackEndedRef.current();
-                    }, 1500);
-                  }
-                }
-              },
-            },
-          });
-        } catch (e) {
-          console.warn("YouTube Player init error:", e);
+        setupYtPlayer();
+      } else {
+        (window as any).onYouTubeIframeAPIReady = setupYtPlayer;
+        if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+          const tag = document.createElement("script");
+          tag.src = "https://www.youtube.com/iframe_api";
+          const firstScript = document.getElementsByTagName("script")[0];
+          firstScript.parentNode?.insertBefore(tag, firstScript);
         }
       }
     };
-
-    if ((window as any).YT && (window as any).YT.Player) {
-      setupYtPlayer();
-    } else {
-      (window as any).onYouTubeIframeAPIReady = setupYtPlayer;
-      loadYtScript();
-    }
   }, []);
 
   // Ensure YouTube iframe never hijacks system MediaSession controls
@@ -2750,6 +2758,10 @@ export default function App() {
       if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
         try { ytPlayerRef.current.stopVideo(); } catch { }
       }
+      if (activeBlobUrlRef.current) {
+        try { URL.revokeObjectURL(activeBlobUrlRef.current); } catch { }
+        activeBlobUrlRef.current = null;
+      }
       audioRef.current.src = directStreamUrl;
       audioRef.current.loop = false;
       audioRef.current.volume = isMuted ? 0 : volume;
@@ -2793,6 +2805,7 @@ export default function App() {
         if (offlineItem && offlineItem.audioBlob && audioRef.current) {
           console.log(`[Player] 📦 Playing "${track.title}" from local IndexedDB offline storage.`);
           const blobUrl = URL.createObjectURL(offlineItem.audioBlob);
+          activeBlobUrlRef.current = blobUrl;
           audioRef.current.src = blobUrl;
           audioRef.current.loop = false;
           if (autoPlay) {
@@ -4093,14 +4106,18 @@ export default function App() {
           if (activePlayerType.current === "audio") {
             console.warn("[Stream Audio Error] Direct stream failed, falling back to YouTube Player engine...");
             const currentId = currentTrackRef.current?.id;
-            if (currentId && ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
-              activePlayerType.current = "youtube";
-              ytPlayerRef.current.loadVideoById({
-                videoId: currentId,
-                startSeconds: lastPlayPositionRef.current || 0,
-              });
-              if (!isUserPausedRef.current) {
-                try { ytPlayerRef.current.playVideo(); } catch { }
+            if (currentId) {
+              if (ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
+                activePlayerType.current = "youtube";
+                ytPlayerRef.current.loadVideoById({
+                  videoId: currentId,
+                  startSeconds: lastPlayPositionRef.current || 0,
+                });
+                if (!isUserPausedRef.current) {
+                  try { ytPlayerRef.current.playVideo(); } catch { }
+                }
+              } else {
+                initYtFallbackRef.current(currentId, lastPlayPositionRef.current || 0);
               }
             }
             setIsLoading(false);

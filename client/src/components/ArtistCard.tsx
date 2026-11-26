@@ -46,6 +46,8 @@ export const ArtistCard: React.FC<ArtistCardProps> = ({
         <img
           src={artistAvatar}
           alt={artist.name}
+          loading="lazy"
+          decoding="async"
           onError={(e) => {
             e.currentTarget.src = DEFAULT_TRACK_ART;
           }}
